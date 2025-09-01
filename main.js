@@ -1,6 +1,10 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
+const Logger = require('./logger');
+
+// Initialize logger for main process
+const logger = new Logger('main');
 
 let mainWindow;
 let pythonProcess;
@@ -30,37 +34,36 @@ function createWindow() {
 }
 
 function startPythonBot() {
+  logger.info('Starting Python bot process');
+  
   // Spawn Python process
+  // Let stderr go to the terminal for debugging (not captured by Electron)
   pythonProcess = spawn('python', [path.join(__dirname, 'src', 'main.py')], {
-    env: { ...process.env, PYTHONUNBUFFERED: '1' } // Ensures real-time output
+    env: { ...process.env, PYTHONUNBUFFERED: '1' }, // Ensures real-time output
+    stdio: ['pipe', 'pipe', 'inherit'] // [stdin, stdout, stderr -> terminal]
   });
+  
+  logger.logPythonProcess('started', { pid: pythonProcess.pid });
 
   // Handle Python stdout (bot responses)
   pythonProcess.stdout.on('data', (data) => {
     const output = data.toString();
-    // Debug: Python output (comment out in production)
-    // console.log('Python output:', output);
+    logger.trace('Python stdout received', { length: output.length });
     
     if (mainWindow) {
       // Send to renderer process
       mainWindow.webContents.send('bot-output', output);
+      logger.logIPC('send', 'bot-output', output, { toRenderer: true });
     }
   });
 
-  // Handle Python stderr (errors)
-  pythonProcess.stderr.on('data', (data) => {
-    const error = data.toString();
-    // Log Python errors for debugging
-    
-    if (mainWindow) {
-      mainWindow.webContents.send('bot-error', error);
-    }
-  });
+  // stderr now goes directly to terminal for debugging (not captured)
 
   // Handle Python process exit
   pythonProcess.on('close', (code) => {
-    // Log process exit for debugging
-    // console.log(`Python process exited with code ${code}`);
+    logger.warn(`Python process exited with code ${code}`);
+    logger.logPythonProcess('exited', { exitCode: code });
+    
     if (mainWindow) {
       mainWindow.webContents.send('bot-disconnected');
     }
@@ -69,12 +72,14 @@ function startPythonBot() {
 
 // IPC handler for user input
 ipcMain.on('user-input', (event, message) => {
-  // Debug: User input (comment out in production)
-  // console.log('User input:', message);
+  logger.logIPC('receive', 'user-input', message, { fromRenderer: true });
+  logger.logUserInteraction('chat-input', { messageLength: message.length });
   
   if (pythonProcess && !pythonProcess.killed) {
     pythonProcess.stdin.write(message + '\n');
+    logger.debug('Sent input to Python process');
   } else {
+    logger.error('Python process is not running');
     event.reply('bot-error', 'Python process is not running');
   }
 });
@@ -93,6 +98,7 @@ ipcMain.on('restart-bot', () => {
 });
 
 app.whenReady().then(() => {
+  logger.info('Electron app ready, initializing...');
   createWindow();
   startPythonBot();
 
@@ -104,8 +110,10 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  logger.info('All windows closed');
   // Kill Python process when app closes
   if (pythonProcess && !pythonProcess.killed) {
+    logger.info('Killing Python process');
     pythonProcess.kill();
   }
   

@@ -24,10 +24,12 @@ Key architectural differences from Chat Completions API:
 import os
 import sys
 import json
-from datetime import datetime
 from dotenv import load_dotenv
 from openai import OpenAI
 from agents import set_default_openai_client, set_default_openai_api, set_tracing_disabled
+
+# Import logging framework  
+from logger import logger
 
 # Load environment variables
 load_dotenv()
@@ -67,30 +69,22 @@ tools = [{
 }]
 
 def get_weather(location):
-    return f"The temperature in {location} is 20 degrees Celsius."
-
-def log_function_call(function_name, args, result):
-    """Log function calls to a file instead of printing to console"""
-    timestamp = datetime.now().isoformat()
-    log_entry = {
-        "timestamp": timestamp,
-        "function": function_name,
-        "arguments": args,
-        "result": result
-    }
-    
-    # Append to log file
-    with open("function_calls.log", "a") as f:
-        f.write(json.dumps(log_entry) + "\n")
+    """Get weather for a location (mock function)"""
+    result = f"The temperature in {location} is 20 degrees Celsius."
+    # Log function call for debugging
+    logger.log_function_call("get_weather", {"location": location}, result)
+    return result
 
 set_default_openai_client(azure_client)
 set_default_openai_api("responses")
 
 deployment_name = "gpt-5-mini"
 
+# Log startup
+logger.info(f"Chat Juicer starting - Endpoint: {azure_endpoint}, Deployment: {deployment_name}")
+
 print(f"Connected to {azure_endpoint}")
 print(f"Using deployment: {deployment_name}")
-print("Type 'quit' or 'exit' to end the conversation")
 print("=" * 60)
 
 # Track the previous response ID for conversation continuity
@@ -101,11 +95,6 @@ while True:
     try:
         # Get user input (no prompt since we're in GUI mode)
         user_input = input().strip()
-        
-        # Check for exit commands
-        if user_input.lower() in ['quit', 'exit', 'q']:
-            print("Goodbye!")
-            break
         
         # Skip empty input
         if not user_input:
@@ -131,8 +120,6 @@ while True:
         # Add previous_response_id if we have one (for conversation continuity)
         if previous_response_id:
             request_params["previous_response_id"] = previous_response_id
-            # Debug: log when using previous_response_id
-            # print(f"[DEBUG: Using previous_response_id: {previous_response_id}]", flush=True)
         
         # Get streaming response
         stream = azure_client.responses.create(**request_params)
@@ -140,20 +127,14 @@ while True:
         tool_calls = []
         response_text = ""
         current_response_id = None
-        # Track if we've started sending assistant messages
         
         # Process streaming events
         for event in stream:
-            # Debug: log all event types (comment out after testing)
-            # print(f"\n[DEBUG: Event type: {event.type}]", flush=True)
-            
             # Capture response ID from response.created event
             if event.type == 'response.created':
                 if hasattr(event, 'response') and hasattr(event.response, 'id'):
                     current_response_id = event.response.id
-                    # Debug: log response ID tracking
-                    # print(f"\n[DEBUG: Got response ID: {current_response_id}]", flush=True)
-            
+        
             # Handle text delta events for clean output
             elif event.type == 'response.output_text.delta':
                 # Send structured JSON message for each delta
@@ -165,25 +146,24 @@ while True:
                 msg = json.dumps({"type": "assistant_delta", "content": event.delta})
                 print(f"__JSON__{msg}__JSON__", flush=True)
                 response_text += event.delta
-            
+        
             # Handle function tool call completion
             elif event.type == 'response.output_item.done':
                 if hasattr(event.item, 'type') and event.item.type == 'function_call':
                     tool_calls.append(event.item)
-            
+        
             # Check for response completion event
             elif event.type == 'response.done':
                 # Send end message
                 msg = json.dumps({"type": "assistant_end"})
                 print(f"__JSON__{msg}__JSON__", flush=True)
-        
+    
         # Update previous_response_id for next turn
         if current_response_id:
             previous_response_id = current_response_id
-        
+    
         # If there were tool calls, execute them and get final response
         if tool_calls:
-            
             # Build a fresh input_list with just what's needed for function calling
             # Start with the original user message
             function_context = [{
@@ -206,9 +186,6 @@ while True:
                 if tool_call.name == 'get_weather':
                     args = json.loads(tool_call.arguments)
                     result = get_weather(args['location'])
-                    
-                    # Log the function call to file
-                    log_function_call(tool_call.name, args, result)
                     
                     # Add function call output
                     function_context.append({
@@ -250,12 +227,17 @@ while True:
                 elif event.type == 'response.done':
                     msg = json.dumps({"type": "assistant_end"})
                     print(f"__JSON__{msg}__JSON__", flush=True)
-        
-        # Response complete
+    
+        # Log conversation turn completion
+        logger.log_conversation_turn(
+            user_input=user_input,
+            response=response_text or final_text if 'final_text' in locals() else response_text,
+            function_calls=[{"name": tc.name, "arguments": tc.arguments} for tc in tool_calls] if tool_calls else None
+        )
 
     except KeyboardInterrupt:
-        print("\n\nInterrupted. Goodbye!")
+        logger.info("Chat interrupted by user")
         break
     except Exception as e:
+        logger.error(f"Error in chat loop: {e}", exc_info=True)
         print(f"\nError: {e}")
-        print("Please try again or type 'quit' to exit.")

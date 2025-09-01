@@ -7,8 +7,7 @@ src/.env
 
 # Logs
 *.log
-src/*.log
-function_calls.log
+logs/*.jsonl
 
 # OS files
 .DS_Store

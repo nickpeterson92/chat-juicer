@@ -23,7 +23,7 @@ When modifying conversation flow, always:
 Function calls follow this specific pattern:
 1. Build temporary context: user message → function call → function output  
 2. Maintain conversation state using `previous_response_id` after function execution
-3. Log all function calls to `function_calls.log` (not console)
+3. All function calls are logged via decorators to the structured logger and included in `logs/conversations.jsonl`
 
 ## Essential Commands
 
@@ -79,9 +79,9 @@ The code processes multiple event types in order:
 
 ### Adding New Functions
 1. Add function definition to `tools` array
-2. Implement function (follow pattern of `get_weather()`)
+2. Implement function with decorators: `@log_function_call()` and optionally `@log_timing()`
 3. Add function execution in tool call handler
-4. Use `log_function_call()` for logging (not print)
+4. Logging is automatic via decorators - no manual logging needed
 
 ### Modifying Conversation Flow
 Always maintain the `previous_response_id` chain - breaking this loses conversation context.
