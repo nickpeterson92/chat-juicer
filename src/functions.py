@@ -3,10 +3,9 @@ Function handlers for Chat Juicer.
 Separate module for all tool/function implementations.
 """
 
-import os
 import json
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, Optional
 
 def get_weather(location: str) -> str:
     """
