@@ -219,8 +219,8 @@ class ChatLogger:
             args: Arguments passed to the function
             result: Result returned by the function
         """
-        self.debug(
-            f"Function call: {function_name}",
+        self.info(
+            f"Function call: {function_name}({args}) → {result}",
             function_name=function_name,
             arguments=args,
             result=str(result)
