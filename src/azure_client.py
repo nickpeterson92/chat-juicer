@@ -3,7 +3,6 @@ Azure OpenAI client setup and configuration.
 Handles all Azure-specific initialization and client management.
 """
 import os
-from openai import AzureOpenAI
 from dotenv import load_dotenv
 
 

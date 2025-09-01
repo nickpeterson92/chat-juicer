@@ -2,9 +2,6 @@
 Function handlers for Chat Juicer.
 Separate module for all tool/function implementations.
 """
-import json
-import random
-
 
 def get_weather(location: str) -> str:
     """

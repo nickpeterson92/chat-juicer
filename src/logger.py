@@ -12,6 +12,7 @@ import sys
 import logging
 import logging.handlers
 import json
+import pathlib
 from datetime import datetime
 import uuid
 from typing import Any, Optional
@@ -96,9 +97,13 @@ def setup_logging(name: str = "chat-juicer", debug: bool = None) -> logging.Logg
     logger.addHandler(console_handler)
     
     # --- Conversation Log Handler (JSON) ---
-    os.makedirs('logs', exist_ok=True)
+    # Use absolute path to project root logs directory
+    project_root = pathlib.Path(__file__).parent.parent
+    log_dir = project_root / 'logs'
+    log_dir.mkdir(exist_ok=True)
+    
     conv_handler = logging.handlers.RotatingFileHandler(
-        'logs/conversations.jsonl',
+        log_dir / 'conversations.jsonl',
         maxBytes=10*1024*1024,  # 10MB
         backupCount=5
     )
@@ -118,7 +123,7 @@ def setup_logging(name: str = "chat-juicer", debug: bool = None) -> logging.Logg
     
     # --- Error Log Handler (JSON) ---
     error_handler = logging.handlers.RotatingFileHandler(
-        'logs/errors.jsonl',
+        log_dir / 'errors.jsonl',
         maxBytes=10*1024*1024,  # 10MB
         backupCount=3
     )

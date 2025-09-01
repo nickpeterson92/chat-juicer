@@ -74,7 +74,7 @@ while True:
             "tools": tools,
             "stream": True,
             "store": True,
-            "instructions": "You are a helpful assistant. Remember information the user tells you about themselves."
+            "instructions": "You are the most helpful assistant."
         }
         
         # Add previous_response_id if we have one (for conversation continuity)
