@@ -1,0 +1,23 @@
+# Chat Juicer Requirements
+
+# Core AI Libraries
+openai-agents>=0.1.0
+openai>=1.0.0
+
+# MCP SDK for file server
+mcp>=1.0.0
+
+# Configuration and Environment
+python-dotenv>=1.0.0
+pyyaml>=6.0
+
+# Core dependencies
+pydantic>=2.0.0
+
+# Optional but recommended for enhanced functionality
+aiofiles>=23.0.0  # Async file operations
+rich>=13.0.0  # Better terminal output
+click>=8.0.0  # Alternative CLI framework
+
+# For Azure OpenAI support
+azure-identity>=1.0.0
