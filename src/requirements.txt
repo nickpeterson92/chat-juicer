@@ -22,5 +22,8 @@ aiofiles>=23.0.0  # Async file operations
 rich>=13.0.0  # Better terminal output
 click>=8.0.0  # Alternative CLI framework
 
+# Document conversion for token-efficient reading
+markitdown>=0.1.0  # Microsoft's markdown converter for various formats
+
 # For Azure OpenAI support
 azure-identity>=1.0.0

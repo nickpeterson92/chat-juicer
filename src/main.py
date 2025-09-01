@@ -29,6 +29,19 @@ from logger import logger
 from azure_client import setup_azure_client
 from functions import TOOLS, FUNCTION_REGISTRY
 
+# System instructions for the documentation bot
+SYSTEM_INSTRUCTIONS = """You are a technical documentation automation assistant with file system access.
+
+When asked to create documentation:
+1. First use list_directory to explore available files
+2. Use read_file to read ALL deliverables from the deliverables/ directory ONLY
+3. Use load_template to load the requested template
+4. Use generate_document to combine the template with deliverables content
+5. Use write_document to save the generated document
+6. Respond with a brief confirmation of what was created
+
+Always complete the full workflow when creating documents."""
+
 # Set up Azure client
 try:
     azure_client, deployment_name = setup_azure_client()
@@ -74,17 +87,7 @@ while True:
             "tools": tools,
             "stream": True,
             "store": True,
-            "instructions": """You are a documentation automation assistant with file system access.
-
-When asked to create documentation:
-1. First use list_directory to explore available files
-2. Use read_file to read relevant deliverables from the deliverables/ directory
-3. Use load_template to load the requested template
-4. Use generate_document to combine the template with deliverables content
-5. Use write_document to save the generated document
-6. Respond with a brief confirmation of what was created
-
-Always complete the full workflow when creating documents. Don't stop after just listing directories."""
+            "instructions": SYSTEM_INSTRUCTIONS
         }
         
         # Add previous_response_id if we have one (for conversation continuity)
@@ -181,20 +184,7 @@ Always complete the full workflow when creating documents. Don't stop after just
                 "tools": tools,
                 "stream": True,
                 "store": True,
-                "instructions": """You are a documentation automation assistant with file system access.
-
-When asked to create documentation:
-1. First use list_directory to explore available files
-2. Use read_file to read relevant deliverables from the deliverables/ directory  
-3. Use load_template to load the requested template
-4. Use generate_document to combine the template with deliverables content
-5. Use write_document to save the generated document
-6. Respond with a brief confirmation of what was created
-
-Continue with the next step in the workflow based on what you've learned from the function results.
-If you've just listed directories, now read the relevant files.
-If you've read files, now load the template.
-If you have everything, generate the document."""
+                "instructions": SYSTEM_INSTRUCTIONS
             }
             
             # Add previous_response_id to maintain conversation context

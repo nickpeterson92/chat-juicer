@@ -79,6 +79,7 @@ def list_directory(path: str = ".", show_hidden: bool = False) -> str:
 def read_file(file_path: str, max_size: int = 1048576) -> str:
     """
     Read a file's contents for documentation processing.
+    Automatically converts non-markdown formats to markdown for token efficiency.
     
     Args:
         file_path: Path to the file to read
@@ -101,7 +102,7 @@ def read_file(file_path: str, max_size: int = 1048576) -> str:
         if not target_file.is_file():
             return json.dumps({"error": f"Not a file: {file_path}"})
             
-        # Check file size
+        # Check file size before conversion
         file_size = target_file.stat().st_size
         if file_size > max_size:
             return json.dumps({
@@ -109,26 +110,132 @@ def read_file(file_path: str, max_size: int = 1048576) -> str:
                 "file_size": file_size
             })
         
-        # Detect file type and read accordingly
-        try:
-            content = target_file.read_text(encoding='utf-8')
-            
-            result = {
-                "file_path": str(target_file.relative_to(cwd) if cwd in target_file.parents else target_file),
-                "file_name": target_file.name,
-                "size": file_size,
-                "extension": target_file.suffix,
-                "content": content,
-                "lines": len(content.splitlines())
+        # Get file extension for format detection
+        extension = target_file.suffix.lower()
+        
+        # Determine if we need markdown conversion
+        needs_conversion = extension in [
+            '.xlsx', '.xls',  # Excel
+            '.docx', '.doc',  # Word
+            '.pptx', '.ppt',  # PowerPoint
+            '.pdf',           # PDF
+            '.csv',           # CSV (will be converted to markdown table)
+            '.html', '.htm',  # HTML
+            '.xml',           # XML
+            '.json',          # JSON (will be formatted as code block)
+            '.ipynb'          # Jupyter notebooks
+        ]
+        
+        content = None
+        conversion_method = "none"
+        
+        if needs_conversion:
+            try:
+                # Use MarkItDown for conversion
+                from markitdown import MarkItDown
+                
+                converter = MarkItDown()
+                conversion_result = converter.convert(str(target_file))
+                content = conversion_result.text_content
+                conversion_method = "markitdown"
+                
+                # Token optimization: strip excessive whitespace
+                lines = content.splitlines()
+                # Remove multiple consecutive blank lines
+                optimized_lines = []
+                prev_blank = False
+                for line in lines:
+                    if line.strip() == "":
+                        if not prev_blank:
+                            optimized_lines.append(line)
+                        prev_blank = True
+                    else:
+                        optimized_lines.append(line)
+                        prev_blank = False
+                
+                content = "\n".join(optimized_lines)
+                
+            except ImportError:
+                # Fallback if MarkItDown not installed
+                # For CSV, do basic conversion
+                if extension == '.csv':
+                    try:
+                        import csv
+                        with open(target_file, 'r', encoding='utf-8') as f:
+                            reader = csv.reader(f)
+                            rows = list(reader)
+                            
+                        if rows:
+                            # Convert to markdown table
+                            content = "| " + " | ".join(rows[0]) + " |\n"
+                            content += "|" + "|".join(["---"] * len(rows[0])) + "|\n"
+                            for row in rows[1:]:
+                                # Ensure row has same number of columns
+                                while len(row) < len(rows[0]):
+                                    row.append("")
+                                content += "| " + " | ".join(row[:len(rows[0])]) + " |\n"
+                            conversion_method = "csv_fallback"
+                    except Exception:
+                        pass
+                
+                # For JSON, format as code block
+                elif extension == '.json':
+                    try:
+                        with open(target_file, 'r', encoding='utf-8') as f:
+                            json_data = json.load(f)
+                        content = f"```json\n{json.dumps(json_data, indent=2)}\n```"
+                        conversion_method = "json_fallback"
+                    except Exception:
+                        pass
+                
+                if not content:
+                    return json.dumps({
+                        "error": f"Cannot convert {extension} file without MarkItDown. Install with: pip install markitdown",
+                        "file_path": str(target_file)
+                    })
+            except Exception as conv_error:
+                return json.dumps({
+                    "error": f"Conversion failed: {str(conv_error)}",
+                    "file_path": str(target_file),
+                    "extension": extension
+                })
+        
+        # For text/markdown files, read normally
+        if not content:
+            try:
+                content = target_file.read_text(encoding='utf-8')
+                conversion_method = "direct_read"
+            except UnicodeDecodeError:
+                return json.dumps({
+                    "error": "File is not text/UTF-8 encoded",
+                    "file_path": str(target_file)
+                })
+        
+        # Calculate token estimate (rough: 1 token ≈ 4 characters)
+        estimated_tokens = len(content) // 4
+        
+        result = {
+            "file_path": str(target_file.relative_to(cwd) if cwd in target_file.parents else target_file),
+            "file_name": target_file.name,
+            "original_size": file_size,
+            "content_size": len(content),
+            "extension": target_file.suffix,
+            "content": content,
+            "lines": len(content.splitlines()),
+            "conversion_method": conversion_method,
+            "estimated_tokens": estimated_tokens,
+            "format": "markdown" if needs_conversion or extension in ['.md', '.markdown'] else "text"
+        }
+        
+        # Add conversion savings info if converted
+        if needs_conversion and conversion_method == "markitdown":
+            result["token_optimization"] = {
+                "original_format": extension,
+                "converted_to": "markdown",
+                "note": "Structured markdown typically uses fewer tokens than raw formats"
             }
-            
-            return json.dumps(result, indent=2)
-            
-        except UnicodeDecodeError:
-            return json.dumps({
-                "error": "File is not text/UTF-8 encoded",
-                "file_path": str(target_file)
-            })
+        
+        return json.dumps(result, indent=2)
             
     except Exception as e:
         return json.dumps({"error": f"Failed to read file: {str(e)}"})
