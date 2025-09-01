@@ -21,7 +21,7 @@ function createWindow() {
     icon: path.join(__dirname, 'icon.png') // Optional, you can add an icon later
   });
 
-  mainWindow.loadFile('index.html');
+  mainWindow.loadFile(path.join(__dirname, '..', 'ui', 'index.html'));
 
   // Open DevTools in development
   if (process.argv.includes('--dev')) {
@@ -38,7 +38,7 @@ function startPythonBot() {
   
   // Spawn Python process
   // Let stderr go to the terminal for debugging (not captured by Electron)
-  pythonProcess = spawn('python', [path.join(__dirname, 'src', 'main.py')], {
+  pythonProcess = spawn('python', [path.join(__dirname, '..', 'src', 'main.py')], {
     env: { ...process.env, PYTHONUNBUFFERED: '1' }, // Ensures real-time output
     stdio: ['pipe', 'pipe', 'inherit'] // [stdin, stdout, stderr -> terminal]
   });

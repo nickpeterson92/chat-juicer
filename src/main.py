@@ -21,71 +21,31 @@ Key architectural differences from Chat Completions API:
 4. The `store: true` parameter enables response retrieval later
 """
 
-import os
 import sys
 import json
-from dotenv import load_dotenv
-from openai import OpenAI
-from agents import set_default_openai_client, set_default_openai_api, set_tracing_disabled
 
-# Import logging framework  
+# Import local modules
 from logger import logger
+from azure_client import setup_azure_client
+from functions import TOOLS, FUNCTION_REGISTRY
 
-# Load environment variables
-load_dotenv()
-
-azure_key = os.getenv("AZURE_OPENAI_API_KEY")
-azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-
-if not azure_key or not azure_endpoint:
-    print("Error: Please set AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT environment variables")
+# Set up Azure client
+try:
+    azure_client, deployment_name = setup_azure_client()
+except ValueError as e:
+    print(f"Error: {e}")
     sys.exit(1)
 
-# Set up for Azure with Responses API
-set_tracing_disabled(True)  # Disable tracing for Azure
+# Tools are imported from functions module
+tools = TOOLS
 
-azure_client = OpenAI(
-    api_key=azure_key,
-    base_url=azure_endpoint
-)
-
-tools = [{
-    "type": "function",
-    "name": "get_weather",
-    "description": "Get current temperature for a given location.",
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "location": {
-                "type": "string",
-                "description": "City and country e.g. Bogotá, Colombia"
-            }
-        },
-        "required": [
-            "location"
-        ],
-        "additionalProperties": False
-    }
-}]
-
-def get_weather(location):
-    """Get weather for a location (mock function)"""
-    result = f"The temperature in {location} is 20 degrees Celsius."
-    # Log function call for debugging
-    logger.log_function_call("get_weather", {"location": location}, result)
-    return result
-
-set_default_openai_client(azure_client)
-set_default_openai_api("responses")
-
-deployment_name = "gpt-5-mini"
+# Azure client and deployment are set up by azure_client module
 
 # Log startup
-logger.info(f"Chat Juicer starting - Endpoint: {azure_endpoint}, Deployment: {deployment_name}")
+logger.info(f"Chat Juicer starting - Deployment: {deployment_name}")
 
-print(f"Connected to {azure_endpoint}")
+print("Connected to Azure OpenAI")
 print(f"Using deployment: {deployment_name}")
-print("=" * 60)
 
 # Track the previous response ID for conversation continuity
 previous_response_id = None
@@ -182,17 +142,22 @@ while True:
             
             # Execute each tool call and add outputs
             for tool_call in tool_calls:
-                # Execute the function
-                if tool_call.name == 'get_weather':
+                # Execute the function from registry
+                if tool_call.name in FUNCTION_REGISTRY:
                     args = json.loads(tool_call.arguments)
-                    result = get_weather(args['location'])
-                    
-                    # Add function call output
-                    function_context.append({
-                        "type": "function_call_output",
-                        "call_id": tool_call.call_id,
-                        "output": result
-                    })
+                    func = FUNCTION_REGISTRY[tool_call.name]
+                    result = func(**args)
+                    # Log the function call
+                    logger.log_function_call(tool_call.name, args, result)
+                else:
+                    result = f"Error: Unknown function {tool_call.name}"
+                
+                # Add function call output (moved outside the else block)
+                function_context.append({
+                    "type": "function_call_output",
+                    "call_id": tool_call.call_id,
+                    "output": result
+                })
             
             # Make second request with function results
             # Use previous_response_id to maintain context

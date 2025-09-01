@@ -6,20 +6,20 @@ This document describes the comprehensive observability strategy for Chat Juicer
 ## Architecture
 
 ```
-┌─────────────────┐
-│  Electron Main  │──────logs────▶┌──────────────┐
-│    (logger.js)  │               │              │
-└─────────────────┘               │  Log Files   │
-                                  │              │
-┌─────────────────┐               │ • app.log    │
-│Electron Renderer│──────logs────▶│ • error.log  │
-│   (logger.js)   │               │ • perf.log   │
-└─────────────────┘               │ • conv.jsonl │
-                                  │              │
-┌─────────────────┐               └──────────────┘
-│  Python Backend │──────logs────▶      ⬇
-│   (logger.py)   │               Terminal/Console
-└─────────────────┘              (Dev Environment)
+┌─────────────────────┐
+│   Electron Main     │──────logs────▶┌────────────────────┐
+│ (electron/logger.js)│               │                    │
+└─────────────────────┘               │    Log Files       │
+                                      │                    │
+┌─────────────────────┐               │ • logs/app.log     │
+│ Electron Renderer   │──────logs────▶│ • logs/error.log   │
+│ (electron/renderer) │               │ • logs/conversations.jsonl │
+└─────────────────────┘               │ • logs/errors.jsonl│
+                                      │                    │
+┌─────────────────────┐               └────────────────────┘
+│  Python Backend     │──────logs────▶        ⬇
+│  (src/logger.py)    │               Terminal/Console
+└─────────────────────┘              (Dev Environment)
 ```
 
 ## Log Levels

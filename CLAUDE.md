@@ -4,7 +4,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Chat Juicer is an Azure OpenAI chat application using the **Responses API** (not Chat Completions API). This is a critical architectural distinction that affects all interactions with the AI service.
+Chat Juicer is an Electron + Python application for Azure OpenAI chat using the **Responses API** (not Chat Completions API). This is a critical architectural distinction that affects all interactions with the AI service.
+
+## Project Structure
+
+```
+chat-juicer/
+├── electron/          # Electron main process and utilities
+│   ├── main.js       # Electron main process
+│   ├── preload.js    # Preload script for IPC
+│   ├── renderer.js   # Renderer process script
+│   └── logger.js     # Electron-side logging
+├── ui/               # Frontend assets
+│   └── index.html    # Main UI
+├── src/              # Python backend
+│   ├── main.py       # Main chat loop and streaming handler
+│   ├── azure_client.py  # Azure OpenAI setup and configuration
+│   ├── functions.py  # Function handlers and tool definitions
+│   └── logger.py     # Python logging framework
+├── logs/             # Log files (gitignored)
+│   ├── conversations.jsonl  # Structured conversation logs
+│   └── errors.jsonl  # Error logs
+└── docs/             # Documentation
+```
 
 ## Key Architectural Concepts
 
@@ -23,7 +45,7 @@ When modifying conversation flow, always:
 Function calls follow this specific pattern:
 1. Build temporary context: user message → function call → function output  
 2. Maintain conversation state using `previous_response_id` after function execution
-3. All function calls are logged via decorators to the structured logger and included in `logs/conversations.jsonl`
+3. All function calls are logged to the structured logger and included in `logs/conversations.jsonl`
 
 ## Essential Commands
 
@@ -36,6 +58,15 @@ pip install -r requirements.txt
 ```
 
 ### Running the Application
+
+#### Electron App (Primary)
+```bash
+npm start
+# Or for development mode with DevTools:
+npm run dev
+```
+
+#### Python Backend Only (Testing)
 ```bash
 python src/main.py
 ```
@@ -55,13 +86,22 @@ python src/main.py
 ### Environment Requirements
 - `AZURE_OPENAI_API_KEY`: Required
 - `AZURE_OPENAI_ENDPOINT`: Required (format: `https://resource.openai.azure.com/`)
-- Deployment must support Responses API (currently "gpt-5-mini")
+- `AZURE_OPENAI_DEPLOYMENT`: Optional, defaults to "gpt-5-mini"
+- Deployment must support Responses API
 
 ### Dependencies
-Core requirement: `openai-agents>=0.1.0` - provides the `agents` module imported in main.py with:
-- `set_default_openai_client()`
-- `set_default_openai_api()`  
-- `set_tracing_disabled()`
+
+#### Python Dependencies
+- `openai-agents>=0.1.0` - provides the `agents` module with:
+  - `set_default_openai_client()`
+  - `set_default_openai_api()`  
+  - `set_tracing_disabled()`
+- `python-json-logger>=2.0.0` - JSON formatted logging
+- `python-dotenv` - Environment variable management
+- `openai` - Azure OpenAI client
+
+#### Node Dependencies
+- `electron` - Desktop application framework
 
 ### Streaming Response Handling
 The code processes multiple event types in order:
@@ -78,10 +118,10 @@ The code processes multiple event types in order:
 ## Common Development Tasks
 
 ### Adding New Functions
-1. Add function definition to `tools` array
-2. Implement function with decorators: `@log_function_call()` and optionally `@log_timing()`
-3. Add function execution in tool call handler
-4. Logging is automatic via decorators - no manual logging needed
+1. Add function definition to `TOOLS` array in `src/functions.py`
+2. Implement the function in `src/functions.py`
+3. Register function in `FUNCTION_REGISTRY` dict in `src/functions.py`
+4. Function calls are automatically logged via the main loop
 
 ### Modifying Conversation Flow
 Always maintain the `previous_response_id` chain - breaking this loses conversation context.
@@ -91,4 +131,4 @@ Always maintain the `previous_response_id` chain - breaking this loses conversat
 - No test framework configured
 - No linting/formatting tools
 - Manual validation only
-- Single-file architecture (all in `src/main.py`)
+- Modular architecture with separation of concerns
