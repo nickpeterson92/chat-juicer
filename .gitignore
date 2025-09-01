@@ -1,3 +1,38 @@
-.DS_Store
+# Dependencies
+node_modules/
+
+# Environment
+.env
 src/.env
+
+# Logs
+*.log
 src/*.log
+function_calls.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+env/
+venv/
+.venv
+
+# Electron
+dist/
+out/
+
+# Project specific
+.serena/
+.juicer/

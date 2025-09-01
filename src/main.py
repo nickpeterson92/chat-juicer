@@ -99,8 +99,8 @@ previous_response_id = None
 # Main chat loop
 while True:
     try:
-        # Get user input
-        user_input = input("\nYou: ").strip()
+        # Get user input (no prompt since we're in GUI mode)
+        user_input = input().strip()
         
         # Check for exit commands
         if user_input.lower() in ['quit', 'exit', 'q']:
@@ -140,7 +140,7 @@ while True:
         tool_calls = []
         response_text = ""
         current_response_id = None
-        assistant_printed = False  # Track if we've printed "Assistant: " yet
+        # Track if we've started sending assistant messages
         
         # Process streaming events
         for event in stream:
@@ -156,12 +156,14 @@ while True:
             
             # Handle text delta events for clean output
             elif event.type == 'response.output_text.delta':
-                # Print "Assistant: " prefix on first text output
-                if not assistant_printed:
-                    print("\nAssistant: ", end="", flush=True)
-                    assistant_printed = True
-                # Print the text delta immediately with flush
-                print(event.delta, end="", flush=True)
+                # Send structured JSON message for each delta
+                # Send start message only once per response
+                if not response_text:
+                    msg = json.dumps({"type": "assistant_start"})
+                    print(f"__JSON__{msg}__JSON__", flush=True)
+                # Send delta message
+                msg = json.dumps({"type": "assistant_delta", "content": event.delta})
+                print(f"__JSON__{msg}__JSON__", flush=True)
                 response_text += event.delta
             
             # Handle function tool call completion
@@ -171,8 +173,9 @@ while True:
             
             # Check for response completion event
             elif event.type == 'response.done':
-                # This event marks the end of the response
-                pass
+                # Send end message
+                msg = json.dumps({"type": "assistant_end"})
+                print(f"__JSON__{msg}__JSON__", flush=True)
         
         # Update previous_response_id for next turn
         if current_response_id:
@@ -216,7 +219,8 @@ while True:
             
             # Make second request with function results
             # Use previous_response_id to maintain context
-            print("\nAssistant: ", end="", flush=True)
+            msg = json.dumps({"type": "assistant_start"})
+            print(f"__JSON__{msg}__JSON__", flush=True)
             
             final_request_params = {
                 "model": deployment_name,
@@ -240,11 +244,14 @@ while True:
                         previous_response_id = event.response.id
                         
                 elif event.type == 'response.output_text.delta':
-                    print(event.delta, end="", flush=True)
+                    msg = json.dumps({"type": "assistant_delta", "content": event.delta})
+                    print(f"__JSON__{msg}__JSON__", flush=True)
                     final_text += event.delta
+                elif event.type == 'response.done':
+                    msg = json.dumps({"type": "assistant_end"})
+                    print(f"__JSON__{msg}__JSON__", flush=True)
         
-        # Add newline after response completes
-        print()
+        # Response complete
 
     except KeyboardInterrupt:
         print("\n\nInterrupted. Goodbye!")
