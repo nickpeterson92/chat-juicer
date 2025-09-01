@@ -74,7 +74,17 @@ while True:
             "tools": tools,
             "stream": True,
             "store": True,
-            "instructions": "You are the most helpful assistant."
+            "instructions": """You are a documentation automation assistant with file system access.
+
+When asked to create documentation:
+1. First use list_directory to explore available files
+2. Use read_file to read relevant deliverables from the deliverables/ directory
+3. Use load_template to load the requested template
+4. Use generate_document to combine the template with deliverables content
+5. Use write_document to save the generated document
+6. Respond with a brief confirmation of what was created
+
+Always complete the full workflow when creating documents. Don't stop after just listing directories."""
         }
         
         # Add previous_response_id if we have one (for conversation continuity)
@@ -85,6 +95,7 @@ while True:
         stream = azure_client.responses.create(**request_params)
 
         tool_calls = []
+        all_function_calls = []  # Track all function calls for logging
         response_text = ""
         current_response_id = None
         
@@ -122,26 +133,28 @@ while True:
         if current_response_id:
             previous_response_id = current_response_id
     
-        # If there were tool calls, execute them and get final response
-        if tool_calls:
-            # Build a fresh input_list with just what's needed for function calling
-            # Start with the original user message
-            function_context = [{
-                "role": "user",
-                "content": user_input
-            }]
-            
-            # Add the tool calls
+        # Initialize function context once, outside the loop
+        function_context = [{
+            "role": "user",
+            "content": user_input
+        }]
+        
+        # Process function calls in a loop until no more functions are called
+        while tool_calls:
+            # Add the new tool calls to the existing context
             for tool_call in tool_calls:
                 function_context.append({
                     "type": "function_call",
                     "call_id": tool_call.call_id,
-                    "name": tool_call.name,
+                    "name": tool_call.name,  
                     "arguments": tool_call.arguments
                 })
             
             # Execute each tool call and add outputs
             for tool_call in tool_calls:
+                # Track for logging
+                all_function_calls.append({"name": tool_call.name, "arguments": tool_call.arguments})
+                
                 # Execute the function from registry
                 if tool_call.name in FUNCTION_REGISTRY:
                     args = json.loads(tool_call.arguments)
@@ -161,24 +174,39 @@ while True:
             
             # Make second request with function results
             # Use previous_response_id to maintain context
-            msg = json.dumps({"type": "assistant_start"})
-            print(f"__JSON__{msg}__JSON__", flush=True)
             
             final_request_params = {
                 "model": deployment_name,
                 "input": function_context,  # Use function_context with function results
                 "tools": tools,
                 "stream": True,
-                "store": True
+                "store": True,
+                "instructions": """You are a documentation automation assistant with file system access.
+
+When asked to create documentation:
+1. First use list_directory to explore available files
+2. Use read_file to read relevant deliverables from the deliverables/ directory  
+3. Use load_template to load the requested template
+4. Use generate_document to combine the template with deliverables content
+5. Use write_document to save the generated document
+6. Respond with a brief confirmation of what was created
+
+Continue with the next step in the workflow based on what you've learned from the function results.
+If you've just listed directories, now read the relevant files.
+If you've read files, now load the template.
+If you have everything, generate the document."""
             }
             
             # Add previous_response_id to maintain conversation context
-            if current_response_id:
-                final_request_params["previous_response_id"] = current_response_id
+            # Use the most recent response ID we have
+            if previous_response_id:
+                final_request_params["previous_response_id"] = previous_response_id
             
             final_response = azure_client.responses.create(**final_request_params)
             
             final_text = ""
+            more_tool_calls = []
+            
             for event in final_response:
                 # Capture the new response ID
                 if event.type == 'response.created':
@@ -186,18 +214,35 @@ while True:
                         previous_response_id = event.response.id
                         
                 elif event.type == 'response.output_text.delta':
-                    msg = json.dumps({"type": "assistant_delta", "content": event.delta})
-                    print(f"__JSON__{msg}__JSON__", flush=True)
-                    final_text += event.delta
+                    # Send start message on first delta
+                    if not final_text and event.delta:
+                        msg = json.dumps({"type": "assistant_start"})
+                        print(f"__JSON__{msg}__JSON__", flush=True)
+                    
+                    if event.delta:  # Only send if there's actual content
+                        msg = json.dumps({"type": "assistant_delta", "content": event.delta})
+                        print(f"__JSON__{msg}__JSON__", flush=True)
+                        final_text += event.delta
+                        
+                # Check for additional function calls
+                elif event.type == 'response.output_item.done':
+                    if hasattr(event.item, 'type') and event.item.type == 'function_call':
+                        more_tool_calls.append(event.item)
+                        
                 elif event.type == 'response.done':
-                    msg = json.dumps({"type": "assistant_end"})
-                    print(f"__JSON__{msg}__JSON__", flush=True)
+                    # Only send end message if we actually sent content
+                    if final_text:
+                        msg = json.dumps({"type": "assistant_end"})
+                        print(f"__JSON__{msg}__JSON__", flush=True)
+            
+            # Continue with more tool calls if any
+            tool_calls = more_tool_calls
     
-        # Log conversation turn completion
+        # Log conversation turn completion with all function calls
         logger.log_conversation_turn(
             user_input=user_input,
             response=response_text or final_text if 'final_text' in locals() else response_text,
-            function_calls=[{"name": tc.name, "arguments": tc.arguments} for tc in tool_calls] if tool_calls else None
+            function_calls=all_function_calls if all_function_calls else None
         )
 
     except KeyboardInterrupt:
