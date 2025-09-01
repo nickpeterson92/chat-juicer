@@ -4,8 +4,196 @@ Separate module for all tool/function implementations.
 """
 
 import json
+import re
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, List
+
+
+def optimize_content_for_tokens(content: str, format_type: str = "text") -> tuple[str, Dict]:
+    """
+    Optimize content for minimal token usage while preserving information.
+    
+    Args:
+        content: The text content to optimize
+        format_type: Type of content (markdown, csv, json, text, etc.)
+        
+    Returns:
+        Tuple of (optimized_content, optimization_stats)
+    """
+    original_length = len(content)
+    lines = content.splitlines()
+    
+    # Statistics tracking
+    stats = {
+        "original_length": original_length,
+        "original_lines": len(lines),
+        "removed_blank_lines": 0,
+        "removed_headers": 0,
+        "removed_footers": 0,
+        "whitespace_trimmed": 0,
+        "redundant_removed": 0
+    }
+    
+    # Step 1: Remove excessive blank lines (keep max 1 between sections)
+    optimized_lines = []
+    prev_blank = False
+    for line in lines:
+        if line.strip() == "":
+            if not prev_blank:
+                optimized_lines.append("")
+                prev_blank = True
+            else:
+                stats["removed_blank_lines"] += 1
+        else:
+            optimized_lines.append(line)
+            prev_blank = False
+    
+    # Step 2: Detect and remove common headers/footers
+    if len(optimized_lines) > 10:
+        # Common header patterns (first 5 lines)
+        header_patterns = [
+            r'^[-=]{3,}$',  # Separator lines
+            r'^Page \d+',  # Page numbers
+            r'^\s*Confidential',  # Confidentiality notices
+            r'^\s*Copyright',  # Copyright notices
+            r'^\s*Generated on',  # Generation timestamps
+            r'^\s*Printed on',  # Print timestamps
+        ]
+        
+        # Check first 5 lines for headers
+        lines_to_remove = []
+        for i in range(min(5, len(optimized_lines))):
+            for pattern in header_patterns:
+                if re.match(pattern, optimized_lines[i], re.IGNORECASE):
+                    lines_to_remove.append(i)
+                    stats["removed_headers"] += 1
+                    break
+        
+        # Remove headers (in reverse to maintain indices)
+        for i in reversed(lines_to_remove):
+            if i < len(optimized_lines):
+                optimized_lines.pop(i)
+        
+        # Check last 5 lines for footers
+        footer_patterns = header_patterns + [
+            r'^\s*End of (document|file|report)',
+            r'^\s*\d+\s*$',  # Lone page numbers
+        ]
+        
+        lines_to_remove = []
+        start_idx = max(0, len(optimized_lines) - 5)
+        for i in range(start_idx, len(optimized_lines)):
+            for pattern in footer_patterns:
+                if re.match(pattern, optimized_lines[i], re.IGNORECASE):
+                    lines_to_remove.append(i)
+                    stats["removed_footers"] += 1
+                    break
+        
+        # Remove footers
+        for i in reversed(lines_to_remove):
+            if i < len(optimized_lines):
+                optimized_lines.pop(i)
+    
+    # Step 3: Format-specific optimizations
+    if format_type == "csv" or format_type == "markdown_table":
+        # Remove redundant column separators
+        optimized_lines = [re.sub(r'\s*\|\s*', '|', line) for line in optimized_lines]
+        stats["whitespace_trimmed"] = sum(1 for line in optimized_lines if '|' in line)
+    
+    elif format_type == "json":
+        # Compact JSON formatting (remove extra spaces around : and ,)
+        content_joined = '\n'.join(optimized_lines)
+        content_joined = re.sub(r'\s*:\s*', ':', content_joined)
+        content_joined = re.sub(r'\s*,\s*', ',', content_joined)
+        optimized_lines = content_joined.splitlines()
+        stats["whitespace_trimmed"] = len(optimized_lines)
+    
+    # Step 4: Trim trailing whitespace from all lines
+    optimized_lines = [line.rstrip() for line in optimized_lines]
+    
+    # Step 5: Remove redundant separators (multiple dashes, equals, etc.)
+    final_lines = []
+    prev_separator = False
+    for line in optimized_lines:
+        # Check if line is just separators
+        if re.match(r'^[\s\-=_*#]{3,}$', line):
+            if not prev_separator:
+                final_lines.append(line[:20])  # Keep shortened separator
+                prev_separator = True
+            else:
+                stats["redundant_removed"] += 1
+        else:
+            final_lines.append(line)
+            prev_separator = False
+    
+    # Step 6: For markdown, optimize heading spacing
+    if format_type == "markdown" or "markdown" in format_type:
+        compressed = []
+        for i, line in enumerate(final_lines):
+            # Remove blank lines before headings (markdown renders spacing)
+            if line.startswith('#') and i > 0 and compressed and compressed[-1] == "":
+                compressed.pop()
+                stats["removed_blank_lines"] += 1
+            compressed.append(line)
+        final_lines = compressed
+    
+    # Join back together
+    optimized_content = '\n'.join(final_lines)
+    
+    # Calculate final stats
+    stats["final_length"] = len(optimized_content)
+    stats["final_lines"] = len(final_lines)
+    stats["bytes_saved"] = original_length - stats["final_length"]
+    stats["percentage_saved"] = round((stats["bytes_saved"] / original_length * 100), 1) if original_length > 0 else 0
+    
+    return optimized_content, stats
+
+
+def estimate_tokens(text: str) -> Dict:
+    """
+    Estimate token count for text content.
+    
+    Uses multiple heuristics for better accuracy:
+    - Average English: ~4 characters per token
+    - Code/technical: ~3.5 characters per token  
+    - Structured data: ~3 characters per token
+    
+    Returns dict with multiple estimates.
+    """
+    char_count = len(text)
+    word_count = len(text.split())
+    
+    # Detect content type for better estimation
+    code_indicators = sum([
+        text.count('{'),
+        text.count('}'),
+        text.count('('),
+        text.count(')'),
+        text.count(';'),
+        text.count('=')
+    ])
+    
+    # Calculate code density (0-1)
+    code_density = min(code_indicators / (word_count + 1), 1.0)
+    
+    # Weighted average based on content type
+    if code_density > 0.3:
+        # Code/technical content
+        chars_per_token = 3.0 + (1.0 * (1 - code_density))
+    else:
+        # Natural language
+        chars_per_token = 4.0
+    
+    return {
+        "estimated_tokens": int(char_count / chars_per_token),
+        "conservative_estimate": int(char_count / 3.0),  # Worst case
+        "optimistic_estimate": int(char_count / 4.5),  # Best case
+        "char_count": char_count,
+        "word_count": word_count,
+        "chars_per_token": round(chars_per_token, 2),
+        "content_type": "technical" if code_density > 0.3 else "natural"
+    }
+
 
 def get_weather(location: str) -> str:
     """
@@ -139,60 +327,17 @@ def read_file(file_path: str, max_size: int = 1048576) -> str:
                 content = conversion_result.text_content
                 conversion_method = "markitdown"
                 
-                # Token optimization: strip excessive whitespace
-                lines = content.splitlines()
-                # Remove multiple consecutive blank lines
-                optimized_lines = []
-                prev_blank = False
-                for line in lines:
-                    if line.strip() == "":
-                        if not prev_blank:
-                            optimized_lines.append(line)
-                        prev_blank = True
-                    else:
-                        optimized_lines.append(line)
-                        prev_blank = False
-                
-                content = "\n".join(optimized_lines)
+                # Apply advanced token optimization
+                content, optimization_stats = optimize_content_for_tokens(
+                    content, 
+                    format_type="markdown"
+                )
                 
             except ImportError:
-                # Fallback if MarkItDown not installed
-                # For CSV, do basic conversion
-                if extension == '.csv':
-                    try:
-                        import csv
-                        with open(target_file, 'r', encoding='utf-8') as f:
-                            reader = csv.reader(f)
-                            rows = list(reader)
-                            
-                        if rows:
-                            # Convert to markdown table
-                            content = "| " + " | ".join(rows[0]) + " |\n"
-                            content += "|" + "|".join(["---"] * len(rows[0])) + "|\n"
-                            for row in rows[1:]:
-                                # Ensure row has same number of columns
-                                while len(row) < len(rows[0]):
-                                    row.append("")
-                                content += "| " + " | ".join(row[:len(rows[0])]) + " |\n"
-                            conversion_method = "csv_fallback"
-                    except Exception:
-                        pass
-                
-                # For JSON, format as code block
-                elif extension == '.json':
-                    try:
-                        with open(target_file, 'r', encoding='utf-8') as f:
-                            json_data = json.load(f)
-                        content = f"```json\n{json.dumps(json_data, indent=2)}\n```"
-                        conversion_method = "json_fallback"
-                    except Exception:
-                        pass
-                
-                if not content:
-                    return json.dumps({
-                        "error": f"Cannot convert {extension} file without MarkItDown. Install with: pip install markitdown",
-                        "file_path": str(target_file)
-                    })
+                return json.dumps({
+                    "error": f"MarkItDown is required for reading {extension} files. Install with: pip install markitdown",
+                    "file_path": str(target_file)
+                })
             except Exception as conv_error:
                 return json.dumps({
                     "error": f"Conversion failed: {str(conv_error)}",
@@ -205,14 +350,30 @@ def read_file(file_path: str, max_size: int = 1048576) -> str:
             try:
                 content = target_file.read_text(encoding='utf-8')
                 conversion_method = "direct_read"
+                
+                # Determine format type for optimization
+                if extension in ['.md', '.markdown']:
+                    format_type = "markdown"
+                elif extension in ['.json']:
+                    format_type = "json"
+                elif extension in ['.csv']:
+                    format_type = "csv"
+                else:
+                    format_type = "text"
+                
+                # Apply optimization to all text content
+                content, optimization_stats = optimize_content_for_tokens(
+                    content,
+                    format_type=format_type
+                )
             except UnicodeDecodeError:
                 return json.dumps({
                     "error": "File is not text/UTF-8 encoded",
                     "file_path": str(target_file)
                 })
         
-        # Calculate token estimate (rough: 1 token ≈ 4 characters)
-        estimated_tokens = len(content) // 4
+        # Use advanced token estimation
+        token_estimates = estimate_tokens(content)
         
         result = {
             "file_path": str(target_file.relative_to(cwd) if cwd in target_file.parents else target_file),
@@ -223,16 +384,23 @@ def read_file(file_path: str, max_size: int = 1048576) -> str:
             "content": content,
             "lines": len(content.splitlines()),
             "conversion_method": conversion_method,
-            "estimated_tokens": estimated_tokens,
+            "token_estimates": token_estimates,
             "format": "markdown" if needs_conversion or extension in ['.md', '.markdown'] else "text"
         }
         
-        # Add conversion savings info if converted
+        # Add optimization statistics if we have them
+        if 'optimization_stats' in locals():
+            result["optimization"] = optimization_stats
+            result["optimization"]["token_savings_estimate"] = int(
+                optimization_stats["bytes_saved"] / 4  # Rough token savings
+            )
+        
+        # Add conversion info if converted
         if needs_conversion and conversion_method == "markitdown":
-            result["token_optimization"] = {
+            result["conversion_info"] = {
                 "original_format": extension,
                 "converted_to": "markdown",
-                "note": "Structured markdown typically uses fewer tokens than raw formats"
+                "optimized": True if 'optimization_stats' in locals() else False
             }
         
         return json.dumps(result, indent=2)
