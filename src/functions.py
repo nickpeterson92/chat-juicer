@@ -235,9 +235,16 @@ def list_directory(path: str = ".", show_hidden: bool = False) -> str:
         # Sort directories first, then files
         items.sort(key=lambda x: (x["type"] != "directory", x["name"].lower()))
         
+        # Log metadata for humans
+        import logging
+        logger = logging.getLogger('chat-juicer')
+        dirs = sum(1 for i in items if i["type"] == "directory")
+        files = sum(1 for i in items if i["type"] == "file")
+        total_size = sum(i.get("size", 0) for i in items if i["type"] == "file")
+        logger.debug(f"Listed {target_path.name}: {dirs} dirs, {files} files, {total_size:,} bytes total")
+        
+        # Return minimal data to model - just items, no counts or stats
         result = {
-            "current_directory": str(target_path.relative_to(cwd) if cwd in target_path.parents or target_path == cwd else target_path),
-            "total_items": len(items),
             "items": items
         }
         
@@ -355,36 +362,27 @@ def read_file(file_path: str, max_size: int = 1048576) -> str:
                     "file_path": str(target_file)
                 })
         
-        # Use advanced token estimation
+        # Use advanced token estimation for logging only
         token_estimates = estimate_tokens(content)
         
-        result = {
-            "file_path": str(target_file.relative_to(cwd) if cwd in target_file.parents else target_file),
-            "file_name": target_file.name,
-            "original_size": file_size,
-            "content_size": len(content),
-            "extension": target_file.suffix,
-            "content": content,
-            "lines": len(content.splitlines()),
-            "conversion_method": conversion_method,
-            "token_estimates": token_estimates,
-            "format": "markdown" if needs_conversion or extension in ['.md', '.markdown'] else "text"
-        }
+        # Log all the metadata for humans
+        import logging
+        logger = logging.getLogger('chat-juicer')
+        logger.debug(f"Read {target_file.name}: {file_size} bytes → {len(content)} chars, "
+                    f"{len(content.splitlines())} lines, ~{token_estimates.get('estimated_tokens', '?')} tokens")
         
-        # Add optimization statistics if we have them
         if 'optimization_stats' in locals():
-            result["optimization"] = optimization_stats
-            result["optimization"]["token_savings_estimate"] = int(
-                optimization_stats["bytes_saved"] / 4  # Rough token savings
-            )
+            logger.debug(f"Optimization: saved {optimization_stats['percentage_saved']}% "
+                        f"({optimization_stats['bytes_saved']} bytes)")
         
-        # Add conversion info if converted
-        if needs_conversion and conversion_method == "markitdown":
-            result["conversion_info"] = {
-                "original_format": extension,
-                "converted_to": "markdown",
-                "optimized": True if 'optimization_stats' in locals() else False
-            }
+        if needs_conversion:
+            logger.debug(f"Converted from {extension} to markdown via {conversion_method}")
+        
+        # Return ONLY essential data to model - just content and path
+        result = {
+            "content": content,
+            "file_path": str(target_file.relative_to(cwd) if cwd in target_file.parents else target_file)
+        }
         
         return json.dumps(result, indent=2)
             
@@ -494,13 +492,16 @@ def generate_document(
         # Check for unfilled placeholders
         remaining_placeholders = re.findall(r'\{\{([^}]+)\}\}', generated_content)
         
+        # Log metadata for humans
+        import logging
+        logger = logging.getLogger('chat-juicer')
+        logger.debug(f"Generated document: {len(replacements_made)} replacements, "
+                    f"{len(remaining_placeholders)} unfilled, "
+                    f"{len(generated_content):,} chars")
+        
+        # Return minimal data to model - NO content, just success status
         result = {
-            "success": True,
-            "content": generated_content,
-            "replacements_made": replacements_made,
-            "unfilled_placeholders": list(set(remaining_placeholders)),
-            "total_lines": len(generated_content.splitlines()),
-            "total_characters": len(generated_content)
+            "success": True
         }
         
         # Save if output file specified

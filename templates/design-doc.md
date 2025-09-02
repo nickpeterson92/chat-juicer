@@ -156,9 +156,9 @@ EVERYTHING BELOW IS FOR TEMPLATE USERS ONLY - DO NOT INCLUDE IN GENERATED DOCS
 
 ## Quick Mermaid Syntax Reference
 
-### Critical Rules - NEVER Use These Characters in Labels
+### 🚨 CRITICAL RULES - NEVER Use The Below Characters in Labels:
 - `{ }` → Interpreted as diamond shape syntax
-- `( )` → Causes parsing errors  
+- `( )` → Causes parsing errors
 - `&` → Use "and" instead
 - `[ ]` → Reserved for node definition
 - `|` → Reserved for separators
@@ -243,7 +243,7 @@ CREDIT[Credit Check (cache)]      CREDIT[Credit Check - cache]
 DB[Staging DB (order_staging_db)] DB[Staging DB - order_staging_db]
 API[REST API (v2)]                API[REST API v2]
 ENV[Production (US-EAST)]         ENV[Production US-EAST]
-SYSTEM API (Aysnc)                SYSTEM API [Async]
+SYSTEM API (Aysnc)                SYSTEM API - Async
 ```
 
 #### Complete Error Reference
