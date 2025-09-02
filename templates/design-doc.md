@@ -1,11 +1,19 @@
 # Design Document: {{project_name}}
 
 <!-- 
-TEMPLATE INSTRUCTIONS:
-1. Replace {{placeholders}} in text sections with your content
-2. Replace {{diagram_placeholder}} sections with ACTUAL Mermaid diagrams
-3. Each diagram MUST be a proper ```mermaid code block
-4. Avoid parentheses and curly braces in labels
+MERMAID DIAGRAM GENERATION RULES:
+================================
+
+When creating Mermaid diagrams, remember these syntax requirements:
+
+1. Node labels CANNOT contain parentheses - they cause parser errors
+2. Instead of parentheses, use: dashes, colons, or just spaces
+3. Keep node IDs simple (letters/numbers/underscores only)
+
+Example transformations for clarity:
+- Instead of: "System (Production)" use: "System - Production"  
+- Instead of: "API (v2)" use: "API v2"
+- Instead of: "Process (async)" use: "Process Async"
 -->
 
 ## Executive Summary
@@ -235,6 +243,7 @@ CREDIT[Credit Check (cache)]      CREDIT[Credit Check - cache]
 DB[Staging DB (order_staging_db)] DB[Staging DB - order_staging_db]
 API[REST API (v2)]                API[REST API v2]
 ENV[Production (US-EAST)]         ENV[Production US-EAST]
+SYSTEM API (Aysnc)                SYSTEM API [Async]
 ```
 
 #### Complete Error Reference

@@ -6,7 +6,7 @@ Separate module for all tool/function implementations.
 import json
 import re
 from pathlib import Path
-from typing import Dict, Optional, List
+from typing import Dict, Optional
 
 
 def optimize_content_for_tokens(content: str, format_type: str = "text") -> tuple[str, Dict]:
@@ -193,23 +193,6 @@ def estimate_tokens(text: str) -> Dict:
         "chars_per_token": round(chars_per_token, 2),
         "content_type": "technical" if code_density > 0.3 else "natural"
     }
-
-
-def get_weather(location: str) -> str:
-    """
-    Get weather for a given location.
-    Currently returns mock data for demonstration.
-    
-    Args:
-        location: The location to get weather for
-        
-    Returns:
-        String with weather information
-    """
-    # Simple mock response matching original format
-    result = f"The temperature in {location} is 20 degrees Celsius."
-    return result
-
 
 def list_directory(path: str = ".", show_hidden: bool = False) -> str:
     """
@@ -593,22 +576,6 @@ def write_document(file_path: str, content: str, create_backup: bool = True) -> 
 TOOLS = [
     {
         "type": "function",
-        "name": "get_weather",
-        "description": "Get current temperature for a given location.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "location": {
-                    "type": "string",
-                    "description": "City and country e.g. Bogotá, Colombia"
-                }
-            },
-            "required": ["location"],
-            "additionalProperties": False
-        }
-    },
-    {
-        "type": "function",
         "name": "list_directory",
         "description": "List contents of a directory for project discovery. Returns files and subdirectories with metadata.",
         "parameters": {
@@ -719,7 +686,6 @@ TOOLS = [
 
 # Function registry for execution
 FUNCTION_REGISTRY = {
-    "get_weather": get_weather,
     "list_directory": list_directory,
     "read_file": read_file,
     "load_template": load_template,

@@ -26,32 +26,38 @@ except ImportError:
     # Fallback JSON formatter
     class JsonFormatter(logging.Formatter):
         def format(self, record):
+            # Use file_message if available, otherwise use regular message
+            message = getattr(record, 'file_message', record.getMessage())
+            
+            # Start with minimal essential fields
             log_data = {
-                'timestamp': datetime.utcnow().isoformat(),
-                'level': record.levelname,
-                'logger': record.name,
-                'message': record.getMessage(),
-                'module': record.module,
-                'function': record.funcName,
-                'line': record.lineno
+                'ts': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+                'lvl': record.levelname[0],  # Just first letter: I, W, E, D
+                'msg': message  # Use the potentially shortened message
             }
-            # Add all extra fields from the record
-            # Skip internal logging attributes
-            skip_attrs = {'name', 'msg', 'args', 'created', 'filename', 'funcName', 
-                         'levelname', 'levelno', 'lineno', 'module', 'msecs', 
-                         'message', 'pathname', 'process', 'processName', 
-                         'relativeCreated', 'thread', 'threadName', 'exc_info',
-                         'exc_text', 'stack_info'}
-            for key, value in record.__dict__.items():
-                if key not in skip_attrs:
-                    log_data[key] = value
-            return json.dumps(log_data)
+            
+            # Only add important extra fields if they exist
+            important_fields = ['session_id', 'ms', 'tokens', 'chars', 'functions', 'func']
+            
+            for field in important_fields:
+                if hasattr(record, field):
+                    value = getattr(record, field)
+                    if value is not None:  # Only add if not None
+                        log_data[field] = value
+            
+            # Add error info if present
+            if record.exc_info:
+                log_data['error'] = self.formatException(record.exc_info)
+                
+            # Return compact single-line JSON
+            return json.dumps(log_data, separators=(',', ':'))
 
 
 class ConversationFilter(logging.Filter):
-    """Filter to only allow conversation turn logs"""
+    """Filter to allow all INFO level logs for conversations"""
     def filter(self, record):
-        return hasattr(record, 'conversation_turn') and record.conversation_turn
+        # Allow all INFO and above logs (not DEBUG)
+        return record.levelno >= logging.INFO
 
 
 class ErrorFilter(logging.Filter):
@@ -111,9 +117,11 @@ def setup_logging(name: str = "chat-juicer", debug: bool = None) -> logging.Logg
     conv_handler.addFilter(ConversationFilter())
     
     if HAS_JSON_LOGGER:
+        # Use concise format for JSON logger too
         conv_formatter = jsonlogger.JsonFormatter(
-            '%(timestamp)s %(session_id)s %(user_input)s %(response)s %(function_calls)s',
-            timestamp=True
+            '%(asctime)s %(levelname)s %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S',
+            rename={'asctime': 'ts', 'levelname': 'lvl', 'message': 'msg'}
         )
     else:
         conv_formatter = JsonFormatter()
@@ -186,45 +194,78 @@ class ChatLogger:
             duration_ms: Response time in milliseconds
             tokens_used: Number of tokens used
         """
+        # Create concise summary for log file
+        user_preview = user_input[:50].replace('\n', ' ')
+        if len(user_input) > 50:
+            user_preview += "..."
+        
+        response_preview = response[:50].replace('\n', ' ')
+        if len(response) > 50:
+            response_preview += "..."
+        
+        # Build concise message
+        msg_parts = [f"User: {user_preview} → AI: {response_preview}"]
+        
+        if function_calls:
+            msg_parts.append(f"[{len(function_calls)} functions]")
+        
+        if duration_ms:
+            msg_parts.append(f"[{duration_ms:.0f}ms]")
+            
+        if tokens_used:
+            msg_parts.append(f"[{tokens_used} tokens]")
+        
+        # Log concise message with minimal extra data
         extra_data = {
             'conversation_turn': True,  # Flag for filter
             'timestamp': datetime.utcnow().isoformat(),
             'session_id': self.session_id,
-            'user_input': user_input,
-            'response': response,
-            'function_calls': function_calls or [],
-            'user_input_length': len(user_input),
-            'response_length': len(response),
-            'has_function_calls': bool(function_calls),
-            'function_count': len(function_calls) if function_calls else 0
+            'chars': len(user_input) + len(response),
+            'functions': len(function_calls) if function_calls else 0
         }
         
+        # Only add performance metrics if present
         if duration_ms is not None:
-            extra_data['duration_ms'] = duration_ms
+            extra_data['ms'] = int(duration_ms)
         if tokens_used is not None:
-            extra_data['tokens_used'] = tokens_used
+            extra_data['tokens'] = tokens_used
             
         # Log with special flag for conversation filter
-        self.logger.info(
-            f"Turn: {user_input[:50]}... → {response[:50]}...",
-            extra=extra_data
-        )
+        self.logger.info(" ".join(msg_parts), extra=extra_data)
         
     def log_function_call(self, function_name: str, args: dict, result: Any):
         """
-        Log a function call for debugging.
+        Log a function call - verbose to console, concise to file.
         
         Args:
             function_name: Name of the function called
             args: Arguments passed to the function
             result: Result returned by the function
         """
-        self.info(
-            f"Function call: {function_name}({args}) → {result}",
-            function_name=function_name,
-            arguments=args,
-            result=str(result)
-        )
+        # CONSOLE: Full verbose output
+        console_msg = f"Function call: {function_name}({args}) → {result}"
+        
+        # FILE: Concise summary
+        args_parts = []
+        for key, value in args.items():
+            value_str = str(value)
+            if len(value_str) > 20:
+                value_str = value_str[:20] + "..."
+            args_parts.append(f"{key}={value_str}")
+        
+        args_summary = ", ".join(args_parts) if args_parts else ""
+        
+        # Truncate result for file
+        result_str = str(result)[:50]
+        if len(str(result)) > 50:
+            result_str += "..."
+        
+        file_msg = f"Func: {function_name}({args_summary}) → {result_str}"
+        
+        # Log different messages to console vs file
+        # Console handler will show console_msg, file handler will show file_msg
+        # We'll use a custom attribute to differentiate
+        self.logger.info(console_msg, extra={'file_message': file_msg, 'func': function_name})
 
 
 # Global logger instance

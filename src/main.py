@@ -73,6 +73,10 @@ while True:
         if not user_input:
             continue
         
+        # Log user input - full to console, truncated to file
+        file_msg = f"User: {user_input[:100]}{'...' if len(user_input) > 100 else ''}"
+        logger.info(f"User: {user_input}", extra={'file_message': file_msg})
+        
         # For Responses API with previous_response_id, we maintain state server-side
         # Only need to send current user input
         input_list = [{
@@ -95,10 +99,10 @@ while True:
             request_params["previous_response_id"] = previous_response_id
         
         # Get streaming response
+        logger.info("AI: Starting response...", extra={'file_message': 'AI: Start'})
         stream = azure_client.responses.create(**request_params)
 
         tool_calls = []
-        all_function_calls = []  # Track all function calls for logging
         response_text = ""
         current_response_id = None
         
@@ -131,6 +135,10 @@ while True:
                 # Send end message
                 msg = json.dumps({"type": "assistant_end"})
                 print(f"__JSON__{msg}__JSON__", flush=True)
+                # Log response completion - full to console, truncated to file
+                if response_text:
+                    file_msg = f"AI: {response_text[:100]}{'...' if len(response_text) > 100 else ''}"
+                    logger.info(f"AI: {response_text}", extra={'file_message': file_msg})
     
         # Update previous_response_id for next turn
         if current_response_id:
@@ -155,9 +163,6 @@ while True:
             
             # Execute each tool call and add outputs
             for tool_call in tool_calls:
-                # Track for logging
-                all_function_calls.append({"name": tool_call.name, "arguments": tool_call.arguments})
-                
                 # Execute the function from registry
                 if tool_call.name in FUNCTION_REGISTRY:
                     args = json.loads(tool_call.arguments)
@@ -224,16 +229,14 @@ while True:
                     if final_text:
                         msg = json.dumps({"type": "assistant_end"})
                         print(f"__JSON__{msg}__JSON__", flush=True)
+                        # Log the follow-up response - full to console, truncated to file
+                        file_msg = f"AI (post-func): {final_text[:100]}{'...' if len(final_text) > 100 else ''}"
+                        logger.info(f"AI (after functions): {final_text}", extra={'file_message': file_msg})
             
             # Continue with more tool calls if any
             tool_calls = more_tool_calls
     
-        # Log conversation turn completion with all function calls
-        logger.log_conversation_turn(
-            user_input=user_input,
-            response=response_text or final_text if 'final_text' in locals() else response_text,
-            function_calls=all_function_calls if all_function_calls else None
-        )
+        # No longer needed - we log in real-time as events happen
 
     except KeyboardInterrupt:
         logger.info("Chat interrupted by user")

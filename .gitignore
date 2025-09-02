@@ -9,6 +9,9 @@ src/.env
 *.log
 logs/*.jsonl
 
+# Source Documents
+deliverables/*
+
 # OS files
 .DS_Store
 Thumbs.db
