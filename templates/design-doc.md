@@ -163,6 +163,8 @@ EVERYTHING BELOW IS FOR TEMPLATE USERS ONLY - DO NOT INCLUDE IN GENERATED DOCS
 - `[ ]` → Reserved for node definition
 - `|` → Reserved for separators
 
+⚠️ REMEMBER! Using the characters ABOVE in LABELS will result in a FAILURE! ⚠️
+
 ### Safe Label Patterns
 ```
 ✅ GOOD                          ❌ BAD

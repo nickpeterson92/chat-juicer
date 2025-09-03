@@ -23,11 +23,86 @@ Key architectural differences from Chat Completions API:
 
 import sys
 import json
+import time
 
 # Import local modules
 from logger import logger
 from azure_client import setup_azure_client
 from functions import TOOLS, FUNCTION_REGISTRY
+
+# Rate limiting configuration
+RATE_LIMIT_RETRY_MAX = 5
+RATE_LIMIT_BASE_DELAY = 2  # Base delay in seconds
+FUNCTION_CALL_DELAY = 0.5  # Delay between function calls to prevent bursts
+
+def handle_rate_limit(func, *args, **kwargs):
+    """
+    Handle rate limiting with exponential backoff.
+    
+    Args:
+        func: The function to call (typically azure_client.responses.create)
+        *args, **kwargs: Arguments to pass to the function
+        
+    Returns:
+        The response from the function
+        
+    Raises:
+        Exception if max retries exceeded
+    """
+    retry_count = 0
+    last_error = None
+    
+    while retry_count < RATE_LIMIT_RETRY_MAX:
+        try:
+            # Log attempt
+            if retry_count > 0:
+                logger.info(f"Retry attempt {retry_count}/{RATE_LIMIT_RETRY_MAX}")
+            
+            # Try the API call
+            response = func(*args, **kwargs)
+            
+            # Log token usage if available
+            if hasattr(response, 'usage') and response.usage:
+                logger.info(f"Tokens used - Prompt: {response.usage.prompt_tokens}, "
+                          f"Completion: {response.usage.completion_tokens}, "
+                          f"Total: {response.usage.total_tokens}")
+            
+            return response
+            
+        except Exception as e:
+            error_str = str(e)
+            last_error = e
+            
+            # Check if it's a rate limit error
+            if 'rate limit' in error_str.lower() or '429' in error_str:
+                # Calculate exponential backoff
+                wait_time = RATE_LIMIT_BASE_DELAY * (2 ** retry_count)
+                
+                # Send UI notification about rate limit
+                msg = json.dumps({
+                    "type": "rate_limit_hit",
+                    "retry_count": retry_count + 1,
+                    "wait_time": wait_time,
+                    "message": f"Rate limit hit. Waiting {wait_time}s before retry..."
+                })
+                print(f"__JSON__{msg}__JSON__", flush=True)
+                
+                logger.warning(f"Rate limit hit. Waiting {wait_time}s before retry {retry_count + 1}")
+                time.sleep(wait_time)
+                retry_count += 1
+            else:
+                # Not a rate limit error, re-raise
+                raise e
+    
+    # Max retries exceeded
+    error_msg = f"Rate limit retry max ({RATE_LIMIT_RETRY_MAX}) exceeded"
+    logger.error(error_msg)
+    msg = json.dumps({
+        "type": "rate_limit_failed",
+        "message": error_msg
+    })
+    print(f"__JSON__{msg}__JSON__", flush=True)
+    raise last_error if last_error else Exception(error_msg)
 
 # System instructions for the documentation bot
 SYSTEM_INSTRUCTIONS = """You are a technical documentation automation assistant with file system access.
@@ -98,9 +173,9 @@ while True:
         if previous_response_id:
             request_params["previous_response_id"] = previous_response_id
         
-        # Get streaming response
+        # Get streaming response with rate limit handling
         logger.info("AI: Starting response...", extra={'file_message': 'AI: Start'})
-        stream = azure_client.responses.create(**request_params)
+        stream = handle_rate_limit(azure_client.responses.create, **request_params)
 
         tool_calls = []
         response_text = ""
@@ -108,6 +183,10 @@ while True:
         
         # Process streaming events
         for event in stream:
+            # Debug: Log event type to understand what's available
+            if hasattr(event, 'type'):
+                logger.debug(f"Stream event type: {event.type}")
+            
             # Capture response ID from response.created event
             if event.type == 'response.created':
                 if hasattr(event, 'response') and hasattr(event.response, 'id'):
@@ -115,7 +194,6 @@ while True:
         
             # Handle text delta events for clean output
             elif event.type == 'response.output_text.delta':
-                # Send structured JSON message for each delta
                 # Send start message only once per response
                 if not response_text:
                     msg = json.dumps({"type": "assistant_start"})
@@ -129,6 +207,15 @@ while True:
             elif event.type == 'response.output_item.done':
                 if hasattr(event.item, 'type') and event.item.type == 'function_call':
                     tool_calls.append(event.item)
+                    # Send function detected event
+                    msg = json.dumps({
+                        "type": "function_detected",
+                        "name": event.item.name,
+                        "call_id": event.item.call_id,
+                        "arguments": event.item.arguments
+                    })
+                    print(f"__JSON__{msg}__JSON__", flush=True)
+                    logger.info(f"Function detected: {event.item.name}")
         
             # Check for response completion event
             elif event.type == 'response.done':
@@ -162,18 +249,63 @@ while True:
                 })
             
             # Execute each tool call and add outputs
-            for tool_call in tool_calls:
+            for i, tool_call in enumerate(tool_calls):
+                # Add delay between function calls to prevent rate limit bursts
+                if i > 0:
+                    time.sleep(FUNCTION_CALL_DELAY)
+                # Send function execution start event
+                msg = json.dumps({
+                    "type": "function_executing",
+                    "name": tool_call.name,
+                    "call_id": tool_call.call_id,
+                    "arguments": tool_call.arguments
+                })
+                print(f"__JSON__{msg}__JSON__", flush=True)
+                logger.info(f"Executing function: {tool_call.name}")
+                
                 # Execute the function from registry
                 if tool_call.name in FUNCTION_REGISTRY:
                     args = json.loads(tool_call.arguments)
                     func = FUNCTION_REGISTRY[tool_call.name]
-                    result = func(**args)
+                    try:
+                        result = func(**args)
+                        # Send success event
+                        msg = json.dumps({
+                            "type": "function_completed",
+                            "name": tool_call.name,
+                            "call_id": tool_call.call_id,
+                            "success": True
+                        })
+                        print(f"__JSON__{msg}__JSON__", flush=True)
+                        logger.info(f"Function completed: {tool_call.name}")
+                    except Exception as e:
+                        result = f"Error: {str(e)}"
+                        # Send error event
+                        msg = json.dumps({
+                            "type": "function_completed",
+                            "name": tool_call.name,
+                            "call_id": tool_call.call_id,
+                            "success": False,
+                            "error": str(e)
+                        })
+                        print(f"__JSON__{msg}__JSON__", flush=True)
+                        logger.error(f"Function error: {tool_call.name} - {str(e)}")
                     # Log the function call
                     logger.log_function_call(tool_call.name, args, result)
                 else:
                     result = f"Error: Unknown function {tool_call.name}"
+                    # Send error event for unknown function
+                    msg = json.dumps({
+                        "type": "function_completed",
+                        "name": tool_call.name,
+                        "call_id": tool_call.call_id,
+                        "success": False,
+                        "error": "Unknown function"
+                    })
+                    print(f"__JSON__{msg}__JSON__", flush=True)
+                    logger.error(f"Unknown function: {tool_call.name}")
                 
-                # Add function call output (moved outside the else block)
+                # Add function call output
                 function_context.append({
                     "type": "function_call_output",
                     "call_id": tool_call.call_id,
@@ -197,12 +329,21 @@ while True:
             if previous_response_id:
                 final_request_params["previous_response_id"] = previous_response_id
             
-            final_response = azure_client.responses.create(**final_request_params)
+            # Add delay between consecutive function calls to prevent rate limit bursts
+            if tool_calls:
+                logger.debug(f"Adding {FUNCTION_CALL_DELAY}s delay between function calls")
+                time.sleep(FUNCTION_CALL_DELAY)
+            
+            final_response = handle_rate_limit(azure_client.responses.create, **final_request_params)
             
             final_text = ""
             more_tool_calls = []
             
             for event in final_response:
+                # Debug: Log event type
+                if hasattr(event, 'type'):
+                    logger.debug(f"Final response event type: {event.type}")
+                
                 # Capture the new response ID
                 if event.type == 'response.created':
                     if hasattr(event, 'response') and hasattr(event.response, 'id'):
@@ -223,6 +364,15 @@ while True:
                 elif event.type == 'response.output_item.done':
                     if hasattr(event.item, 'type') and event.item.type == 'function_call':
                         more_tool_calls.append(event.item)
+                        # Send function detected event for UI
+                        msg = json.dumps({
+                            "type": "function_detected",
+                            "name": event.item.name,
+                            "call_id": event.item.call_id,
+                            "arguments": event.item.arguments
+                        })
+                        print(f"__JSON__{msg}__JSON__", flush=True)
+                        logger.info(f"Additional function detected: {event.item.name}")
                         
                 elif event.type == 'response.done':
                     # Only send end message if we actually sent content
