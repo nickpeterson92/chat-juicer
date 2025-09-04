@@ -32,8 +32,7 @@ from functions import TOOLS, FUNCTION_REGISTRY
 
 # Rate limiting configuration
 RATE_LIMIT_RETRY_MAX = 5
-RATE_LIMIT_BASE_DELAY = 2  # Base delay in seconds
-FUNCTION_CALL_DELAY = 0.5  # Delay between function calls to prevent bursts
+RATE_LIMIT_BASE_DELAY = 1  # Base delay in seconds (reduced from 2)
 
 def handle_rate_limit(func, *args, **kwargs):
     """
@@ -75,8 +74,8 @@ def handle_rate_limit(func, *args, **kwargs):
             
             # Check if it's a rate limit error
             if 'rate limit' in error_str.lower() or '429' in error_str:
-                # Calculate exponential backoff
-                wait_time = RATE_LIMIT_BASE_DELAY * (2 ** retry_count)
+                # Calculate exponential backoff with cap at 10 seconds
+                wait_time = min(RATE_LIMIT_BASE_DELAY * (2 ** retry_count), 10)
                 
                 # Send UI notification about rate limit
                 msg = json.dumps({
@@ -250,9 +249,6 @@ while True:
             
             # Execute each tool call and add outputs
             for i, tool_call in enumerate(tool_calls):
-                # Add delay between function calls to prevent rate limit bursts
-                if i > 0:
-                    time.sleep(FUNCTION_CALL_DELAY)
                 # Send function execution start event
                 msg = json.dumps({
                     "type": "function_executing",
@@ -263,12 +259,18 @@ while True:
                 print(f"__JSON__{msg}__JSON__", flush=True)
                 logger.info(f"Executing function: {tool_call.name}")
                 
+                # Initialize result variable
+                result = None
+                args = {}
+                
                 # Execute the function from registry
                 if tool_call.name in FUNCTION_REGISTRY:
-                    args = json.loads(tool_call.arguments)
-                    func = FUNCTION_REGISTRY[tool_call.name]
                     try:
+                        # Try to parse the arguments JSON
+                        args = json.loads(tool_call.arguments)
+                        func = FUNCTION_REGISTRY[tool_call.name]
                         result = func(**args)
+                        
                         # Send success event
                         msg = json.dumps({
                             "type": "function_completed",
@@ -278,7 +280,25 @@ while True:
                         })
                         print(f"__JSON__{msg}__JSON__", flush=True)
                         logger.info(f"Function completed: {tool_call.name}")
+                        
+                    except json.JSONDecodeError as je:
+                        # Handle malformed JSON from the AI
+                        result = f"Error: Invalid JSON in function arguments - {str(je)}"
+                        logger.error(f"JSON decode error for {tool_call.name}: {str(je)}")
+                        logger.debug(f"Raw arguments that failed to parse: {tool_call.arguments}")
+                        
+                        # Send error event
+                        msg = json.dumps({
+                            "type": "function_completed",
+                            "name": tool_call.name,
+                            "call_id": tool_call.call_id,
+                            "success": False,
+                            "error": f"Invalid JSON arguments: {str(je)}"
+                        })
+                        print(f"__JSON__{msg}__JSON__", flush=True)
+                        
                     except Exception as e:
+                        # Handle function execution errors
                         result = f"Error: {str(e)}"
                         # Send error event
                         msg = json.dumps({
@@ -290,9 +310,13 @@ while True:
                         })
                         print(f"__JSON__{msg}__JSON__", flush=True)
                         logger.error(f"Function error: {tool_call.name} - {str(e)}")
-                    # Log the function call
-                    logger.log_function_call(tool_call.name, args, result)
+                    
+                    # Log the function call (only if we have args)
+                    if args:
+                        logger.log_function_call(tool_call.name, args, result)
+                        
                 else:
+                    # Unknown function
                     result = f"Error: Unknown function {tool_call.name}"
                     # Send error event for unknown function
                     msg = json.dumps({
@@ -305,11 +329,11 @@ while True:
                     print(f"__JSON__{msg}__JSON__", flush=True)
                     logger.error(f"Unknown function: {tool_call.name}")
                 
-                # Add function call output
+                # ALWAYS add function call output, regardless of success/failure
                 function_context.append({
                     "type": "function_call_output",
                     "call_id": tool_call.call_id,
-                    "output": result
+                    "output": result if result is not None else "Error: No output generated"
                 })
             
             # Make second request with function results
@@ -329,11 +353,7 @@ while True:
             if previous_response_id:
                 final_request_params["previous_response_id"] = previous_response_id
             
-            # Add delay between consecutive function calls to prevent rate limit bursts
-            if tool_calls:
-                logger.debug(f"Adding {FUNCTION_CALL_DELAY}s delay between function calls")
-                time.sleep(FUNCTION_CALL_DELAY)
-            
+            # Make the follow-up request with function results
             final_response = handle_rate_limit(azure_client.responses.create, **final_request_params)
             
             final_text = ""

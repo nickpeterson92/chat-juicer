@@ -17,40 +17,8 @@ from datetime import datetime
 import uuid
 from typing import Any, Optional
 
-# Check if python-json-logger is installed, otherwise use fallback
-try:
-    from pythonjsonlogger import jsonlogger
-    HAS_JSON_LOGGER = True
-except ImportError:
-    HAS_JSON_LOGGER = False
-    # Fallback JSON formatter
-    class JsonFormatter(logging.Formatter):
-        def format(self, record):
-            # Use file_message if available, otherwise use regular message
-            message = getattr(record, 'file_message', record.getMessage())
-            
-            # Start with minimal essential fields
-            log_data = {
-                'ts': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
-                'lvl': record.levelname[0],  # Just first letter: I, W, E, D
-                'msg': message  # Use the potentially shortened message
-            }
-            
-            # Only add important extra fields if they exist
-            important_fields = ['session_id', 'ms', 'tokens', 'chars', 'functions', 'func']
-            
-            for field in important_fields:
-                if hasattr(record, field):
-                    value = getattr(record, field)
-                    if value is not None:  # Only add if not None
-                        log_data[field] = value
-            
-            # Add error info if present
-            if record.exc_info:
-                log_data['error'] = self.formatException(record.exc_info)
-                
-            # Return compact single-line JSON
-            return json.dumps(log_data, separators=(',', ':'))
+# Import python-json-logger (required dependency)
+from pythonjsonlogger import jsonlogger
 
 
 class ConversationFilter(logging.Filter):
@@ -116,15 +84,11 @@ def setup_logging(name: str = "chat-juicer", debug: bool = None) -> logging.Logg
     conv_handler.setLevel(logging.INFO)
     conv_handler.addFilter(ConversationFilter())
     
-    if HAS_JSON_LOGGER:
-        # Use concise format for JSON logger too
-        conv_formatter = jsonlogger.JsonFormatter(
-            '%(asctime)s %(levelname)s %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S',
-            rename={'asctime': 'ts', 'levelname': 'lvl', 'message': 'msg'}
-        )
-    else:
-        conv_formatter = JsonFormatter()
+    # Use JSON formatter for conversations
+    conv_formatter = jsonlogger.JsonFormatter(
+        '%(timestamp)s %(levelname)s %(message)s %(session_id)s %(chars)s %(functions)s %(func)s',
+        timestamp=True
+    )
     
     conv_handler.setFormatter(conv_formatter)
     logger.addHandler(conv_handler)
@@ -138,13 +102,11 @@ def setup_logging(name: str = "chat-juicer", debug: bool = None) -> logging.Logg
     error_handler.setLevel(logging.ERROR)
     error_handler.addFilter(ErrorFilter())
     
-    if HAS_JSON_LOGGER:
-        error_formatter = jsonlogger.JsonFormatter(
-            '%(timestamp)s %(levelname)s %(name)s %(message)s %(exc_info)s',
-            timestamp=True
-        )
-    else:
-        error_formatter = JsonFormatter()
+    # Use JSON formatter for errors
+    error_formatter = jsonlogger.JsonFormatter(
+        '%(timestamp)s %(levelname)s %(name)s %(message)s',
+        timestamp=True
+    )
     
     error_handler.setFormatter(error_formatter)
     logger.addHandler(error_handler)

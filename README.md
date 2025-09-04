@@ -9,7 +9,7 @@ An Electron + Python application for Azure OpenAI chat interactions using the Re
 - 🛠️ **Function Calling**: Integrated tool and function execution
 - 📝 **Conversation Logging**: Structured JSON logging for all interactions
 - 🔐 **Azure OpenAI Integration**: Secure connection to Azure OpenAI services
-- 📊 **Token Estimation**: Built-in token counting and optimization
+- 📊 **Token Counting**: Exact token counting with tiktoken and content optimization
 
 ## Architecture
 
@@ -24,6 +24,16 @@ Chat Juicer uses Azure OpenAI's **Responses API** (not Chat Completions API) whi
 - Python 3.8+
 - Azure OpenAI resource with deployment supporting Responses API
 - Azure OpenAI API credentials
+
+## Requirements
+
+### Node.js Dependencies
+- `electron`: Desktop application framework (devDependency)
+- Node.js 16+ and npm required
+
+### Python Dependencies
+- Python 3.8+ required
+- See dependencies section below for package list
 
 ## Installation
 
@@ -40,6 +50,7 @@ Chat Juicer uses Azure OpenAI's **Responses API** (not Chat Completions API) whi
 
 3. **Install Python dependencies**
    ```bash
+   cd src/
    pip install -r requirements.txt
    ```
 
@@ -122,8 +133,11 @@ chat-juicer/
 ## Function Calling
 
 The application supports function calling with:
-- File reading and format conversion (PDF, Word, images)
-- Token estimation for content optimization
+- Directory listing and file system exploration
+- File reading with automatic format conversion (PDF, Word, Excel, PowerPoint, HTML, CSV, JSON)
+- Document template loading and generation
+- Exact token counting using tiktoken
+- Content optimization to reduce token usage
 - Extensible function registry for custom tools
 
 Add new functions by:
@@ -170,16 +184,13 @@ npm start
 
 ### Python Dependencies
 
-Key dependencies:
-- `openai-agents`: Provides agent functionality and streaming support
-- `openai`: Azure OpenAI client library
-- `python-json-logger`: Structured JSON logging
-- `python-dotenv`: Environment variable management
-- `pypdf`: PDF processing
-- `python-docx`: Word document processing
-- `pillow`: Image processing
-- `tiktoken`: Token counting
-
+Required dependencies (from `src/requirements.txt`):
+- `openai-agents>=0.1.0`: Provides agents module for Responses API support
+- `openai>=1.0.0`: Azure OpenAI client library
+- `python-dotenv>=1.0.0`: Environment variable management (.env file loading)
+- `markitdown>=0.1.0`: Document conversion to markdown (PDF, Word, Excel, HTML, etc.)
+- `tiktoken>=0.5.0`: OpenAI's official token counting library for exact token counts
+- `python-json-logger>=2.0.0`: Structured JSON logging (required)
 ## Troubleshooting
 
 ### Common Issues

@@ -6,16 +6,19 @@ Separate module for all tool/function implementations.
 import json
 import re
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
+import tiktoken
 
 
-def optimize_content_for_tokens(content: str, format_type: str = "text") -> tuple[str, Dict]:
+def optimize_content_for_tokens(content: str, format_type: str = "text", model: str = "gpt-4o-mini") -> Tuple[str, Dict]:
     """
     Optimize content for minimal token usage while preserving information.
+    Now with exact token counting using tiktoken for intelligent optimization decisions.
     
     Args:
         content: The text content to optimize
         format_type: Type of content (markdown, csv, json, text, etc.)
+        model: Model name for token counting (default: gpt-4o-mini)
         
     Returns:
         Tuple of (optimized_content, optimization_stats)
@@ -23,16 +26,35 @@ def optimize_content_for_tokens(content: str, format_type: str = "text") -> tupl
     original_length = len(content)
     lines = content.splitlines()
     
+    # Get initial token count
+    initial_token_count = estimate_tokens(content, model)
+    initial_tokens = initial_token_count.get("exact_tokens") or initial_token_count.get("estimated_tokens", 0)
+    
     # Statistics tracking
     stats = {
         "original_length": original_length,
         "original_lines": len(lines),
+        "original_tokens": initial_tokens,
         "removed_blank_lines": 0,
         "removed_headers": 0,
         "removed_footers": 0,
         "whitespace_trimmed": 0,
         "redundant_removed": 0
     }
+    
+    # Only optimize if content is large enough to benefit (>1000 tokens)
+    # Small documents don't need aggressive optimization
+    if initial_tokens <= 1000:
+        # Content is small enough, no optimization needed
+        stats["final_length"] = original_length
+        stats["final_lines"] = len(lines)
+        stats["final_tokens"] = initial_tokens
+        stats["bytes_saved"] = 0
+        stats["tokens_saved"] = 0
+        stats["percentage_saved"] = 0
+        stats["optimization_skipped"] = True
+        stats["skip_reason"] = f"Content too small ({initial_tokens} tokens <= 1000)"
+        return content, stats
     
     # Step 1: Remove excessive blank lines (keep max 1 between sections)
     optimized_lines = []
@@ -140,59 +162,97 @@ def optimize_content_for_tokens(content: str, format_type: str = "text") -> tupl
     # Join back together
     optimized_content = '\n'.join(final_lines)
     
-    # Calculate final stats
+    # Calculate final stats with exact token counts
+    final_token_count = estimate_tokens(optimized_content, model)
+    final_tokens = final_token_count.get("exact_tokens") or final_token_count.get("estimated_tokens", 0)
+    
     stats["final_length"] = len(optimized_content)
     stats["final_lines"] = len(final_lines)
+    stats["final_tokens"] = final_tokens
     stats["bytes_saved"] = original_length - stats["final_length"]
+    stats["tokens_saved"] = initial_tokens - final_tokens
     stats["percentage_saved"] = round((stats["bytes_saved"] / original_length * 100), 1) if original_length > 0 else 0
+    stats["token_percentage_saved"] = round((stats["tokens_saved"] / initial_tokens * 100), 1) if initial_tokens > 0 else 0
     
     return optimized_content, stats
 
 
-def estimate_tokens(text: str) -> Dict:
+def estimate_tokens(text: str, model: str = "gpt-4o-mini") -> Dict:
     """
-    Estimate token count for text content.
+    Count exact tokens using tiktoken for accurate token counting.
     
-    Uses multiple heuristics for better accuracy:
-    - Average English: ~4 characters per token
-    - Code/technical: ~3.5 characters per token  
-    - Structured data: ~3 characters per token
-    
-    Returns dict with multiple estimates.
+    Args:
+        text: The text to count tokens for
+        model: The model name (default: gpt-4o-mini)
+        
+    Returns:
+        Dict with exact and estimated token counts
     """
-    char_count = len(text)
-    word_count = len(text.split())
-    
-    # Detect content type for better estimation
-    code_indicators = sum([
-        text.count('{'),
-        text.count('}'),
-        text.count('('),
-        text.count(')'),
-        text.count(';'),
-        text.count('=')
-    ])
-    
-    # Calculate code density (0-1)
-    code_density = min(code_indicators / (word_count + 1), 1.0)
-    
-    # Weighted average based on content type
-    if code_density > 0.3:
-        # Code/technical content
-        chars_per_token = 3.0 + (1.0 * (1 - code_density))
-    else:
-        # Natural language
-        chars_per_token = 4.0
-    
-    return {
-        "estimated_tokens": int(char_count / chars_per_token),
-        "conservative_estimate": int(char_count / 3.0),  # Worst case
-        "optimistic_estimate": int(char_count / 4.5),  # Best case
-        "char_count": char_count,
-        "word_count": word_count,
-        "chars_per_token": round(chars_per_token, 2),
-        "content_type": "technical" if code_density > 0.3 else "natural"
-    }
+    try:
+        # Try to get exact encoding for the model
+        try:
+            # Try to get encoding for the specific model
+            encoding = tiktoken.encoding_for_model(model)
+        except KeyError:
+            # If model not recognized, use cl100k_base encoding
+            # This is the encoding used by GPT-4 and newer models
+            encoding = tiktoken.get_encoding("cl100k_base")
+        
+        # Get exact token count
+        tokens = encoding.encode(text)
+        exact_count = len(tokens)
+        
+        # Also provide character and word stats for context
+        char_count = len(text)
+        word_count = len(text.split())
+        
+        # Calculate actual chars per token for this specific text
+        chars_per_token = char_count / exact_count if exact_count > 0 else 0
+        
+        return {
+            "exact_tokens": exact_count,
+            "char_count": char_count,
+            "word_count": word_count,
+            "chars_per_token": round(chars_per_token, 2),
+            "model": model,
+            "encoding": encoding.name
+        }
+        
+    except Exception as e:
+        # If tiktoken fails for any reason, fall back to estimation
+        char_count = len(text)
+        word_count = len(text.split())
+        
+        # Detect content type for better estimation
+        code_indicators = sum([
+            text.count('{'),
+            text.count('}'),
+            text.count('('),
+            text.count(')'),
+            text.count(';'),
+            text.count('=')
+        ])
+        
+        # Calculate code density (0-1)
+        code_density = min(code_indicators / (word_count + 1), 1.0)
+        
+        # Weighted average based on content type
+        if code_density > 0.3:
+            # Code/technical content
+            chars_per_token = 3.0 + (1.0 * (1 - code_density))
+        else:
+            # Natural language
+            chars_per_token = 4.0
+        
+        return {
+            "exact_tokens": None,  # Indicate this is an estimate
+            "estimated_tokens": int(char_count / chars_per_token),
+            "char_count": char_count,
+            "word_count": word_count,
+            "chars_per_token": round(chars_per_token, 2),
+            "content_type": "technical" if code_density > 0.3 else "natural",
+            "error": f"Tiktoken unavailable: {str(e)}"
+        }
 
 def list_directory(path: str = ".", show_hidden: bool = False) -> str:
     """
@@ -362,14 +422,15 @@ def read_file(file_path: str, max_size: int = 1048576) -> str:
                     "file_path": str(target_file)
                 })
         
-        # Use advanced token estimation for logging only
-        token_estimates = estimate_tokens(content)
+        # Use exact token counting for logging
+        token_count = estimate_tokens(content)
+        exact_tokens = token_count.get("exact_tokens") or token_count.get("estimated_tokens", "?")
         
         # Log all the metadata for humans
         import logging
         logger = logging.getLogger('chat-juicer')
         logger.debug(f"Read {target_file.name}: {file_size} bytes → {len(content)} chars, "
-                    f"{len(content.splitlines())} lines, ~{token_estimates.get('estimated_tokens', '?')} tokens")
+                    f"{len(content.splitlines())} lines, {exact_tokens} tokens (exact)")
         
         if 'optimization_stats' in locals():
             logger.debug(f"Optimization: saved {optimization_stats['percentage_saved']}% "

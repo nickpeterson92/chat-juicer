@@ -1,29 +1,17 @@
 # Chat Juicer Requirements
 
-# Core AI Libraries
-openai-agents>=0.1.0
-openai>=1.0.0
+# Core AI Libraries (REQUIRED)
+openai-agents>=0.1.0  # Provides agents module for Responses API support
+openai>=1.0.0  # Azure OpenAI client library
 
-# MCP SDK for file server
-mcp>=1.0.0
+# Configuration (REQUIRED)
+python-dotenv>=1.0.0  # Load environment variables from .env file
 
-# Configuration and Environment
-python-dotenv>=1.0.0
-pyyaml>=6.0
+# Document Conversion (REQUIRED for file reading features)
+markitdown>=0.1.0  # Microsoft's markdown converter for PDF, Word, Excel, etc.
 
-# Core dependencies
-pydantic>=2.0.0
+# Token Counting (REQUIRED)
+tiktoken>=0.5.0  # OpenAI's official token counting library for accurate token counts
 
-# Logging
-python-json-logger>=2.0.0  # JSON formatted logging
-
-# Optional but recommended for enhanced functionality
-aiofiles>=23.0.0  # Async file operations
-rich>=13.0.0  # Better terminal output
-click>=8.0.0  # Alternative CLI framework
-
-# Document conversion for token-efficient reading
-markitdown>=0.1.0  # Microsoft's markdown converter for various formats
-
-# For Azure OpenAI support
-azure-identity>=1.0.0
+# Structured Logging (REQUIRED)
+python-json-logger>=2.0.0  # JSON formatted logging for structured logs
