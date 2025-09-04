@@ -118,9 +118,9 @@ chat-juicer/
 
 ### Python Backend (`src/`)
 
-- **main.py**: Handles the chat loop, streaming responses, and function execution
-- **azure_client.py**: Manages Azure OpenAI client initialization and configuration
-- **functions.py**: Implements tool definitions and function handlers
+- **main.py**: Handles the chat loop, streaming responses, and function execution with rate limiting
+- **azure_client.py**: Manages Azure OpenAI client initialization and configuration  
+- **functions.py**: Implements tool definitions and function handlers with tiktoken integration
 - **logger.py**: Provides structured JSON logging for conversations and errors
 
 ### Electron Frontend (`electron/`)
@@ -173,13 +173,30 @@ python src/main.py
 npm start
 ```
 
+## Features in Detail
+
+### Rate Limiting
+The application includes automatic rate limit handling with:
+- Exponential backoff (1s base delay, max 10s)
+- Up to 5 retry attempts
+- Real-time UI notifications when rate limits are hit
+- Graceful error handling without crashing
+
+### Token Counting & Optimization
+Using tiktoken for exact token counting:
+- Precise token counts for all content (not estimates)
+- Automatic content optimization for documents >1000 tokens
+- Removes unnecessary headers, footers, and redundant whitespace
+- Reports exact tokens saved through optimization
+- Model-aware encoding (supports GPT-4, GPT-3.5, and newer models)
+
 ## Configuration
 
 ### Environment Variables
 
 - `AZURE_OPENAI_API_KEY`: Your Azure OpenAI API key (required)
 - `AZURE_OPENAI_ENDPOINT`: Azure OpenAI endpoint URL (required)
-- `AZURE_OPENAI_DEPLOYMENT`: Deployment name (optional, defaults to "gpt-5-mini")
+- `AZURE_OPENAI_DEPLOYMENT`: Deployment name (defaults to "gpt-5-mini" if not set)
 - `AZURE_OPENAI_API_VERSION`: API version (optional, defaults to "2024-10-01-preview")
 
 ### Python Dependencies
