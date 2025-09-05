@@ -144,11 +144,16 @@
     }
     
     .tools-toggle-wrapper {
-      position: absolute;
-      left: -32px;
+      position: fixed;
+      right: 420px;
       top: 50%;
       transform: translateY(-50%);
-      z-index: 10;
+      z-index: 100;
+      transition: right 0.3s ease;
+    }
+    
+    body.tools-collapsed .tools-toggle-wrapper {
+      right: 0;
     }
     
     .tools-header {
@@ -665,11 +670,6 @@
       </div>
       
       <div class="tools-panel" id="tools-panel">
-        <div class="tools-toggle-wrapper" id="tools-toggle-wrapper">
-          <button class="toggle-tools-btn" id="toggle-tools-btn" title="Toggle tools panel">
-            ▶
-          </button>
-        </div>
         <div class="tools-header">
           <div class="tools-title">
             <span>🔧 Function Calls</span>
@@ -680,6 +680,13 @@
         </div>
       </div>
     </div>
+  </div>
+  
+  <!-- Toggle button outside of collapsible panel -->
+  <div class="tools-toggle-wrapper" id="tools-toggle-wrapper">
+    <button class="toggle-tools-btn" id="toggle-tools-btn" title="Toggle tools panel">
+      ▶
+    </button>
   </div>
 
   <script src="../electron/renderer.js"></script>

@@ -18,8 +18,32 @@ let currentAssistantMessage = null;
 let assistantMessageBuffer = '';
 let hasShownWelcome = false;
 let isInitialConnection = true;
-let activeFunctionCalls = new Map(); // Track active function calls by call_id
-let functionArgumentsBuffer = new Map(); // Buffer for streaming function arguments
+
+// Bounded Maps with max size to prevent memory leaks
+const MAX_FUNCTION_CALLS = 50;
+const MAX_FUNCTION_BUFFERS = 20;
+
+class BoundedMap extends Map {
+  constructor(maxSize = 100) {
+    super();
+    this.maxSize = maxSize;
+  }
+  
+  set(key, value) {
+    // If at max size, delete oldest entry (FIFO)
+    if (this.size >= this.maxSize) {
+      const firstKey = this.keys().next().value;
+      this.delete(firstKey);
+    }
+    return super.set(key, value);
+  }
+}
+
+let activeFunctionCalls = new BoundedMap(MAX_FUNCTION_CALLS); // Track active function calls by call_id
+let functionArgumentsBuffer = new BoundedMap(MAX_FUNCTION_BUFFERS); // Buffer for streaming function arguments
+
+// Track all active timers for cleanup
+const activeTimers = new Set();
 
 // Function to add message to chat
 function addMessage(content, type = 'assistant') {
@@ -87,7 +111,7 @@ function createFunctionCallCard(callId, functionName, status = 'preparing') {
     toolsContainer.appendChild(cardDiv);
     toolsContainer.scrollTop = toolsContainer.scrollHeight;
     
-    card = { element: cardDiv, name: functionName };
+    card = { element: cardDiv, name: functionName, timestamp: Date.now() };
     activeFunctionCalls.set(callId, card);
   }
   
@@ -301,9 +325,11 @@ window.electronAPI.onBotOutput((output) => {
               });
             }
             // Clean up after a delay
-            setTimeout(() => {
+            const timerId = setTimeout(() => {
               activeFunctionCalls.delete(message.call_id);
+              activeTimers.delete(timerId);
             }, 30000); // Keep cards visible for 30 seconds
+            activeTimers.add(timerId);
             break;
             
           case 'rate_limit_hit':
@@ -362,9 +388,11 @@ window.electronAPI.onBotOutput((output) => {
               });
             }
             // Clean up after a delay
-            setTimeout(() => {
+            const timerId2 = setTimeout(() => {
               activeFunctionCalls.delete(message.call_id);
+              activeTimers.delete(timerId2);
             }, 30000); // Keep cards visible for 30 seconds
+            activeTimers.add(timerId2);
             break;
         }
       } catch (e) {
@@ -428,6 +456,7 @@ restartBtn.addEventListener('click', () => {
 if (toggleToolsBtn) {
   toggleToolsBtn.addEventListener('click', () => {
     toolsPanel.classList.toggle('collapsed');
+    document.body.classList.toggle('tools-collapsed');
     // Update arrow direction: ◀ when collapsed (to expand), ▶ when open (to collapse)
     toggleToolsBtn.textContent = toolsPanel.classList.contains('collapsed') ? '◀' : '▶';
     toggleToolsBtn.title = toolsPanel.classList.contains('collapsed') ? 'Show function calls' : 'Hide function calls';
@@ -492,4 +521,40 @@ function toggleTheme() {
 if (themeToggle) {
   themeToggle.addEventListener('click', toggleTheme);
 }
+
+// Cleanup function to prevent memory leaks
+function cleanup() {
+  console.log('Cleaning up renderer resources...');
+  
+  // Clear all timers
+  activeTimers.forEach(timerId => clearTimeout(timerId));
+  activeTimers.clear();
+  
+  // Clear Maps
+  activeFunctionCalls.clear();
+  functionArgumentsBuffer.clear();
+  
+  // Reset state
+  currentAssistantMessage = null;
+  assistantMessageBuffer = '';
+  
+  // Note: IPC listeners are handled by preload script and cannot be removed from renderer
+}
+
+// Clean up on page unload
+window.addEventListener('beforeunload', cleanup);
+
+// Also clean up on visibility change (for mobile/tabs)
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    // Clear old function cards when tab is hidden
+    const now = Date.now();
+    activeFunctionCalls.forEach((card, callId) => {
+      // Remove cards older than 1 minute when tab is hidden
+      if (card.timestamp && now - card.timestamp > 60000) {
+        activeFunctionCalls.delete(callId);
+      }
+    });
+  }
+});
 
