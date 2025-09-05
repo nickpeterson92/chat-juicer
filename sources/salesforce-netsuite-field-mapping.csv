@@ -1,0 +1,38 @@
+Mapping Type,Source System,Source Object,Source Field,Source Data Type,Target System,Target Object,Target Field,Target Data Type,Transformation Rule,Required,Default Value,Validation Rule,Notes
+Order Header,Salesforce,Sales_Order__c,Name,String(Auto),NetSuite,salesOrder,tranId,String,Pass provisonal ID temporarily,Yes,AUTO,,"System generated, will be replaced"
+Order Header,Salesforce,Sales_Order__c,Account__c,Lookup(18),NetSuite,salesOrder,entity,Integer,Lookup via correlation table,Yes,,"Must exist in NetSuite",Complex correlation logic required
+Order Header,Salesforce,Sales_Order__c,Order_Date__c,Date,NetSuite,salesOrder,tranDate,Date,Format: YYYY-MM-DD,Yes,TODAY(),,
+Order Header,Salesforce,Sales_Order__c,Opportunity__c,Lookup(18),NetSuite,salesOrder,custbody_sf_opportunity,String,Direct map,No,,,For commission tracking
+Order Header,Salesforce,Sales_Order__c,Order_Total__c,Currency,NetSuite,salesOrder,total,Currency,Direct map,Yes,0.00,Must be > 0,Calculated from line items
+Order Header,Salesforce,Sales_Order__c,Billing_Country__c,Picklist,Staging,staging_orders,subsidiary_id,Integer,Complex Excel matrix logic,Yes,1,"Must be valid subsidiary",See subsidiary mapping tab
+Order Header,Salesforce,Sales_Order__c,Status__c,Picklist,NetSuite,salesOrder,status,String,"Map: Draft->Pending Approval, Confirmed->Pending Fulfillment",Yes,Pending Approval,"Valid NetSuite status",
+Order Header,Salesforce,Sales_Order__c,External_Order_Number__c,String(50),NetSuite,salesOrder,tranId,String,Update after NS creation,No,,,Populated async after polling
+Order Header,Salesforce,Sales_Order__c,Provisional_Order_ID__c,String(50),NetSuite,salesOrder,custbody_provisional_id,String,Direct map,Yes,,,Maintain for correlation
+Order Header,Salesforce,Sales_Order__c,Credit_Status__c,String,AS400,CREDIT_INFO,CREDIT_STATUS,String,Cache lookup then API call,No,Not Checked,"Valid: Not Checked, Approved, On Hold, Rate Limited",D&B rate limits apply
+Order Header,Salesforce,Sales_Order__c,Inventory_Status_Text__c,String,NetSuite,salesOrder,shipStatus,String,"Standardize: plenty->In Stock, some->Partial, none->Backordered",No,Unknown,"Must map to valid NS status",Free text field needs cleanup
+Order Line,Salesforce,Sales_Order_Line__c,Sales_Order__c,Master-Detail,NetSuite,salesOrderLine,order,Reference,Link to parent order,Yes,,,
+Order Line,Salesforce,Sales_Order_Line__c,Product2Id,Lookup(18),NetSuite,salesOrderLine,item,Integer,Product correlation required,Yes,,"Must exist in NetSuite","Custom products problematic"
+Order Line,Salesforce,Sales_Order_Line__c,Quantity__c,Number,NetSuite,salesOrderLine,quantity,Number,Direct map,Yes,1,Must be > 0,
+Order Line,Salesforce,Sales_Order_Line__c,Unit_Price__c,Currency,NetSuite,salesOrderLine,rate,Currency,Apply contract pricing if exists,Yes,0.00,Must be >= 0,May be overridden by NS pricing
+Order Line,Salesforce,Sales_Order_Line__c,Custom_Product__c,Boolean,Staging,staging_order_lines,product_correlation_status,String,"If true, flag for manual creation",No,false,,"Blocks order until resolved"
+Order Line,Salesforce,Sales_Order_Line__c,Special_Terms__c,Long Text,NetSuite,salesOrderLine,description,String,Truncate to 4000 chars,No,,,
+Customer,Salesforce,Account,Id,ID(18),NetSuite,customer,externalId,String,Direct map,Yes,,,
+Customer,Salesforce,Account,Name,String,NetSuite,customer,companyName,String,Direct map,Yes,,,
+Customer,Salesforce,Account,Email__c,String,NetSuite,customer,email,String,"Validate format, check for generic",No,,Valid email format,"Unreliable for correlation"
+Customer,Salesforce,Account,Tax_ID__c,String,NetSuite,customer,taxId,String,Direct map if present,No,,,"Often missing"
+Customer,Salesforce,Account,DUNS_Number__c,String,NetSuite,customer,custentity_duns,String,Direct map,No,,9 digits,Used for D&B credit checks
+Customer,Salesforce,Account,AS400_Customer_ID__c,String,AS400,CUSTOMER_MASTER,CUSTOMER_ID,String,Bidirectional sync,No,,Format: CUST-#####,Critical for credit checks
+Customer,Salesforce,Account,Credit_Limit__c,Currency,AS400,CREDIT_INFO,CREDIT_LIMIT,Decimal,"Cache from AS400, refresh daily",No,0.00,,May be stale up to 24 hours
+Customer,Salesforce,Account,Credit_Score__c,Number,D&B,CREDIT_API,SCORE,Integer,"Cache for 72 hours, rate limited",No,,,100 calls/hour limit
+Product,NetSuite,item,internalId,Integer,Salesforce,Product2,NetSuite_Item_ID__c,String,Direct map,Yes,,,Master in NetSuite
+Product,NetSuite,item,itemId,String,Salesforce,Product2,ProductCode,String,Direct map,Yes,,,
+Product,NetSuite,item,displayName,String,Salesforce,Product2,Name,String,Direct map,Yes,,,
+Product,NetSuite,item,basePrice,Currency,Salesforce,Product2,Standard_Price__c,Currency,Direct map,No,0.00,,Contract pricing overrides
+Credit Check,AS400,CREDIT_INFO,AS400ID,String,Staging,credit_check_cache,as400_customer_id,String,Direct map,Yes,,,
+Credit Check,AS400,CREDIT_INFO,CREDIT_LIMIT,Decimal,Staging,credit_check_cache,credit_limit,Decimal,Convert from EBCDIC,Yes,0.00,,European decimal format
+Credit Check,AS400,CREDIT_INFO,AVAILABLE_CREDIT,Decimal,Staging,credit_check_cache,available_credit,Decimal,Convert from EBCDIC,Yes,0.00,,Updates after each order
+Credit Check,D&B,CREDIT_API,DUNS,String,Staging,credit_check_cache,duns_number,String,Direct map,Yes,,,
+Credit Check,D&B,CREDIT_API,SCORE,Integer,Staging,credit_check_cache,credit_score,Integer,Direct map,Yes,0,300-850 range,
+Status Sync,NetSuite,salesOrder,status,String,Salesforce,Sales_Order__c,Status__c,Picklist,"Map: Pending Fulfillment->Confirmed, Fully Billed->Closed",Yes,,,Webhook-based update
+Status Sync,NetSuite,salesOrder,creditHoldStatus,String,Salesforce,Sales_Order__c,Credit_Hold__c,Checkbox,"Map: ON_HOLD->true, else false",No,false,,Updates affect commission calc
+Status Sync,NetSuite,salesOrder,shipStatus,String,Salesforce,Sales_Order__c,Ship_Status__c,Picklist,Standardize values,No,,,Updates trigger customer notifications
