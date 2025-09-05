@@ -23,85 +23,12 @@ Key architectural differences from Chat Completions API:
 
 import sys
 import json
-import time
 
 # Import local modules
 from logger import logger
 from azure_client import setup_azure_client
 from functions import TOOLS, FUNCTION_REGISTRY
-
-# Rate limiting configuration
-RATE_LIMIT_RETRY_MAX = 5
-RATE_LIMIT_BASE_DELAY = 1  # Base delay in seconds (reduced from 2)
-
-def handle_rate_limit(func, *args, **kwargs):
-    """
-    Handle rate limiting with exponential backoff.
-    
-    Args:
-        func: The function to call (typically azure_client.responses.create)
-        *args, **kwargs: Arguments to pass to the function
-        
-    Returns:
-        The response from the function
-        
-    Raises:
-        Exception if max retries exceeded
-    """
-    retry_count = 0
-    last_error = None
-    
-    while retry_count < RATE_LIMIT_RETRY_MAX:
-        try:
-            # Log attempt
-            if retry_count > 0:
-                logger.info(f"Retry attempt {retry_count}/{RATE_LIMIT_RETRY_MAX}")
-            
-            # Try the API call
-            response = func(*args, **kwargs)
-            
-            # Log token usage if available
-            if hasattr(response, 'usage') and response.usage:
-                logger.info(f"Tokens used - Prompt: {response.usage.prompt_tokens}, "
-                          f"Completion: {response.usage.completion_tokens}, "
-                          f"Total: {response.usage.total_tokens}")
-            
-            return response
-            
-        except Exception as e:
-            error_str = str(e)
-            last_error = e
-            
-            # Check if it's a rate limit error
-            if 'rate limit' in error_str.lower() or '429' in error_str:
-                # Calculate exponential backoff with cap at 10 seconds
-                wait_time = min(RATE_LIMIT_BASE_DELAY * (2 ** retry_count), 10)
-                
-                # Send UI notification about rate limit
-                msg = json.dumps({
-                    "type": "rate_limit_hit",
-                    "retry_count": retry_count + 1,
-                    "wait_time": wait_time,
-                    "message": f"Rate limit hit. Waiting {wait_time}s before retry..."
-                })
-                print(f"__JSON__{msg}__JSON__", flush=True)
-                
-                logger.warning(f"Rate limit hit. Waiting {wait_time}s before retry {retry_count + 1}")
-                time.sleep(wait_time)
-                retry_count += 1
-            else:
-                # Not a rate limit error, re-raise
-                raise e
-    
-    # Max retries exceeded
-    error_msg = f"Rate limit retry max ({RATE_LIMIT_RETRY_MAX}) exceeded"
-    logger.error(error_msg)
-    msg = json.dumps({
-        "type": "rate_limit_failed",
-        "message": error_msg
-    })
-    print(f"__JSON__{msg}__JSON__", flush=True)
-    raise last_error if last_error else Exception(error_msg)
+from utils import handle_rate_limit
 
 # System instructions for the documentation bot
 SYSTEM_INSTRUCTIONS = """You are a technical documentation automation assistant with file system access.
@@ -174,7 +101,7 @@ while True:
         
         # Get streaming response with rate limit handling
         logger.info("AI: Starting response...", extra={'file_message': 'AI: Start'})
-        stream = handle_rate_limit(azure_client.responses.create, **request_params)
+        stream = handle_rate_limit(azure_client.responses.create, logger=logger, **request_params)
 
         tool_calls = []
         response_text = ""
@@ -354,7 +281,7 @@ while True:
                 final_request_params["previous_response_id"] = previous_response_id
             
             # Make the follow-up request with function results
-            final_response = handle_rate_limit(azure_client.responses.create, **final_request_params)
+            final_response = handle_rate_limit(azure_client.responses.create, logger=logger, **final_request_params)
             
             final_text = ""
             more_tool_calls = []

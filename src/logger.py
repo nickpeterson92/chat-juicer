@@ -11,11 +11,17 @@ import os
 import sys
 import logging
 import logging.handlers
-import json
 import pathlib
 from datetime import datetime
 import uuid
-from typing import Any, Optional
+from constants import (
+    LOG_MAX_SIZE,
+    LOG_BACKUP_COUNT_CONVERSATIONS,
+    LOG_BACKUP_COUNT_ERRORS,
+    LOG_PREVIEW_LENGTH,
+    SESSION_ID_LENGTH
+)
+from typing import Any, Optional, Dict
 
 # Import python-json-logger (required dependency)
 from pythonjsonlogger import jsonlogger
@@ -78,8 +84,8 @@ def setup_logging(name: str = "chat-juicer", debug: bool = None) -> logging.Logg
     
     conv_handler = logging.handlers.RotatingFileHandler(
         log_dir / 'conversations.jsonl',
-        maxBytes=10*1024*1024,  # 10MB
-        backupCount=5
+        maxBytes=LOG_MAX_SIZE,
+        backupCount=LOG_BACKUP_COUNT_CONVERSATIONS
     )
     conv_handler.setLevel(logging.INFO)
     conv_handler.addFilter(ConversationFilter())
@@ -96,8 +102,8 @@ def setup_logging(name: str = "chat-juicer", debug: bool = None) -> logging.Logg
     # --- Error Log Handler (JSON) ---
     error_handler = logging.handlers.RotatingFileHandler(
         log_dir / 'errors.jsonl',
-        maxBytes=10*1024*1024,  # 10MB
-        backupCount=3
+        maxBytes=LOG_MAX_SIZE,
+        backupCount=LOG_BACKUP_COUNT_ERRORS
     )
     error_handler.setLevel(logging.ERROR)
     error_handler.addFilter(ErrorFilter())
@@ -122,7 +128,7 @@ class ChatLogger:
     
     def __init__(self, name: str = "chat-juicer"):
         self.logger = setup_logging(name)
-        self.session_id = str(uuid.uuid4())[:8]
+        self.session_id = str(uuid.uuid4())[:SESSION_ID_LENGTH]
         
     def debug(self, message: str, **kwargs):
         """Debug level logging"""
@@ -157,12 +163,12 @@ class ChatLogger:
             tokens_used: Number of tokens used
         """
         # Create concise summary for log file
-        user_preview = user_input[:50].replace('\n', ' ')
-        if len(user_input) > 50:
+        user_preview = user_input[:LOG_PREVIEW_LENGTH].replace('\\n', ' ')
+        if len(user_input) > LOG_PREVIEW_LENGTH:
             user_preview += "..."
         
-        response_preview = response[:50].replace('\n', ' ')
-        if len(response) > 50:
+        response_preview = response[:LOG_PREVIEW_LENGTH].replace('\\n', ' ')
+        if len(response) > LOG_PREVIEW_LENGTH:
             response_preview += "..."
         
         # Build concise message
@@ -195,7 +201,7 @@ class ChatLogger:
         # Log with special flag for conversation filter
         self.logger.info(" ".join(msg_parts), extra=extra_data)
         
-    def log_function_call(self, function_name: str, args: dict, result: Any):
+    def log_function_call(self, function_name: str, args: Dict, result: Any):
         """
         Log a function call - verbose to console, concise to file.
         
@@ -218,8 +224,8 @@ class ChatLogger:
         args_summary = ", ".join(args_parts) if args_parts else ""
         
         # Truncate result for file
-        result_str = str(result)[:50]
-        if len(str(result)) > 50:
+        result_str = str(result)[:LOG_PREVIEW_LENGTH]
+        if len(str(result)) > LOG_PREVIEW_LENGTH:
             result_str += "..."
         
         file_msg = f"Func: {function_name}({args_summary}) → {result_str}"
