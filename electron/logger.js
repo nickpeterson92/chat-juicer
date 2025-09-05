@@ -33,10 +33,19 @@ class Logger {
     this.metrics = new Map();
     this.timers = new Map();
     
+    // Async write queue for non-blocking file I/O
+    this.writeQueue = [];
+    this.isWriting = false;
+    this.writeInterval = null;
+    this.maxQueueSize = 1000; // Maximum logs to queue
+    this.flushIntervalMs = 100; // Flush every 100ms
+    
     // Setup file logging if needed
     if (this.destination === 'file' || this.destination === 'both') {
       this.logDir = app ? app.getPath('logs') : './logs';
       this.ensureLogDirectory();
+      this.setupAsyncWriting();
+      this.setupLogRotation();
     }
   }
   
@@ -102,15 +111,200 @@ class Logger {
     }
     
     if (this.destination === 'file' || this.destination === 'both') {
-      const logFile = path.join(this.logDir, 'app.log');
-      fs.appendFileSync(logFile, formatted + '\n');
+      // Queue for async writing instead of blocking
+      this.queueWrite({
+        file: 'app.log',
+        content: formatted + '\n',
+        level: level
+      });
       
-      // Also write errors to separate file
+      // Also queue errors to separate file
       if (level === 'ERROR') {
-        const errorFile = path.join(this.logDir, 'error.log');
-        fs.appendFileSync(errorFile, formatted + '\n');
+        this.queueWrite({
+          file: 'error.log',
+          content: formatted + '\n',
+          level: level
+        });
       }
     }
+  }
+  
+  // Queue log entry for async writing
+  queueWrite(entry) {
+    // Drop old logs if queue is full to prevent memory issues
+    if (this.writeQueue.length >= this.maxQueueSize) {
+      this.writeQueue.shift(); // Remove oldest
+      console.warn('Log queue full, dropping oldest entry');
+    }
+    
+    this.writeQueue.push(entry);
+    
+    // Trigger immediate flush if queue is getting large
+    if (this.writeQueue.length > this.maxQueueSize / 2) {
+      this.flushQueue();
+    }
+  }
+  
+  // Setup async writing with batching
+  setupAsyncWriting() {
+    // Periodic flush
+    this.writeInterval = setInterval(() => {
+      this.flushQueue();
+    }, this.flushIntervalMs);
+    
+    // Ensure logs are flushed on exit
+    process.on('exit', () => {
+      this.flushQueueSync(); // Final sync flush on exit
+    });
+    
+    process.on('SIGINT', () => {
+      this.flushQueueSync();
+      process.exit();
+    });
+  }
+  
+  // Async batch write (fire-and-forget, non-blocking)
+  flushQueue() {
+    if (this.isWriting || this.writeQueue.length === 0) {
+      return;
+    }
+    
+    this.isWriting = true;
+    const batch = this.writeQueue.splice(0, Math.min(100, this.writeQueue.length)); // Process up to 100 at a time
+    
+    // Group by file for efficiency
+    const fileGroups = {};
+    batch.forEach(entry => {
+      if (!fileGroups[entry.file]) {
+        fileGroups[entry.file] = [];
+      }
+      fileGroups[entry.file].push(entry.content);
+    });
+    
+    // Write each file asynchronously (fire-and-forget)
+    const writes = Object.entries(fileGroups).map(([file, contents]) => {
+      const filePath = path.join(this.logDir, file);
+      const content = contents.join('');
+      return fs.promises.appendFile(filePath, content).catch(err => {
+        console.error(`Failed to write to ${file}:`, err);
+      });
+    });
+    
+    // Fire and forget - don't await, just handle completion
+    Promise.all(writes).then(() => {
+      this.isWriting = false;
+    }).catch(() => {
+      this.isWriting = false; // Ensure flag is reset even on error
+    });
+  }
+  
+  // Synchronous flush for exit scenarios
+  flushQueueSync() {
+    if (this.writeQueue.length === 0) return;
+    
+    const fileGroups = {};
+    this.writeQueue.forEach(entry => {
+      if (!fileGroups[entry.file]) {
+        fileGroups[entry.file] = [];
+      }
+      fileGroups[entry.file].push(entry.content);
+    });
+    
+    Object.entries(fileGroups).forEach(([file, contents]) => {
+      const filePath = path.join(this.logDir, file);
+      const content = contents.join('');
+      try {
+        fs.appendFileSync(filePath, content);
+      } catch (err) {
+        console.error(`Failed to write to ${file}:`, err);
+      }
+    });
+    
+    this.writeQueue = [];
+  }
+  
+  // Setup log rotation
+  setupLogRotation() {
+    const maxLogSize = 10 * 1024 * 1024; // 10MB
+    const checkInterval = 60 * 60 * 1000; // Check every hour
+    
+    this.rotationInterval = setInterval(() => {
+      this.checkAndRotateLogs(maxLogSize);
+    }, checkInterval);
+    
+    // Initial check
+    this.checkAndRotateLogs(maxLogSize);
+  }
+  
+  checkAndRotateLogs(maxSize) {
+    const files = ['app.log', 'error.log'];
+    
+    // Non-blocking rotation check
+    files.forEach(file => {
+      const filePath = path.join(this.logDir, file);
+      
+      fs.promises.stat(filePath).then(stats => {
+        if (stats.size > maxSize) {
+          // Rotate the log
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+          const rotatedPath = path.join(this.logDir, `${file}.${timestamp}`);
+          
+          // Non-blocking rename
+          fs.promises.rename(filePath, rotatedPath).then(() => {
+            // Clean up old rotated logs (keep last 5)
+            this.cleanupOldLogs(file);
+          }).catch(err => {
+            console.error(`Error rotating ${file}:`, err);
+          });
+        }
+      }).catch(err => {
+        // File doesn't exist yet, ignore
+        if (err.code !== 'ENOENT') {
+          console.error(`Error checking log rotation for ${file}:`, err);
+        }
+      });
+    });
+  }
+  
+  cleanupOldLogs(baseFileName) {
+    // Non-blocking cleanup
+    fs.promises.readdir(this.logDir).then(files => {
+      const rotatedFiles = files
+        .filter(f => f.startsWith(baseFileName + '.'))
+        .sort()
+        .reverse();
+      
+      // Keep only the 5 most recent
+      const deletions = [];
+      for (let i = 5; i < rotatedFiles.length; i++) {
+        deletions.push(
+          fs.promises.unlink(path.join(this.logDir, rotatedFiles[i])).catch(() => {})
+        );
+      }
+      
+      // Fire and forget deletions
+      if (deletions.length > 0) {
+        Promise.all(deletions).catch(() => {});
+      }
+    }).catch(err => {
+      console.error('Error cleaning up old logs:', err);
+    });
+  }
+  
+  // Cleanup on logger destruction
+  destroy() {
+    if (this.writeInterval) {
+      clearInterval(this.writeInterval);
+      this.writeInterval = null;
+    }
+    
+    if (this.rotationInterval) {
+      clearInterval(this.rotationInterval);
+      this.rotationInterval = null;
+    }
+    
+    // Final flush
+    this.flushQueueSync();
   }
   
   shouldLog(level) {

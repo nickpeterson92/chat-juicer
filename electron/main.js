@@ -19,8 +19,14 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      // Reduce GPU memory usage
+      offscreen: false,
+      backgroundThrottling: true
     },
+    // Hardware acceleration options
+    disableHardwareAcceleration: false, // Set to true if issues persist
+    transparent: false,
     icon: path.join(__dirname, 'icon.png') // Optional, you can add an icon later
   });
 
@@ -32,7 +38,19 @@ function createWindow() {
   }
 
   mainWindow.on('closed', () => {
+    // Clean up any window-specific resources
+    if (mainWindow) {
+      mainWindow.removeAllListeners();
+    }
     mainWindow = null;
+  });
+  
+  // Clean up on window close to prevent memory leaks
+  mainWindow.on('close', (event) => {
+    // Send cleanup signal to renderer before closing
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('cleanup-requested');
+    }
   });
 }
 

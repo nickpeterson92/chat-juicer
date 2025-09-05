@@ -1,25 +1,22 @@
 // Renderer process JavaScript
-const chatContainer = document.getElementById('chat-container');
-const userInput = document.getElementById('user-input');
-const sendBtn = document.getElementById('send-btn');
-const restartBtn = document.getElementById('restart-btn');
-const statusIndicator = document.getElementById('status-indicator');
-const statusText = document.getElementById('status-text');
-const typingIndicator = document.getElementById('typing-indicator');
-const toolsContainer = document.getElementById('tools-container');
-const toolsPanel = document.getElementById('tools-panel');
-const toggleToolsBtn = document.getElementById('toggle-tools-btn');
-const themeToggle = document.getElementById('theme-toggle');
-const themeIcon = document.getElementById('theme-icon');
-const themeText = document.getElementById('theme-text');
+// DOM element references (immutable)
+const elements = {
+  chatContainer: document.getElementById('chat-container'),
+  userInput: document.getElementById('user-input'),
+  sendBtn: document.getElementById('send-btn'),
+  restartBtn: document.getElementById('restart-btn'),
+  statusIndicator: document.getElementById('status-indicator'),
+  statusText: document.getElementById('status-text'),
+  typingIndicator: document.getElementById('typing-indicator'),
+  toolsContainer: document.getElementById('tools-container'),
+  toolsPanel: document.getElementById('tools-panel'),
+  toggleToolsBtn: document.getElementById('toggle-tools-btn'),
+  themeToggle: document.getElementById('theme-toggle'),
+  themeIcon: document.getElementById('theme-icon'),
+  themeText: document.getElementById('theme-text')
+};
 
-let isConnected = true;  // Start as connected since bot auto-starts
-let currentAssistantMessage = null;
-let assistantMessageBuffer = '';
-let hasShownWelcome = false;
-let isInitialConnection = true;
-
-// Bounded Maps with max size to prevent memory leaks
+// Bounded Map class for memory management (define before use)
 const MAX_FUNCTION_CALLS = 50;
 const MAX_FUNCTION_BUFFERS = 20;
 
@@ -39,11 +36,170 @@ class BoundedMap extends Map {
   }
 }
 
-let activeFunctionCalls = new BoundedMap(MAX_FUNCTION_CALLS); // Track active function calls by call_id
-let functionArgumentsBuffer = new BoundedMap(MAX_FUNCTION_BUFFERS); // Buffer for streaming function arguments
+// Centralized State Management
+class AppState {
+  constructor() {
+    // Connection state machine
+    this.connection = {
+      status: 'CONNECTED', // CONNECTED | DISCONNECTED | RECONNECTING | ERROR
+      isInitial: true,
+      hasShownWelcome: false
+    };
+    
+    // Message state
+    this.message = {
+      currentAssistant: null,
+      assistantBuffer: '',
+      isTyping: false
+    };
+    
+    // Function call tracking
+    this.functions = {
+      activeCalls: new BoundedMap(50),
+      argumentsBuffer: new BoundedMap(20),
+      activeTimers: new Set()
+    };
+    
+    // UI state
+    this.ui = {
+      theme: localStorage.getItem('theme') || 'light',
+      toolsPanelCollapsed: false
+    };
+    
+    // State change listeners
+    this.listeners = new Map();
+  }
+  
+  // State change notification
+  setState(path, value) {
+    const keys = path.split('.');
+    let target = this;
+    
+    // Navigate to the nested property
+    for (let i = 0; i < keys.length - 1; i++) {
+      target = target[keys[i]];
+    }
+    
+    const oldValue = target[keys[keys.length - 1]];
+    target[keys[keys.length - 1]] = value;
+    
+    // Notify listeners
+    this.notifyListeners(path, value, oldValue);
+  }
+  
+  // Get nested state value
+  getState(path) {
+    const keys = path.split('.');
+    let value = this;
+    
+    for (const key of keys) {
+      value = value[key];
+      if (value === undefined) return undefined;
+    }
+    
+    return value;
+  }
+  
+  // Subscribe to state changes
+  subscribe(path, callback) {
+    if (!this.listeners.has(path)) {
+      this.listeners.set(path, new Set());
+    }
+    this.listeners.get(path).add(callback);
+    
+    // Return unsubscribe function
+    return () => {
+      const callbacks = this.listeners.get(path);
+      if (callbacks) {
+        callbacks.delete(callback);
+      }
+    };
+  }
+  
+  // Notify listeners of state change
+  notifyListeners(path, newValue, oldValue) {
+    const callbacks = this.listeners.get(path);
+    if (callbacks) {
+      callbacks.forEach(callback => {
+        callback(newValue, oldValue, path);
+      });
+    }
+    
+    // Also notify wildcard listeners
+    const wildcardCallbacks = this.listeners.get('*');
+    if (wildcardCallbacks) {
+      wildcardCallbacks.forEach(callback => {
+        callback({ path, newValue, oldValue });
+      });
+    }
+  }
+  
+  // Connection state machine transitions
+  setConnectionStatus(status) {
+    const validTransitions = {
+      'CONNECTED': ['DISCONNECTED', 'ERROR'],
+      'DISCONNECTED': ['CONNECTED', 'RECONNECTING'],
+      'RECONNECTING': ['CONNECTED', 'DISCONNECTED', 'ERROR'],
+      'ERROR': ['RECONNECTING', 'DISCONNECTED']
+    };
+    
+    const currentStatus = this.connection.status;
+    
+    // Skip if already in the desired state
+    if (currentStatus === status) {
+      return;
+    }
+    
+    // Validate transition
+    if (validTransitions[currentStatus] && validTransitions[currentStatus].includes(status)) {
+      this.setState('connection.status', status);
+      this.handleConnectionChange(status);
+    } else {
+      console.warn(`Invalid state transition: ${currentStatus} -> ${status}`);
+    }
+  }
+  
+  // Handle connection state changes
+  handleConnectionChange(status) {
+    switch(status) {
+      case 'CONNECTED':
+        elements.statusIndicator.classList.remove('disconnected');
+        elements.statusText.textContent = 'Connected';
+        elements.userInput.disabled = false;
+        elements.elements.sendBtn.disabled = false;
+        break;
+        
+      case 'DISCONNECTED':
+      case 'ERROR':
+        elements.statusIndicator.classList.add('disconnected');
+        elements.statusText.textContent = status === 'ERROR' ? 'Error' : 'Disconnected';
+        elements.userInput.disabled = true;
+        elements.elements.sendBtn.disabled = true;
+        break;
+        
+      case 'RECONNECTING':
+        elements.statusIndicator.classList.add('disconnected');
+        elements.statusText.textContent = 'Reconnecting...';
+        elements.userInput.disabled = true;
+        elements.elements.sendBtn.disabled = true;
+        break;
+    }
+  }
+}
 
-// Track all active timers for cleanup
-const activeTimers = new Set();
+// Initialize state
+const appState = new AppState();
+
+// Track all event listeners for cleanup
+const eventListeners = [];
+
+// Helper to add event listeners that can be cleaned up
+function addManagedEventListener(element, event, handler, options) {
+  if (element && element.addEventListener) {
+    element.addEventListener(event, handler, options);
+    eventListeners.push({ element, event, handler, options });
+  }
+}
 
 // Function to add message to chat
 function addMessage(content, type = 'assistant') {
@@ -55,21 +211,21 @@ function addMessage(content, type = 'assistant') {
   contentDiv.textContent = content;
   
   messageDiv.appendChild(contentDiv);
-  chatContainer.appendChild(messageDiv);
+  elements.chatContainer.appendChild(messageDiv);
   
   // Auto-scroll to bottom
-  chatContainer.scrollTop = chatContainer.scrollHeight;
+  elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight;
   
   return contentDiv;
 }
 
 // Function to update current assistant message (for streaming)
 function updateAssistantMessage(content) {
-  if (!currentAssistantMessage) {
-    currentAssistantMessage = addMessage('', 'assistant');
+  if (!appState.message.currentAssistant) {
+    appState.setState('message.currentAssistant', addMessage('', 'assistant'));
   }
-  currentAssistantMessage.textContent = content;
-  chatContainer.scrollTop = chatContainer.scrollHeight;
+  appState.message.currentAssistant.textContent = content;
+  elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight;
 }
 
 // Function to create or update function call card
@@ -80,7 +236,7 @@ function createFunctionCallCard(callId, functionName, status = 'preparing') {
   if (!callId) {
     callId = 'temp-' + Date.now();
   }
-  let card = activeFunctionCalls.get(callId);
+  let card = appState.functions.activeCalls.get(callId);
   
   if (!card) {
     // Create new card
@@ -108,11 +264,11 @@ function createFunctionCallCard(callId, functionName, status = 'preparing') {
     headerDiv.appendChild(statusDiv);
     cardDiv.appendChild(headerDiv);
     
-    toolsContainer.appendChild(cardDiv);
-    toolsContainer.scrollTop = toolsContainer.scrollHeight;
+    elements.toolsContainer.appendChild(cardDiv);
+    elements.toolsContainer.scrollTop = elements.toolsContainer.scrollHeight;
     
     card = { element: cardDiv, name: functionName, timestamp: Date.now() };
-    activeFunctionCalls.set(callId, card);
+    appState.functions.activeCalls.set(callId, card);
   }
   
   return card;
@@ -120,7 +276,7 @@ function createFunctionCallCard(callId, functionName, status = 'preparing') {
 
 // Function to update function call status
 function updateFunctionCallStatus(callId, status, data = {}) {
-  const card = activeFunctionCalls.get(callId);
+  const card = appState.functions.activeCalls.get(callId);
   if (!card) return;
   
   const statusDiv = card.element.querySelector('.function-status');
@@ -171,16 +327,16 @@ function updateFunctionCallStatus(callId, status, data = {}) {
 
 // Function to handle streaming function arguments
 function updateFunctionArguments(callId, delta, isDone = false) {
-  const card = activeFunctionCalls.get(callId);
+  const card = appState.functions.activeCalls.get(callId);
   if (!card) return;
   
   // Initialize buffer for this call if needed
-  if (!functionArgumentsBuffer.has(callId)) {
-    functionArgumentsBuffer.set(callId, '');
+  if (!appState.functions.argumentsBuffer.has(callId)) {
+    appState.functions.argumentsBuffer.set(callId, '');
   }
   
   if (delta) {
-    functionArgumentsBuffer.set(callId, functionArgumentsBuffer.get(callId) + delta);
+    appState.functions.argumentsBuffer.set(callId, appState.functions.argumentsBuffer.get(callId) + delta);
   }
   
   let argsDiv = card.element.querySelector('.function-arguments');
@@ -193,54 +349,47 @@ function updateFunctionArguments(callId, delta, isDone = false) {
   if (isDone) {
     argsDiv.classList.remove('streaming');
     try {
-      const parsedArgs = JSON.parse(functionArgumentsBuffer.get(callId));
+      const parsedArgs = JSON.parse(appState.functions.argumentsBuffer.get(callId));
       argsDiv.textContent = JSON.stringify(parsedArgs, null, 2);
     } catch {
-      argsDiv.textContent = functionArgumentsBuffer.get(callId);
+      argsDiv.textContent = appState.functions.argumentsBuffer.get(callId);
     }
-    functionArgumentsBuffer.delete(callId);
+    appState.functions.argumentsBuffer.delete(callId);
   } else {
     // Show partial arguments while streaming
-    argsDiv.textContent = functionArgumentsBuffer.get(callId) + '...';
+    argsDiv.textContent = appState.functions.argumentsBuffer.get(callId) + '...';
   }
 }
 
-// Function to set connection status
+// Function to set connection status (now uses state machine)
 function setConnectionStatus(connected) {
-  isConnected = connected;
-  
   if (connected) {
-    statusIndicator.classList.remove('disconnected');
-    statusText.textContent = 'Connected';
-    userInput.disabled = false;
-    sendBtn.disabled = false;
+    appState.setConnectionStatus('CONNECTED');
   } else {
-    statusIndicator.classList.add('disconnected');
-    statusText.textContent = 'Disconnected';
-    userInput.disabled = true;
-    sendBtn.disabled = true;
+    appState.setConnectionStatus('DISCONNECTED');
   }
 }
 
 // Send message function
 function sendMessage() {
-  const message = userInput.value.trim();
+  const message = elements.userInput.value.trim();
   
-  if (!message || !isConnected) return;
+  if (!message || appState.connection.status !== 'CONNECTED') return;
   
   // Add user message to chat
   addMessage(message, 'user');
   
   // Clear input
-  userInput.value = '';
+  elements.userInput.value = '';
   
   // Show typing indicator
-  typingIndicator.parentElement.style.display = 'block';
-  typingIndicator.classList.add('active');
+  elements.typingIndicator.parentElement.style.display = 'block';
+  elements.typingIndicator.classList.add('active');
+  appState.setState('message.isTyping', true);
   
   // Reset assistant message state
-  currentAssistantMessage = null;
-  assistantMessageBuffer = '';
+  appState.setState('message.currentAssistant', null);
+  appState.setState('message.assistantBuffer', '');
   
   // Send to main process
   window.electronAPI.sendUserInput(message);
@@ -254,14 +403,14 @@ window.electronAPI.onBotOutput((output) => {
   
   for (const line of lines) {
     // Skip the initial connection message from Python bot (legacy format)
-    if (isInitialConnection && (line.includes('Welcome to Chat Juicer!') || 
+    if (appState.connection.isInitial && (line.includes('Welcome to Chat Juicer!') || 
         line.includes('Connected to') || 
         line.includes('Using deployment:') || 
         line.includes('Type \'quit\'') || 
         line.includes('====') ||
         line.includes('Enter your message'))) {
-      isInitialConnection = false;
-      hasShownWelcome = true;
+      appState.setState('connection.isInitial', false);
+      appState.setState('connection.hasShownWelcome', true);
       continue;  // Skip all initial bot output
     }
     
@@ -274,23 +423,26 @@ window.electronAPI.onBotOutput((output) => {
         switch(message.type) {
           case 'assistant_start':
             // Hide typing indicator and start new message
-            typingIndicator.classList.remove('active');
-            typingIndicator.parentElement.style.display = 'none';
-            assistantMessageBuffer = '';
-            currentAssistantMessage = addMessage('', 'assistant');
+            elements.typingIndicator.classList.remove('active');
+            elements.typingIndicator.parentElement.style.display = 'none';
+            appState.setState('message.isTyping', false);
+            const newMessage = addMessage('', 'assistant');
+            appState.setState('message.currentAssistant', newMessage);
+            appState.setState('message.assistantBuffer', '');
             break;
             
           case 'assistant_delta':
             // Add content to buffer exactly as received
-            if (currentAssistantMessage) {
-              assistantMessageBuffer += message.content;
-              updateAssistantMessage(assistantMessageBuffer);
+            if (appState.message.currentAssistant) {
+              const newBuffer = appState.message.assistantBuffer + message.content;
+              appState.setState('message.assistantBuffer', newBuffer);
+              updateAssistantMessage(newBuffer);
             }
             break;
             
           case 'assistant_end':
             // Message complete, reset for next message
-            currentAssistantMessage = null;
+            appState.setState('message.currentAssistant', null);
             break;
             
           case 'function_detected':
@@ -326,10 +478,10 @@ window.electronAPI.onBotOutput((output) => {
             }
             // Clean up after a delay
             const timerId = setTimeout(() => {
-              activeFunctionCalls.delete(message.call_id);
-              activeTimers.delete(timerId);
+              appState.functions.activeCalls.delete(message.call_id);
+              appState.functions.activeTimers.delete(timerId);
             }, 30000); // Keep cards visible for 30 seconds
-            activeTimers.add(timerId);
+            appState.functions.activeTimers.add(timerId);
             break;
             
           case 'rate_limit_hit':
@@ -389,10 +541,10 @@ window.electronAPI.onBotOutput((output) => {
             }
             // Clean up after a delay
             const timerId2 = setTimeout(() => {
-              activeFunctionCalls.delete(message.call_id);
-              activeTimers.delete(timerId2);
+              appState.functions.activeCalls.delete(message.call_id);
+              appState.functions.activeTimers.delete(timerId2);
             }, 30000); // Keep cards visible for 30 seconds
-            activeTimers.add(timerId2);
+            appState.functions.activeTimers.add(timerId2);
             break;
         }
       } catch (e) {
@@ -431,44 +583,44 @@ window.electronAPI.onBotDisconnected(() => {
 
 // Handle bot restart
 window.electronAPI.onBotRestarted(() => {
-  chatContainer.innerHTML = '';
-  hasShownWelcome = false;
-  currentAssistantMessage = null;
-  assistantMessageBuffer = '';
+  elements.chatContainer.innerHTML = '';
+  appState.setState('connection.hasShownWelcome', false);
+  appState.setState('message.currentAssistant', null);
+  appState.setState('message.assistantBuffer', '');
   addMessage('Bot is restarting...', 'system');
 });
 
-// Event listeners
-sendBtn.addEventListener('click', sendMessage);
+// Event listeners (using managed listeners for cleanup)
+addManagedEventListener(elements.sendBtn, 'click', sendMessage);
 
-userInput.addEventListener('keypress', (e) => {
+addManagedEventListener(elements.userInput, 'keypress', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     sendMessage();
   }
 });
 
-restartBtn.addEventListener('click', () => {
+addManagedEventListener(elements.restartBtn, 'click', () => {
   window.electronAPI.restartBot();
 });
 
 // Toggle tools panel handler
-if (toggleToolsBtn) {
-  toggleToolsBtn.addEventListener('click', () => {
-    toolsPanel.classList.toggle('collapsed');
+if (elements.toggleToolsBtn) {
+  addManagedEventListener(elements.toggleToolsBtn, 'click', () => {
+    elements.toolsPanel.classList.toggle('collapsed');
     document.body.classList.toggle('tools-collapsed');
     // Update arrow direction: ◀ when collapsed (to expand), ▶ when open (to collapse)
-    toggleToolsBtn.textContent = toolsPanel.classList.contains('collapsed') ? '◀' : '▶';
-    toggleToolsBtn.title = toolsPanel.classList.contains('collapsed') ? 'Show function calls' : 'Hide function calls';
+    elements.toggleToolsBtn.textContent = elements.toolsPanel.classList.contains('collapsed') ? '◀' : '▶';
+    elements.toggleToolsBtn.title = elements.toolsPanel.classList.contains('collapsed') ? 'Show function calls' : 'Hide function calls';
   });
 }
 
 // Focus input on load and ensure it's enabled
 window.addEventListener('load', () => {
   // Ensure input is enabled from the start
-  userInput.disabled = false;
-  sendBtn.disabled = false;
-  userInput.focus();
+  elements.userInput.disabled = false;
+  elements.sendBtn.disabled = false;
+  elements.userInput.focus();
   setConnectionStatus(true);  // Start as connected
   
   // Initialize dark mode from localStorage
@@ -490,13 +642,13 @@ function initializeTheme() {
 }
 
 function updateThemeToggle(isDark) {
-  if (themeIcon && themeText) {
+  if (elements.themeIcon && elements.themeText) {
     if (isDark) {
-      themeIcon.textContent = '☀️';
-      themeText.textContent = 'Light';
+      elements.themeIcon.textContent = '☀️';
+      elements.themeText.textContent = 'Light';
     } else {
-      themeIcon.textContent = '🌙';
-      themeText.textContent = 'Dark';
+      elements.themeIcon.textContent = '🌙';
+      elements.themeText.textContent = 'Dark';
     }
   }
 }
@@ -518,27 +670,72 @@ function toggleTheme() {
 }
 
 // Add event listener for theme toggle button
-if (themeToggle) {
-  themeToggle.addEventListener('click', toggleTheme);
+if (elements.themeToggle) {
+  addManagedEventListener(elements.themeToggle, 'click', toggleTheme);
 }
 
-// Cleanup function to prevent memory leaks
+// Comprehensive cleanup function to prevent memory leaks
 function cleanup() {
   console.log('Cleaning up renderer resources...');
   
-  // Clear all timers
-  activeTimers.forEach(timerId => clearTimeout(timerId));
-  activeTimers.clear();
+  // 1. Clear all setTimeout/setInterval timers
+  appState.functions.activeTimers.forEach(timerId => {
+    clearTimeout(timerId);
+    clearInterval(timerId); // In case any intervals were added
+  });
+  appState.functions.activeTimers.clear();
   
-  // Clear Maps
-  activeFunctionCalls.clear();
-  functionArgumentsBuffer.clear();
+  // 2. Clear all data structures
+  appState.functions.activeCalls.clear();
+  appState.functions.argumentsBuffer.clear();
   
-  // Reset state
-  currentAssistantMessage = null;
-  assistantMessageBuffer = '';
+  // 3. Reset all state
+  appState.setState('message.currentAssistant', null);
+  appState.setState('message.assistantBuffer', '');
+  appState.setState('message.isTyping', false);
+  appState.setState('connection.isInitial', true);
   
-  // Note: IPC listeners are handled by preload script and cannot be removed from renderer
+  // 4. Clear DOM references to prevent detached DOM trees
+  const chatContainer = elements.chatContainer;
+  if (chatContainer) {
+    // Remove all child nodes to free memory
+    while (chatContainer.firstChild) {
+      chatContainer.removeChild(chatContainer.firstChild);
+    }
+  }
+  
+  const toolsContainer = elements.toolsContainer;
+  if (toolsContainer) {
+    while (toolsContainer.firstChild) {
+      toolsContainer.removeChild(toolsContainer.firstChild);
+    }
+  }
+  
+  // 5. Remove all managed event listeners
+  eventListeners.forEach(({ element, event, handler, options }) => {
+    if (element && element.removeEventListener) {
+      element.removeEventListener(event, handler, options);
+    }
+  });
+  eventListeners.length = 0;
+  
+  // 6. Cancel any pending animations
+  if (elements.typingIndicator) {
+    elements.typingIndicator.classList.remove('active');
+    elements.typingIndicator.parentElement.style.display = 'none';
+  }
+  
+  // 7. Clear any pending state from localStorage if needed
+  // (keeping theme preference though)
+  
+  // 8. Nullify any pending async operations
+  if (window.pendingRequests) {
+    window.pendingRequests.forEach(req => {
+      if (req && req.abort) req.abort();
+    });
+  }
+  
+  console.log('Cleanup complete');
 }
 
 // Clean up on page unload
@@ -549,10 +746,10 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     // Clear old function cards when tab is hidden
     const now = Date.now();
-    activeFunctionCalls.forEach((card, callId) => {
+    appState.functions.activeCalls.forEach((card, callId) => {
       // Remove cards older than 1 minute when tab is hidden
       if (card.timestamp && now - card.timestamp > 60000) {
-        activeFunctionCalls.delete(callId);
+        appState.functions.activeCalls.delete(callId);
       }
     });
   }
