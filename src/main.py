@@ -35,9 +35,9 @@ SYSTEM_INSTRUCTIONS = """You are a technical documentation automation assistant 
 
 When asked to create documentation:
 1. First use list_directory to explore available files
-2. Use read_file to read ALL deliverables from the deliverables/ directory ONLY
+2. Use read_file to read ALL files from the sources/ directory ONLY
 3. Use load_template to load the requested template
-4. Use generate_document to combine the template with deliverables content
+4. Use generate_document to combine the template with source content
 5. Use write_document to save the generated document
 6. Respond with a brief confirmation of what was created
 

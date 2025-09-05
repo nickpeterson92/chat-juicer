@@ -262,15 +262,15 @@ def load_template(template_name: str, templates_dir: str = "templates") -> str:
 
 def generate_document(
     template_content: str,
-    deliverables: Dict[str, str],
+    sections: Dict[str, str],
     output_file: Optional[str] = None
 ) -> str:
     """
-    Generate documentation by combining template with deliverables.
+    Generate documentation by combining template with sections.
     
     Args:
         template_content: The template content with placeholders
-        deliverables: Dictionary mapping placeholder names to content
+        sections: Dictionary mapping placeholder names to content
         output_file: Optional path to save the generated document
         
     Returns:
@@ -289,16 +289,16 @@ def generate_document(
         for placeholder in set(placeholders):
             placeholder_clean = placeholder.strip()
             
-            # Look for matching deliverable
-            if placeholder_clean in deliverables:
-                replacement = deliverables[placeholder_clean]
+            # Look for matching section
+            if placeholder_clean in sections:
+                replacement = sections[placeholder_clean]
                 generated_content = generated_content.replace(
                     f"{{{{{placeholder}}}}}",
                     replacement
                 )
                 replacements_made.append(placeholder_clean)
             else:
-                # Leave placeholder if no matching deliverable
+                # Leave placeholder if no matching section
                 pass
         
         # Check for unfilled placeholders
@@ -449,7 +449,7 @@ TOOLS = [
     {
         "type": "function",
         "name": "generate_document",
-        "description": "Generate documentation by combining a template with deliverables content. Replaces {{placeholders}} in template with actual content.",
+        "description": "Generate documentation by combining a template with section content. Replaces {{placeholders}} in template with actual content.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -457,16 +457,16 @@ TOOLS = [
                     "type": "string",
                     "description": "The template content with {{placeholders}}"
                 },
-                "deliverables": {
+                "sections": {
                     "type": "object",
-                    "description": "Dictionary mapping placeholder names to their content"
+                    "description": "Dictionary mapping section/placeholder names to their content"
                 },
                 "output_file": {
                     "type": "string",
                     "description": "Optional path to save the generated document"
                 }
             },
-            "required": ["template_content", "deliverables"],
+            "required": ["template_content", "sections"],
             "additionalProperties": False
         }
     },
