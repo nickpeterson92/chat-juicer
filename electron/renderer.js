@@ -9,6 +9,9 @@ const typingIndicator = document.getElementById('typing-indicator');
 const toolsContainer = document.getElementById('tools-container');
 const toolsPanel = document.getElementById('tools-panel');
 const toggleToolsBtn = document.getElementById('toggle-tools-btn');
+const themeToggle = document.getElementById('theme-toggle');
+const themeIcon = document.getElementById('theme-icon');
+const themeText = document.getElementById('theme-text');
 
 let isConnected = true;  // Start as connected since bot auto-starts
 let currentAssistantMessage = null;
@@ -425,8 +428,9 @@ restartBtn.addEventListener('click', () => {
 if (toggleToolsBtn) {
   toggleToolsBtn.addEventListener('click', () => {
     toolsPanel.classList.toggle('collapsed');
-    // Fixed arrow directions: ◀ to expand (open), ▶ to collapse (close)
+    // Update arrow direction: ◀ when collapsed (to expand), ▶ when open (to collapse)
     toggleToolsBtn.textContent = toolsPanel.classList.contains('collapsed') ? '◀' : '▶';
+    toggleToolsBtn.title = toolsPanel.classList.contains('collapsed') ? 'Show function calls' : 'Hide function calls';
   });
 }
 
@@ -437,5 +441,55 @@ window.addEventListener('load', () => {
   sendBtn.disabled = false;
   userInput.focus();
   setConnectionStatus(true);  // Start as connected
+  
+  // Initialize dark mode from localStorage
+  initializeTheme();
 });
+
+// Dark mode functionality
+function initializeTheme() {
+  // Check localStorage for saved theme preference
+  const savedTheme = localStorage.getItem('theme') || 'light';
+  
+  if (savedTheme === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    updateThemeToggle(true);
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+    updateThemeToggle(false);
+  }
+}
+
+function updateThemeToggle(isDark) {
+  if (themeIcon && themeText) {
+    if (isDark) {
+      themeIcon.textContent = '☀️';
+      themeText.textContent = 'Light';
+    } else {
+      themeIcon.textContent = '🌙';
+      themeText.textContent = 'Dark';
+    }
+  }
+}
+
+function toggleTheme() {
+  const currentTheme = document.documentElement.getAttribute('data-theme');
+  
+  if (currentTheme === 'dark') {
+    // Switch to light mode
+    document.documentElement.removeAttribute('data-theme');
+    localStorage.setItem('theme', 'light');
+    updateThemeToggle(false);
+  } else {
+    // Switch to dark mode
+    document.documentElement.setAttribute('data-theme', 'dark');
+    localStorage.setItem('theme', 'dark');
+    updateThemeToggle(true);
+  }
+}
+
+// Add event listener for theme toggle button
+if (themeToggle) {
+  themeToggle.addEventListener('click', toggleTheme);
+}
 
