@@ -107,7 +107,9 @@ chat-juicer/
 │   ├── main.py       # Main chat loop and streaming handler
 │   ├── azure_client.py  # Azure OpenAI setup and configuration
 │   ├── functions.py  # Function handlers and tool definitions
-│   └── logger.py     # Python logging framework
+│   ├── logger.py     # Python logging framework
+│   ├── utils.py      # Utility functions for token management and rate limiting
+│   └── constants.py  # Centralized configuration and constants
 ├── logs/             # Log files (auto-generated)
 │   ├── conversations.jsonl  # Structured conversation logs
 │   └── errors.jsonl  # Error logs
@@ -118,10 +120,12 @@ chat-juicer/
 
 ### Python Backend (`src/`)
 
-- **main.py**: Handles the chat loop, streaming responses, and function execution with rate limiting
+- **main.py**: Handles the chat loop, streaming responses, and function execution
 - **azure_client.py**: Manages Azure OpenAI client initialization and configuration  
-- **functions.py**: Implements tool definitions and function handlers with tiktoken integration
+- **functions.py**: Implements tool definitions and function handlers
 - **logger.py**: Provides structured JSON logging for conversations and errors
+- **utils.py**: Token management utilities including estimation, optimization, and rate limiting
+- **constants.py**: Centralized configuration for rate limits, file sizes, and other constants
 
 ### Electron Frontend (`electron/`)
 
@@ -181,6 +185,7 @@ The application includes automatic rate limit handling with:
 - Up to 5 retry attempts
 - Real-time UI notifications when rate limits are hit
 - Graceful error handling without crashing
+- Centralized configuration in `constants.py`
 
 ### Token Counting & Optimization
 Using tiktoken for exact token counting:
@@ -189,6 +194,14 @@ Using tiktoken for exact token counting:
 - Removes unnecessary headers, footers, and redundant whitespace
 - Reports exact tokens saved through optimization
 - Model-aware encoding (supports GPT-4, GPT-3.5, and newer models)
+- Utilities centralized in `utils.py` for reusability
+
+### Code Organization
+Recent improvements for better maintainability:
+- **Modular utilities**: Token and rate limiting functions in `utils.py`
+- **Centralized constants**: All configuration values in `constants.py`
+- **Clean separation**: Each module has a single, clear responsibility
+- **Type hints**: Improved type annotations throughout the codebase
 
 ## Configuration
 
