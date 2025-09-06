@@ -1,0 +1,126 @@
+[tool.ruff]
+# Exclude commonly ignored directories
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+    "logs",
+    "generated",
+    "output",
+]
+
+# Python version target
+target-version = "py39"
+
+# Line length (matching Black's default)
+line-length = 120
+
+# Allow some flexibility for complex code
+indent-width = 4
+
+[tool.ruff.lint]
+# Enable specific rule categories
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # bugbear
+    "C4",   # comprehensions
+    "UP",   # pyupgrade
+    "SIM",  # simplify
+    "RUF",  # ruff-specific rules
+    "G",    # logging format
+    "C90",  # mccabe complexity
+    "PLC",  # pylint convention
+    "PLE",  # pylint error
+    "PLR",  # pylint refactor
+    "PLW",  # pylint warning
+    "PERF", # performance
+    "FA",   # future annotations
+]
+
+# Ignore specific rules that are too strict for this project
+ignore = [
+    "E501",     # Line too long (handled by formatter)
+    "T201",     # Print statements (needed for IPC communication)
+    "T203",     # pprint (sometimes useful for debugging)
+    "S101",     # Assert statements (useful for development)
+    "BLE001",   # Blind except (sometimes necessary for resilience)
+    "G004",     # Logging f-strings (cleaner than %)
+    "PLR2004",  # Magic values (sometimes clearer inline)
+    "PLR0913",  # Too many arguments
+    "PLR0912",  # Too many branches
+    "PLR0915",  # Too many statements
+    "C901",     # Complex structure
+    "D",        # Documentation (separate concern)
+    "ANN",      # Annotations (gradual typing)
+    "DTZ",      # Datetime timezone (not always needed)
+    "TRY003",   # Long exception messages
+    "EM101",    # Exception message in f-string
+    "EM102",    # Exception message in f-string
+    "RUF001",   # String contains ambiguous character
+    "RUF002",   # Docstring contains ambiguous character
+    "RUF003",   # Comment contains ambiguous character
+]
+
+# Allow autofix for safe fixes
+fixable = ["ALL"]
+unfixable = []
+
+# Allow unused variables when prefixed with an underscore
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.format]
+# Use double quotes for strings
+quote-style = "double"
+
+# Indent with spaces
+indent-style = "space"
+
+# Unix-style line endings
+line-ending = "auto"
+
+# Magic trailing comma
+skip-magic-trailing-comma = false
+
+[tool.ruff.lint.isort]
+# Group imports
+combine-as-imports = true
+split-on-trailing-comma = true
+
+[tool.ruff.lint.mccabe]
+# Maximum complexity
+max-complexity = 15
+
+[tool.ruff.lint.pylint]
+# Maximum number of arguments
+max-args = 8
+max-branches = 15
+max-returns = 6
+max-statements = 50
+
+[tool.ruff.lint.per-file-ignores]
+# Test files can have more relaxed rules
+"tests/**/*.py" = ["S101", "PLR2004", "PLR0913"]
+
+# Main.py needs prints for IPC
+"src/main.py" = ["T201"]

@@ -7,24 +7,25 @@ Log destinations:
 - logs/conversations.jsonl: JSON format for conversation history
 - logs/errors.jsonl: JSON format for error tracking
 """
-import os
-import sys
 import logging
 import logging.handlers
+import os
 import pathlib
-from datetime import datetime
+import sys
 import uuid
-from constants import (
-    LOG_MAX_SIZE,
-    LOG_BACKUP_COUNT_CONVERSATIONS,
-    LOG_BACKUP_COUNT_ERRORS,
-    LOG_PREVIEW_LENGTH,
-    SESSION_ID_LENGTH
-)
-from typing import Any, Optional, Dict
+from datetime import datetime
+from typing import Any, Optional
 
 # Import python-json-logger (required dependency)
 from pythonjsonlogger import jsonlogger
+
+from constants import (
+    LOG_BACKUP_COUNT_CONVERSATIONS,
+    LOG_BACKUP_COUNT_ERRORS,
+    LOG_MAX_SIZE,
+    LOG_PREVIEW_LENGTH,
+    SESSION_ID_LENGTH,
+)
 
 
 class ConversationFilter(logging.Filter):
@@ -43,80 +44,80 @@ class ErrorFilter(logging.Filter):
 def setup_logging(name: str = "chat-juicer", debug: bool = None) -> logging.Logger:
     """
     Set up professional logging with multiple handlers.
-    
+
     Args:
         name: Logger name
         debug: Enable debug logging (overrides DEBUG env var)
-    
+
     Returns:
         Configured logger instance
     """
     # Create logger
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)  # Capture all, filter at handler level
-    
+
     # Remove any existing handlers
     logger.handlers = []
-    
+
     # Determine debug mode
     if debug is None:
-        debug = os.getenv('DEBUG', 'false').lower() in ('true', '1', 'yes')
-    
+        debug = os.getenv("DEBUG", "false").lower() in ("true", "1", "yes")
+
     # --- Console Handler (Human-readable) ---
     # Always add console handler to stderr for debugging
     # This goes to terminal, not Electron (due to stdio configuration)
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setLevel(logging.DEBUG if debug else logging.INFO)
-    
+
     # Simple format for console
-    console_format = '%(asctime)s [%(levelname)8s] %(name)s - %(message)s'
+    console_format = "%(asctime)s [%(levelname)8s] %(name)s - %(message)s"
     console_handler.setFormatter(logging.Formatter(
         console_format,
-        datefmt='%H:%M:%S'
+        datefmt="%H:%M:%S",
     ))
     logger.addHandler(console_handler)
-    
+
     # --- Conversation Log Handler (JSON) ---
     # Use absolute path to project root logs directory
     project_root = pathlib.Path(__file__).parent.parent
-    log_dir = project_root / 'logs'
+    log_dir = project_root / "logs"
     log_dir.mkdir(exist_ok=True)
-    
+
     conv_handler = logging.handlers.RotatingFileHandler(
-        log_dir / 'conversations.jsonl',
+        log_dir / "conversations.jsonl",
         maxBytes=LOG_MAX_SIZE,
-        backupCount=LOG_BACKUP_COUNT_CONVERSATIONS
+        backupCount=LOG_BACKUP_COUNT_CONVERSATIONS,
     )
     conv_handler.setLevel(logging.INFO)
     conv_handler.addFilter(ConversationFilter())
-    
+
     # Use JSON formatter for conversations
     conv_formatter = jsonlogger.JsonFormatter(
-        '%(timestamp)s %(levelname)s %(message)s %(session_id)s %(chars)s %(functions)s %(func)s',
-        timestamp=True
+        "%(timestamp)s %(levelname)s %(message)s %(session_id)s %(chars)s %(functions)s %(func)s",
+        timestamp=True,
     )
-    
+
     conv_handler.setFormatter(conv_formatter)
     logger.addHandler(conv_handler)
-    
+
     # --- Error Log Handler (JSON) ---
     error_handler = logging.handlers.RotatingFileHandler(
-        log_dir / 'errors.jsonl',
+        log_dir / "errors.jsonl",
         maxBytes=LOG_MAX_SIZE,
-        backupCount=LOG_BACKUP_COUNT_ERRORS
+        backupCount=LOG_BACKUP_COUNT_ERRORS,
     )
     error_handler.setLevel(logging.ERROR)
     error_handler.addFilter(ErrorFilter())
-    
+
     # Use JSON formatter for errors
     error_formatter = jsonlogger.JsonFormatter(
-        '%(timestamp)s %(levelname)s %(name)s %(message)s',
-        timestamp=True
+        "%(timestamp)s %(levelname)s %(name)s %(message)s",
+        timestamp=True,
     )
-    
+
     error_handler.setFormatter(error_formatter)
     logger.addHandler(error_handler)
-    
+
     return logger
 
 
@@ -125,36 +126,36 @@ class ChatLogger:
     High-level logging interface for Chat Juicer.
     Wraps standard Python logging with convenience methods.
     """
-    
+
     def __init__(self, name: str = "chat-juicer"):
         self.logger = setup_logging(name)
         self.session_id = str(uuid.uuid4())[:SESSION_ID_LENGTH]
-        
+
     def debug(self, message: str, **kwargs):
         """Debug level logging"""
         self.logger.debug(message, extra=kwargs)
-        
+
     def info(self, message: str, **kwargs):
         """Info level logging"""
         self.logger.info(message, extra=kwargs)
-        
+
     def warning(self, message: str, **kwargs):
         """Warning level logging"""
         self.logger.warning(message, extra=kwargs)
-        
+
     def error(self, message: str, exc_info=False, **kwargs):
         """Error level logging with optional exception info"""
         self.logger.error(message, extra=kwargs, exc_info=exc_info)
-        
-    def log_conversation_turn(self, 
-                            user_input: str, 
+
+    def log_conversation_turn(self,
+                            user_input: str,
                             response: str,
                             function_calls: Optional[list] = None,
                             duration_ms: Optional[float] = None,
                             tokens_used: Optional[int] = None):
         """
         Log a complete conversation turn to conversations.jsonl
-        
+
         Args:
             user_input: The user's input text
             response: The AI's response text
@@ -163,48 +164,48 @@ class ChatLogger:
             tokens_used: Number of tokens used
         """
         # Create concise summary for log file
-        user_preview = user_input[:LOG_PREVIEW_LENGTH].replace('\\n', ' ')
+        user_preview = user_input[:LOG_PREVIEW_LENGTH].replace("\\n", " ")
         if len(user_input) > LOG_PREVIEW_LENGTH:
             user_preview += "..."
-        
-        response_preview = response[:LOG_PREVIEW_LENGTH].replace('\\n', ' ')
+
+        response_preview = response[:LOG_PREVIEW_LENGTH].replace("\\n", " ")
         if len(response) > LOG_PREVIEW_LENGTH:
             response_preview += "..."
-        
+
         # Build concise message
         msg_parts = [f"User: {user_preview} → AI: {response_preview}"]
-        
+
         if function_calls:
             msg_parts.append(f"[{len(function_calls)} functions]")
-        
+
         if duration_ms:
             msg_parts.append(f"[{duration_ms:.0f}ms]")
-            
+
         if tokens_used:
             msg_parts.append(f"[{tokens_used} tokens]")
-        
+
         # Log concise message with minimal extra data
         extra_data = {
-            'conversation_turn': True,  # Flag for filter
-            'timestamp': datetime.utcnow().isoformat(),
-            'session_id': self.session_id,
-            'chars': len(user_input) + len(response),
-            'functions': len(function_calls) if function_calls else 0
+            "conversation_turn": True,  # Flag for filter
+            "timestamp": datetime.utcnow().isoformat(),
+            "session_id": self.session_id,
+            "chars": len(user_input) + len(response),
+            "functions": len(function_calls) if function_calls else 0,
         }
-        
+
         # Only add performance metrics if present
         if duration_ms is not None:
-            extra_data['ms'] = int(duration_ms)
+            extra_data["ms"] = int(duration_ms)
         if tokens_used is not None:
-            extra_data['tokens'] = tokens_used
-            
+            extra_data["tokens"] = tokens_used
+
         # Log with special flag for conversation filter
         self.logger.info(" ".join(msg_parts), extra=extra_data)
-        
-    def log_function_call(self, function_name: str, args: Dict, result: Any):
+
+    def log_function_call(self, function_name: str, args: dict, result: Any):
         """
         Log a function call - verbose to console, concise to file.
-        
+
         Args:
             function_name: Name of the function called
             args: Arguments passed to the function
@@ -212,7 +213,7 @@ class ChatLogger:
         """
         # CONSOLE: Full verbose output
         console_msg = f"Function call: {function_name}({args}) → {result}"
-        
+
         # FILE: Concise summary
         args_parts = []
         for key, value in args.items():
@@ -220,20 +221,20 @@ class ChatLogger:
             if len(value_str) > 20:
                 value_str = value_str[:20] + "..."
             args_parts.append(f"{key}={value_str}")
-        
+
         args_summary = ", ".join(args_parts) if args_parts else ""
-        
+
         # Truncate result for file
         result_str = str(result)[:LOG_PREVIEW_LENGTH]
         if len(str(result)) > LOG_PREVIEW_LENGTH:
             result_str += "..."
-        
+
         file_msg = f"Func: {function_name}({args_summary}) → {result_str}"
-        
+
         # Log different messages to console vs file
         # Console handler will show console_msg, file handler will show file_msg
         # We'll use a custom attribute to differentiate
-        self.logger.info(console_msg, extra={'file_message': file_msg, 'func': function_name})
+        self.logger.info(console_msg, extra={"file_message": file_msg, "func": function_name})
 
 
 # Global logger instance
