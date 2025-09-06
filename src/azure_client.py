@@ -5,6 +5,19 @@ Handles all Azure-specific initialization and client management.
 import os
 
 from dotenv import load_dotenv
+from openai import OpenAI
+
+# Optional agents helpers
+try:
+    from agents import (
+        set_default_openai_api,
+        set_default_openai_client,
+        set_tracing_disabled,
+    )
+except ImportError:  # agents module not available
+    set_default_openai_api = None  # type: ignore
+    set_default_openai_client = None  # type: ignore
+    set_tracing_disabled = None  # type: ignore
 
 
 def setup_azure_client():
@@ -32,24 +45,15 @@ def setup_azure_client():
         )
 
     # Initialize Azure OpenAI client (using base OpenAI client for Responses API)
-    from openai import OpenAI
     client = OpenAI(
         api_key=api_key,
         base_url=endpoint,
     )
 
     # Set up agents module if available
-    try:
-        from agents import (
-            set_default_openai_api,
-            set_default_openai_client,
-            set_tracing_disabled,
-        )
+    if set_default_openai_client and set_default_openai_api and set_tracing_disabled:
         set_default_openai_client(client)
         set_default_openai_api("responses")
         set_tracing_disabled(True)
-    except ImportError:
-        # agents module not available, continue without it
-        pass
 
     return client, deployment
