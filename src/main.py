@@ -44,7 +44,7 @@ When asked to create documentation:
 
 All files in the sources/ directory are available to be used for documentation generation.
 - Leverage files of ALL extensions:
-- .md, .txt, .template, .docx, .doc, .pptx, .ppt, .pdf, .csv, .html, .htm, .xml, .json, .ipynb, etc...
+    - .md, .txt, .template, .docx, .doc, .pptx, .ppt, .pdf, .csv, .html, .htm, .xml, .json, .ipynb, etc...
 
 Always complete the full workflow when creating documents."""
 
