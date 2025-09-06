@@ -20,6 +20,7 @@ Key architectural differences from Chat Completions API:
 
 4. The `store: true` parameter enables response retrieval later
 """
+
 from __future__ import annotations
 
 import json
@@ -37,17 +38,22 @@ SYSTEM_INSTRUCTIONS = """You are a technical documentation automation assistant 
 
 When asked to create documentation:
 1. First use list_directory to explore available files
-2. Use read_file to read ALL files from the sources/ directory
-3. Use load_template to load the requested template
-4. Use generate_document to combine the template with source content
-5. Use write_document to save the generated document
-6. Respond with a brief confirmation of what was created
+2. Then use read_file to examine source files from the sources/ directory
+3. After all sources are read, use read_file to load templates from the templates/ directory
+4. Generate comprehensive document content based on the template and source files
+5. Use generate_document to save the completed document to the output location
 
-All files in the sources/ directory are available to be used for documentation generation.
-- Leverage files of ALL extensions:
-    - .md, .txt, .template, .docx, .doc, .pptx, .ppt, .pdf, .csv, .html, .htm, .xml, .json, .ipynb, etc...
-
-Always complete the full workflow when creating documents."""
+Key points:
+- Read ALL files of ALL extensions in the sources/ directory:
+    - .md, .txt, .docx, .doc, .pptx, .ppt, .xlsx, .xls, .pdf, .csv, .html, .htm, .xml, .json, .ipynb, etc.
+- The read_file tool is safe to run in parallel with multiple sources
+- Templates are markdown files in templates/ directory - use read_file to access them
+- Load the most relevant template for the documentation type requested
+- The generate_document function takes the complete document content and saves it
+- Ensure that all sections of the template are filled with the content of the source files
+- Ensure the content of the document is accurate and complete
+- Ensure all requested Mermaid diagrams are generated accurately and with the correct syntax
+- Always provide the full document content to generate_document, not a template with placeholders"""
 
 # Set up Azure client
 try:
