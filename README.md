@@ -1,18 +1,18 @@
 ```
    ██████╗██╗  ██╗ █████╗ ████████╗
   ██╔════╝██║  ██║██╔══██╗╚══██╔══╝
-  ██║     ███████║███████║   ██║   
-  ██║     ██╔══██║██╔══██║   ██║   
-  ╚██████╗██║  ██║██║  ██║   ██║   
-   ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   
-                                    
-       ██╗██╗   ██╗██╗ ██████╗███████╗██████╗ 
+  ██║     ███████║███████║   ██║
+  ██║     ██╔══██║██╔══██║   ██║
+  ╚██████╗██║  ██║██║  ██║   ██║
+   ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝
+
+       ██╗██╗   ██╗██╗ ██████╗███████╗██████╗
        ██║██║   ██║██║██╔════╝██╔════╝██╔══██╗
        ██║██║   ██║██║██║     █████╗  ██████╔╝
   ██   ██║██║   ██║██║██║     ██╔══╝  ██╔══██╗
   ╚█████╔╝╚██████╔╝██║╚██████╗███████╗██║  ██║
    ╚════╝  ╚═════╝ ╚═╝ ╚═════╝╚══════╝╚═╝  ╚═╝
-                                                
+
         "Putting the 'Juice' in 'Chatbot'"
 ```
 
@@ -77,7 +77,7 @@ Chat Juicer uses Azure OpenAI's **Responses API** (not Chat Completions API) whi
    cd src/
    cp .env.example .env
    ```
-   
+
    Edit `.env` with your Azure OpenAI credentials:
    ```env
    AZURE_OPENAI_API_KEY=your-api-key
@@ -139,7 +139,7 @@ chat-juicer/
 ### Python Backend (`src/`)
 
 - **main.py**: Handles the chat loop, streaming responses, and function execution
-- **azure_client.py**: Manages Azure OpenAI client initialization and configuration  
+- **azure_client.py**: Manages Azure OpenAI client initialization and configuration
 - **functions.py**: Implements tool definitions and function handlers
 - **logger.py**: Provides structured JSON logging for conversations and errors
 - **utils.py**: Token management utilities including estimation, optimization, and rate limiting
@@ -174,6 +174,30 @@ Structured logs are automatically generated in `logs/`:
 - **errors.jsonl**: Error tracking and debugging information
 
 ## Development
+
+### Code Quality Tools
+
+The project uses pre-commit hooks to ensure code quality. Install development dependencies:
+
+```bash
+# Install development tools
+pip install -r requirements-dev.txt
+
+# Install pre-commit hooks
+pre-commit install
+```
+
+Now code quality checks run automatically on `git commit`. To run manually:
+
+```bash
+# Run all hooks on all files
+pre-commit run --all-files
+
+# Or run individual tools:
+black src/              # Format code
+ruff check src/ --fix   # Lint and auto-fix
+mypy src/               # Type checking
+```
 
 ### Adding New Features
 

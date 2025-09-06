@@ -1,0 +1,65 @@
+# Pre-commit hooks for Chat Juicer
+# Install: pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Black - Python code formatter
+  - repo: https://github.com/psf/black
+    rev: 23.12.1
+    hooks:
+      - id: black
+        args: ['--line-length=100']
+        files: ^src/.*\.py$
+
+  # Ruff - Fast Python linter
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.9
+    hooks:
+      # Run the linter
+      - id: ruff
+        args: ['--fix', '--exit-non-zero-on-fix']
+        files: ^src/.*\.py$
+      # Run the formatter (alternative to black, disabled by default)
+      # - id: ruff-format
+      #   files: ^src/.*\.py$
+
+  # MyPy - Static type checker
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        args: ['--ignore-missing-imports', '--no-strict-optional']
+        files: ^src/.*\.py$
+        additional_dependencies:
+          - types-requests
+          - python-dotenv
+          - openai
+
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+
+  # Check for Python syntax errors
+  - repo: https://github.com/pre-commit/pygrep-hooks
+    rev: v1.10.0
+    hooks:
+      - id: python-check-blanket-noqa  # Check for # noqa without specific error codes
+      - id: python-no-eval              # Check for eval() usage
+      - id: python-no-log-warn          # Check for logger.warn (use warning instead)
+
+# Configuration
+default_stages: [pre-commit]
+fail_fast: false
+exclude: '^(logs/|generated/|sources/|docs/|templates/)'

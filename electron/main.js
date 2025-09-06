@@ -148,7 +148,7 @@ ipcMain.on("user-input", (event, message) => {
 // IPC handler for restart request
 ipcMain.on("restart-bot", () => {
   logger.info("Restart requested");
-  
+
   // Send disconnected status first
   if (mainWindow) {
     mainWindow.webContents.send("bot-disconnected");
@@ -159,7 +159,7 @@ ipcMain.on("restart-bot", () => {
     // Wait a bit longer to ensure process is fully terminated
     setTimeout(() => {
       startPythonBot();
-      
+
       // Send restart event after process starts
       setTimeout(() => {
         if (mainWindow) {

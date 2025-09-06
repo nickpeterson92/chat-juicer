@@ -108,13 +108,13 @@
       overflow: hidden;
       transition: all 0.3s ease;
     }
-    
+
     .main-content {
       display: flex;
       flex: 1;
       overflow: hidden;
     }
-    
+
     .chat-panel {
       flex: 1;
       display: flex;
@@ -122,7 +122,7 @@
       min-width: 400px;
       border-right: 1px solid var(--border-color);
     }
-    
+
     .tools-panel {
       width: 420px;
       display: flex;
@@ -131,18 +131,18 @@
       transition: width 0.3s ease;
       position: relative;
     }
-    
+
     .tools-panel.collapsed {
       width: 0;
       overflow: hidden;
     }
-    
+
     .tools-panel.collapsed .tools-header,
     .tools-panel.collapsed .tools-container {
       opacity: 0;
       visibility: hidden;
     }
-    
+
     .tools-toggle-wrapper {
       position: fixed;
       right: 420px;
@@ -151,11 +151,11 @@
       z-index: 100;
       transition: right 0.3s ease;
     }
-    
+
     body.tools-collapsed .tools-toggle-wrapper {
       right: 0;
     }
-    
+
     .tools-header {
       padding: 16px 20px;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -166,7 +166,7 @@
       height: 56px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     }
-    
+
     .tools-title {
       font-size: 15px;
       font-weight: 600;
@@ -176,11 +176,11 @@
       transition: opacity 0.3s ease;
       letter-spacing: 0.5px;
     }
-    
+
     .tools-panel.collapsed .tools-title {
       opacity: 0;
     }
-    
+
     .tools-container {
       flex: 1;
       overflow-y: auto;
@@ -190,12 +190,12 @@
       flex-direction: column;
       gap: 12px;
     }
-    
+
     .tools-panel.collapsed .tools-container {
       opacity: 0;
       pointer-events: none;
     }
-    
+
     .toggle-tools-btn {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       border: none;
@@ -213,7 +213,7 @@
       box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15);
       font-family: system-ui, -apple-system, sans-serif;
     }
-    
+
     .toggle-tools-btn:hover {
       transform: translateX(-2px);
       box-shadow: -4px 0 12px rgba(102, 126, 234, 0.4);
@@ -535,7 +535,7 @@
       line-height: 1.5;
       font-weight: 500;
     }
-    
+
     /* Override for default state (not executing/success/error) */
     .function-call-card:not(.executing):not(.success):not(.error) .function-arguments,
     .function-call-card:not(.executing):not(.success):not(.error) .function-result {
@@ -564,7 +564,7 @@
     .function-executing-pulse {
       animation: pulse-function 1.5s infinite;
     }
-    
+
     /* Dark mode toggle button */
     .theme-toggle {
       background: transparent;
@@ -579,42 +579,42 @@
       align-items: center;
       gap: 8px;
     }
-    
+
     .theme-toggle:hover {
       background: rgba(255, 255, 255, 0.1);
       transform: scale(1.05);
     }
-    
+
     .theme-toggle-icon {
       transition: transform 0.3s ease;
     }
-    
+
     [data-theme="dark"] .theme-toggle-icon {
       transform: rotate(180deg);
     }
-    
+
     /* Custom scrollbar styling */
     .tools-container::-webkit-scrollbar,
     .chat-container::-webkit-scrollbar {
       width: 8px;
     }
-    
+
     .tools-container::-webkit-scrollbar-track,
     .chat-container::-webkit-scrollbar-track {
       background: transparent;
     }
-    
+
     .tools-container::-webkit-scrollbar-thumb,
     .chat-container::-webkit-scrollbar-thumb {
       background: rgba(139, 92, 246, 0.3);
       border-radius: 4px;
     }
-    
+
     .tools-container::-webkit-scrollbar-thumb:hover,
     .chat-container::-webkit-scrollbar-thumb:hover {
       background: rgba(139, 92, 246, 0.5);
     }
-    
+
     /* Smooth animations */
     @keyframes fadeIn {
       from { opacity: 0; }
@@ -658,9 +658,9 @@
 
         <div class="input-container">
       <div class="input-wrapper">
-        <input 
-          type="text" 
-          id="user-input" 
+        <input
+          type="text"
+          id="user-input"
           placeholder="Type your message here..."
           autocomplete="off"
         />
@@ -668,7 +668,7 @@
       <button class="send-button" id="send-btn">Send</button>
     </div>
       </div>
-      
+
       <div class="tools-panel" id="tools-panel">
         <div class="tools-header">
           <div class="tools-title">
@@ -681,7 +681,7 @@
       </div>
     </div>
   </div>
-  
+
   <!-- Toggle button outside of collapsible panel -->
   <div class="tools-toggle-wrapper" id="tools-toggle-wrapper">
     <button class="toggle-tools-btn" id="toggle-tools-btn" title="Toggle tools panel">

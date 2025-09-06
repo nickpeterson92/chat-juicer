@@ -587,7 +587,7 @@ window.electronAPI.onBotRestarted(() => {
   appState.setState("message.currentAssistant", null);
   appState.setState("message.assistantBuffer", "");
   addMessage("Bot is restarting...", "system");
-  
+
   // Reset connection status after a short delay to allow process to start
   setTimeout(() => {
     setConnectionStatus(true);

@@ -1,12 +1,12 @@
 """
 Utility functions for token management, rate limiting, and optimization.
 """
+
 import json
 import re
 import time
 
 import tiktoken
-
 from constants import RATE_LIMIT_BASE_DELAY, RATE_LIMIT_MAX_WAIT, RATE_LIMIT_RETRY_MAX
 
 
@@ -57,14 +57,16 @@ def estimate_tokens(text: str, model: str = "gpt-4o-mini") -> dict:
         word_count = len(text.split())
 
         # Detect content type for better estimation
-        code_indicators = sum([
-            text.count("{"),
-            text.count("}"),
-            text.count("("),
-            text.count(")"),
-            text.count(";"),
-            text.count("="),
-        ])
+        code_indicators = sum(
+            [
+                text.count("{"),
+                text.count("}"),
+                text.count("("),
+                text.count(")"),
+                text.count(";"),
+                text.count("="),
+            ]
+        )
 
         # Calculate code density (0-1)
         code_density = min(code_indicators / (word_count + 1), 1.0)
@@ -83,7 +85,9 @@ def estimate_tokens(text: str, model: str = "gpt-4o-mini") -> dict:
         }
 
 
-def optimize_content_for_tokens(content: str, format_type: str = "text", model: str = "gpt-4o-mini") -> tuple[str, dict]:
+def optimize_content_for_tokens(
+    content: str, format_type: str = "text", model: str = "gpt-4o-mini"
+) -> tuple[str, dict]:
     """
     Optimize content for minimal token usage while preserving information.
     Now with exact token counting using tiktoken for intelligent optimization decisions.
@@ -101,7 +105,9 @@ def optimize_content_for_tokens(content: str, format_type: str = "text", model: 
 
     # Get initial token count
     initial_token_count = estimate_tokens(content, model)
-    initial_tokens = initial_token_count.get("exact_tokens") or initial_token_count.get("estimated_tokens", 0)
+    initial_tokens = initial_token_count.get("exact_tokens") or initial_token_count.get(
+        "estimated_tokens", 0
+    )
 
     # Statistics tracking
     stats = {
@@ -224,7 +230,7 @@ def optimize_content_for_tokens(content: str, format_type: str = "text", model: 
 
     # Step 6: For markdown, optimize heading spacing
     if format_type == "markdown" or "markdown" in format_type:
-        compressed = []
+        compressed: list[str] = []
         for i, line in enumerate(final_lines):
             # Remove blank lines before headings (markdown renders spacing)
             if line.startswith("#") and i > 0 and compressed and compressed[-1] == "":
@@ -238,15 +244,21 @@ def optimize_content_for_tokens(content: str, format_type: str = "text", model: 
 
     # Calculate final stats with exact token counts
     final_token_count = estimate_tokens(optimized_content, model)
-    final_tokens = final_token_count.get("exact_tokens") or final_token_count.get("estimated_tokens", 0)
+    final_tokens = final_token_count.get("exact_tokens") or final_token_count.get(
+        "estimated_tokens", 0
+    )
 
     stats["final_length"] = len(optimized_content)
     stats["final_lines"] = len(final_lines)
     stats["final_tokens"] = final_tokens
     stats["bytes_saved"] = original_length - stats["final_length"]
     stats["tokens_saved"] = initial_tokens - final_tokens
-    stats["percentage_saved"] = round((stats["bytes_saved"] / original_length * 100), 1) if original_length > 0 else 0
-    stats["token_percentage_saved"] = round((stats["tokens_saved"] / initial_tokens * 100), 1) if initial_tokens > 0 else 0
+    stats["percentage_saved"] = (
+        round((stats["bytes_saved"] / original_length * 100), 1) if original_length > 0 else 0
+    )
+    stats["token_percentage_saved"] = (
+        round((stats["tokens_saved"] / initial_tokens * 100), 1) if initial_tokens > 0 else 0
+    )
 
     return optimized_content, stats
 
@@ -301,19 +313,23 @@ def handle_rate_limit(func, *args, logger=None, **kwargs):
         # Check if it's a rate limit error
         if "rate limit" in error_str.lower() or "429" in error_str:
             # Calculate exponential backoff with cap
-            wait_time = min(RATE_LIMIT_BASE_DELAY * (2 ** retry_count), RATE_LIMIT_MAX_WAIT)
+            wait_time = min(RATE_LIMIT_BASE_DELAY * (2**retry_count), RATE_LIMIT_MAX_WAIT)
 
             # Send UI notification about rate limit
-            msg = json.dumps({
-                "type": "rate_limit_hit",
-                "retry_count": retry_count + 1,
-                "wait_time": wait_time,
-                "message": f"Rate limit hit. Waiting {wait_time}s before retry...",
-            })
+            msg = json.dumps(
+                {
+                    "type": "rate_limit_hit",
+                    "retry_count": retry_count + 1,
+                    "wait_time": wait_time,
+                    "message": f"Rate limit hit. Waiting {wait_time}s before retry...",
+                }
+            )
             print(f"__JSON__{msg}__JSON__", flush=True)
 
             if logger:
-                logger.warning(f"Rate limit hit. Waiting {wait_time}s before retry {retry_count + 1}")
+                logger.warning(
+                    f"Rate limit hit. Waiting {wait_time}s before retry {retry_count + 1}"
+                )
             time.sleep(wait_time)
             retry_count += 1
         else:
@@ -324,9 +340,11 @@ def handle_rate_limit(func, *args, logger=None, **kwargs):
     error_msg = f"Rate limit retry max ({RATE_LIMIT_RETRY_MAX}) exceeded"
     if logger:
         logger.error(error_msg)
-    msg = json.dumps({
-        "type": "rate_limit_failed",
-        "message": error_msg,
-    })
+    msg = json.dumps(
+        {
+            "type": "rate_limit_failed",
+            "message": error_msg,
+        }
+    )
     print(f"__JSON__{msg}__JSON__", flush=True)
     raise last_error if last_error else Exception(error_msg)

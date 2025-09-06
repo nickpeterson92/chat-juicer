@@ -2,6 +2,7 @@
 Azure OpenAI client setup and configuration.
 Handles all Azure-specific initialization and client management.
 """
+
 import os
 
 from dotenv import load_dotenv
@@ -51,7 +52,11 @@ def setup_azure_client():
     )
 
     # Set up agents module if available
-    if set_default_openai_client and set_default_openai_api and set_tracing_disabled:
+    if (
+        set_default_openai_client is not None
+        and set_default_openai_api is not None
+        and set_tracing_disabled is not None
+    ):
         set_default_openai_client(client)
         set_default_openai_api("responses")
         set_tracing_disabled(True)

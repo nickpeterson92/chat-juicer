@@ -1,0 +1,245 @@
+# Design Document: Salesforce to NetSuite Sales Order Integration
+
+## Executive Summary
+We will build a robust, maintainable integration to automate sales orders from Salesforce to NetSuite, providing near-real-time order creation, status synchronization back to Salesforce, and improved data correlation across legacy systems. The solution uses Boomi AtomSphere for orchestration, an AWS RDS PostgreSQL staging database for correlation and resilience, and connector-based APIs to NetSuite, Salesforce, the AS400 credit system, and DnB for credit scoring. A phased delivery minimizes risk and delivers business value quickly.
+
+## Problem Statement
+- Manual order entry and reconciliation between Salesforce and NetSuite causes delays and errors
+- Customer correlation is unreliable (generic emails, missing tax IDs, legacy AS400 IDs)
+- NetSuite async order creation requires polling and provisional IDs for UX
+- Credit data lives on an AS400 SOAP service with certificate auth and EBCDIC formats
+- Subsidiary routing logic lives in unmanaged Excel files (no audit trail), causing tax risk
+- Product and pricing discrepancies, custom product creation, and DnB rate limits add complexity
+
+## Proposed Solution
+Implement a Boomi-orchestrated integration with a persistent staging database in AWS RDS (Postgres) to: accept orders from Salesforce, perform deterministic correlation against NetSuite/AS400/DnB, run validation and transformation rules, submit orders to NetSuite asynchronously with provisional IDs, poll and reconcile NetSuite responses, and surface status and errors back to Salesforce and operations consoles. Phase the work into core order flow, credit and inventory, then advanced features (pricing, returns, custom products).
+
+### Integration Approach
+Use Boomi AtomSphere for orchestration and mapping. Use Salesforce REST APIs and Platform Events as the front-end. Use NetSuite SuiteTalk REST v2 for async order creation and webhooks for status updates. Use the AS400 SOAP API for credit checks (client certificate authentication). Implement a credit_check_cache and customer_correlation_map in Postgres to smooth rate limits and improve matching. Secure all traffic with TLS; store credentials and certificates in a secrets manager.
+
+### Key Components
+- Salesforce (source of truth for orders)
+- Boomi Atoms (orchestration, mapping, retries)
+- AWS RDS PostgreSQL (staging_orders, staging_order_lines, customer_correlation_map, credit_check_cache, netsuite_polling_queue, audit_log)
+- NetSuite SuiteTalk REST API (async create, status webhook)
+- AS400 SOAP API (credit info, customer mapping)
+- DnB credit API (rate-limited, cached)
+- Monitoring and Alerting (CloudWatch, Boomi dashboards, PagerDuty)
+- Admin UI / Manual Review Queue for exceptions
+
+## Technical Architecture
+The architecture centralizes orchestration in Boomi, with durable state in Postgres for correlation, retry, and audit. Orders originate from Salesforce and are placed into staging_orders. Boomi correlates customers, optionally calls AS400 and DnB for credit, applies subsidiary decision logic, and posts async requests to NetSuite. A polling process reads netsuite_polling_queue and updates staging records; completed orders push status updates to Salesforce via API.
+
+### System Architecture Diagram
+```mermaid
+graph TB
+    subgraph "Source Layer"
+        SF[Salesforce]
+    end
+    subgraph "Processing"
+        BOOMI[Boomi Orchestrator]
+        DB[Staging DB - order_staging_db]
+    end
+    subgraph "Target Layer"
+        NS[NetSuite]
+        AS4[AS400 Credit System]
+        DNB[DnB Credit API]
+    end
+    SF --> BOOMI
+    BOOMI --> DB
+    BOOMI --> NS
+    BOOMI --> AS4
+    BOOMI --> DNB
+    NS --> BOOMI
+    NS --> DB
+    AS4 --> DB
+    DNB --> DB
+```
+
+### Data Flow Sequence Diagram  
+```mermaid
+sequenceDiagram
+    participant SF as Salesforce
+    participant BO as Boomi
+    participant DB as StagingDB
+    participant NS as NetSuite
+    participant AS4 as AS400
+    SF->>BO: New Order event / REST create
+    BO->>DB: Insert staging_order (provisional ID)
+    BO->>DB: Correlate customer
+    BO->>AS4: Get credit info (if needed)
+    alt DnB required
+      BO->>DNB: Check credit score
+      DNB-->>BO: Credit result
+    end
+    BO->>NS: Async create sales order
+    NS-->>BO: TransactionId (temp)
+    BO->>DB: Enqueue poll (netsuite_polling_queue)
+    loop Polling
+      BO->>NS: Poll status
+      NS-->>BO: Completed with order number
+    end
+    BO->>SF: Update order with NetSuite order number
+```
+
+### Process Flow Diagram
+```mermaid
+flowchart TD
+    START([Order Created in Salesforce]) --> STAGE[Insert into Staging DB]
+    STAGE --> CORR[Customer Correlation]
+    CORR --> CREDIT{Credit Check Required}
+    CREDIT -->|Yes| AS400[Call AS400 and/or DnB]
+    CREDIT -->|No| VALID[Validate Order and Lines]
+    AS400 --> VALID
+    VALID --> SEND[Send Async Create to NetSuite]
+    SEND --> POLL[Enqueue and Poll NetSuite]
+    POLL -->|Success| CONF[Confirm and Update Salesforce]
+    POLL -->|Failure| ERR[Handle Error / Manual Review]
+    ERR --> MANUAL[Manual Review Queue]
+    CONF --> END([Completed])
+```
+
+### State Transition Diagram
+```mermaid
+stateDiagram-v2
+    [*] --> Pending
+    Pending --> Correlating
+    Correlating --> Credit_Check
+    Credit_Check --> Awaiting_NS
+    Awaiting_NS --> Polling_NS
+    Polling_NS --> Completed
+    Polling_NS --> Failed
+    Failed --> Manual_Review
+    Manual_Review --> Completed
+```
+
+### Entity Relationship Diagram
+```mermaid
+erDiagram
+    CUSTOMER ||--o{ ORDER : places
+    ORDER ||--o{ LINE : contains
+    CUSTOMER {
+        string id PK
+        string name
+        string email
+    }
+    ORDER {
+        string staging_id PK
+        date order_date
+        decimal order_total
+    }
+    LINE {
+        string line_id PK
+        decimal quantity
+        decimal unit_price
+    }
+```
+
+### Component Interaction Diagram
+```mermaid
+graph LR
+    subgraph "Source Layer"
+        SF[Salesforce]
+    end
+    subgraph "Processing"
+        BOOMI[Boomi Orchestrator]
+        DB[Staging DB]
+    end
+    subgraph "Target Layer"
+        NS[NetSuite]
+        AS4[AS400]
+        DNB[DnB]
+    end
+    SF --> BOOMI
+    BOOMI --> DB
+    BOOMI --> NS
+    BOOMI --> AS4
+    BOOMI --> DNB
+```
+
+## Implementation Plan
+Deliver in three phases with automated tests, monitoring, and rollback plans. Start with a discovery sprint to confirm mappings and subsidiary rules, then implement Phase 1 and run a pilot with a subset of accounts.
+
+### Phase Breakdown
+- Phase 1 (6 weeks): Core order flow
+  - Ingest Salesforce orders
+  - Staging DB and provisional ID flow
+  - Customer correlation basic keys (AS400 ID, DUNS, email)
+  - Async NetSuite create and polling
+  - Basic status sync to Salesforce
+- Phase 2 (6 weeks): Credit and inventory
+  - Integrate AS400 credit checks (SOAP) and DnB caching
+  - Inventory validation and product correlation
+  - Subsidiary decision engine moved from Excel to DB
+- Phase 3 (6 weeks): Advanced features
+  - Custom product handling, pricing sync, returns and RMA
+  - Commission event redesign and integrations
+  - Hardening, scaling and cutover
+
+### Data Mappings
+Refer to the included mapping spreadsheet (salesforce-netsuite-field-mapping.csv) for detailed field-level mappings. Key rules:
+- Use provisional_order_id in NetSuite custom field custbody_provisional_id during create
+- Map Order_Date__c to tranDate (YYYY-MM-DD)
+- Correlate customers using composite keys: AS400_Customer_ID, DUNS, email, fuzzy name match
+- Convert AS400 EBCDIC-decoded decimals to standard decimal with dot separator
+
+### Error Handling Strategy
+- Retry transient API failures with exponential backoff (max 3 attempts)
+- Enqueue async NetSuite creates into netsuite_polling_queue with max_poll_attempts and timeout (3 minutes)
+- Circuit breaker on AS400 and DnB failures; fallback to cached data where allowed
+- Route unresolved items to Manual Review queue with audit trail
+- Alerting: critical failures -> PagerDuty, degraded performance -> email to ops
+
+## Success Metrics
+- Order sync delay < 5 minutes (typical 5-60 seconds)
+- 99.9% integration availability
+- Manual interventions < 1% of orders after stabilization
+- Zero data loss and daily reconciliation reports
+
+## Technical Specifications
+- Orchestration: Boomi AtomSphere
+- Staging DB: AWS RDS PostgreSQL (order_staging_db)
+- NetSuite: SuiteTalk REST v2 (async create, webhook for status)
+- Salesforce: REST API v59 and Platform Events
+- AS400: SOAP 1.2 over HTTPS with X.509 client certificate
+- DnB: REST API, cache for 72 hours
+- Rate limits: NetSuite 10 reqs/sec burst, AS400 max 5 concurrent, DnB 100 calls/hr
+- Security: TLS 1.2+, secrets in AWS Secrets Manager, least privilege service accounts
+
+### Database Schema
+See detailed schema in staging-database-schema.md. Key tables:
+- staging_orders (staging_id, provisional_order_id, salesforce_order_id, netsuite_transaction_id, netsuite_order_number, staging_status)
+- staging_order_lines (line items, product correlation status)
+- customer_correlation_map (salesforce_account_id, netsuite_customer_id, as400_customer_id, correlation_score)
+- credit_check_cache (cached credit results, expires_at)
+- netsuite_polling_queue (transaction_id, poll_status, next_poll_at)
+- integration_errors and audit_log for troubleshooting and compliance
+
+### API Integrations
+- Salesforce: POST /sobjects/Sales_Order__c, Platform Events Order_Status_Change__e
+- NetSuite: POST /record/v1/salesOrder (async), GET /transaction/v1/status/{transactionId}, webhook for status changes
+- AS400: SOAP endpoints getCreditInfo and updateUtilization (WSDL provided); client certificate auth
+- DnB: Credit score lookup (rate limited) with caching in credit_check_cache
+
+### Transformation Rules
+- Inventory status normalization: map free text to NetSuite set {In Stock, Backordered, Partial, Drop Ship, Special Order}
+- Decimal and date conversions from AS400: EBCDIC numeric fields with comma decimal -> dot decimal, dates DD.MM.YYYY -> YYYY-MM-DD
+- Truncate long text fields (Special_Terms) to NetSuite 4000 char limit and log truncation
+- Provisional order flow: allow provisional ID in Salesforce and update External_Order_Number__c after NetSuite confirms
+
+## Risks and Mitigations
+- AS400 certificate renewal dependency: Mitigate by automating renewal process where possible and documenting manual steps; maintain backup certificate renewal environment
+- Subsidiary routing in Excel (tax risk): Move rules into DB, version control rules and require signoff from tax before cutover
+- DnB rate limits: Implement caching and fallback policies; prioritize critical credit checks
+- Data quality (generic emails, missing IDs): Flag for manual review, implement data quality improvement program in Salesforce
+- Async timing UX: Use provisional IDs and clear statuses in Salesforce to avoid confusion
+
+## Timeline
+- Discovery sprint: 1 week (confirm mappings, translate AS400 docs)
+- Phase 1 (Core): 6 weeks
+- Phase 2 (Credit and Inventory): 6 weeks
+- Phase 3 (Advanced features): 6 weeks
+- Pilot and cutover window: 2 weeks
+
+---
+*Generated from template: design-doc.md*

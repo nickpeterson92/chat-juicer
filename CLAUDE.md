@@ -218,7 +218,7 @@ Always maintain the `previous_response_id` chain - breaking this loses conversat
 ## Project Constraints
 
 - No test framework configured
-- No linting/formatting tools  
+- No linting/formatting tools
 - Manual validation only
 - Modular architecture with separation of concerns
 

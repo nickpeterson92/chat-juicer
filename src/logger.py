@@ -7,6 +7,7 @@ Log destinations:
 - logs/conversations.jsonl: JSON format for conversation history
 - logs/errors.jsonl: JSON format for error tracking
 """
+
 from __future__ import annotations
 
 import logging
@@ -18,9 +19,6 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-# Import python-json-logger (required dependency)
-from pythonjsonlogger import jsonlogger
-
 from constants import (
     LOG_BACKUP_COUNT_CONVERSATIONS,
     LOG_BACKUP_COUNT_ERRORS,
@@ -29,9 +27,13 @@ from constants import (
     SESSION_ID_LENGTH,
 )
 
+# Import python-json-logger (required dependency)
+from pythonjsonlogger import jsonlogger
+
 
 class ConversationFilter(logging.Filter):
     """Filter to allow all INFO level logs for conversations"""
+
     def filter(self, record):
         # Allow all INFO and above logs (not DEBUG)
         return record.levelno >= logging.INFO
@@ -39,6 +41,7 @@ class ConversationFilter(logging.Filter):
 
 class ErrorFilter(logging.Filter):
     """Filter to only allow ERROR and CRITICAL logs"""
+
     def filter(self, record):
         return record.levelno >= logging.ERROR
 
@@ -73,10 +76,12 @@ def setup_logging(name: str = "chat-juicer", debug: bool | None = None) -> loggi
 
     # Simple format for console
     console_format = "%(asctime)s [%(levelname)8s] %(name)s - %(message)s"
-    console_handler.setFormatter(logging.Formatter(
-        console_format,
-        datefmt="%H:%M:%S",
-    ))
+    console_handler.setFormatter(
+        logging.Formatter(
+            console_format,
+            datefmt="%H:%M:%S",
+        )
+    )
     logger.addHandler(console_handler)
 
     # --- Conversation Log Handler (JSON) ---
@@ -149,12 +154,14 @@ class ChatLogger:
         """Error level logging with optional exception info"""
         self.logger.error(message, extra=kwargs, exc_info=exc_info)
 
-    def log_conversation_turn(self,
-                            user_input: str,
-                            response: str,
-                            function_calls: list | None = None,
-                            duration_ms: float | None = None,
-                            tokens_used: int | None = None):
+    def log_conversation_turn(
+        self,
+        user_input: str,
+        response: str,
+        function_calls: list | None = None,
+        duration_ms: float | None = None,
+        tokens_used: int | None = None,
+    ):
         """
         Log a complete conversation turn to conversations.jsonl
 

@@ -24,15 +24,19 @@ LOG_PREVIEW_LENGTH = 50  # Characters for preview in logs
 
 # File processing
 CONVERTIBLE_EXTENSIONS = {
-    ".xlsx", ".xls",  # Excel
-    ".docx", ".doc",  # Word
-    ".pptx", ".ppt",  # PowerPoint
-    ".pdf",           # PDF
-    ".csv",           # CSV
-    ".html", ".htm",  # HTML
-    ".xml",           # XML
-    ".json",          # JSON
-    ".ipynb",          # Jupyter notebooks
+    ".xlsx",
+    ".xls",  # Excel
+    ".docx",
+    ".doc",  # Word
+    ".pptx",
+    ".ppt",  # PowerPoint
+    ".pdf",  # PDF
+    ".csv",  # CSV
+    ".html",
+    ".htm",  # HTML
+    ".xml",  # XML
+    ".json",  # JSON
+    ".ipynb",  # Jupyter notebooks
 }
 
 TEMPLATE_EXTENSIONS = [".md", ".txt", ".template", ""]

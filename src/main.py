@@ -20,6 +20,7 @@ Key architectural differences from Chat Completions API:
 
 4. The `store: true` parameter enables response retrieval later
 """
+from __future__ import annotations
 
 import json
 import sys
@@ -72,7 +73,7 @@ previous_response_id = None
 # Main chat loop
 while True:
     try:
-        # Get user input (no prompt since we're in GUI mode)
+        # Get user input
         user_input = input().strip()
 
         # Skip empty input
@@ -90,10 +91,12 @@ while True:
 
         # For Responses API with previous_response_id, we maintain state server-side
         # Only need to send current user input
-        input_list = [{
-            "role": "user",
-            "content": user_input,
-        }]
+        input_list = [
+            {
+                "role": "user",
+                "content": user_input,
+            }
+        ]
 
         # Build request parameters
         request_params = {
@@ -144,12 +147,14 @@ while True:
                 if hasattr(event.item, "type") and event.item.type == "function_call":
                     tool_calls.append(event.item)
                     # Send function detected event
-                    msg = json.dumps({
-                        "type": "function_detected",
-                        "name": event.item.name,
-                        "call_id": event.item.call_id,
-                        "arguments": event.item.arguments,
-                    })
+                    msg = json.dumps(
+                        {
+                            "type": "function_detected",
+                            "name": event.item.name,
+                            "call_id": event.item.call_id,
+                            "arguments": event.item.arguments,
+                        }
+                    )
                     print(f"__JSON__{msg}__JSON__", flush=True)
                     logger.info(f"Function detected: {event.item.name}")
 
@@ -160,7 +165,9 @@ while True:
                 print(f"__JSON__{msg}__JSON__", flush=True)
                 # Log response completion - full to console, truncated to file
                 if response_text:
-                    file_msg = f"AI: {response_text[:100]}{'...' if len(response_text) > 100 else ''}"
+                    file_msg = (
+                        f"AI: {response_text[:100]}{'...' if len(response_text) > 100 else ''}"
+                    )
                     logger.info(f"AI: {response_text}", extra={"file_message": file_msg})
 
         # Update previous_response_id for next turn
@@ -168,33 +175,39 @@ while True:
             previous_response_id = current_response_id
 
         # Initialize function context once, outside the loop
-        function_context = [{
-            "role": "user",
-            "content": user_input,
-        }]
+        function_context = [
+            {
+                "role": "user",
+                "content": user_input,
+            }
+        ]
 
         # Process function calls in a loop until no more functions are called
         while tool_calls:
             # Add the new tool calls to the existing context
-            function_context.extend([
-                {
-                    "type": "function_call",
-                    "call_id": tool_call.call_id,
-                    "name": tool_call.name,
-                    "arguments": tool_call.arguments,
-                }
-                for tool_call in tool_calls
-            ])
+            function_context.extend(
+                [
+                    {
+                        "type": "function_call",
+                        "call_id": tool_call.call_id,
+                        "name": tool_call.name,
+                        "arguments": tool_call.arguments,
+                    }
+                    for tool_call in tool_calls
+                ]
+            )
 
             # Execute each tool call and add outputs
             for tool_call in tool_calls:
                 # Send function execution start event
-                msg = json.dumps({
-                    "type": "function_executing",
-                    "name": tool_call.name,
-                    "call_id": tool_call.call_id,
-                    "arguments": tool_call.arguments,
-                })
+                msg = json.dumps(
+                    {
+                        "type": "function_executing",
+                        "name": tool_call.name,
+                        "call_id": tool_call.call_id,
+                        "arguments": tool_call.arguments,
+                    }
+                )
                 print(f"__JSON__{msg}__JSON__", flush=True)
                 logger.info(f"Executing function: {tool_call.name}")
 
@@ -207,16 +220,20 @@ while True:
                     try:
                         # Try to parse the arguments JSON
                         args = json.loads(tool_call.arguments)
-                        func = FUNCTION_REGISTRY[tool_call.name]
-                        result = func(**args)
+                        func = FUNCTION_REGISTRY.get(tool_call.name)
+                        if func is None:
+                            raise ValueError(f"Unknown function: {tool_call.name}")
+                        result = func(**args)  # type: ignore[operator]
 
                         # Send success event
-                        msg = json.dumps({
-                            "type": "function_completed",
-                            "name": tool_call.name,
-                            "call_id": tool_call.call_id,
-                            "success": True,
-                        })
+                        msg = json.dumps(
+                            {
+                                "type": "function_completed",
+                                "name": tool_call.name,
+                                "call_id": tool_call.call_id,
+                                "success": True,
+                            }
+                        )
                         print(f"__JSON__{msg}__JSON__", flush=True)
                         logger.info(f"Function completed: {tool_call.name}")
 
@@ -227,26 +244,30 @@ while True:
                         logger.debug(f"Raw arguments that failed to parse: {tool_call.arguments}")
 
                         # Send error event
-                        msg = json.dumps({
-                            "type": "function_completed",
-                            "name": tool_call.name,
-                            "call_id": tool_call.call_id,
-                            "success": False,
-                            "error": f"Invalid JSON arguments: {je!s}",
-                        })
+                        msg = json.dumps(
+                            {
+                                "type": "function_completed",
+                                "name": tool_call.name,
+                                "call_id": tool_call.call_id,
+                                "success": False,
+                                "error": f"Invalid JSON arguments: {je!s}",
+                            }
+                        )
                         print(f"__JSON__{msg}__JSON__", flush=True)
 
                     except Exception as e:
                         # Handle function execution errors
                         result = f"Error: {e!s}"
                         # Send error event
-                        msg = json.dumps({
-                            "type": "function_completed",
-                            "name": tool_call.name,
-                            "call_id": tool_call.call_id,
-                            "success": False,
-                            "error": str(e),
-                        })
+                        msg = json.dumps(
+                            {
+                                "type": "function_completed",
+                                "name": tool_call.name,
+                                "call_id": tool_call.call_id,
+                                "success": False,
+                                "error": str(e),
+                            }
+                        )
                         print(f"__JSON__{msg}__JSON__", flush=True)
                         logger.error(f"Function error: {tool_call.name} - {e!s}")
 
@@ -258,22 +279,26 @@ while True:
                     # Unknown function
                     result = f"Error: Unknown function {tool_call.name}"
                     # Send error event for unknown function
-                    msg = json.dumps({
-                        "type": "function_completed",
-                        "name": tool_call.name,
-                        "call_id": tool_call.call_id,
-                        "success": False,
-                        "error": "Unknown function",
-                    })
+                    msg = json.dumps(
+                        {
+                            "type": "function_completed",
+                            "name": tool_call.name,
+                            "call_id": tool_call.call_id,
+                            "success": False,
+                            "error": "Unknown function",
+                        }
+                    )
                     print(f"__JSON__{msg}__JSON__", flush=True)
                     logger.error(f"Unknown function: {tool_call.name}")
 
                 # ALWAYS add function call output, regardless of success/failure
-                function_context.append({
-                    "type": "function_call_output",
-                    "call_id": tool_call.call_id,
-                    "output": result if result is not None else "Error: No output generated",
-                })
+                function_context.append(
+                    {
+                        "type": "function_call_output",
+                        "call_id": tool_call.call_id,
+                        "output": (result if result is not None else "Error: No output generated"),
+                    }
+                )
 
             # Make second request with function results
             # Use previous_response_id to maintain context
@@ -293,7 +318,9 @@ while True:
                 final_request_params["previous_response_id"] = previous_response_id
 
             # Make the follow-up request with function results
-            final_response = handle_rate_limit(azure_client.responses.create, logger=logger, **final_request_params)
+            final_response = handle_rate_limit(
+                azure_client.responses.create, logger=logger, **final_request_params
+            )
 
             final_text = ""
             more_tool_calls = []
@@ -324,12 +351,14 @@ while True:
                     if hasattr(event.item, "type") and event.item.type == "function_call":
                         more_tool_calls.append(event.item)
                         # Send function detected event for UI
-                        msg = json.dumps({
-                            "type": "function_detected",
-                            "name": event.item.name,
-                            "call_id": event.item.call_id,
-                            "arguments": event.item.arguments,
-                        })
+                        msg = json.dumps(
+                            {
+                                "type": "function_detected",
+                                "name": event.item.name,
+                                "call_id": event.item.call_id,
+                                "arguments": event.item.arguments,
+                            }
+                        )
                         print(f"__JSON__{msg}__JSON__", flush=True)
                         logger.info(f"Additional function detected: {event.item.name}")
 
@@ -339,7 +368,10 @@ while True:
                     print(f"__JSON__{msg}__JSON__", flush=True)
                     # Log the follow-up response - full to console, truncated to file
                     file_msg = f"AI (post-func): {final_text[:100]}{'...' if len(final_text) > 100 else ''}"
-                    logger.info(f"AI (after functions): {final_text}", extra={"file_message": file_msg})
+                    logger.info(
+                        f"AI (after functions): {final_text}",
+                        extra={"file_message": file_msg},
+                    )
 
             # Continue with more tool calls if any
             tool_calls = more_tool_calls

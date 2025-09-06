@@ -2,6 +2,7 @@
 Function handlers for Chat Juicer.
 Separate module for all tool/function implementations.
 """
+
 from __future__ import annotations
 
 import json
@@ -58,7 +59,7 @@ def list_directory(path: str = "sources", show_hidden: bool = False) -> str:
 
             # Add file size for files
             if item.is_file():
-                item_info["size"] = item.stat().st_size
+                item_info["size"] = str(item.stat().st_size)  # Convert to string for JSON
                 item_info["extension"] = item.suffix
 
             items.append(item_info)
@@ -70,8 +71,10 @@ def list_directory(path: str = "sources", show_hidden: bool = False) -> str:
         # logger already imported from logger.py
         dirs = sum(1 for i in items if i["type"] == "directory")
         files = sum(1 for i in items if i["type"] == "file")
-        total_size = sum(i.get("size", 0) for i in items if i["type"] == "file")
-        logger.info(f"Listed {target_path.name}: {dirs} dirs, {files} files, {total_size:,} bytes total")
+        total_size = sum(int(i.get("size", "0")) for i in items if i["type"] == "file")
+        logger.info(
+            f"Listed {target_path.name}: {dirs} dirs, {files} files, {total_size:,} bytes total"
+        )
 
         # Return minimal data to model - just items, no counts or stats
         result = {
@@ -116,7 +119,7 @@ def read_file(file_path: str, max_size: int = DEFAULT_MAX_FILE_SIZE) -> str:
             if file_size > max_size:
                 result = {
                     "error": f"File too large: {file_size} bytes (max: {max_size} bytes)",
-                    "file_size": file_size,
+                    "file_size": str(file_size),
                 }
             else:
                 # Process the file
@@ -181,24 +184,36 @@ def read_file(file_path: str, max_size: int = DEFAULT_MAX_FILE_SIZE) -> str:
                 if not result and content:
                     # Token counting for logging
                     token_count = estimate_tokens(content)
-                    exact_tokens = token_count.get("exact_tokens") or token_count.get("estimated_tokens", "?")
+                    exact_tokens = token_count.get("exact_tokens") or token_count.get(
+                        "estimated_tokens", "?"
+                    )
 
                     # Log metadata
                     # logger already imported from logger.py
-                    logger.info(f"Read {target_file.name}: {file_size} bytes → {len(content)} chars, "
-                                f"{len(content.splitlines())} lines, {exact_tokens} tokens (exact)")
+                    logger.info(
+                        f"Read {target_file.name}: {file_size} bytes → {len(content)} chars, "
+                        f"{len(content.splitlines())} lines, {exact_tokens} tokens (exact)"
+                    )
 
                     if optimization_stats:
-                        logger.info(f"Optimization: saved {optimization_stats['percentage_saved']}% "
-                                    f"({optimization_stats['bytes_saved']} bytes)")
+                        logger.info(
+                            f"Optimization: saved {optimization_stats['percentage_saved']}% "
+                            f"({optimization_stats['bytes_saved']} bytes)"
+                        )
 
                     if needs_conversion:
-                        logger.info(f"Converted from {extension} to markdown via {conversion_method}")
+                        logger.info(
+                            f"Converted from {extension} to markdown via {conversion_method}"
+                        )
 
                     # Build successful result
                     result = {
                         "content": content,
-                        "file_path": str(target_file.relative_to(cwd) if cwd in target_file.parents else target_file),
+                        "file_path": str(
+                            target_file.relative_to(cwd)
+                            if cwd in target_file.parents
+                            else target_file
+                        ),
                     }
 
     except Exception as e:
@@ -244,10 +259,12 @@ def load_template(template_name: str, templates_dir: str = "templates") -> str:
                 else []
             )
 
-            return json.dumps({
-                "error": f"Template not found: {template_name}",
-                "available_templates": available,
-            })
+            return json.dumps(
+                {
+                    "error": f"Template not found: {template_name}",
+                    "available_templates": available,
+                }
+            )
 
         content = template_file.read_text(encoding="utf-8")
 
@@ -314,12 +331,14 @@ def generate_document(
 
         # Log metadata for humans
         # logger already imported from logger.py
-        logger.info(f"Generated document: {len(replacements_made)} replacements, "
-                    f"{len(remaining_placeholders)} unfilled, "
-                    f"{len(generated_content):,} chars")
+        logger.info(
+            f"Generated document: {len(replacements_made)} replacements, "
+            f"{len(remaining_placeholders)} unfilled, "
+            f"{len(generated_content):,} chars"
+        )
 
         # Return minimal data to model - NO content, just success status
-        result = {
+        result: dict[str, str | bool] = {
             "success": True,
         }
 
@@ -360,7 +379,7 @@ def write_document(file_path: str, content: str, create_backup: bool = True) -> 
         target_file.parent.mkdir(parents=True, exist_ok=True)
 
         # Backup existing file if requested
-        backup_created = False
+        backup_created: str | bool = False
         if target_file.exists() and create_backup:
             backup_path = target_file.with_suffix(target_file.suffix + ".backup")
             counter = 1
