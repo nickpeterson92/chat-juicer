@@ -2,10 +2,19 @@
 Function handlers for Chat Juicer.
 Separate module for all tool/function implementations.
 """
+from __future__ import annotations
 
 import json
+import logging
+import re
+import shutil
 from pathlib import Path
-from typing import Optional
+
+# Optional dependency: MarkItDown for document conversion
+try:
+    from markitdown import MarkItDown  # type: ignore
+except ImportError:  # pragma: no cover - optional dependency
+    MarkItDown = None  # type: ignore
 
 from constants import (
     CONVERTIBLE_EXTENSIONS,
@@ -58,7 +67,6 @@ def list_directory(path: str = ".", show_hidden: bool = False) -> str:
         items.sort(key=lambda x: (x["type"] != "directory", x["name"].lower()))
 
         # Log metadata for humans
-        import logging
         logger = logging.getLogger("chat-juicer")
         dirs = sum(1 for i in items if i["type"] == "directory")
         files = sum(1 for i in items if i["type"] == "file")
@@ -121,8 +129,12 @@ def read_file(file_path: str, max_size: int = DEFAULT_MAX_FILE_SIZE) -> str:
 
         if needs_conversion:
             try:
-                # Use MarkItDown for conversion (lazy import for performance)
-                from markitdown import MarkItDown
+                # Use MarkItDown for conversion
+                if MarkItDown is None:
+                    return json.dumps({
+                        "error": f"MarkItDown is required for reading {extension} files. Install with: pip install markitdown",
+                        "file_path": str(target_file),
+                    })
 
                 converter = MarkItDown()
                 conversion_result = converter.convert(str(target_file))
@@ -135,11 +147,6 @@ def read_file(file_path: str, max_size: int = DEFAULT_MAX_FILE_SIZE) -> str:
                     format_type="markdown",
                 )
 
-            except ImportError:
-                return json.dumps({
-                    "error": f"MarkItDown is required for reading {extension} files. Install with: pip install markitdown",
-                    "file_path": str(target_file),
-                })
             except Exception as conv_error:
                 return json.dumps({
                     "error": f"Conversion failed: {conv_error!s}",
@@ -179,7 +186,6 @@ def read_file(file_path: str, max_size: int = DEFAULT_MAX_FILE_SIZE) -> str:
         exact_tokens = token_count.get("exact_tokens") or token_count.get("estimated_tokens", "?")
 
         # Log all the metadata for humans
-        import logging
         logger = logging.getLogger("chat-juicer")
         logger.debug(f"Read {target_file.name}: {file_size} bytes → {len(content)} chars, "
                     f"{len(content.splitlines())} lines, {exact_tokens} tokens (exact)")
@@ -229,11 +235,15 @@ def load_template(template_name: str, templates_dir: str = "templates") -> str:
 
         if not template_file:
             # List available templates
-            available = []
-            if templates_path.exists():
-                for file in templates_path.iterdir():
-                    if file.is_file() and not file.name.startswith("."):
-                        available.append(file.stem)
+            available = (
+                [
+                    file.stem
+                    for file in templates_path.iterdir()
+                    if file.is_file() and not file.name.startswith(".")
+                ]
+                if templates_path.exists()
+                else []
+            )
 
             return json.dumps({
                 "error": f"Template not found: {template_name}",
@@ -243,7 +253,6 @@ def load_template(template_name: str, templates_dir: str = "templates") -> str:
         content = template_file.read_text(encoding="utf-8")
 
         # Parse template for placeholders
-        import re
         placeholders = re.findall(r"\{\{([^}]+)\}\}", content)
         unique_placeholders = list(set(placeholders))
 
@@ -264,7 +273,7 @@ def load_template(template_name: str, templates_dir: str = "templates") -> str:
 def generate_document(
     template_content: str,
     sections: dict[str, str],
-    output_file: Optional[str] = None,
+    output_file: str | None = None,
 ) -> str:
     """
     Generate documentation by combining template with sections.
@@ -278,9 +287,8 @@ def generate_document(
         JSON string with generated document and metadata
     """
     try:
-        import re
-
         # Process the template
+
         generated_content = template_content
         replacements_made = []
 
@@ -306,7 +314,6 @@ def generate_document(
         remaining_placeholders = re.findall(r"\{\{([^}]+)\}\}", generated_content)
 
         # Log metadata for humans
-        import logging
         logger = logging.getLogger("chat-juicer")
         logger.debug(f"Generated document: {len(replacements_made)} replacements, "
                     f"{len(remaining_placeholders)} unfilled, "
@@ -362,7 +369,6 @@ def write_document(file_path: str, content: str, create_backup: bool = True) -> 
                 backup_path = target_file.with_suffix(f"{target_file.suffix}.backup{counter}")
                 counter += 1
 
-            import shutil
             shutil.copy2(target_file, backup_path)
             backup_created = str(backup_path.relative_to(cwd))
 

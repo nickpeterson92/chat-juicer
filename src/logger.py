@@ -7,6 +7,8 @@ Log destinations:
 - logs/conversations.jsonl: JSON format for conversation history
 - logs/errors.jsonl: JSON format for error tracking
 """
+from __future__ import annotations
+
 import logging
 import logging.handlers
 import os
@@ -14,7 +16,7 @@ import pathlib
 import sys
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 # Import python-json-logger (required dependency)
 from pythonjsonlogger import jsonlogger
@@ -41,7 +43,7 @@ class ErrorFilter(logging.Filter):
         return record.levelno >= logging.ERROR
 
 
-def setup_logging(name: str = "chat-juicer", debug: bool = None) -> logging.Logger:
+def setup_logging(name: str = "chat-juicer", debug: bool | None = None) -> logging.Logger:
     """
     Set up professional logging with multiple handlers.
 
@@ -150,9 +152,9 @@ class ChatLogger:
     def log_conversation_turn(self,
                             user_input: str,
                             response: str,
-                            function_calls: Optional[list] = None,
-                            duration_ms: Optional[float] = None,
-                            tokens_used: Optional[int] = None):
+                            function_calls: list | None = None,
+                            duration_ms: float | None = None,
+                            tokens_used: int | None = None):
         """
         Log a complete conversation turn to conversations.jsonl
 

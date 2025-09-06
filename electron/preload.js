@@ -1,35 +1,35 @@
 // Preload script for secure IPC communication
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer } = require("electron");
 
 // Expose protected methods that allow the renderer process to communicate with the main process
-contextBridge.exposeInMainWorld('electronAPI', {
+contextBridge.exposeInMainWorld("electronAPI", {
   // Send user input to Python bot
   sendUserInput: (message) => {
-    ipcRenderer.send('user-input', message);
+    ipcRenderer.send("user-input", message);
   },
-  
+
   // Request bot restart
   restartBot: () => {
-    ipcRenderer.send('restart-bot');
+    ipcRenderer.send("restart-bot");
   },
-  
+
   // Listen for bot output
   onBotOutput: (callback) => {
-    ipcRenderer.on('bot-output', (event, data) => callback(data));
+    ipcRenderer.on("bot-output", (_event, data) => callback(data));
   },
-  
+
   // Listen for bot errors
   onBotError: (callback) => {
-    ipcRenderer.on('bot-error', (event, error) => callback(error));
+    ipcRenderer.on("bot-error", (_event, error) => callback(error));
   },
-  
+
   // Listen for bot disconnection
   onBotDisconnected: (callback) => {
-    ipcRenderer.on('bot-disconnected', () => callback());
+    ipcRenderer.on("bot-disconnected", () => callback());
   },
-  
+
   // Listen for bot restart completion
   onBotRestarted: (callback) => {
-    ipcRenderer.on('bot-restarted', () => callback());
-  }
+    ipcRenderer.on("bot-restarted", () => callback());
+  },
 });

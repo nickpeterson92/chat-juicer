@@ -75,6 +75,11 @@ while True:
         if not user_input:
             continue
 
+        # Handle quit command from Electron
+        if user_input.lower() in ["quit", "exit"]:
+            logger.info("Quit command received, shutting down gracefully")
+            break
+
         # Log user input - full to console, truncated to file
         file_msg = f"User: {user_input[:100]}{'...' if len(user_input) > 100 else ''}"
         logger.info(f"User: {user_input}", extra={"file_message": file_msg})
@@ -167,16 +172,18 @@ while True:
         # Process function calls in a loop until no more functions are called
         while tool_calls:
             # Add the new tool calls to the existing context
-            for tool_call in tool_calls:
-                function_context.append({
+            function_context.extend([
+                {
                     "type": "function_call",
                     "call_id": tool_call.call_id,
                     "name": tool_call.name,
                     "arguments": tool_call.arguments,
-                })
+                }
+                for tool_call in tool_calls
+            ])
 
             # Execute each tool call and add outputs
-            for i, tool_call in enumerate(tool_calls):
+            for tool_call in tool_calls:
                 # Send function execution start event
                 msg = json.dumps({
                     "type": "function_executing",
@@ -322,14 +329,13 @@ while True:
                         print(f"__JSON__{msg}__JSON__", flush=True)
                         logger.info(f"Additional function detected: {event.item.name}")
 
-                elif event.type == "response.done":
+                elif event.type == "response.done" and final_text:
                     # Only send end message if we actually sent content
-                    if final_text:
-                        msg = json.dumps({"type": "assistant_end"})
-                        print(f"__JSON__{msg}__JSON__", flush=True)
-                        # Log the follow-up response - full to console, truncated to file
-                        file_msg = f"AI (post-func): {final_text[:100]}{'...' if len(final_text) > 100 else ''}"
-                        logger.info(f"AI (after functions): {final_text}", extra={"file_message": file_msg})
+                    msg = json.dumps({"type": "assistant_end"})
+                    print(f"__JSON__{msg}__JSON__", flush=True)
+                    # Log the follow-up response - full to console, truncated to file
+                    file_msg = f"AI (post-func): {final_text[:100]}{'...' if len(final_text) > 100 else ''}"
+                    logger.info(f"AI (after functions): {final_text}", extra={"file_message": file_msg})
 
             # Continue with more tool calls if any
             tool_calls = more_tool_calls
@@ -342,3 +348,7 @@ while True:
     except Exception as e:
         logger.error(f"Error in chat loop: {e}", exc_info=True)
         print(f"\nError: {e}")
+
+# Clean shutdown
+logger.info("Python process shutting down")
+sys.exit(0)
