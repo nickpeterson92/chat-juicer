@@ -165,9 +165,7 @@ while True:
                 print(f"__JSON__{msg}__JSON__", flush=True)
                 # Log response completion - full to console, truncated to file
                 if response_text:
-                    file_msg = (
-                        f"AI: {response_text[:100]}{'...' if len(response_text) > 100 else ''}"
-                    )
+                    file_msg = f"AI: {response_text[:100]}{'...' if len(response_text) > 100 else ''}"
                     logger.info(f"AI: {response_text}", extra={"file_message": file_msg})
 
         # Update previous_response_id for next turn
@@ -318,9 +316,7 @@ while True:
                 final_request_params["previous_response_id"] = previous_response_id
 
             # Make the follow-up request with function results
-            final_response = handle_rate_limit(
-                azure_client.responses.create, logger=logger, **final_request_params
-            )
+            final_response = handle_rate_limit(azure_client.responses.create, logger=logger, **final_request_params)
 
             final_text = ""
             more_tool_calls = []

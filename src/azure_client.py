@@ -41,8 +41,7 @@ def setup_azure_client():
 
     if not api_key or not endpoint:
         raise ValueError(
-            "Missing required environment variables: "
-            "AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT must be set",
+            "Missing required environment variables: " "AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT must be set",
         )
 
     # Initialize Azure OpenAI client (using base OpenAI client for Responses API)

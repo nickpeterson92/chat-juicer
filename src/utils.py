@@ -7,6 +7,7 @@ import re
 import time
 
 import tiktoken
+
 from constants import RATE_LIMIT_BASE_DELAY, RATE_LIMIT_MAX_WAIT, RATE_LIMIT_RETRY_MAX
 
 
@@ -105,9 +106,7 @@ def optimize_content_for_tokens(
 
     # Get initial token count
     initial_token_count = estimate_tokens(content, model)
-    initial_tokens = initial_token_count.get("exact_tokens") or initial_token_count.get(
-        "estimated_tokens", 0
-    )
+    initial_tokens = initial_token_count.get("exact_tokens") or initial_token_count.get("estimated_tokens", 0)
 
     # Statistics tracking
     stats = {
@@ -244,18 +243,14 @@ def optimize_content_for_tokens(
 
     # Calculate final stats with exact token counts
     final_token_count = estimate_tokens(optimized_content, model)
-    final_tokens = final_token_count.get("exact_tokens") or final_token_count.get(
-        "estimated_tokens", 0
-    )
+    final_tokens = final_token_count.get("exact_tokens") or final_token_count.get("estimated_tokens", 0)
 
     stats["final_length"] = len(optimized_content)
     stats["final_lines"] = len(final_lines)
     stats["final_tokens"] = final_tokens
     stats["bytes_saved"] = original_length - stats["final_length"]
     stats["tokens_saved"] = initial_tokens - final_tokens
-    stats["percentage_saved"] = (
-        round((stats["bytes_saved"] / original_length * 100), 1) if original_length > 0 else 0
-    )
+    stats["percentage_saved"] = round((stats["bytes_saved"] / original_length * 100), 1) if original_length > 0 else 0
     stats["token_percentage_saved"] = (
         round((stats["tokens_saved"] / initial_tokens * 100), 1) if initial_tokens > 0 else 0
     )
@@ -327,9 +322,7 @@ def handle_rate_limit(func, *args, logger=None, **kwargs):
             print(f"__JSON__{msg}__JSON__", flush=True)
 
             if logger:
-                logger.warning(
-                    f"Rate limit hit. Waiting {wait_time}s before retry {retry_count + 1}"
-                )
+                logger.warning(f"Rate limit hit. Waiting {wait_time}s before retry {retry_count + 1}")
             time.sleep(wait_time)
             retry_count += 1
         else:

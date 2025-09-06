@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
+
 from pathlib import Path
 
 # Optional dependency: MarkItDown for document conversion
@@ -72,9 +73,7 @@ def list_directory(path: str = "sources", show_hidden: bool = False) -> str:
         dirs = sum(1 for i in items if i["type"] == "directory")
         files = sum(1 for i in items if i["type"] == "file")
         total_size = sum(int(i.get("size", "0")) for i in items if i["type"] == "file")
-        logger.info(
-            f"Listed {target_path.name}: {dirs} dirs, {files} files, {total_size:,} bytes total"
-        )
+        logger.info(f"Listed {target_path.name}: {dirs} dirs, {files} files, {total_size:,} bytes total")
 
         # Return minimal data to model - just items, no counts or stats
         result = {
@@ -184,9 +183,7 @@ def read_file(file_path: str, max_size: int = DEFAULT_MAX_FILE_SIZE) -> str:
                 if not result and content:
                     # Token counting for logging
                     token_count = estimate_tokens(content)
-                    exact_tokens = token_count.get("exact_tokens") or token_count.get(
-                        "estimated_tokens", "?"
-                    )
+                    exact_tokens = token_count.get("exact_tokens") or token_count.get("estimated_tokens", "?")
 
                     # Log metadata
                     # logger already imported from logger.py
@@ -202,18 +199,12 @@ def read_file(file_path: str, max_size: int = DEFAULT_MAX_FILE_SIZE) -> str:
                         )
 
                     if needs_conversion:
-                        logger.info(
-                            f"Converted from {extension} to markdown via {conversion_method}"
-                        )
+                        logger.info(f"Converted from {extension} to markdown via {conversion_method}")
 
                     # Build successful result
                     result = {
                         "content": content,
-                        "file_path": str(
-                            target_file.relative_to(cwd)
-                            if cwd in target_file.parents
-                            else target_file
-                        ),
+                        "file_path": str(target_file.relative_to(cwd) if cwd in target_file.parents else target_file),
                     }
 
     except Exception as e:
@@ -250,11 +241,7 @@ def load_template(template_name: str, templates_dir: str = "templates") -> str:
         if not template_file:
             # List available templates
             available = (
-                [
-                    file.stem
-                    for file in templates_path.iterdir()
-                    if file.is_file() and not file.name.startswith(".")
-                ]
+                [file.stem for file in templates_path.iterdir() if file.is_file() and not file.name.startswith(".")]
                 if templates_path.exists()
                 else []
             )

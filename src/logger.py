@@ -16,8 +16,11 @@ import os
 import pathlib
 import sys
 import uuid
+
 from datetime import datetime
 from typing import Any
+
+from pythonjsonlogger import jsonlogger  # Third-party dependency
 
 from constants import (
     LOG_BACKUP_COUNT_CONVERSATIONS,
@@ -26,9 +29,6 @@ from constants import (
     LOG_PREVIEW_LENGTH,
     SESSION_ID_LENGTH,
 )
-
-# Import python-json-logger (required dependency)
-from pythonjsonlogger import jsonlogger
 
 
 class ConversationFilter(logging.Filter):

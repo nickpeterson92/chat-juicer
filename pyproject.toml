@@ -106,6 +106,14 @@ skip-magic-trailing-comma = false
 # Group imports
 combine-as-imports = true
 split-on-trailing-comma = true
+# Add blank lines between import sections
+lines-between-types = 1
+# Force consistent import sections
+force-single-line = false
+# Import sections order
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+# Define first-party packages (your local modules)
+known-first-party = ["constants", "logger", "utils", "functions", "azure_client", "main"]
 
 [tool.ruff.lint.mccabe]
 # Maximum complexity
