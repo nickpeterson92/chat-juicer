@@ -1,3 +1,21 @@
+```
+   ██████╗██╗  ██╗ █████╗ ████████╗
+  ██╔════╝██║  ██║██╔══██╗╚══██╔══╝
+  ██║     ███████║███████║   ██║   
+  ██║     ██╔══██║██╔══██║   ██║   
+  ╚██████╗██║  ██║██║  ██║   ██║   
+   ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   
+                                    
+       ██╗██╗   ██╗██╗ ██████╗███████╗██████╗ 
+       ██║██║   ██║██║██╔════╝██╔════╝██╔══██╗
+       ██║██║   ██║██║██║     █████╗  ██████╔╝
+  ██   ██║██║   ██║██║██║     ██╔══╝  ██╔══██╗
+  ╚█████╔╝╚██████╔╝██║╚██████╗███████╗██║  ██║
+   ╚════╝  ╚═════╝ ╚═╝ ╚═════╝╚══════╝╚═╝  ╚═╝
+                                                
+        "Putting the 'Juice' in 'Chatbot'"
+```
+
 # Chat Juicer
 
 An Electron + Python application for Azure OpenAI chat interactions using the Responses API, providing a desktop interface for AI conversations with integrated function calling capabilities.
