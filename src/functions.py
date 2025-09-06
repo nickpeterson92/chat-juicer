@@ -96,117 +96,116 @@ def read_file(file_path: str, max_size: int = DEFAULT_MAX_FILE_SIZE) -> str:
     Returns:
         JSON string with file contents and metadata
     """
+    # Initialize result dict that will be returned at the end
+    result = {}
+
     try:
         target_file = Path(file_path).resolve()
-
-        # Security check
         cwd = Path.cwd()
+
+        # Validation checks - collect any errors
         if not (cwd in target_file.parents or target_file in cwd.parents):
-            return json.dumps({"error": "Access denied: File outside project scope"})
+            result = {"error": "Access denied: File outside project scope"}
+        elif not target_file.exists():
+            result = {"error": f"File not found: {file_path}"}
+        elif not target_file.is_file():
+            result = {"error": f"Not a file: {file_path}"}
+        else:
+            # File is valid, check size
+            file_size = target_file.stat().st_size
+            if file_size > max_size:
+                result = {
+                    "error": f"File too large: {file_size} bytes (max: {max_size} bytes)",
+                    "file_size": file_size,
+                }
+            else:
+                # Process the file
+                extension = target_file.suffix.lower()
+                needs_conversion = extension in CONVERTIBLE_EXTENSIONS
+                content = None
+                conversion_method = "none"
+                optimization_stats = None
 
-        if not target_file.exists():
-            return json.dumps({"error": f"File not found: {file_path}"})
+                if needs_conversion:
+                    # Try conversion
+                    if MarkItDown is None:
+                        result = {
+                            "error": f"MarkItDown is required for reading {extension} files. Install with: pip install markitdown",
+                            "file_path": str(target_file),
+                        }
+                    else:
+                        try:
+                            converter = MarkItDown()
+                            conversion_result = converter.convert(str(target_file))
+                            content = conversion_result.text_content
+                            conversion_method = "markitdown"
 
-        if not target_file.is_file():
-            return json.dumps({"error": f"Not a file: {file_path}"})
+                            # Apply optimization
+                            content, optimization_stats = optimize_content_for_tokens(
+                                content,
+                                format_type="markdown",
+                            )
+                        except Exception as conv_error:
+                            result = {
+                                "error": f"Conversion failed: {conv_error!s}",
+                                "file_path": str(target_file),
+                                "extension": extension,
+                            }
 
-        # Check file size before conversion
-        file_size = target_file.stat().st_size
-        if file_size > max_size:
-            return json.dumps({
-                "error": f"File too large: {file_size} bytes (max: {max_size} bytes)",
-                "file_size": file_size,
-            })
+                # If no conversion or conversion failed, try direct read
+                if not result and not content:
+                    try:
+                        content = target_file.read_text(encoding="utf-8")
+                        conversion_method = "direct_read"
 
-        # Get file extension for format detection
-        extension = target_file.suffix.lower()
+                        # Determine format type for optimization
+                        format_type = {
+                            ".md": "markdown",
+                            ".markdown": "markdown",
+                            ".json": "json",
+                            ".csv": "csv",
+                        }.get(extension, "text")
 
-        # Determine if we need markdown conversion
-        needs_conversion = extension in CONVERTIBLE_EXTENSIONS
+                        # Apply optimization
+                        content, optimization_stats = optimize_content_for_tokens(
+                            content,
+                            format_type=format_type,
+                        )
+                    except UnicodeDecodeError:
+                        result = {
+                            "error": "File is not text/UTF-8 encoded",
+                            "file_path": str(target_file),
+                        }
 
-        content = None
-        conversion_method = "none"
+                # If we successfully got content, prepare final result
+                if not result and content:
+                    # Token counting for logging
+                    token_count = estimate_tokens(content)
+                    exact_tokens = token_count.get("exact_tokens") or token_count.get("estimated_tokens", "?")
 
-        if needs_conversion:
-            try:
-                # Use MarkItDown for conversion
-                if MarkItDown is None:
-                    return json.dumps({
-                        "error": f"MarkItDown is required for reading {extension} files. Install with: pip install markitdown",
-                        "file_path": str(target_file),
-                    })
+                    # Log metadata
+                    logger = logging.getLogger("chat-juicer")
+                    logger.debug(f"Read {target_file.name}: {file_size} bytes → {len(content)} chars, "
+                                f"{len(content.splitlines())} lines, {exact_tokens} tokens (exact)")
 
-                converter = MarkItDown()
-                conversion_result = converter.convert(str(target_file))
-                content = conversion_result.text_content
-                conversion_method = "markitdown"
+                    if optimization_stats:
+                        logger.debug(f"Optimization: saved {optimization_stats['percentage_saved']}% "
+                                    f"({optimization_stats['bytes_saved']} bytes)")
 
-                # Apply advanced token optimization
-                content, optimization_stats = optimize_content_for_tokens(
-                    content,
-                    format_type="markdown",
-                )
+                    if needs_conversion:
+                        logger.debug(f"Converted from {extension} to markdown via {conversion_method}")
 
-            except Exception as conv_error:
-                return json.dumps({
-                    "error": f"Conversion failed: {conv_error!s}",
-                    "file_path": str(target_file),
-                    "extension": extension,
-                })
-
-        # For text/markdown files, read normally
-        if not content:
-            try:
-                content = target_file.read_text(encoding="utf-8")
-                conversion_method = "direct_read"
-
-                # Determine format type for optimization
-                if extension in [".md", ".markdown"]:
-                    format_type = "markdown"
-                elif extension in [".json"]:
-                    format_type = "json"
-                elif extension in [".csv"]:
-                    format_type = "csv"
-                else:
-                    format_type = "text"
-
-                # Apply optimization to all text content
-                content, optimization_stats = optimize_content_for_tokens(
-                    content,
-                    format_type=format_type,
-                )
-            except UnicodeDecodeError:
-                return json.dumps({
-                    "error": "File is not text/UTF-8 encoded",
-                    "file_path": str(target_file),
-                })
-
-        # Use exact token counting for logging
-        token_count = estimate_tokens(content)
-        exact_tokens = token_count.get("exact_tokens") or token_count.get("estimated_tokens", "?")
-
-        # Log all the metadata for humans
-        logger = logging.getLogger("chat-juicer")
-        logger.debug(f"Read {target_file.name}: {file_size} bytes → {len(content)} chars, "
-                    f"{len(content.splitlines())} lines, {exact_tokens} tokens (exact)")
-
-        if "optimization_stats" in locals():
-            logger.debug(f"Optimization: saved {optimization_stats['percentage_saved']}% "
-                        f"({optimization_stats['bytes_saved']} bytes)")
-
-        if needs_conversion:
-            logger.debug(f"Converted from {extension} to markdown via {conversion_method}")
-
-        # Return ONLY essential data to model - just content and path
-        result = {
-            "content": content,
-            "file_path": str(target_file.relative_to(cwd) if cwd in target_file.parents else target_file),
-        }
-
-        return json.dumps(result, indent=2)
+                    # Build successful result
+                    result = {
+                        "content": content,
+                        "file_path": str(target_file.relative_to(cwd) if cwd in target_file.parents else target_file),
+                    }
 
     except Exception as e:
-        return json.dumps({"error": f"Failed to read file: {e!s}"})
+        result = {"error": f"Failed to read file: {e!s}"}
+
+    # Single return point
+    return json.dumps(result, indent=2)
 
 
 def load_template(template_name: str, templates_dir: str = "templates") -> str:
