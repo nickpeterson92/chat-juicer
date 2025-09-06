@@ -5,7 +5,6 @@ Separate module for all tool/function implementations.
 from __future__ import annotations
 
 import json
-import logging
 import re
 import shutil
 from pathlib import Path
@@ -22,10 +21,11 @@ from constants import (
     MAX_BACKUP_VERSIONS,
     TEMPLATE_EXTENSIONS,
 )
+from logger import logger
 from utils import estimate_tokens, optimize_content_for_tokens
 
 
-def list_directory(path: str = ".", show_hidden: bool = False) -> str:
+def list_directory(path: str = "sources", show_hidden: bool = False) -> str:
     """
     List contents of a directory for project discovery.
 
@@ -67,11 +67,11 @@ def list_directory(path: str = ".", show_hidden: bool = False) -> str:
         items.sort(key=lambda x: (x["type"] != "directory", x["name"].lower()))
 
         # Log metadata for humans
-        logger = logging.getLogger("chat-juicer")
+        # logger already imported from logger.py
         dirs = sum(1 for i in items if i["type"] == "directory")
         files = sum(1 for i in items if i["type"] == "file")
         total_size = sum(i.get("size", 0) for i in items if i["type"] == "file")
-        logger.debug(f"Listed {target_path.name}: {dirs} dirs, {files} files, {total_size:,} bytes total")
+        logger.info(f"Listed {target_path.name}: {dirs} dirs, {files} files, {total_size:,} bytes total")
 
         # Return minimal data to model - just items, no counts or stats
         result = {
@@ -184,16 +184,16 @@ def read_file(file_path: str, max_size: int = DEFAULT_MAX_FILE_SIZE) -> str:
                     exact_tokens = token_count.get("exact_tokens") or token_count.get("estimated_tokens", "?")
 
                     # Log metadata
-                    logger = logging.getLogger("chat-juicer")
-                    logger.debug(f"Read {target_file.name}: {file_size} bytes → {len(content)} chars, "
+                    # logger already imported from logger.py
+                    logger.info(f"Read {target_file.name}: {file_size} bytes → {len(content)} chars, "
                                 f"{len(content.splitlines())} lines, {exact_tokens} tokens (exact)")
 
                     if optimization_stats:
-                        logger.debug(f"Optimization: saved {optimization_stats['percentage_saved']}% "
+                        logger.info(f"Optimization: saved {optimization_stats['percentage_saved']}% "
                                     f"({optimization_stats['bytes_saved']} bytes)")
 
                     if needs_conversion:
-                        logger.debug(f"Converted from {extension} to markdown via {conversion_method}")
+                        logger.info(f"Converted from {extension} to markdown via {conversion_method}")
 
                     # Build successful result
                     result = {
@@ -313,8 +313,8 @@ def generate_document(
         remaining_placeholders = re.findall(r"\{\{([^}]+)\}\}", generated_content)
 
         # Log metadata for humans
-        logger = logging.getLogger("chat-juicer")
-        logger.debug(f"Generated document: {len(replacements_made)} replacements, "
+        # logger already imported from logger.py
+        logger.info(f"Generated document: {len(replacements_made)} replacements, "
                     f"{len(remaining_placeholders)} unfilled, "
                     f"{len(generated_content):,} chars")
 
