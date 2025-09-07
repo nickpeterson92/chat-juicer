@@ -130,5 +130,5 @@ max-statements = 50
 # Test files can have more relaxed rules
 "tests/**/*.py" = ["S101", "PLR2004", "PLR0913"]
 
-# Main.py needs prints for IPC
-"src/main.py" = ["T201"]
+# Main.py needs prints for IPC and has cleanup loops
+"src/main.py" = ["T201", "PERF203"]

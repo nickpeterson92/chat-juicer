@@ -38,9 +38,9 @@ The Sequential Thinking tool helps you:
 When asked to create documentation:
 1. First use list_directory to explore available files
 2. Then use read_file to examine source files from the sources/ directory
-3. After all sources are read, use read_file to load templates from the templates/ directory
-5. Generate comprehensive document content based on the template and source files
-6. Use generate_document to save the completed document to the output location
+3. After all sources are read, use read_file to load the most relevant template from the templates/ directory
+4. Generate comprehensive document content based on the template and source files
+5. Use generate_document to save the completed document to the output location
 
 Key points:
 - Read ALL files of ALL extensions in the sources/ directory:
@@ -52,6 +52,7 @@ Key points:
 - Ensure that all sections of the template are filled with the content of the source files
 - Ensure the content of the document is accurate and complete
 - Ensure all requested Mermaid diagrams are generated accurately and with the correct syntax
+- Consider each section of the template carefully and ensure it is filled with the content of the source files
 - Always provide the full document content to generate_document, not a template with placeholders"""
 
 
@@ -377,13 +378,16 @@ async def main():
             print(f"__JSON__{msg}__JSON__", flush=True)
 
     # Clean up MCP servers
-    results = await asyncio.gather(
-        *(server.__aexit__(None, None, None) for server in mcp_servers),
-        return_exceptions=True,
-    )
-    for result in results:
-        if isinstance(result, Exception):
-            logger.warning(f"Error closing MCP server: {result}")
+    for server in mcp_servers:
+        try:
+            # Use asyncio.wait_for with a timeout to prevent hanging
+            await asyncio.wait_for(server.__aexit__(None, None, None), timeout=2.0)
+        except asyncio.TimeoutError:
+            logger.warning("Timeout while closing MCP server")
+        except asyncio.CancelledError:
+            logger.warning("MCP server cleanup cancelled")
+        except Exception as e:
+            logger.warning(f"Error closing MCP server: {e}")
 
     logger.info("Chat Juicer shutdown complete")
 
