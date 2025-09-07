@@ -8,10 +8,13 @@ openai>=1.0.0  # Azure OpenAI client library
 python-dotenv>=1.0.0  # Load environment variables from .env file
 
 # Document Conversion (REQUIRED for file reading features)
-markitdown>=0.1.0  # Microsoft's markdown converter for PDF, Word, Excel, etc.
+markitdown[all]>=0.1.0  # Microsoft's markdown converter with all format support (PDF, Word, Excel, etc.)
 
 # Token Counting (REQUIRED)
 tiktoken>=0.5.0  # OpenAI's official token counting library for accurate token counts
+
+# Networking (REQUIRED)
+httpx>=0.25.0  # Modern HTTP client for handling network errors and retries
 
 # Structured Logging (REQUIRED)
 python-json-logger>=2.0.0  # JSON formatted logging for structured logs

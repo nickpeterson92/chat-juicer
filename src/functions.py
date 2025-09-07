@@ -135,22 +135,36 @@ def read_file(file_path: str, max_size: int = DEFAULT_MAX_FILE_SIZE) -> str:
                         }
                     else:
                         try:
-                            converter = MarkItDown()
+                            # Initialize MarkItDown with plugin support for better format handling
+                            converter = MarkItDown(enable_plugins=True)
                             conversion_result = converter.convert(str(target_file))
                             content = conversion_result.text_content
                             conversion_method = "markitdown"
+
+                            # Check if conversion actually produced content
+                            if not content or content.strip() == "":
+                                raise ValueError(f"MarkItDown returned empty content for {extension} file")
 
                             # Apply optimization
                             content, optimization_stats = optimize_content_for_tokens(
                                 content,
                                 format_type="markdown",
                             )
-                        except Exception as conv_error:
+                        except ImportError as ie:
                             result = {
-                                "error": f"Conversion failed: {conv_error!s}",
+                                "error": f"Missing dependencies for {extension}: {ie!s}. Try: pip install 'markitdown[all]'",
                                 "file_path": str(target_file),
                                 "extension": extension,
                             }
+                            logger.error(f"Import error during conversion: {ie}")
+                        except Exception as conv_error:
+                            result = {
+                                "error": f"Conversion failed for {extension}: {conv_error!s}",
+                                "file_path": str(target_file),
+                                "extension": extension,
+                                "error_type": type(conv_error).__name__,
+                            }
+                            logger.error(f"Conversion error: {conv_error}", exc_info=True)
 
                 # If no conversion or conversion failed, try direct read
                 if not result and not content:

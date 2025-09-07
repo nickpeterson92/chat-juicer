@@ -24,22 +24,57 @@ LOG_PREVIEW_LENGTH = 50  # Characters for preview in logs
 
 # File processing
 CONVERTIBLE_EXTENSIONS = {
+    # Microsoft Office formats
     ".xlsx",
     ".xls",  # Excel
     ".docx",
     ".doc",  # Word
     ".pptx",
     ".ppt",  # PowerPoint
-    ".pdf",  # PDF
-    ".csv",  # CSV
+    # Document formats
+    ".pdf",  # PDF documents
+    ".rtf",  # Rich Text Format
+    ".odt",  # OpenDocument Text
+    # Data formats
+    ".csv",  # CSV files
+    ".json",  # JSON data
+    ".xml",  # XML data
+    # Web formats
     ".html",
-    ".htm",  # HTML
-    ".xml",  # XML
-    ".json",  # JSON
+    ".htm",  # HTML files
+    ".mhtml",
+    ".mht",  # MHTML archives
+    # Code/Notebook formats
     ".ipynb",  # Jupyter notebooks
+    # Image formats (if LLM client configured)
+    ".jpg",
+    ".jpeg",  # JPEG images
+    ".png",  # PNG images
+    ".gif",  # GIF images
+    ".bmp",  # Bitmap images
+    ".tiff",
+    ".tif",  # TIFF images
+    ".webp",  # WebP images
 }
 
 TEMPLATE_EXTENSIONS = [".md", ".txt", ".template", ""]
 
 # System limits
 SESSION_ID_LENGTH = 8
+
+# Retry configuration
+MAX_RETRIES = 2  # Maximum number of retries for transient errors
+RETRY_BACKOFF_BASE = 0.5  # Base wait time for exponential backoff (seconds)
+RETRYABLE_ERROR_PATTERNS = [
+    # Note: RS_ errors are NOT retried - they're internal streaming state issues that we handle by continuing
+    "rate_limit",  # Rate limiting errors
+    "429",  # Rate limit HTTP status
+    "timeout",  # Request timeouts
+    "connection",  # Connection errors
+    "503",  # Service unavailable
+    "502",  # Bad gateway
+    "504",  # Gateway timeout
+]
+
+# HTTP status codes that should trigger retries
+RETRYABLE_STATUS_CODES = [429, 500, 502, 503, 504]

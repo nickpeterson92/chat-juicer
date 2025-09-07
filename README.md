@@ -69,7 +69,12 @@ Chat Juicer uses Azure OpenAI's **Responses API** (not Chat Completions API) whi
 3. **Install Python dependencies**
    ```bash
    cd src/
+   # Install with full document format support
+   pip install 'markitdown[all]'
    pip install -r requirements.txt
+
+   # Or use the install script:
+   # bash scripts/install-deps.sh
    ```
 
 4. **Configure environment variables**

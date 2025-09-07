@@ -8,12 +8,17 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import sys
+
+import httpx
 
 from agents import Agent, Runner, set_default_openai_client, set_tracing_disabled
 from agents.mcp import MCPServerStdio
 from dotenv import load_dotenv
-from openai import AsyncOpenAI
+from openai import APIConnectionError, APIStatusError, AsyncOpenAI, RateLimitError
+
+from constants import MAX_RETRIES, RETRY_BACKOFF_BASE, RETRYABLE_ERROR_PATTERNS
 
 # Import function tools for Agent/Runner
 from functions import AGENT_TOOLS
@@ -39,8 +44,9 @@ When asked to create documentation:
 1. First use list_directory to explore available files
 2. Then use read_file to examine source files from the sources/ directory
 3. After all sources are read, use read_file to load the most relevant template from the templates/ directory
-4. Generate comprehensive document content based on the template and source files
-5. Use generate_document to save the completed document to the output/ directory
+4. Generate comprehensive document(s) content based on the template and source files
+5. Use generate_document to save the completed document(s) to the output/ directory
+6. If multiple documents are to be generated ensure ALL generated documents follow the template and are complete
 
 Key points:
 - Read ALL files of ALL extensions in the sources/ directory:
@@ -206,6 +212,115 @@ async def handle_electron_ipc(event, call_id_tracker=None):
     return None
 
 
+async def process_user_input_with_retry(agent, messages, user_input, max_retries=MAX_RETRIES):
+    """Process user input with retry logic for transient errors
+
+    Args:
+        agent: The AI agent instance
+        messages: Conversation history
+        user_input: User's message
+        max_retries: Maximum number of retry attempts
+
+    Returns:
+        Updated messages list with the response
+    """
+
+    for attempt in range(max_retries + 1):
+        try:
+            return await process_user_input(agent, messages, user_input)
+        except (RateLimitError, APIConnectionError) as e:
+            # These are always retryable
+            if attempt < max_retries:
+                wait_time = (2**attempt) * RETRY_BACKOFF_BASE  # Exponential backoff
+                logger.warning(f"Retryable error on attempt {attempt + 1}/{max_retries + 1}: {e}")
+                logger.info(f"Retrying in {wait_time} seconds...")
+
+                # Send retry notification to UI
+                msg = json.dumps(
+                    {
+                        "type": "retry",
+                        "attempt": attempt + 1,
+                        "max_attempts": max_retries + 1,
+                        "wait_time": wait_time,
+                        "reason": "Temporary error - retrying automatically",
+                    }
+                )
+                print(f"__JSON__{msg}__JSON__", flush=True)
+
+                await asyncio.sleep(wait_time)
+                continue
+            else:
+                logger.error(f"Max retries ({max_retries}) exceeded for error: {e}")
+                raise
+
+        except APIStatusError as e:
+            # Check if this is an RS_ error (shouldn't happen as they're caught in streaming)
+            error_msg = str(e)
+            if e.status_code == 400 and "rs_" in error_msg and "not found" in error_msg.lower():
+                # RS_ errors are benign - don't retry, just return
+                logger.warning(f"RS_ error handled: {error_msg}")
+                return messages  # Return with any accumulated messages
+
+            # Check if it's another retryable status code
+            retryable_status_codes = [429, 500, 502, 503, 504]  # Rate limit and server errors
+            if e.status_code in retryable_status_codes and attempt < max_retries:
+                wait_time = (2**attempt) * RETRY_BACKOFF_BASE
+                logger.warning(f"Retryable status {e.status_code} on attempt {attempt + 1}/{max_retries + 1}: {e}")
+                logger.info(f"Retrying in {wait_time} seconds...")
+
+                msg = json.dumps(
+                    {
+                        "type": "retry",
+                        "attempt": attempt + 1,
+                        "max_attempts": max_retries + 1,
+                        "wait_time": wait_time,
+                        "reason": f"HTTP {e.status_code} error - retrying",
+                    }
+                )
+                print(f"__JSON__{msg}__JSON__", flush=True)
+
+                await asyncio.sleep(wait_time)
+                continue
+            else:
+                # Non-retryable status code or max retries exceeded
+                if attempt == max_retries:
+                    logger.error(f"Max retries ({max_retries}) exceeded for status {e.status_code}: {e}")
+                raise
+
+        except Exception as e:
+            # Non-API errors - check if pattern matches retryable
+            error_msg = str(e).lower()
+
+            is_retryable = any(pattern in error_msg for pattern in RETRYABLE_ERROR_PATTERNS)
+
+            if is_retryable and attempt < max_retries:
+                wait_time = (2**attempt) * RETRY_BACKOFF_BASE
+                logger.warning(f"Retryable error on attempt {attempt + 1}/{max_retries + 1}: {e}")
+                logger.info(f"Retrying in {wait_time} seconds...")
+
+                msg = json.dumps(
+                    {
+                        "type": "retry",
+                        "attempt": attempt + 1,
+                        "max_attempts": max_retries + 1,
+                        "wait_time": wait_time,
+                        "reason": "Temporary error - retrying automatically",
+                    }
+                )
+                print(f"__JSON__{msg}__JSON__", flush=True)
+
+                await asyncio.sleep(wait_time)
+                continue
+            else:
+                # Not retryable or max retries reached
+                if attempt == max_retries and is_retryable:
+                    logger.error(f"Max retries ({max_retries}) exceeded for error: {e}")
+                raise
+
+    # Should never reach here
+    raise Exception("Max retries exceeded")
+
+
 async def process_user_input(agent, messages, user_input):
     """Process a single user input and return updated messages"""
 
@@ -218,74 +333,180 @@ async def process_user_input(agent, messages, user_input):
 
     response_text = ""
     call_id_tracker = {}  # Track function call IDs
+    rs_error_encountered = False  # Track if we hit RS_ errors
 
-    try:
-        # Run agent with streaming - allow more turns for complex tasks
-        result = Runner.run_streamed(
-            agent,
-            input=messages,
-            max_turns=50,  # Increase from default 10 to allow complex document generation
-        )
+    retries = 0
+    while retries <= MAX_RETRIES:
+        try:
+            # Run agent with streaming - allow more turns for complex tasks
+            result = Runner.run_streamed(
+                agent,
+                input=messages,
+                max_turns=50,  # Increase from default 10 to allow complex document generation
+            )
 
-        async for event in result.stream_events():
-            # Debug: log event types
-            if hasattr(event, "item") and event.item:
-                logger.debug(f"Event type: {event.type}, Item type: {event.item.type}")
-            else:
-                logger.debug(f"Event type: {event.type}, No item")
+            async for event in result.stream_events():
+                try:
+                    # Debug: log event types
+                    if hasattr(event, "item") and event.item:
+                        logger.debug(f"Event type: {event.type}, Item type: {event.item.type}")
+                    else:
+                        logger.debug(f"Event type: {event.type}, No item")
 
-            # Convert to Electron IPC format with call_id tracking
-            ipc_msg = await handle_electron_ipc(event, call_id_tracker)
-            if ipc_msg:
-                print(f"__JSON__{ipc_msg}__JSON__", flush=True)
+                    # Convert to Electron IPC format with call_id tracking
+                    ipc_msg = await handle_electron_ipc(event, call_id_tracker)
+                    if ipc_msg:
+                        print(f"__JSON__{ipc_msg}__JSON__", flush=True)
 
-            # Accumulate response text for logging
-            if (
-                event.type == "run_item_stream_event"
-                and hasattr(event, "item")
-                and event.item
-                and event.item.type == "message_output_item"
-                and hasattr(event.item, "raw_item")
-                and hasattr(event.item.raw_item, "content")
-                and event.item.raw_item.content
-            ):
-                for content_item in event.item.raw_item.content:
-                    if hasattr(content_item, "text") and content_item.text:
-                        response_text += content_item.text
+                    # Accumulate response text for logging
+                    if (
+                        event.type == "run_item_stream_event"
+                        and hasattr(event, "item")
+                        and event.item
+                        and event.item.type == "message_output_item"
+                        and hasattr(event.item, "raw_item")
+                        and hasattr(event.item.raw_item, "content")
+                        and event.item.raw_item.content
+                    ):
+                        for content_item in event.item.raw_item.content:
+                            if hasattr(content_item, "text") and content_item.text:
+                                response_text += content_item.text
 
-        # For streaming, we accumulate the response text during streaming
-        # and add it to history once streaming is complete
-        if response_text:
-            messages.append({"role": "assistant", "content": response_text})
+                except APIStatusError as e:
+                    # Check if this is an RS_ error during streaming
+                    error_msg = str(e)
+                    if e.status_code == 400 and "rs_" in error_msg and "not found" in error_msg.lower():
+                        # RS_ (reasoning item) errors - internal streaming state management issue
+                        # Continue streaming to preserve content
+                        logger.warning(f"RS_ error during streaming (continuing): {error_msg}")
+                        rs_error_encountered = True
+                        continue
+                    else:
+                        # Other API errors should break the stream
+                        raise
+                except Exception as e:
+                    # Log but continue for RS_ pattern in any exception
+                    error_msg = str(e)
+                    if "rs_" in error_msg and "not found" in error_msg.lower():
+                        logger.warning(f"RS_ error during streaming (continuing): {error_msg}")
+                        rs_error_encountered = True
+                        continue
+                    else:
+                        # Other exceptions should break the stream
+                        raise
 
-        # Send end message
-        msg = json.dumps({"type": "assistant_end"})
-        print(f"__JSON__{msg}__JSON__", flush=True)
+            # If we successfully complete streaming, break out of retry loop
+            break
 
-        # Log response
-        if response_text:
-            file_msg = f"AI: {response_text[:100]}{'...' if len(response_text) > 100 else ''}"
-            logger.info(f"AI: {response_text}", extra={"file_message": file_msg})
-
-    except Exception as e:
-        error_msg = str(e)
-        # Handle specific Agent/Runner errors gracefully
-        if "not found" in error_msg.lower() and "item with id" in error_msg.lower():
-            # This happens when streaming completes but references an already-processed item
-            logger.warning(f"Streaming reference error (can be ignored): {error_msg}")
-            # Still send completion message
-            if response_text:
-                messages.append({"role": "assistant", "content": response_text})
-                msg = json.dumps({"type": "assistant_end"})
+        except (httpx.ReadError, httpx.ConnectError, httpx.TimeoutException) as e:
+            # Network errors - retry with exponential backoff
+            retries += 1
+            if retries > MAX_RETRIES:
+                logger.error(f"Network error after {MAX_RETRIES} retries: {e}")
+                msg = json.dumps({"type": "error", "message": "Network connection lost. Please try again."})
                 print(f"__JSON__{msg}__JSON__", flush=True)
-                logger.info(
-                    f"AI: {response_text}",
-                    extra={"file_message": f"AI: {response_text[:100]}..."},
-                )
-        else:
-            logger.error(f"Error processing input: {e}")
-            msg = json.dumps({"type": "error", "message": error_msg})
+                raise
+
+            wait_time = RETRY_BACKOFF_BASE * (2 ** (retries - 1))
+            logger.warning(f"Network error (attempt {retries}/{MAX_RETRIES}): {e}. Retrying in {wait_time}s...")
+            msg = json.dumps(
+                {"type": "info", "message": f"Connection interrupted. Retrying... (attempt {retries}/{MAX_RETRIES})"}
+            )
             print(f"__JSON__{msg}__JSON__", flush=True)
+            await asyncio.sleep(wait_time)
+            continue
+
+        except (RateLimitError, APIConnectionError) as e:
+            # OpenAI-specific network/rate errors - retry with backoff
+            retries += 1
+            if retries > MAX_RETRIES:
+                logger.error(f"API error after {MAX_RETRIES} retries: {e}")
+                error_type = "Rate limit" if isinstance(e, RateLimitError) else "Connection"
+                msg = json.dumps(
+                    {"type": "error", "message": f"{error_type} error. Please wait a moment and try again."}
+                )
+                print(f"__JSON__{msg}__JSON__", flush=True)
+                raise
+
+            wait_time = RETRY_BACKOFF_BASE * (2 ** (retries - 1))
+            logger.warning(f"API error (attempt {retries}/{MAX_RETRIES}): {e}. Retrying in {wait_time}s...")
+            msg = json.dumps({"type": "info", "message": f"API error. Retrying... (attempt {retries}/{MAX_RETRIES})"})
+            print(f"__JSON__{msg}__JSON__", flush=True)
+            await asyncio.sleep(wait_time)
+            continue
+
+        except APIStatusError as e:
+            error_msg = str(e)
+
+            # Check if it's a rate limit error (429)
+            if e.status_code == 429:
+                retries += 1
+                if retries > MAX_RETRIES:
+                    logger.error(f"Rate limit persisted after {MAX_RETRIES} retries")
+                    msg = json.dumps({"type": "error", "message": "Rate limit exceeded. Please wait and try again."})
+                    print(f"__JSON__{msg}__JSON__", flush=True)
+                    raise
+
+                # Extract wait time from error message if available
+                wait_time = 2.0  # Default wait time
+                if "Try again in" in error_msg:
+                    try:
+                        # Extract seconds from message like "Try again in 2 seconds"
+                        match = re.search(r"Try again in (\d+(?:\.\d+)?)", error_msg)
+                        if match:
+                            wait_time = float(match.group(1))
+                    except Exception:
+                        pass
+
+                logger.warning(f"Rate limit hit (attempt {retries}/{MAX_RETRIES}). Waiting {wait_time}s...")
+                msg = json.dumps(
+                    {
+                        "type": "info",
+                        "message": f"Rate limit reached. Waiting {wait_time}s... (attempt {retries}/{MAX_RETRIES})",
+                    }
+                )
+                print(f"__JSON__{msg}__JSON__", flush=True)
+                await asyncio.sleep(wait_time)
+                continue
+
+            else:
+                # Other API status errors (including RS_ errors outside streaming)
+                # RS_ errors are transient streaming issues - if they happen here, just fail
+                if "rs_" in error_msg and "not found" in error_msg.lower():
+                    logger.warning(f"RS_ error outside streaming context: {error_msg}")
+                    msg = json.dumps({"type": "error", "message": "Temporary API issue. Please try again."})
+                else:
+                    logger.error(f"API status error: {e}")
+                    msg = json.dumps({"type": "error", "message": f"API error: {e.status_code}"})
+                print(f"__JSON__{msg}__JSON__", flush=True)
+                raise
+
+        except Exception as e:
+            # Unexpected errors
+            logger.error(f"Unexpected streaming error: {e}")
+            msg = json.dumps({"type": "error", "message": "An unexpected error occurred."})
+            print(f"__JSON__{msg}__JSON__", flush=True)
+            raise
+
+    # For streaming, we accumulate the response text during streaming
+    # and add it to history once streaming is complete
+    if response_text:
+        messages.append({"role": "assistant", "content": response_text})
+
+    # Send end message with warning if RS_ errors occurred
+    if rs_error_encountered:
+        logger.warning("Response completed despite RS_ streaming errors")
+        msg = json.dumps(
+            {"type": "assistant_end", "warning": "Minor streaming errors occurred but response should be complete"}
+        )
+    else:
+        msg = json.dumps({"type": "assistant_end"})
+    print(f"__JSON__{msg}__JSON__", flush=True)
+
+    # Log response
+    if response_text:
+        file_msg = f"AI: {response_text[:100]}{'...' if len(response_text) > 100 else ''}"
+        logger.info(f"AI: {response_text}", extra={"file_message": file_msg})
 
     return messages
 
@@ -362,8 +583,8 @@ async def main():
             file_msg = f"User: {user_input[:100]}{'...' if len(user_input) > 100 else ''}"
             logger.info(f"User: {user_input}", extra={"file_message": file_msg})
 
-            # Process user input
-            messages = await process_user_input(agent, messages, user_input)
+            # Process user input with retry logic
+            messages = await process_user_input_with_retry(agent, messages, user_input)
 
         except KeyboardInterrupt:
             logger.info("Keyboard interrupt received")
