@@ -362,3 +362,22 @@ FUNCTION_REGISTRY = {
     "read_file": read_file,
     "generate_document": generate_document,
 }
+
+# Agent/Runner tools - wrap functions with function_tool decorator
+try:
+    from agents import function_tool
+
+    # Wrap existing functions as Agent tools
+    list_directory_tool = function_tool(list_directory)
+    read_file_tool = function_tool(read_file)
+    generate_document_tool = function_tool(generate_document)
+
+    # List of tools for Agent
+    AGENT_TOOLS = [
+        list_directory_tool,
+        read_file_tool,
+        generate_document_tool,
+    ]
+except ImportError:
+    # If agents module not available, provide empty tools list
+    AGENT_TOOLS = []
