@@ -164,6 +164,7 @@ def read_file(file_path: str, max_size: int = DEFAULT_MAX_FILE_SIZE) -> str:
                             ".markdown": "markdown",
                             ".json": "json",
                             ".csv": "csv",
+                            ".docx": "text",
                         }.get(extension, "text")
 
                         # Apply optimization

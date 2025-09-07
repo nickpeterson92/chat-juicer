@@ -8,6 +8,7 @@ const elements = {
   statusIndicator: document.getElementById("status-indicator"),
   statusText: document.getElementById("status-text"),
   typingIndicator: document.getElementById("typing-indicator"),
+  aiThinking: document.getElementById("ai-thinking"),
   toolsContainer: document.getElementById("tools-container"),
   toolsPanel: document.getElementById("tools-panel"),
   toggleToolsBtn: document.getElementById("toggle-tools-btn"),
@@ -163,25 +164,25 @@ class AppState {
   handleConnectionChange(status) {
     switch (status) {
       case "CONNECTED":
-        elements.statusIndicator.classList.remove("disconnected");
-        elements.statusText.textContent = "Connected";
-        elements.userInput.disabled = false;
-        elements.elements.sendBtn.disabled = false;
+        if (elements.statusIndicator) elements.statusIndicator.classList.remove("disconnected");
+        if (elements.statusText) elements.statusText.textContent = "Connected";
+        if (elements.userInput) elements.userInput.disabled = false;
+        if (elements.sendBtn) elements.sendBtn.disabled = false;
         break;
 
       case "DISCONNECTED":
       case "ERROR":
-        elements.statusIndicator.classList.add("disconnected");
-        elements.statusText.textContent = status === "ERROR" ? "Error" : "Disconnected";
-        elements.userInput.disabled = true;
-        elements.elements.sendBtn.disabled = true;
+        if (elements.statusIndicator) elements.statusIndicator.classList.add("disconnected");
+        if (elements.statusText) elements.statusText.textContent = status === "ERROR" ? "Error" : "Disconnected";
+        if (elements.userInput) elements.userInput.disabled = true;
+        if (elements.sendBtn) elements.sendBtn.disabled = true;
         break;
 
       case "RECONNECTING":
-        elements.statusIndicator.classList.add("disconnected");
-        elements.statusText.textContent = "Reconnecting...";
-        elements.userInput.disabled = true;
-        elements.elements.sendBtn.disabled = true;
+        if (elements.statusIndicator) elements.statusIndicator.classList.add("disconnected");
+        if (elements.statusText) elements.statusText.textContent = "Reconnecting...";
+        if (elements.userInput) elements.userInput.disabled = true;
+        if (elements.sendBtn) elements.sendBtn.disabled = true;
         break;
     }
   }
@@ -382,7 +383,26 @@ function sendMessage() {
   // Clear input
   elements.userInput.value = "";
 
-  // Show typing indicator
+  // Show modern AI thinking indicator as a message in chat
+  const thinkingMessage = document.createElement("div");
+  thinkingMessage.className = "message assistant ai-thinking-message";
+  thinkingMessage.id = "ai-thinking-message";
+  thinkingMessage.innerHTML = `
+    <div class="message-content" style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%); border: 1px solid rgba(102, 126, 234, 0.2);">
+      <div class="ai-thinking-content">
+        <div class="ai-thinking-dots">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <div class="ai-thinking-text">AI is thinking...</div>
+      </div>
+    </div>
+  `;
+  elements.chatContainer.appendChild(thinkingMessage);
+  elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight;
+
+  // Also show legacy typing indicator for compatibility
   elements.typingIndicator.parentElement.style.display = "block";
   elements.typingIndicator.classList.add("active");
   appState.setState("message.isTyping", true);
@@ -425,7 +445,18 @@ window.electronAPI.onBotOutput((output) => {
 
         switch (message.type) {
           case "assistant_start": {
-            // Hide typing indicator and start new message
+            // Remove AI thinking message from chat
+            const thinkingMsg = document.getElementById("ai-thinking-message");
+            if (thinkingMsg) {
+              thinkingMsg.remove();
+            }
+
+            // Hide AI thinking indicator (static one if it exists)
+            if (elements.aiThinking) {
+              elements.aiThinking.classList.remove("active");
+            }
+
+            // Hide legacy typing indicator and start new message
             elements.typingIndicator.classList.remove("active");
             elements.typingIndicator.parentElement.style.display = "none";
             appState.setState("message.isTyping", false);
@@ -447,6 +478,10 @@ window.electronAPI.onBotOutput((output) => {
           case "assistant_end":
             // Message complete, reset for next message
             appState.setState("message.currentAssistant", null);
+            // Ensure AI thinking indicator is hidden
+            if (elements.aiThinking) {
+              elements.aiThinking.classList.remove("active");
+            }
             break;
 
           case "function_detected": {
@@ -570,12 +605,29 @@ window.electronAPI.onBotOutput((output) => {
 // Handle bot errors
 window.electronAPI.onBotError((error) => {
   console.error("Bot error:", error);
+
+  // Remove AI thinking message from chat
+  const thinkingMsg = document.getElementById("ai-thinking-message");
+  if (thinkingMsg) {
+    thinkingMsg.remove();
+  }
+
+  // Hide AI thinking indicator on error
+  if (elements.aiThinking) {
+    elements.aiThinking.classList.remove("active");
+  }
+
   addMessage(`Error: ${error}`, "error");
   setConnectionStatus(false);
 });
 
 // Handle bot disconnection
 window.electronAPI.onBotDisconnected(() => {
+  // Hide AI thinking indicator on disconnect
+  if (elements.aiThinking) {
+    elements.aiThinking.classList.remove("active");
+  }
+
   setConnectionStatus(false);
   addMessage('Bot disconnected. Click "Restart Bot" to reconnect.', "system");
 });
@@ -730,6 +782,11 @@ function cleanup() {
   if (elements.typingIndicator) {
     elements.typingIndicator.classList.remove("active");
     elements.typingIndicator.parentElement.style.display = "none";
+  }
+
+  // Also hide AI thinking indicator
+  if (elements.aiThinking) {
+    elements.aiThinking.classList.remove("active");
   }
 
   // 7. Clear any pending state from localStorage if needed

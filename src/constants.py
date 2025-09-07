@@ -9,7 +9,7 @@ RATE_LIMIT_BASE_DELAY = 1  # seconds
 RATE_LIMIT_MAX_WAIT = 10  # seconds
 
 # File size limits
-DEFAULT_MAX_FILE_SIZE = 1048576  # 1MB
+DEFAULT_MAX_FILE_SIZE = 1572864  # 1.5MB
 MAX_BACKUP_VERSIONS = 10
 
 # Token optimization thresholds

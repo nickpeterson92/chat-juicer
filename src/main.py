@@ -40,7 +40,7 @@ When asked to create documentation:
 2. Then use read_file to examine source files from the sources/ directory
 3. After all sources are read, use read_file to load the most relevant template from the templates/ directory
 4. Generate comprehensive document content based on the template and source files
-5. Use generate_document to save the completed document to the output location
+5. Use generate_document to save the completed document to the output/ directory
 
 Key points:
 - Read ALL files of ALL extensions in the sources/ directory:
