@@ -212,112 +212,55 @@ async def handle_electron_ipc(event, call_id_tracker=None):
     return None
 
 
-async def process_user_input_with_retry(
-    agent, messages, user_input, previous_response_id=None, max_retries=MAX_RETRIES
-):
-    """Process user input with retry logic for transient errors
+async def process_user_input_with_retry(agent, messages, user_input, previous_response_id=None):
+    """Process user input with automatic retry on rate limit errors
 
     Args:
         agent: The AI agent instance
         messages: Conversation history
         user_input: User's message
         previous_response_id: ID from previous response for conversation continuity
-        max_retries: Maximum number of retry attempts
 
     Returns:
         Tuple of (messages, response_id) for next turn
     """
+    max_retries = MAX_RETRIES
 
     for attempt in range(max_retries + 1):
         try:
+            # Try to process the user input
             return await process_user_input(agent, messages, user_input, previous_response_id)
-        except (RateLimitError, APIConnectionError) as e:
-            # These are always retryable
-            if attempt < max_retries:
-                wait_time = (2**attempt) * RETRY_BACKOFF_BASE  # Exponential backoff
-                logger.warning(f"Retryable error on attempt {attempt + 1}/{max_retries + 1}: {e}")
-                logger.info(f"Retrying in {wait_time} seconds...")
-
-                # Send retry notification to UI
-                msg = json.dumps(
-                    {
-                        "type": "retry",
-                        "attempt": attempt + 1,
-                        "max_attempts": max_retries + 1,
-                        "wait_time": wait_time,
-                        "reason": "Temporary error - retrying automatically",
-                    }
-                )
-                print(f"__JSON__{msg}__JSON__", flush=True)
-
-                await asyncio.sleep(wait_time)
-                continue
-            else:
-                logger.error(f"Max retries ({max_retries}) exceeded for error: {e}")
-                raise
-
-        except APIStatusError as e:
-            # Check if this is an RS_ error (shouldn't happen as they're caught in streaming)
-            error_msg = str(e)
-            if e.status_code == 400 and ("rs_" in error_msg or "fc_" in error_msg) and "not found" in error_msg.lower():
-                # RS_ (reasoning) and FC_ (function call) errors are benign streaming state issues - don't retry
-                logger.warning(f"Streaming state error handled: {error_msg}")
-
-                # Send a completion message to UI so it doesn't hang
-                msg = json.dumps(
-                    {
-                        "type": "assistant_end",
-                        "warning": "Response interrupted due to temporary streaming issue. Please try again if needed.",
-                    }
-                )
-                print(f"__JSON__{msg}__JSON__", flush=True)
-
-                return messages, None  # Return with any accumulated messages, no response_id on error
-
-            # Check if it's another retryable status code
-            retryable_status_codes = [429, 500, 502, 503, 504]  # Rate limit and server errors
-            if e.status_code in retryable_status_codes and attempt < max_retries:
-                wait_time = (2**attempt) * RETRY_BACKOFF_BASE
-                logger.warning(f"Retryable status {e.status_code} on attempt {attempt + 1}/{max_retries + 1}: {e}")
-                logger.info(f"Retrying in {wait_time} seconds...")
-
-                msg = json.dumps(
-                    {
-                        "type": "retry",
-                        "attempt": attempt + 1,
-                        "max_attempts": max_retries + 1,
-                        "wait_time": wait_time,
-                        "reason": f"HTTP {e.status_code} error - retrying",
-                    }
-                )
-                print(f"__JSON__{msg}__JSON__", flush=True)
-
-                await asyncio.sleep(wait_time)
-                continue
-            else:
-                # Non-retryable status code or max retries exceeded
-                if attempt == max_retries:
-                    logger.error(f"Max retries ({max_retries}) exceeded for status {e.status_code}: {e}")
-                raise
 
         except Exception as e:
-            # Non-API errors - check if pattern matches retryable
             error_msg = str(e).lower()
 
+            # Check if this is a retryable error
             is_retryable = any(pattern in error_msg for pattern in RETRYABLE_ERROR_PATTERNS)
 
             if is_retryable and attempt < max_retries:
-                wait_time = (2**attempt) * RETRY_BACKOFF_BASE
+                # Calculate exponential backoff
+                wait_time = RETRY_BACKOFF_BASE * (2**attempt)
+
+                # Try to extract specific wait time from rate limit errors
+                if "rate limit" in error_msg and "try again in" in error_msg:
+                    try:
+                        match = re.search(r"try again in (\d+(?:\.\d+)?)", error_msg)
+                        if match:
+                            wait_time = float(match.group(1)) + 1  # Add 1 second buffer
+                    except Exception:
+                        pass
+
                 logger.warning(f"Retryable error on attempt {attempt + 1}/{max_retries + 1}: {e}")
                 logger.info(f"Retrying in {wait_time} seconds...")
 
+                # Send retry message to UI
                 msg = json.dumps(
                     {
                         "type": "retry",
                         "attempt": attempt + 1,
                         "max_attempts": max_retries + 1,
                         "wait_time": wait_time,
-                        "reason": "Temporary error - retrying automatically",
+                        "reason": "Rate limit - retrying",
                     }
                 )
                 print(f"__JSON__{msg}__JSON__", flush=True)
@@ -325,13 +268,21 @@ async def process_user_input_with_retry(
                 await asyncio.sleep(wait_time)
                 continue
             else:
-                # Not retryable or max retries reached
-                if attempt == max_retries and is_retryable:
+                # Max retries exceeded or non-retryable error
+                if attempt >= max_retries:
                     logger.error(f"Max retries ({max_retries}) exceeded for error: {e}")
-                raise
+                else:
+                    logger.error(f"Non-retryable error: {e}")
 
-    # Should never reach here
-    raise Exception("Max retries exceeded")
+                # Send error to UI
+                msg = json.dumps({"type": "error", "message": str(e)})
+                print(f"__JSON__{msg}__JSON__", flush=True)
+
+                # Return messages without response_id on error
+                return messages, None
+
+    # Should never reach here, but just in case
+    return messages, None
 
 
 async def process_user_input(agent, messages, user_input, previous_response_id=None):
@@ -356,84 +307,44 @@ async def process_user_input(agent, messages, user_input, previous_response_id=N
 
     response_text = ""
     call_id_tracker = {}  # Track function call IDs
-    rs_error_encountered = False  # Track if we hit RS_ errors
+    result = None  # Store result for response_id extraction
 
     retries = 0
     while retries <= MAX_RETRIES:
         try:
             # Run agent with streaming
             # Use conversation_id for persistent conversation state across turns
-            # If we don't have a conversation_id yet, let OpenAI create one
             conversation_id = getattr(agent, "_conversation_id", None)
 
             result = Runner.run_streamed(
                 agent,
-                input=user_input if previous_response_id else messages,  # Pass full history on first turn
+                input=user_input,  # Always pass string input, let Agent manage context
                 previous_response_id=previous_response_id,  # For continuing conversation
                 conversation_id=conversation_id,  # For persistent conversation storage
                 max_turns=20,  # Reasonable limit for turns
             )
 
             async for event in result.stream_events():
-                try:
-                    # Debug: log event types
-                    if hasattr(event, "item") and event.item:
-                        logger.debug(f"Event type: {event.type}, Item type: {event.item.type}")
-                    else:
-                        logger.debug(f"Event type: {event.type}, No item")
+                # Convert to Electron IPC format with call_id tracking
+                ipc_msg = await handle_electron_ipc(event, call_id_tracker)
+                if ipc_msg:
+                    print(f"__JSON__{ipc_msg}__JSON__", flush=True)
 
-                    # Convert to Electron IPC format with call_id tracking
-                    ipc_msg = await handle_electron_ipc(event, call_id_tracker)
-                    if ipc_msg:
-                        print(f"__JSON__{ipc_msg}__JSON__", flush=True)
-
-                    # Accumulate response text for logging
-                    if (
-                        event.type == "run_item_stream_event"
-                        and hasattr(event, "item")
-                        and event.item
-                        and event.item.type == "message_output_item"
-                        and hasattr(event.item, "raw_item")
-                        and hasattr(event.item.raw_item, "content")
-                        and event.item.raw_item.content
-                    ):
-                        for content_item in event.item.raw_item.content:
-                            if hasattr(content_item, "text") and content_item.text:
-                                response_text += content_item.text
-
-                except APIStatusError as e:
-                    # Check if this is an RS_ error during streaming
-                    error_msg = str(e)
-                    if (
-                        e.status_code == 400
-                        and ("rs_" in error_msg or "fc_" in error_msg)
-                        and "not found" in error_msg.lower()
-                    ):
-                        # RS_ (reasoning) and FC_ (function call) errors - internal streaming state management issues
-                        # Continue streaming to preserve content
-                        logger.warning(f"Streaming state error during streaming (continuing): {error_msg}")
-                        rs_error_encountered = True
-                        continue
-                    else:
-                        # Other API errors should break the stream
-                        raise
-                except Exception as e:
-                    # Log but continue for RS_/FC_ pattern in any exception
-                    error_msg = str(e)
-                    if ("rs_" in error_msg or "fc_" in error_msg) and "not found" in error_msg.lower():
-                        logger.warning(f"Streaming state error during streaming (continuing): {error_msg}")
-                        rs_error_encountered = True
-                        continue
-                    else:
-                        # Other exceptions should break the stream
-                        raise
+                # Accumulate response text for logging
+                if (
+                    event.type == "run_item_stream_event"
+                    and hasattr(event, "item")
+                    and event.item
+                    and event.item.type == "message_output_item"
+                    and hasattr(event.item, "raw_item")
+                    and hasattr(event.item.raw_item, "content")
+                    and event.item.raw_item.content
+                ):
+                    for content_item in event.item.raw_item.content:
+                        if hasattr(content_item, "text") and content_item.text:
+                            response_text += content_item.text
 
             # If we successfully complete streaming, break out of retry loop
-            # Debug: log what's available on the result object
-            logger.debug(f"Result type: {type(result)}")
-            logger.debug(f"Result attributes: {dir(result)}")
-            if hasattr(result, "raw_responses"):
-                logger.debug(f"Raw responses count: {len(result.raw_responses) if result.raw_responses else 0}")
             break
 
         except (httpx.ReadError, httpx.ConnectError, httpx.TimeoutException) as e:
@@ -481,8 +392,6 @@ async def process_user_input(agent, messages, user_input, previous_response_id=N
                 retries += 1
                 if retries > MAX_RETRIES:
                     logger.error(f"Rate limit persisted after {MAX_RETRIES} retries")
-                    # Don't send error message here, let the wrapper handle it
-                    # Re-raise the original error so wrapper can retry
                     raise
 
                 # Extract wait time from error message if available
@@ -506,17 +415,8 @@ async def process_user_input(agent, messages, user_input, previous_response_id=N
                 print(f"__JSON__{msg}__JSON__", flush=True)
                 await asyncio.sleep(wait_time)
                 continue
-
-            # Other API status errors (including RS_/FC_ errors outside streaming)
-            # RS_/FC_ errors are transient streaming issues - if they happen here, send end message
-            elif ("rs_" in error_msg or "fc_" in error_msg) and "not found" in error_msg.lower():
-                logger.warning(f"Streaming state error outside streaming context: {error_msg}")
-                # Send end message to prevent UI hang
-                msg = json.dumps({"type": "assistant_end", "warning": "Response interrupted. Please try again."})
-                print(f"__JSON__{msg}__JSON__", flush=True)
-                # Return current messages without raising - this is a benign error
-                return messages, None  # No response_id on error
             else:
+                # Other API status errors
                 logger.error(f"API status error: {e}")
                 msg = json.dumps({"type": "error", "message": f"API error: {e.status_code}"})
                 print(f"__JSON__{msg}__JSON__", flush=True)
@@ -526,8 +426,7 @@ async def process_user_input(agent, messages, user_input, previous_response_id=N
             # Check if this is a rate limit error that should be retryable
             error_msg = str(e).lower()
             if "rate limit" in error_msg:
-                # Re-raise the original exception to be caught by retry wrapper
-                # The wrapper already handles RateLimitError properly
+                # Re-raise for wrapper to handle
                 raise
 
             # Unexpected errors
@@ -541,14 +440,8 @@ async def process_user_input(agent, messages, user_input, previous_response_id=N
     if response_text:
         messages.append({"role": "assistant", "content": response_text})
 
-    # Send end message with warning if RS_ errors occurred
-    if rs_error_encountered:
-        logger.warning("Response completed despite RS_ streaming errors")
-        msg = json.dumps(
-            {"type": "assistant_end", "warning": "Minor streaming errors occurred but response should be complete"}
-        )
-    else:
-        msg = json.dumps({"type": "assistant_end"})
+    # Send end message
+    msg = json.dumps({"type": "assistant_end"})
     print(f"__JSON__{msg}__JSON__", flush=True)
 
     # Log response
@@ -556,26 +449,21 @@ async def process_user_input(agent, messages, user_input, previous_response_id=N
         file_msg = f"AI: {response_text[:100]}{'...' if len(response_text) > 100 else ''}"
         logger.info(f"AI: {response_text}", extra={"file_message": file_msg})
 
-    # Extract response_id and conversation_id from result for next turn
+    # Extract response_id from result for next turn
     response_id = None
-    try:
-        # Try to get response_id from raw_responses
-        if hasattr(result, "raw_responses") and result.raw_responses:
-            # Get the last response's ID
-            last_response = result.raw_responses[-1]
-            if hasattr(last_response, "id"):
-                response_id = last_response.id
-                logger.debug(f"Response ID for next turn: {response_id}")
-            elif hasattr(last_response, "response_id"):
-                response_id = last_response.response_id
-                logger.debug(f"Response ID for next turn: {response_id}")
+    if result:
+        try:
+            # The RunResultStreaming has last_response_id attribute
+            if hasattr(result, "last_response_id"):
+                response_id = result.last_response_id
+                logger.info(f"Response ID extracted for next turn: {response_id}")
+            else:
+                logger.warning("Result has no last_response_id attribute")
 
-        # Store conversation_id on the agent for future turns
-        if hasattr(result, "conversation_id") and result.conversation_id:
-            agent._conversation_id = result.conversation_id
-            logger.debug(f"Conversation ID stored: {result.conversation_id}")
-    except Exception as e:
-        logger.warning(f"Could not extract response_id: {e}")
+            # Store conversation_id on the agent for future turns if available
+            # Note: RunResultStreaming doesn't have conversation_id, that's handled internally
+        except Exception as e:
+            logger.warning(f"Could not extract response_id: {e}")
 
     return messages, response_id
 
