@@ -67,7 +67,8 @@ MAX_RETRIES = 2  # Maximum number of retries for transient errors
 RETRY_BACKOFF_BASE = 0.5  # Base wait time for exponential backoff (seconds)
 RETRYABLE_ERROR_PATTERNS = [
     # Note: RS_ errors are NOT retried - they're internal streaming state issues that we handle by continuing
-    "rate_limit",  # Rate limiting errors
+    "rate limit",  # Rate limiting errors (with space)
+    "rate_limit",  # Rate limiting errors (with underscore)
     "429",  # Rate limit HTTP status
     "timeout",  # Request timeouts
     "connection",  # Connection errors
