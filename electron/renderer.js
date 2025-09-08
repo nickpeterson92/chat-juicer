@@ -634,10 +634,27 @@ window.electronAPI.onBotDisconnected(() => {
 
 // Handle bot restart
 window.electronAPI.onBotRestarted(() => {
+  // Clear chat messages
   elements.chatContainer.innerHTML = "";
+
+  // Clear function calls panel
+  elements.toolsContainer.innerHTML = "";
+
+  // Clear all function call timers
+  appState.functions.activeTimers.forEach((timerId) => {
+    clearTimeout(timerId);
+  });
+  appState.functions.activeTimers.clear();
+
+  // Clear function call tracking data
+  appState.functions.activeCalls.clear();
+  appState.functions.argumentsBuffer.clear();
+
+  // Reset message state
   appState.setState("connection.hasShownWelcome", false);
   appState.setState("message.currentAssistant", null);
   appState.setState("message.assistantBuffer", "");
+
   addMessage("Bot is restarting...", "system");
 
   // Reset connection status after a short delay to allow process to start
