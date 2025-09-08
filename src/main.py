@@ -71,7 +71,7 @@ async def setup_mcp_servers():
         )
         await seq_thinking.__aenter__()
         servers.append(seq_thinking)
-        logger.info("✅ Sequential Thinking MCP server initialized")
+        logger.info("Sequential Thinking MCP server initialized")
     except Exception as e:
         logger.warning(f"Sequential Thinking server not available: {e}")
 

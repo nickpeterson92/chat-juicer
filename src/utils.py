@@ -2,13 +2,9 @@
 Utility functions for token management, rate limiting, and optimization.
 """
 
-import json
 import re
-import time
 
 import tiktoken
-
-from constants import RATE_LIMIT_BASE_DELAY, RATE_LIMIT_MAX_WAIT, RATE_LIMIT_RETRY_MAX
 
 
 def estimate_tokens(text: str, model: str = "gpt-4o-mini") -> dict:
@@ -256,88 +252,3 @@ def optimize_content_for_tokens(
     )
 
     return optimized_content, stats
-
-
-def handle_rate_limit(func, *args, logger=None, **kwargs):
-    """
-    Handle rate limiting with exponential backoff.
-
-    Args:
-        func: The function to call (typically azure_client.responses.create)
-        *args: Positional arguments for the function
-        logger: Logger instance for logging (optional)
-        **kwargs: Keyword arguments for the function
-
-    Returns:
-        The response from the function
-
-    Raises:
-        Exception if max retries exceeded
-    """
-    retry_count = 0
-    last_error = None
-
-    def _call_safely(callable_func, *f_args, **f_kwargs):
-        try:
-            return callable_func(*f_args, **f_kwargs), None
-        except Exception as exc:
-            return None, exc
-
-    while retry_count < RATE_LIMIT_RETRY_MAX:
-        # Log attempt
-        if retry_count > 0 and logger:
-            logger.info(f"Retry attempt {retry_count}/{RATE_LIMIT_RETRY_MAX}")
-
-        # Attempt the API call without try/except in the loop
-        response, error = _call_safely(func, *args, **kwargs)
-
-        if error is None:
-            # Log token usage if available
-            if logger and hasattr(response, "usage") and response.usage:
-                logger.info(
-                    f"Tokens used - Prompt: {response.usage.prompt_tokens}, "
-                    f"Completion: {response.usage.completion_tokens}, "
-                    f"Total: {response.usage.total_tokens}"
-                )
-            return response
-
-        # Handle error
-        error_str = str(error)
-        last_error = error
-
-        # Check if it's a rate limit error
-        if "rate limit" in error_str.lower() or "429" in error_str:
-            # Calculate exponential backoff with cap
-            wait_time = min(RATE_LIMIT_BASE_DELAY * (2**retry_count), RATE_LIMIT_MAX_WAIT)
-
-            # Send UI notification about rate limit
-            msg = json.dumps(
-                {
-                    "type": "rate_limit_hit",
-                    "retry_count": retry_count + 1,
-                    "wait_time": wait_time,
-                    "message": f"Rate limit hit. Waiting {wait_time}s before retry...",
-                }
-            )
-            print(f"__JSON__{msg}__JSON__", flush=True)
-
-            if logger:
-                logger.warning(f"Rate limit hit. Waiting {wait_time}s before retry {retry_count + 1}")
-            time.sleep(wait_time)
-            retry_count += 1
-        else:
-            # Not a rate limit error, re-raise
-            raise error
-
-    # Max retries exceeded
-    error_msg = f"Rate limit retry max ({RATE_LIMIT_RETRY_MAX}) exceeded"
-    if logger:
-        logger.error(error_msg)
-    msg = json.dumps(
-        {
-            "type": "rate_limit_failed",
-            "message": error_msg,
-        }
-    )
-    print(f"__JSON__{msg}__JSON__", flush=True)
-    raise last_error if last_error else Exception(error_msg)

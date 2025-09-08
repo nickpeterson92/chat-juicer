@@ -3,11 +3,6 @@ Constants and configuration for Chat Juicer.
 Centralizes all magic numbers and configuration values.
 """
 
-# Rate limiting
-RATE_LIMIT_RETRY_MAX = 5
-RATE_LIMIT_BASE_DELAY = 1  # seconds
-RATE_LIMIT_MAX_WAIT = 10  # seconds
-
 # File size limits
 DEFAULT_MAX_FILE_SIZE = 1572864  # 1.5MB
 MAX_BACKUP_VERSIONS = 10
@@ -61,21 +56,3 @@ TEMPLATE_EXTENSIONS = [".md", ".txt", ".template", ""]
 
 # System limits
 SESSION_ID_LENGTH = 8
-
-# Retry configuration
-MAX_RETRIES = 2  # Maximum number of retries for transient errors
-RETRY_BACKOFF_BASE = 0.5  # Base wait time for exponential backoff (seconds)
-RETRYABLE_ERROR_PATTERNS = [
-    # Note: RS_ errors are NOT retried - they're internal streaming state issues that we handle by continuing
-    "rate limit",  # Rate limiting errors (with space)
-    "rate_limit",  # Rate limiting errors (with underscore)
-    "429",  # Rate limit HTTP status
-    "timeout",  # Request timeouts
-    "connection",  # Connection errors
-    "503",  # Service unavailable
-    "502",  # Bad gateway
-    "504",  # Gateway timeout
-]
-
-# HTTP status codes that should trigger retries
-RETRYABLE_STATUS_CODES = [429, 500, 502, 503, 504]
