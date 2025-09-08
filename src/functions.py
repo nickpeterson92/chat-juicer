@@ -25,7 +25,7 @@ from logger import logger
 from utils import estimate_tokens, optimize_content_for_tokens
 
 
-def list_directory(path: str = "sources", show_hidden: bool = False) -> str:
+def list_directory(path: str = ".", show_hidden: bool = False) -> str:
     """
     List contents of a directory for project discovery.
 

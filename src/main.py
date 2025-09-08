@@ -44,7 +44,7 @@ When asked to create documentation:
 1. First use list_directory to explore available files
 2. Then use read_file to examine source files from the sources/ directory
 3. After all sources are read, use read_file to load the most relevant template from the templates/ directory
-4. Generate comprehensive document(s) content based on the template and source files
+4. Generate comprehensive document content based on the template and source files
 5. Use generate_document to save the completed document(s) to the output/ directory
 6. If multiple documents are to be generated ensure ALL generated documents follow the template and are complete
 
