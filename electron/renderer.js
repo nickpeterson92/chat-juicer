@@ -223,9 +223,21 @@ function addMessage(content, type = "assistant") {
 // Function to update current assistant message (for streaming)
 function updateAssistantMessage(content) {
   if (!appState.message.currentAssistant) {
+    // This shouldn't happen now since we create the message in assistant_start
     appState.setState("message.currentAssistant", addMessage("", "assistant"));
   }
-  appState.message.currentAssistant.textContent = content;
+  // Update only the text content
+  if (appState.message.currentAssistant) {
+    // Hide loading dots when we have content
+    const messageDiv = appState.message.currentAssistant.closest('.message');
+    if (messageDiv && content.length > 0) {
+      const loadingDots = messageDiv.querySelector('.loading-dots');
+      if (loadingDots) {
+        loadingDots.style.display = 'none';
+      }
+    }
+    appState.message.currentAssistant.textContent = content;
+  }
   elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight;
 }
 
@@ -383,29 +395,7 @@ function sendMessage() {
   // Clear input
   elements.userInput.value = "";
 
-  // Show modern AI thinking indicator as a message in chat
-  const thinkingMessage = document.createElement("div");
-  thinkingMessage.className = "message assistant ai-thinking-message";
-  thinkingMessage.id = "ai-thinking-message";
-  thinkingMessage.innerHTML = `
-    <div class="message-content" style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%); border: 1px solid rgba(102, 126, 234, 0.2);">
-      <div class="ai-thinking-content">
-        <div class="ai-thinking-dots">
-          <span></span>
-          <span></span>
-          <span></span>
-        </div>
-        <div class="ai-thinking-text">AI is thinking...</div>
-      </div>
-    </div>
-  `;
-  elements.chatContainer.appendChild(thinkingMessage);
-  elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight;
-
-  // Also show legacy typing indicator for compatibility
-  elements.typingIndicator.parentElement.style.display = "block";
-  elements.typingIndicator.classList.add("active");
-  appState.setState("message.isTyping", true);
+  // No longer show the old thinking indicator - we'll use the streaming cursor instead
 
   // Reset assistant message state
   appState.setState("message.currentAssistant", null);
@@ -445,11 +435,7 @@ window.electronAPI.onBotOutput((output) => {
 
         switch (message.type) {
           case "assistant_start": {
-            // Remove AI thinking message from chat
-            const thinkingMsg = document.getElementById("ai-thinking-message");
-            if (thinkingMsg) {
-              thinkingMsg.remove();
-            }
+            // No longer using the old thinking message
 
             // Hide AI thinking indicator (static one if it exists)
             if (elements.aiThinking) {
@@ -460,9 +446,32 @@ window.electronAPI.onBotOutput((output) => {
             elements.typingIndicator.classList.remove("active");
             elements.typingIndicator.parentElement.style.display = "none";
             appState.setState("message.isTyping", false);
-            const newMessage = addMessage("", "assistant");
-            appState.setState("message.currentAssistant", newMessage);
+
+            // Create assistant message with streaming indicator
+            const messageDiv = document.createElement("div");
+            messageDiv.className = "message assistant streaming";
+
+            const contentDiv = document.createElement("div");
+            contentDiv.className = "message-content";
+
+            // Add loading dots initially
+            const loadingSpan = document.createElement("span");
+            loadingSpan.className = "loading-dots";
+            loadingSpan.innerHTML = '<span>•</span><span>•</span><span>•</span>';
+
+            const textSpan = document.createElement("span");
+            textSpan.className = "streaming-text";
+
+            contentDiv.appendChild(loadingSpan);
+            contentDiv.appendChild(textSpan);
+            messageDiv.appendChild(contentDiv);
+            elements.chatContainer.appendChild(messageDiv);
+
+            appState.setState("message.currentAssistant", textSpan);
             appState.setState("message.assistantBuffer", "");
+
+            // Auto-scroll to bottom
+            elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight;
             break;
           }
 
@@ -476,12 +485,34 @@ window.electronAPI.onBotOutput((output) => {
             break;
 
           case "assistant_end":
-            // Message complete, reset for next message
+            // Message complete, remove streaming indicators
+            const streamingMsg = elements.chatContainer.querySelector(".message.assistant.streaming");
+            if (streamingMsg) {
+              streamingMsg.classList.remove("streaming");
+              const cursor = streamingMsg.querySelector(".streaming-cursor");
+              if (cursor) {
+                cursor.remove();
+              }
+            }
             appState.setState("message.currentAssistant", null);
             // Ensure AI thinking indicator is hidden
             if (elements.aiThinking) {
               elements.aiThinking.classList.remove("active");
             }
+            break;
+
+          case "error":
+            // Display error message as a system/error message
+            console.error("Error from backend:", message.message);
+            if (elements.aiThinking) {
+              elements.aiThinking.classList.remove("active");
+            }
+            // Hide typing indicator
+            elements.typingIndicator.classList.remove("active");
+            elements.typingIndicator.parentElement.style.display = "none";
+            appState.setState("message.isTyping", false);
+            // Add error message with red styling
+            addMessage(message.message, "error");
             break;
 
           case "function_detected": {
@@ -605,12 +636,6 @@ window.electronAPI.onBotOutput((output) => {
 // Handle bot errors
 window.electronAPI.onBotError((error) => {
   console.error("Bot error:", error);
-
-  // Remove AI thinking message from chat
-  const thinkingMsg = document.getElementById("ai-thinking-message");
-  if (thinkingMsg) {
-    thinkingMsg.remove();
-  }
 
   // Hide AI thinking indicator on error
   if (elements.aiThinking) {
