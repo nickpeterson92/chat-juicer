@@ -1,6 +1,6 @@
 # Design Document: [Provide a clear, descriptive project name that captures the essence of what's being designed]
 
-<!-- 
+<!--
 MERMAID DIAGRAM GENERATION RULES:
 ================================
 
@@ -11,7 +11,7 @@ When creating Mermaid diagrams, remember these syntax requirements:
 3. Keep node IDs simple (letters/numbers/underscores only)
 
 Example transformations for clarity:
-- Instead of: "System (Production)" use: "System - Production"  
+- Instead of: "System (Production)" use: "System - Production"
 - Instead of: "API (v2)" use: "API v2"
 - Instead of: "Process (async)" use: "Process Async"
 -->
@@ -36,17 +36,19 @@ Example transformations for clarity:
 
 ### System Architecture Diagram
 [Create a high-level system architecture diagram showing all major components, their relationships, and data flows. Use graph TB or flowchart for clarity. Include external systems, databases, services, and key interfaces.]
-<!-- REPLACE ABOVE WITH MERMAID like:
+
+REPLACE ABOVE WITH MERMAID like:
 ```mermaid
 graph TB
     A[Your Source] --> B[Your Process]
     B --> C[Your Target]
 ```
--->
 
-### Data Flow Sequence Diagram  
+
+### Data Flow Sequence Diagram
 [Create a sequence diagram showing the flow of data through the system for key use cases. Include all participants, messages, responses, and any async operations. Focus on the most critical or complex flows.]
-<!-- REPLACE ABOVE WITH MERMAID like:
+
+REPLACE ABOVE WITH MERMAID like:
 ```mermaid
 sequenceDiagram
     participant A as Your System A
@@ -54,11 +56,12 @@ sequenceDiagram
     A->>B: Your Message
     B-->>A: Your Response
 ```
--->
+
 
 ### Process Flow Diagram
 [Create a flowchart showing the main process flow with decision points, error handling paths, and outcomes. Use flowchart TD with appropriate shapes: rectangles for processes, diamonds for decisions, rounded rectangles for start/end.]
-<!-- REPLACE ABOVE WITH MERMAID like:
+
+REPLACE ABOVE WITH MERMAID like:
 ```mermaid
 flowchart TD
     START([Start]) --> PROCESS[Your Process]
@@ -66,22 +69,24 @@ flowchart TD
     DECIDE -->|Yes| ACTION[Your Action]
     DECIDE -->|No| END([End])
 ```
--->
+
 
 ### State Transition Diagram
 [Create a state diagram showing the various states of key entities or processes and the transitions between them. Include initial and final states, transition triggers, and any guard conditions.]
-<!-- REPLACE ABOVE WITH MERMAID like:
+
+REPLACE ABOVE WITH MERMAID like:
 ```mermaid
 stateDiagram-v2
     [*] --> State1
     State1 --> State2
     State2 --> [*]
 ```
--->
+
 
 ### Entity Relationship Diagram
 [Create an ER diagram showing the main data entities, their attributes, and relationships. Include cardinality, primary keys, and foreign keys. Focus on the core domain model.]
-<!-- REPLACE ABOVE WITH MERMAID like:
+
+REPLACE ABOVE WITH MERMAID like:
 ```mermaid
 erDiagram
     ENTITY1 ||--o{ ENTITY2 : relationship
@@ -90,11 +95,12 @@ erDiagram
         string name
     }
 ```
--->
+
 
 ### Component Interaction Diagram
 [Create a component diagram showing how different layers or modules interact. Use subgraphs to group related components. Show dependencies and communication patterns between components.]
-<!-- REPLACE ABOVE WITH MERMAID like:
+
+REPLACE ABOVE WITH MERMAID like:
 ```mermaid
 graph LR
     subgraph "Layer 1"
@@ -105,7 +111,7 @@ graph LR
     end
     A --> B
 ```
--->
+
 
 ## Implementation Plan
 [Outline the implementation strategy. Include: 1) Development approach (agile, waterfall, etc.), 2) Team structure and roles, 3) Development environment setup, 4) Testing strategy, 5) Deployment approach, 6) Rollback procedures.]
@@ -143,7 +149,7 @@ graph LR
 ---
 *Generated from template: design-doc.md*
 
-<!-- 
+<!--
 ================================================================================
 ⚠️ STOP HERE WHEN GENERATING DOCUMENTS ⚠️
 ================================================================================
@@ -263,7 +269,7 @@ SYSTEM API (Aysnc)                SYSTEM API - Async
 ```
 ❌ WRONG                    ✅ CORRECT
 MY NODE[Label]              MY_NODE[Label]     # Spaces in ID
-Node-1[Label]               Node1[Label]       # Dashes in ID  
+Node-1[Label]               Node1[Label]       # Dashes in ID
 2Node[Label]                Node2[Label]       # Starting with number
 node.service[Label]         node_service[Label] # Dots in ID
 ```
