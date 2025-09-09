@@ -56,3 +56,10 @@ TEMPLATE_EXTENSIONS = [".md", ".txt", ".template", ""]
 
 # System limits
 SESSION_ID_LENGTH = 8
+
+# MCP Server Configuration
+# Tool call delays to mitigate RS_/FC_ race conditions in Agent/Runner streaming
+MCP_TOOL_DELAY = 0.2  # Delay in seconds after MCP server tool calls
+NATIVE_TOOL_DELAY = 0.2  # Delay in seconds after native function tool calls
+# Set either to 0 to disable that specific delay, or increase if still getting errors (e.g., 0.2 for 200ms)
+# You may need different values as MCP tools (subprocess) may have different timing than native tools

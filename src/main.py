@@ -14,19 +14,20 @@ from agents import Agent, Runner, set_default_openai_client, set_tracing_disable
 from agents.mcp import MCPServerStdio
 from dotenv import load_dotenv
 from openai import APIConnectionError, APIStatusError, AsyncOpenAI, RateLimitError
+from tool_patch import apply_tool_patches, patch_native_tools
 
 # Import function tools for Agent/Runner
 from functions import AGENT_TOOLS
 from logger import logger
 
 # System instructions for the documentation bot
-SYSTEM_INSTRUCTIONS = """You are a technical documentation automation assistant with advanced reasoning capabilities.
+SYSTEM_INSTRUCTIONS = """You are a technical documentation automation assistant.
 
 Core Capabilities:
-- Sequential Thinking for complex problem-solving and structured reasoning
 - File system access for reading and writing documents
 - Document generation with template support
 - Token-aware content optimization
+- Sequential Thinking for complex problem-solving and structured reasoning
 
 The Sequential Thinking tool helps you:
 - Break down complex problems into manageable steps
@@ -60,6 +61,9 @@ Key points:
 async def setup_mcp_servers():
     """Configure and initialize MCP servers"""
     servers = []
+
+    # Apply the MCP patch to mitigate race conditions
+    apply_tool_patches()
 
     # Sequential Thinking Server - our primary reasoning tool
     try:
@@ -381,12 +385,15 @@ async def main():
     # Set up MCP servers
     mcp_servers = await setup_mcp_servers()
 
+    # Patch native tools to add delays (must be done before passing to Agent)
+    patched_tools = patch_native_tools(AGENT_TOOLS)
+
     # Create agent with tools and MCP servers
     agent = Agent(
         name="Chat Juicer",
         model=deployment,
         instructions=SYSTEM_INSTRUCTIONS,
-        tools=AGENT_TOOLS,  # Use properly wrapped function tools
+        tools=patched_tools,  # Use patched function tools
         mcp_servers=mcp_servers,
     )
 
@@ -394,7 +401,7 @@ async def main():
 
     # Log startup
     logger.info(f"Chat Juicer starting - Deployment: {deployment}")
-    logger.info(f"Agent configured with {len(AGENT_TOOLS)} tools and {len(mcp_servers)} MCP servers")
+    logger.info(f"Agent configured with {len(patched_tools)} tools and {len(mcp_servers)} MCP servers")
 
     print("Connected to Azure OpenAI")
     print(f"Using deployment: {deployment}")
