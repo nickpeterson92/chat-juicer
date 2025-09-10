@@ -294,6 +294,7 @@
       word-wrap: break-word;
       white-space: pre-wrap;
       line-height: 1.4;
+      min-height: 24px; /* Ensure consistent minimum height */
     }
 
     .message.user .message-content {
@@ -427,6 +428,180 @@
       }
       30% {
         transform: translateY(-10px);
+      }
+    }
+
+    /* Modern AI Processing Indicator */
+    .ai-thinking {
+      display: none;
+      padding: 12px 20px;
+      margin: 12px 20px;
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+      border-radius: 18px;
+      border: 1px solid rgba(102, 126, 234, 0.2);
+      animation: slideIn 0.3s ease-out;
+    }
+
+    .ai-thinking.active {
+      display: block;
+    }
+
+    .ai-thinking-content {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--text-color);
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .ai-thinking-dots {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .ai-thinking-dots span {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      animation: pulse-thinking 1.5s infinite;
+      opacity: 0.3;
+    }
+
+    .ai-thinking-dots span:nth-child(1) {
+      animation-delay: 0s;
+    }
+
+    .ai-thinking-dots span:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .ai-thinking-dots span:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    @keyframes pulse-thinking {
+      0%, 60%, 100% {
+        opacity: 0.3;
+        transform: scale(1);
+      }
+      30% {
+        opacity: 1;
+        transform: scale(1.2);
+      }
+    }
+
+    .ai-thinking-text {
+      color: var(--text-color);
+      opacity: 0.8;
+      animation: fade-text 2s infinite;
+    }
+
+    @keyframes fade-text {
+      0%, 100% {
+        opacity: 0.6;
+      }
+      50% {
+        opacity: 1;
+      }
+    }
+
+    /* Dark mode adjustments for AI thinking */
+    [data-theme="dark"] .ai-thinking {
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+      border-color: rgba(102, 126, 234, 0.3);
+    }
+
+    [data-theme="dark"] .ai-thinking-dots span {
+      background: linear-gradient(135deg, #818cf8 0%, #a78bfa 100%);
+    }
+
+    @keyframes typing {
+      0%, 60%, 100% {
+        transform: translateY(0);
+      }
+      30% {
+        transform: translateY(-10px);
+      }
+    }
+
+    /* Loading dots indicator */
+    .loading-dots {
+      display: inline-block;
+      font-size: 24px;
+      letter-spacing: 2px;
+    }
+
+    .loading-dots span {
+      animation: loading-fade 1.4s infinite;
+      opacity: 0.3;
+    }
+
+    .loading-dots span:nth-child(1) {
+      animation-delay: 0s;
+    }
+
+    .loading-dots span:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .loading-dots span:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    @keyframes loading-fade {
+      0%, 60%, 100% {
+        opacity: 0.3;
+      }
+      30% {
+        opacity: 1;
+      }
+    }
+
+    /* Streaming message indicator */
+    .message.assistant.streaming .streaming-cursor {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: var(--text-color);
+      margin-left: 4px;
+      border-radius: 50%;
+      animation: pulse 1.5s infinite;
+      vertical-align: middle;
+      opacity: 0.8;
+    }
+
+    /* Show three dots while streaming starts */
+    .message.assistant.streaming .message-content:empty .streaming-cursor::before {
+      content: "•••";
+      position: absolute;
+      left: -20px;
+      animation: dots 1.5s infinite;
+      opacity: 0.5;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 0.3;
+        transform: scale(0.8);
+      }
+      50% {
+        opacity: 1;
+        transform: scale(1.2);
+      }
+    }
+
+    @keyframes dots {
+      0%, 20% {
+        opacity: 0.5;
+      }
+      50% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 0.5;
       }
     }
 
@@ -648,6 +823,19 @@
         <div class="chat-container" id="chat-container">
         </div>
 
+        <!-- AI Thinking Indicator -->
+        <div class="ai-thinking" id="ai-thinking">
+          <div class="ai-thinking-content">
+            <div class="ai-thinking-dots">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <div class="ai-thinking-text">AI is thinking...</div>
+          </div>
+        </div>
+
+        <!-- Legacy typing indicator (kept for compatibility) -->
         <div class="message assistant" style="display: none; padding: 0 20px 10px 20px;">
           <div class="typing-indicator" id="typing-indicator">
             <span></span>

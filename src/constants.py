@@ -3,13 +3,8 @@ Constants and configuration for Chat Juicer.
 Centralizes all magic numbers and configuration values.
 """
 
-# Rate limiting
-RATE_LIMIT_RETRY_MAX = 5
-RATE_LIMIT_BASE_DELAY = 1  # seconds
-RATE_LIMIT_MAX_WAIT = 10  # seconds
-
 # File size limits
-DEFAULT_MAX_FILE_SIZE = 1048576  # 1MB
+DEFAULT_MAX_FILE_SIZE = 1572864  # 1.5MB
 MAX_BACKUP_VERSIONS = 10
 
 # Token optimization thresholds
@@ -24,22 +19,47 @@ LOG_PREVIEW_LENGTH = 50  # Characters for preview in logs
 
 # File processing
 CONVERTIBLE_EXTENSIONS = {
+    # Microsoft Office formats
     ".xlsx",
     ".xls",  # Excel
     ".docx",
     ".doc",  # Word
     ".pptx",
     ".ppt",  # PowerPoint
-    ".pdf",  # PDF
-    ".csv",  # CSV
+    # Document formats
+    ".pdf",  # PDF documents
+    ".rtf",  # Rich Text Format
+    ".odt",  # OpenDocument Text
+    # Data formats
+    ".csv",  # CSV files
+    ".json",  # JSON data
+    ".xml",  # XML data
+    # Web formats
     ".html",
-    ".htm",  # HTML
-    ".xml",  # XML
-    ".json",  # JSON
+    ".htm",  # HTML files
+    ".mhtml",
+    ".mht",  # MHTML archives
+    # Code/Notebook formats
     ".ipynb",  # Jupyter notebooks
+    # Image formats (if LLM client configured)
+    ".jpg",
+    ".jpeg",  # JPEG images
+    ".png",  # PNG images
+    ".gif",  # GIF images
+    ".bmp",  # Bitmap images
+    ".tiff",
+    ".tif",  # TIFF images
+    ".webp",  # WebP images
 }
 
 TEMPLATE_EXTENSIONS = [".md", ".txt", ".template", ""]
 
 # System limits
 SESSION_ID_LENGTH = 8
+
+# MCP Server Configuration
+# Tool call delays to mitigate RS_/FC_ race conditions in Agent/Runner streaming
+MCP_TOOL_DELAY = 0.2  # Delay in seconds after MCP server tool calls
+NATIVE_TOOL_DELAY = 0.2  # Delay in seconds after native function tool calls
+# Set either to 0 to disable that specific delay, or increase if still getting errors (e.g., 0.2 for 200ms)
+# You may need different values as MCP tools (subprocess) may have different timing than native tools

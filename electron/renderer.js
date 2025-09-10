@@ -8,6 +8,7 @@ const elements = {
   statusIndicator: document.getElementById("status-indicator"),
   statusText: document.getElementById("status-text"),
   typingIndicator: document.getElementById("typing-indicator"),
+  aiThinking: document.getElementById("ai-thinking"),
   toolsContainer: document.getElementById("tools-container"),
   toolsPanel: document.getElementById("tools-panel"),
   toggleToolsBtn: document.getElementById("toggle-tools-btn"),
@@ -163,25 +164,25 @@ class AppState {
   handleConnectionChange(status) {
     switch (status) {
       case "CONNECTED":
-        elements.statusIndicator.classList.remove("disconnected");
-        elements.statusText.textContent = "Connected";
-        elements.userInput.disabled = false;
-        elements.elements.sendBtn.disabled = false;
+        if (elements.statusIndicator) elements.statusIndicator.classList.remove("disconnected");
+        if (elements.statusText) elements.statusText.textContent = "Connected";
+        if (elements.userInput) elements.userInput.disabled = false;
+        if (elements.sendBtn) elements.sendBtn.disabled = false;
         break;
 
       case "DISCONNECTED":
       case "ERROR":
-        elements.statusIndicator.classList.add("disconnected");
-        elements.statusText.textContent = status === "ERROR" ? "Error" : "Disconnected";
-        elements.userInput.disabled = true;
-        elements.elements.sendBtn.disabled = true;
+        if (elements.statusIndicator) elements.statusIndicator.classList.add("disconnected");
+        if (elements.statusText) elements.statusText.textContent = status === "ERROR" ? "Error" : "Disconnected";
+        if (elements.userInput) elements.userInput.disabled = true;
+        if (elements.sendBtn) elements.sendBtn.disabled = true;
         break;
 
       case "RECONNECTING":
-        elements.statusIndicator.classList.add("disconnected");
-        elements.statusText.textContent = "Reconnecting...";
-        elements.userInput.disabled = true;
-        elements.elements.sendBtn.disabled = true;
+        if (elements.statusIndicator) elements.statusIndicator.classList.add("disconnected");
+        if (elements.statusText) elements.statusText.textContent = "Reconnecting...";
+        if (elements.userInput) elements.userInput.disabled = true;
+        if (elements.sendBtn) elements.sendBtn.disabled = true;
         break;
     }
   }
@@ -222,9 +223,21 @@ function addMessage(content, type = "assistant") {
 // Function to update current assistant message (for streaming)
 function updateAssistantMessage(content) {
   if (!appState.message.currentAssistant) {
+    // This shouldn't happen now since we create the message in assistant_start
     appState.setState("message.currentAssistant", addMessage("", "assistant"));
   }
-  appState.message.currentAssistant.textContent = content;
+  // Update only the text content
+  if (appState.message.currentAssistant) {
+    // Hide loading dots when we have content
+    const messageDiv = appState.message.currentAssistant.closest('.message');
+    if (messageDiv && content.length > 0) {
+      const loadingDots = messageDiv.querySelector('.loading-dots');
+      if (loadingDots) {
+        loadingDots.style.display = 'none';
+      }
+    }
+    appState.message.currentAssistant.textContent = content;
+  }
   elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight;
 }
 
@@ -382,10 +395,7 @@ function sendMessage() {
   // Clear input
   elements.userInput.value = "";
 
-  // Show typing indicator
-  elements.typingIndicator.parentElement.style.display = "block";
-  elements.typingIndicator.classList.add("active");
-  appState.setState("message.isTyping", true);
+  // No longer show the old thinking indicator - we'll use the streaming cursor instead
 
   // Reset assistant message state
   appState.setState("message.currentAssistant", null);
@@ -425,13 +435,43 @@ window.electronAPI.onBotOutput((output) => {
 
         switch (message.type) {
           case "assistant_start": {
-            // Hide typing indicator and start new message
+            // No longer using the old thinking message
+
+            // Hide AI thinking indicator (static one if it exists)
+            if (elements.aiThinking) {
+              elements.aiThinking.classList.remove("active");
+            }
+
+            // Hide legacy typing indicator and start new message
             elements.typingIndicator.classList.remove("active");
             elements.typingIndicator.parentElement.style.display = "none";
             appState.setState("message.isTyping", false);
-            const newMessage = addMessage("", "assistant");
-            appState.setState("message.currentAssistant", newMessage);
+
+            // Create assistant message with streaming indicator
+            const messageDiv = document.createElement("div");
+            messageDiv.className = "message assistant streaming";
+
+            const contentDiv = document.createElement("div");
+            contentDiv.className = "message-content";
+
+            // Add loading dots initially
+            const loadingSpan = document.createElement("span");
+            loadingSpan.className = "loading-dots";
+            loadingSpan.innerHTML = '<span>•</span><span>•</span><span>•</span>';
+
+            const textSpan = document.createElement("span");
+            textSpan.className = "streaming-text";
+
+            contentDiv.appendChild(loadingSpan);
+            contentDiv.appendChild(textSpan);
+            messageDiv.appendChild(contentDiv);
+            elements.chatContainer.appendChild(messageDiv);
+
+            appState.setState("message.currentAssistant", textSpan);
             appState.setState("message.assistantBuffer", "");
+
+            // Auto-scroll to bottom
+            elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight;
             break;
           }
 
@@ -445,8 +485,34 @@ window.electronAPI.onBotOutput((output) => {
             break;
 
           case "assistant_end":
-            // Message complete, reset for next message
+            // Message complete, remove streaming indicators
+            const streamingMsg = elements.chatContainer.querySelector(".message.assistant.streaming");
+            if (streamingMsg) {
+              streamingMsg.classList.remove("streaming");
+              const cursor = streamingMsg.querySelector(".streaming-cursor");
+              if (cursor) {
+                cursor.remove();
+              }
+            }
             appState.setState("message.currentAssistant", null);
+            // Ensure AI thinking indicator is hidden
+            if (elements.aiThinking) {
+              elements.aiThinking.classList.remove("active");
+            }
+            break;
+
+          case "error":
+            // Display error message as a system/error message
+            console.error("Error from backend:", message.message);
+            if (elements.aiThinking) {
+              elements.aiThinking.classList.remove("active");
+            }
+            // Hide typing indicator
+            elements.typingIndicator.classList.remove("active");
+            elements.typingIndicator.parentElement.style.display = "none";
+            appState.setState("message.isTyping", false);
+            // Add error message with red styling
+            addMessage(message.message, "error");
             break;
 
           case "function_detected": {
@@ -570,22 +636,50 @@ window.electronAPI.onBotOutput((output) => {
 // Handle bot errors
 window.electronAPI.onBotError((error) => {
   console.error("Bot error:", error);
+
+  // Hide AI thinking indicator on error
+  if (elements.aiThinking) {
+    elements.aiThinking.classList.remove("active");
+  }
+
   addMessage(`Error: ${error}`, "error");
   setConnectionStatus(false);
 });
 
 // Handle bot disconnection
 window.electronAPI.onBotDisconnected(() => {
+  // Hide AI thinking indicator on disconnect
+  if (elements.aiThinking) {
+    elements.aiThinking.classList.remove("active");
+  }
+
   setConnectionStatus(false);
   addMessage('Bot disconnected. Click "Restart Bot" to reconnect.', "system");
 });
 
 // Handle bot restart
 window.electronAPI.onBotRestarted(() => {
+  // Clear chat messages
   elements.chatContainer.innerHTML = "";
+
+  // Clear function calls panel
+  elements.toolsContainer.innerHTML = "";
+
+  // Clear all function call timers
+  appState.functions.activeTimers.forEach((timerId) => {
+    clearTimeout(timerId);
+  });
+  appState.functions.activeTimers.clear();
+
+  // Clear function call tracking data
+  appState.functions.activeCalls.clear();
+  appState.functions.argumentsBuffer.clear();
+
+  // Reset message state
   appState.setState("connection.hasShownWelcome", false);
   appState.setState("message.currentAssistant", null);
   appState.setState("message.assistantBuffer", "");
+
   addMessage("Bot is restarting...", "system");
 
   // Reset connection status after a short delay to allow process to start
@@ -730,6 +824,11 @@ function cleanup() {
   if (elements.typingIndicator) {
     elements.typingIndicator.classList.remove("active");
     elements.typingIndicator.parentElement.style.display = "none";
+  }
+
+  // Also hide AI thinking indicator
+  if (elements.aiThinking) {
+    elements.aiThinking.classList.remove("active");
   }
 
   // 7. Clear any pending state from localStorage if needed

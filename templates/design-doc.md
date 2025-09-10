@@ -1,6 +1,6 @@
-# Design Document: {{project_name}}
+# Design Document: [Provide a clear, descriptive project name that captures the essence of what's being designed]
 
-<!-- 
+<!--
 MERMAID DIAGRAM GENERATION RULES:
 ================================
 
@@ -11,42 +11,44 @@ When creating Mermaid diagrams, remember these syntax requirements:
 3. Keep node IDs simple (letters/numbers/underscores only)
 
 Example transformations for clarity:
-- Instead of: "System (Production)" use: "System - Production"  
+- Instead of: "System (Production)" use: "System - Production"
 - Instead of: "API (v2)" use: "API v2"
 - Instead of: "Process (async)" use: "Process Async"
 -->
 
 ## Executive Summary
-{{executive_summary}}
+[Write a 2-3 paragraph executive summary that captures: 1) The business context and why this project matters, 2) The core technical approach being proposed, 3) The expected impact and key benefits. Keep it high-level and suitable for both technical and non-technical stakeholders.]
 
 ## Problem Statement
-{{problem_statement}}
+[Clearly articulate the problem being solved. Include: 1) Current pain points and inefficiencies, 2) Specific challenges users/systems face, 3) Why existing solutions fall short, 4) The cost of not solving this problem. Use concrete examples where possible.]
 
 ## Proposed Solution
-{{proposed_solution}}
+[Describe your proposed solution at a high level. Cover: 1) The overall approach and methodology, 2) Key technologies or frameworks to be used, 3) How this addresses each problem identified above, 4) Why this approach was chosen over alternatives.]
 
 ### Integration Approach
-{{integration_approach}}
+[Detail how the solution integrates with existing systems. Include: 1) Integration points and interfaces, 2) Data exchange formats and protocols, 3) Authentication/authorization approach, 4) Backward compatibility considerations, 5) Migration strategy from current state.]
 
 ### Key Components
-{{key_components}}
+[List and describe the major components of the solution. For each component include: 1) Component name and purpose, 2) Key responsibilities, 3) Technologies used, 4) Interactions with other components. Format as a bulleted list or subsections.]
 
 ## Technical Architecture
-{{technical_architecture}}
+[Provide a detailed technical overview. Include: 1) Architectural patterns and principles applied, 2) Technology stack justification, 3) Scalability and performance considerations, 4) Security architecture, 5) Data architecture and storage approach.]
 
 ### System Architecture Diagram
-{{system_architecture_diagram_placeholder}}
-<!-- REPLACE ABOVE WITH MERMAID like:
+[Create a high-level system architecture diagram showing all major components, their relationships, and data flows. Use graph TB or flowchart for clarity. Include external systems, databases, services, and key interfaces.]
+
+REPLACE ABOVE WITH MERMAID like:
 ```mermaid
 graph TB
     A[Your Source] --> B[Your Process]
     B --> C[Your Target]
 ```
--->
 
-### Data Flow Sequence Diagram  
-{{data_flow_sequence_diagram_placeholder}}
-<!-- REPLACE ABOVE WITH MERMAID like:
+
+### Data Flow Sequence Diagram
+[Create a sequence diagram showing the flow of data through the system for key use cases. Include all participants, messages, responses, and any async operations. Focus on the most critical or complex flows.]
+
+REPLACE ABOVE WITH MERMAID like:
 ```mermaid
 sequenceDiagram
     participant A as Your System A
@@ -54,11 +56,12 @@ sequenceDiagram
     A->>B: Your Message
     B-->>A: Your Response
 ```
--->
+
 
 ### Process Flow Diagram
-{{process_flow_diagram_placeholder}}
-<!-- REPLACE ABOVE WITH MERMAID like:
+[Create a flowchart showing the main process flow with decision points, error handling paths, and outcomes. Use flowchart TD with appropriate shapes: rectangles for processes, diamonds for decisions, rounded rectangles for start/end.]
+
+REPLACE ABOVE WITH MERMAID like:
 ```mermaid
 flowchart TD
     START([Start]) --> PROCESS[Your Process]
@@ -66,22 +69,24 @@ flowchart TD
     DECIDE -->|Yes| ACTION[Your Action]
     DECIDE -->|No| END([End])
 ```
--->
+
 
 ### State Transition Diagram
-{{state_transition_diagram_placeholder}}
-<!-- REPLACE ABOVE WITH MERMAID like:
+[Create a state diagram showing the various states of key entities or processes and the transitions between them. Include initial and final states, transition triggers, and any guard conditions.]
+
+REPLACE ABOVE WITH MERMAID like:
 ```mermaid
 stateDiagram-v2
     [*] --> State1
     State1 --> State2
     State2 --> [*]
 ```
--->
+
 
 ### Entity Relationship Diagram
-{{entity_relationship_diagram_placeholder}}
-<!-- REPLACE ABOVE WITH MERMAID like:
+[Create an ER diagram showing the main data entities, their attributes, and relationships. Include cardinality, primary keys, and foreign keys. Focus on the core domain model.]
+
+REPLACE ABOVE WITH MERMAID like:
 ```mermaid
 erDiagram
     ENTITY1 ||--o{ ENTITY2 : relationship
@@ -90,11 +95,12 @@ erDiagram
         string name
     }
 ```
--->
+
 
 ### Component Interaction Diagram
-{{component_interaction_diagram_placeholder}}
-<!-- REPLACE ABOVE WITH MERMAID like:
+[Create a component diagram showing how different layers or modules interact. Use subgraphs to group related components. Show dependencies and communication patterns between components.]
+
+REPLACE ABOVE WITH MERMAID like:
 ```mermaid
 graph LR
     subgraph "Layer 1"
@@ -105,45 +111,45 @@ graph LR
     end
     A --> B
 ```
--->
+
 
 ## Implementation Plan
-{{implementation_plan}}
+[Outline the implementation strategy. Include: 1) Development approach (agile, waterfall, etc.), 2) Team structure and roles, 3) Development environment setup, 4) Testing strategy, 5) Deployment approach, 6) Rollback procedures.]
 
 ### Phase Breakdown
-{{phase_breakdown}}
+[Break down the implementation into phases. For each phase provide: 1) Phase name and objectives, 2) Key deliverables, 3) Dependencies and prerequisites, 4) Estimated duration, 5) Success criteria. Format as numbered phases or a table.]
 
 ### Data Mappings
-{{data_mappings}}
+[Define data transformation and mapping rules. Include: 1) Source to target field mappings, 2) Data type conversions, 3) Validation rules, 4) Default values and constants, 5) Complex transformation logic. Consider using tables for clarity.]
 
 ### Error Handling Strategy
-{{error_handling_strategy}}
+[Describe the error handling approach. Include: 1) Error classification and severity levels, 2) Logging and monitoring strategy, 3) Retry mechanisms and circuit breakers, 4) Error recovery procedures, 5) User notification approach, 6) Escalation procedures.]
 
 ## Success Metrics
-{{success_metrics}}
+[Define measurable success criteria. Include: 1) Key Performance Indicators (KPIs), 2) Service Level Objectives (SLOs), 3) Business metrics, 4) Technical metrics (latency, throughput, error rates), 5) User satisfaction metrics. Provide specific targets and measurement methods.]
 
 ## Technical Specifications
-{{technical_specifications}}
+[Provide detailed technical specifications. Include: 1) Hardware requirements, 2) Software dependencies and versions, 3) Network requirements, 4) Storage requirements, 5) Performance specifications, 6) Compliance and regulatory requirements.]
 
 ### Database Schema
-{{database_schema}}
+[Detail the database design. Include: 1) Table structures with column definitions, 2) Indexes and constraints, 3) Relationships and foreign keys, 4) Stored procedures or functions if applicable, 5) Data retention policies. Consider using SQL DDL or table format.]
 
 ### API Integrations
-{{api_integrations}}
+[Document all API integrations. For each API include: 1) API name and purpose, 2) Authentication method, 3) Key endpoints used, 4) Request/response formats, 5) Rate limits and quotas, 6) Error handling approach, 7) Fallback mechanisms.]
 
 ### Transformation Rules
-{{transformation_rules}}
+[Define data transformation logic. Include: 1) Business rules for data processing, 2) Calculation formulas, 3) Conditional logic and branching, 4) Data enrichment rules, 5) Aggregation and summarization logic. Use pseudocode or structured format for complex rules.]
 
 ## Risks and Mitigations
-{{risks_and_mitigations}}
+[Identify risks and mitigation strategies. For each risk provide: 1) Risk description, 2) Probability (High/Medium/Low), 3) Impact (High/Medium/Low), 4) Mitigation strategy, 5) Contingency plan. Format as a table or structured list. Consider technical, business, and operational risks.]
 
 ## Timeline
-{{timeline}}
+[Provide a project timeline. Include: 1) Major milestones with dates, 2) Phase durations, 3) Dependencies between phases, 4) Critical path items, 5) Buffer time for risks. Consider using a Gantt chart format or milestone table with key dates and deliverables.]
 
 ---
 *Generated from template: design-doc.md*
 
-<!-- 
+<!--
 ================================================================================
 ⚠️ STOP HERE WHEN GENERATING DOCUMENTS ⚠️
 ================================================================================
@@ -263,7 +269,7 @@ SYSTEM API (Aysnc)                SYSTEM API - Async
 ```
 ❌ WRONG                    ✅ CORRECT
 MY NODE[Label]              MY_NODE[Label]     # Spaces in ID
-Node-1[Label]               Node1[Label]       # Dashes in ID  
+Node-1[Label]               Node1[Label]       # Dashes in ID
 2Node[Label]                Node2[Label]       # Starting with number
 node.service[Label]         node_service[Label] # Dots in ID
 ```

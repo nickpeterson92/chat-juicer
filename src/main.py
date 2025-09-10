@@ -1,386 +1,467 @@
-#!/usr/bin/env python3
 """
-Simple interactive chat with Azure OpenAI gpt-5-chat deployment using Responses API
-
-Key architectural differences from Chat Completions API:
-
-1. Responses API can be STATEFUL with `previous_response_id`:
-   - Links responses together for conversation continuity
-   - Server maintains context between turns
-   - Only need to send current user input
-
-2. Chat Completions API is STATELESS:
-   - Must send full message history each time
-   - No server-side conversation state
-   - Requires client-side history management
-
-3. For function calling:
-   - Build temporary context with: user message → function call → function output
-   - Use previous_response_id to maintain conversation after function execution
-
-4. The `store: true` parameter enables response retrieval later
+Chat Juicer - Azure OpenAI Agent with MCP Server Support
+Using Agent/Runner pattern for native MCP integration
 """
+
 from __future__ import annotations
 
+import asyncio
 import json
+import os
 import sys
 
-from azure_client import setup_azure_client
-from functions import FUNCTION_REGISTRY, TOOLS
+from agents import Agent, Runner, set_default_openai_client, set_tracing_disabled
+from agents.mcp import MCPServerStdio
+from dotenv import load_dotenv
+from openai import APIConnectionError, APIStatusError, AsyncOpenAI, RateLimitError
 
-# Import local modules
+# Import function tools for Agent/Runner
+from functions import AGENT_TOOLS
 from logger import logger
-from utils import handle_rate_limit
+from tool_patch import apply_tool_patch, patch_native_tools
 
 # System instructions for the documentation bot
-SYSTEM_INSTRUCTIONS = """You are a technical documentation automation assistant with file system access.
+SYSTEM_INSTRUCTIONS = """You are a technical documentation automation assistant.
+
+Core Capabilities:
+- File system access for reading and writing documents
+- Document generation with template support
+- Token-aware content optimization
+- Sequential Thinking for complex problem-solving and structured reasoning
+
+The Sequential Thinking tool helps you:
+- Break down complex problems into manageable steps
+- Revise thoughts as understanding deepens
+- Branch into alternative reasoning paths
+- Generate and verify solution hypotheses
+- Maintain context across multiple reasoning steps
 
 When asked to create documentation:
 1. First use list_directory to explore available files
-2. Use read_file to read ALL files from the sources/ directory
-3. Use load_template to load the requested template
-4. Use generate_document to combine the template with source content
-5. Use write_document to save the generated document
-6. Respond with a brief confirmation of what was created
+2. Then use read_file to examine source files from the sources/ directory
+3. After all sources are read, use read_file to load the most relevant template from the templates/ directory
+4. Generate comprehensive document content based on the template and source files
+5. Use generate_document to save the completed document(s) to the output/ directory
+6. If multiple documents are to be generated ensure ALL generated documents follow the template and are complete
 
-All files in the sources/ directory are available to be used for documentation generation.
-- Leverage files of ALL extensions:
-    - .md, .txt, .template, .docx, .doc, .pptx, .ppt, .pdf, .csv, .html, .htm, .xml, .json, .ipynb, etc...
+Key points:
+- Read ALL files of ALL extensions in the sources/ directory:
+- .md, .txt, .docx, .doc, .pptx, .ppt, .xlsx, .xls, .pdf, .csv, .html, .htm, .xml, .json, .ipynb, etc.
+- The read_file tool is safe to run in parallel with multiple sources
+- Templates are markdown files in templates/ directory - use read_file to access them
+- Load the most relevant template for the documentation type requested
+- The generate_document function takes the complete document content and saves it
+- Ensure that all sections of the template are filled with content relevant to the source files
+- Ensure the content of the document is accurate and complete
+- Ensure all requested Mermaid diagrams are generated accurately and with the correct syntax
+- Ensure generated documents are produced with proper markdown formatting
+- Always provide the full document content to generate_document, not a template with placeholders"""
 
-Always complete the full workflow when creating documents."""
 
-# Set up Azure client
-try:
-    azure_client, deployment_name = setup_azure_client()
-except ValueError as e:
-    print(f"Error: {e}")
-    sys.exit(1)
+async def setup_mcp_servers():
+    """Configure and initialize MCP servers"""
+    servers = []
 
-# Tools are imported from functions module
-tools = TOOLS
+    # Apply the MCP patch to mitigate race conditions
+    apply_tool_patch()
 
-# Azure client and deployment are set up by azure_client module
-
-# Log startup
-logger.info(f"Chat Juicer starting - Deployment: {deployment_name}")
-
-print("Connected to Azure OpenAI")
-print(f"Using deployment: {deployment_name}")
-
-# Track the previous response ID for conversation continuity
-previous_response_id = None
-
-# Main chat loop
-while True:
+    # Sequential Thinking Server - our primary reasoning tool
     try:
-        # Get user input
-        user_input = input().strip()
-
-        # Skip empty input
-        if not user_input:
-            continue
-
-        # Handle quit command from Electron
-        if user_input.lower() in ["quit", "exit"]:
-            logger.info("Quit command received, shutting down gracefully")
-            break
-
-        # Log user input - full to console, truncated to file
-        file_msg = f"User: {user_input[:100]}{'...' if len(user_input) > 100 else ''}"
-        logger.info(f"User: {user_input}", extra={"file_message": file_msg})
-
-        # For Responses API with previous_response_id, we maintain state server-side
-        # Only need to send current user input
-        input_list = [
-            {
-                "role": "user",
-                "content": user_input,
+        seq_thinking = MCPServerStdio(
+            params={
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
             }
-        ]
+        )
+        await seq_thinking.__aenter__()
+        servers.append(seq_thinking)
+        logger.info("Sequential Thinking MCP server initialized")
+    except Exception as e:
+        logger.warning(f"Sequential Thinking server not available: {e}")
 
-        # Build request parameters
-        request_params = {
-            "model": deployment_name,
-            "input": input_list,
-            "tools": tools,
-            "stream": True,
-            "store": True,
-            "instructions": SYSTEM_INSTRUCTIONS,
+    return servers
+
+
+# Event handler functions for different item types
+def handle_message_output(item):
+    """Handle message output items (assistant responses)"""
+    if hasattr(item, "raw_item") and hasattr(item.raw_item, "content") and item.raw_item.content:
+        for content_item in item.raw_item.content:
+            if hasattr(content_item, "text") and content_item.text:
+                return json.dumps({"type": "assistant_delta", "content": content_item.text})
+    return None
+
+
+def handle_tool_call(item, call_id_tracker):
+    """Handle tool call items (function invocations)"""
+    tool_name = "unknown"
+    call_id = ""
+    arguments = "{}"
+
+    if hasattr(item, "raw_item"):
+        if hasattr(item.raw_item, "name"):
+            tool_name = item.raw_item.name
+        # Use call_id (not id) - this is what the UI expects
+        if hasattr(item.raw_item, "call_id"):
+            call_id = item.raw_item.call_id
+            # Store call_id with tool name for parallel tracking
+            if "active_calls" not in call_id_tracker:
+                call_id_tracker["active_calls"] = []
+            call_id_tracker["active_calls"].append({"call_id": call_id, "tool_name": tool_name})
+        elif hasattr(item.raw_item, "id"):
+            # Fallback to id if call_id not available
+            call_id = item.raw_item.id
+        if hasattr(item.raw_item, "arguments"):
+            arguments = item.raw_item.arguments
+
+    return json.dumps({"type": "function_detected", "name": tool_name, "call_id": call_id, "arguments": arguments})
+
+
+def handle_reasoning(item):
+    """Handle reasoning items (Sequential Thinking output)"""
+    if hasattr(item, "raw_item") and hasattr(item.raw_item, "content") and item.raw_item.content:
+        for content_item in item.raw_item.content:
+            if hasattr(content_item, "text") and content_item.text:
+                return json.dumps({"type": "assistant_delta", "content": f"[Thinking] {content_item.text}"})
+    return None
+
+
+def handle_tool_output(item, call_id_tracker):
+    """Handle tool call output items (function results)"""
+    output_text = ""
+    call_id = ""
+    success = True
+
+    # Try to match this output with a call_id
+    if call_id_tracker.get("active_calls"):
+        # Pop the first active call (FIFO order)
+        call_info = call_id_tracker["active_calls"].pop(0)
+        call_id = call_info["call_id"]
+
+    # Get output and check for errors
+    if hasattr(item, "raw_item"):
+        if hasattr(item.raw_item, "output"):
+            output_text = str(item.raw_item.output)
+        # Check for errors
+        if hasattr(item.raw_item, "error") and item.raw_item.error:
+            success = False
+            output_text = str(item.raw_item.error)
+    elif hasattr(item, "output"):
+        output_text = str(item.output)
+
+    # Truncate if too long
+    if len(output_text) > 100:
+        output_text = output_text[:100] + "..."
+
+    return json.dumps({"type": "function_completed", "call_id": call_id, "success": success, "output": output_text})
+
+
+def handle_handoff_call(item):
+    """Handle handoff call items (multi-agent orchestration)"""
+    target_agent = "unknown"
+    if hasattr(item, "raw_item") and hasattr(item.raw_item, "target"):
+        target_agent = item.raw_item.target
+    return json.dumps({"type": "handoff_started", "target_agent": target_agent})
+
+
+def handle_handoff_output(item):
+    """Handle handoff output items (multi-agent results)"""
+    source_agent = "unknown"
+    result = ""
+    if hasattr(item, "raw_item") and hasattr(item.raw_item, "source"):
+        source_agent = item.raw_item.source
+    if hasattr(item, "output"):
+        result = str(item.output)[:100]  # Truncate if long
+    return json.dumps({"type": "handoff_completed", "source_agent": source_agent, "result": result})
+
+
+async def handle_electron_ipc(event, call_id_tracker=None):
+    """Convert Agent/Runner events to Electron IPC format
+
+    Args:
+        event: The streaming event
+        call_id_tracker: Dict to track call_ids between tool_call and tool_call_output events
+    """
+    if call_id_tracker is None:
+        call_id_tracker = {}
+
+    # Handle run item stream events
+    if event.type == "run_item_stream_event":
+        item = event.item
+
+        # Map item types to handler functions
+        handlers = {
+            "message_output_item": lambda: handle_message_output(item),
+            "tool_call_item": lambda: handle_tool_call(item, call_id_tracker),
+            "reasoning_item": lambda: handle_reasoning(item),
+            "tool_call_output_item": lambda: handle_tool_output(item, call_id_tracker),
+            "handoff_call_item": lambda: handle_handoff_call(item),
+            "handoff_output_item": lambda: handle_handoff_output(item),
         }
 
-        # Add previous_response_id if we have one (for conversation continuity)
-        if previous_response_id:
-            request_params["previous_response_id"] = previous_response_id
+        # Get and execute the appropriate handler
+        handler = handlers.get(item.type)
+        if handler:
+            return handler()
 
-        # Get streaming response with rate limit handling
-        logger.info("AI: Starting response...", extra={"file_message": "AI: Start"})
-        stream = handle_rate_limit(azure_client.responses.create, logger=logger, **request_params)
+    # Handle agent updated events
+    elif event.type == "agent_updated_stream_event":
+        return json.dumps({"type": "agent_updated", "name": event.new_agent.name})
 
-        tool_calls = []
-        response_text = ""
-        current_response_id = None
+    return None
 
-        # Process streaming events
-        for event in stream:
-            # Debug: Log event type to understand what's available
-            if hasattr(event, "type"):
-                logger.debug(f"Stream event type: {event.type}")
 
-            # Capture response ID from response.created event
-            if event.type == "response.created":
-                if hasattr(event, "response") and hasattr(event.response, "id"):
-                    current_response_id = event.response.id
+def handle_streaming_error(error):
+    """Handle streaming errors with appropriate user messages
 
-            # Handle text delta events for clean output
-            elif event.type == "response.output_text.delta":
-                # Send start message only once per response
-                if not response_text:
-                    msg = json.dumps({"type": "assistant_start"})
-                    print(f"__JSON__{msg}__JSON__", flush=True)
-                # Send delta message
-                msg = json.dumps({"type": "assistant_delta", "content": event.delta})
-                print(f"__JSON__{msg}__JSON__", flush=True)
-                response_text += event.delta
+    Args:
+        error: The exception that occurred during streaming
+    """
 
-            # Handle function tool call completion
-            elif event.type == "response.output_item.done":
-                if hasattr(event.item, "type") and event.item.type == "function_call":
-                    tool_calls.append(event.item)
-                    # Send function detected event
-                    msg = json.dumps(
-                        {
-                            "type": "function_detected",
-                            "name": event.item.name,
-                            "call_id": event.item.call_id,
-                            "arguments": event.item.arguments,
-                        }
-                    )
-                    print(f"__JSON__{msg}__JSON__", flush=True)
-                    logger.info(f"Function detected: {event.item.name}")
+    # Define error handlers for different exception types
+    def handle_rate_limit(e):
+        logger.error(f"Rate limit error during streaming: {e}")
+        return {"type": "error", "message": "Rate limit reached. Please wait a moment and try your request again."}
 
-            # Check for response completion event
-            elif event.type == "response.done":
-                # Send end message
-                msg = json.dumps({"type": "assistant_end"})
-                print(f"__JSON__{msg}__JSON__", flush=True)
-                # Log response completion - full to console, truncated to file
-                if response_text:
-                    file_msg = f"AI: {response_text[:100]}{'...' if len(response_text) > 100 else ''}"
-                    logger.info(f"AI: {response_text}", extra={"file_message": file_msg})
+    def handle_connection_error(e):
+        logger.error(f"Connection error during streaming: {e}")
+        return {"type": "error", "message": "Connection interrupted. Please try your request again."}
 
-        # Update previous_response_id for next turn
-        if current_response_id:
-            previous_response_id = current_response_id
+    def handle_api_status(e):
+        logger.error(f"API status error during streaming: {e}")
+        error_msg = str(e).lower()
 
-        # Initialize function context once, outside the loop
-        function_context = [
-            {
-                "role": "user",
-                "content": user_input,
-            }
-        ]
+        # Check for specific error types in the message
+        if "rs_" in error_msg or "fc_" in error_msg:
+            return {"type": "error", "message": "The response was interrupted. Please try your request again."}
+        else:
+            return {"type": "error", "message": f"API error (status {e.status_code}). Please try your request again."}
 
-        # Process function calls in a loop until no more functions are called
-        while tool_calls:
-            # Add the new tool calls to the existing context
-            function_context.extend(
-                [
-                    {
-                        "type": "function_call",
-                        "call_id": tool_call.call_id,
-                        "name": tool_call.name,
-                        "arguments": tool_call.arguments,
-                    }
-                    for tool_call in tool_calls
-                ]
-            )
+    def handle_generic(e):
+        logger.error(f"Unexpected error during streaming: {e}")
+        return {"type": "error", "message": "An error occurred. Please try your request again."}
 
-            # Execute each tool call and add outputs
-            for tool_call in tool_calls:
-                # Send function execution start event
-                msg = json.dumps(
-                    {
-                        "type": "function_executing",
-                        "name": tool_call.name,
-                        "call_id": tool_call.call_id,
-                        "arguments": tool_call.arguments,
-                    }
-                )
-                print(f"__JSON__{msg}__JSON__", flush=True)
-                logger.info(f"Executing function: {tool_call.name}")
+    # Map exception types to handlers
+    error_handlers = {
+        RateLimitError: handle_rate_limit,
+        APIConnectionError: handle_connection_error,
+        APIStatusError: handle_api_status,
+    }
 
-                # Initialize result variable
-                result = None
-                args = {}
+    # Get the appropriate handler or use generic
+    handler = error_handlers.get(type(error), handle_generic)
+    error_msg = handler(error)
 
-                # Execute the function from registry
-                if tool_call.name in FUNCTION_REGISTRY:
-                    try:
-                        # Try to parse the arguments JSON
-                        args = json.loads(tool_call.arguments)
-                        func = FUNCTION_REGISTRY.get(tool_call.name)
-                        if func is None:
-                            raise ValueError(f"Unknown function: {tool_call.name}")
-                        result = func(**args)  # type: ignore[operator]
+    # Send error message to UI
+    msg = json.dumps(error_msg)
+    print(f"__JSON__{msg}__JSON__", flush=True)
 
-                        # Send success event
-                        msg = json.dumps(
-                            {
-                                "type": "function_completed",
-                                "name": tool_call.name,
-                                "call_id": tool_call.call_id,
-                                "success": True,
-                            }
-                        )
-                        print(f"__JSON__{msg}__JSON__", flush=True)
-                        logger.info(f"Function completed: {tool_call.name}")
+    # Send assistant_end to properly close the stream
+    end_msg = json.dumps({"type": "assistant_end"})
+    print(f"__JSON__{end_msg}__JSON__", flush=True)
 
-                    except json.JSONDecodeError as je:
-                        # Handle malformed JSON from the AI
-                        result = f"Error: Invalid JSON in function arguments - {je!s}"
-                        logger.error(f"JSON decode error for {tool_call.name}: {je!s}")
-                        logger.debug(f"Raw arguments that failed to parse: {tool_call.arguments}")
 
-                        # Send error event
-                        msg = json.dumps(
-                            {
-                                "type": "function_completed",
-                                "name": tool_call.name,
-                                "call_id": tool_call.call_id,
-                                "success": False,
-                                "error": f"Invalid JSON arguments: {je!s}",
-                            }
-                        )
-                        print(f"__JSON__{msg}__JSON__", flush=True)
+async def process_user_input(agent, messages, user_input, previous_response_id=None):
+    """Process a single user input and return updated messages
 
-                    except Exception as e:
-                        # Handle function execution errors
-                        result = f"Error: {e!s}"
-                        # Send error event
-                        msg = json.dumps(
-                            {
-                                "type": "function_completed",
-                                "name": tool_call.name,
-                                "call_id": tool_call.call_id,
-                                "success": False,
-                                "error": str(e),
-                            }
-                        )
-                        print(f"__JSON__{msg}__JSON__", flush=True)
-                        logger.error(f"Function error: {tool_call.name} - {e!s}")
+    Args:
+        agent: The AI agent instance
+        messages: Conversation history (kept for logging, not sent to API)
+        user_input: User's message
+        previous_response_id: ID from previous response for conversation continuity
 
-                    # Log the function call (only if we have args)
-                    if args:
-                        logger.log_function_call(tool_call.name, args, result)
+    Returns:
+        Tuple of (messages, response_id) for next turn
+    """
 
-                else:
-                    # Unknown function
-                    result = f"Error: Unknown function {tool_call.name}"
-                    # Send error event for unknown function
-                    msg = json.dumps(
-                        {
-                            "type": "function_completed",
-                            "name": tool_call.name,
-                            "call_id": tool_call.call_id,
-                            "success": False,
-                            "error": "Unknown function",
-                        }
-                    )
-                    print(f"__JSON__{msg}__JSON__", flush=True)
-                    logger.error(f"Unknown function: {tool_call.name}")
+    # Add user message to our local history (for logging)
+    messages.append({"role": "user", "content": user_input})
 
-                # ALWAYS add function call output, regardless of success/failure
-                function_context.append(
-                    {
-                        "type": "function_call_output",
-                        "call_id": tool_call.call_id,
-                        "output": (result if result is not None else "Error: No output generated"),
-                    }
-                )
+    # Send start message for Electron
+    msg = json.dumps({"type": "assistant_start"})
+    print(f"__JSON__{msg}__JSON__", flush=True)
 
-            # Make second request with function results
-            # Use previous_response_id to maintain context
+    response_text = ""
+    call_id_tracker = {}  # Track function call IDs
+    result = None  # Store result for response_id extraction
 
-            final_request_params = {
-                "model": deployment_name,
-                "input": function_context,  # Use function_context with function results
-                "tools": tools,
-                "stream": True,
-                "store": True,
-                "instructions": SYSTEM_INSTRUCTIONS,
-            }
+    # No retry logic - fail fast on errors
+    try:
+        # Run agent with streaming
+        # Use conversation_id for persistent conversation state across turns
+        conversation_id = getattr(agent, "_conversation_id", None)
 
-            # Add previous_response_id to maintain conversation context
-            # Use the most recent response ID we have
-            if previous_response_id:
-                final_request_params["previous_response_id"] = previous_response_id
+        result = Runner.run_streamed(
+            agent,
+            input=user_input,  # Always pass string input, let Agent manage context
+            previous_response_id=previous_response_id,  # For continuing conversation
+            conversation_id=conversation_id,  # For persistent conversation storage
+            max_turns=20,  # Reasonable limit for turns
+        )
 
-            # Make the follow-up request with function results
-            final_response = handle_rate_limit(azure_client.responses.create, logger=logger, **final_request_params)
+        async for event in result.stream_events():
+            # Convert to Electron IPC format with call_id tracking
+            ipc_msg = await handle_electron_ipc(event, call_id_tracker)
+            if ipc_msg:
+                print(f"__JSON__{ipc_msg}__JSON__", flush=True)
 
-            final_text = ""
-            more_tool_calls = []
+            # Accumulate response text for logging
+            if (
+                event.type == "run_item_stream_event"
+                and hasattr(event, "item")
+                and event.item
+                and event.item.type == "message_output_item"
+                and hasattr(event.item, "raw_item")
+                and hasattr(event.item.raw_item, "content")
+                and event.item.raw_item.content
+            ):
+                for content_item in event.item.raw_item.content:
+                    if hasattr(content_item, "text") and content_item.text:
+                        response_text += content_item.text
 
-            for event in final_response:
-                # Debug: Log event type
-                if hasattr(event, "type"):
-                    logger.debug(f"Final response event type: {event.type}")
-
-                # Capture the new response ID
-                if event.type == "response.created":
-                    if hasattr(event, "response") and hasattr(event.response, "id"):
-                        previous_response_id = event.response.id
-
-                elif event.type == "response.output_text.delta":
-                    # Send start message on first delta
-                    if not final_text and event.delta:
-                        msg = json.dumps({"type": "assistant_start"})
-                        print(f"__JSON__{msg}__JSON__", flush=True)
-
-                    if event.delta:  # Only send if there's actual content
-                        msg = json.dumps({"type": "assistant_delta", "content": event.delta})
-                        print(f"__JSON__{msg}__JSON__", flush=True)
-                        final_text += event.delta
-
-                # Check for additional function calls
-                elif event.type == "response.output_item.done":
-                    if hasattr(event.item, "type") and event.item.type == "function_call":
-                        more_tool_calls.append(event.item)
-                        # Send function detected event for UI
-                        msg = json.dumps(
-                            {
-                                "type": "function_detected",
-                                "name": event.item.name,
-                                "call_id": event.item.call_id,
-                                "arguments": event.item.arguments,
-                            }
-                        )
-                        print(f"__JSON__{msg}__JSON__", flush=True)
-                        logger.info(f"Additional function detected: {event.item.name}")
-
-                elif event.type == "response.done" and final_text:
-                    # Only send end message if we actually sent content
-                    msg = json.dumps({"type": "assistant_end"})
-                    print(f"__JSON__{msg}__JSON__", flush=True)
-                    # Log the follow-up response - full to console, truncated to file
-                    file_msg = f"AI (post-func): {final_text[:100]}{'...' if len(final_text) > 100 else ''}"
-                    logger.info(
-                        f"AI (after functions): {final_text}",
-                        extra={"file_message": file_msg},
-                    )
-
-            # Continue with more tool calls if any
-            tool_calls = more_tool_calls
-
-        # No longer needed - we log in real-time as events happen
-
-    except KeyboardInterrupt:
-        logger.info("Chat interrupted by user")
-        break
     except Exception as e:
-        logger.error(f"Error in chat loop: {e}", exc_info=True)
-        print(f"\nError: {e}")
+        handle_streaming_error(e)
+        return messages, None
 
-# Clean shutdown
-logger.info("Python process shutting down")
-sys.exit(0)
+    # For streaming, we accumulate the response text during streaming
+    # and add it to history once streaming is complete
+    if response_text:
+        messages.append({"role": "assistant", "content": response_text})
+
+    # Send end message
+    msg = json.dumps({"type": "assistant_end"})
+    print(f"__JSON__{msg}__JSON__", flush=True)
+
+    # Log response
+    if response_text:
+        file_msg = f"AI: {response_text[:100]}{'...' if len(response_text) > 100 else ''}"
+        logger.info(f"AI: {response_text}", extra={"file_message": file_msg})
+
+    # Extract response_id from result for next turn
+    response_id = None
+    if result:
+        try:
+            # The RunResultStreaming has last_response_id attribute
+            if hasattr(result, "last_response_id"):
+                response_id = result.last_response_id
+                logger.info(f"Response ID extracted for next turn: {response_id}")
+            else:
+                logger.warning("Result has no last_response_id attribute")
+
+            # Store conversation_id on the agent for future turns if available
+            # Note: RunResultStreaming doesn't have conversation_id, that's handled internally
+        except Exception as e:
+            logger.warning(f"Could not extract response_id: {e}")
+
+    return messages, response_id
+
+
+async def main():
+    """Main entry point for Chat Juicer with Agent/Runner pattern"""
+
+    # Load environment variables
+    load_dotenv()
+
+    # Get Azure configuration
+    api_key = os.getenv("AZURE_OPENAI_API_KEY")
+    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+    deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5-mini")
+
+    if not api_key or not endpoint:
+        print("Error: Missing required environment variables:")
+        print("AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT must be set")
+        sys.exit(1)
+
+    # Create Azure OpenAI client and set as default for Agent/Runner
+    client = AsyncOpenAI(
+        api_key=api_key,
+        base_url=endpoint,
+    )
+    set_default_openai_client(client)
+
+    # Disable tracing to avoid 401 errors with Azure
+    set_tracing_disabled(True)
+
+    # Set up MCP servers
+    mcp_servers = await setup_mcp_servers()
+
+    # Patch native tools to add delays (must be done before passing to Agent)
+    patched_tools = patch_native_tools(AGENT_TOOLS)
+
+    # Create agent with tools and MCP servers
+    agent = Agent(
+        name="Chat Juicer",
+        model=deployment,
+        instructions=SYSTEM_INSTRUCTIONS,
+        tools=patched_tools,  # Use patched function tools
+        mcp_servers=mcp_servers,
+    )
+
+    # Runner class is used directly (static methods)
+
+    # Log startup
+    logger.info(f"Chat Juicer starting - Deployment: {deployment}")
+    logger.info(f"Agent configured with {len(patched_tools)} tools and {len(mcp_servers)} MCP servers")
+
+    print("Connected to Azure OpenAI")
+    print(f"Using deployment: {deployment}")
+    if mcp_servers:
+        print("MCP Servers: Sequential Thinking enabled")
+
+    # Conversation history and response tracking
+    messages = []
+    previous_response_id = None  # Track response_id for conversation continuity
+
+    # Main chat loop
+    while True:
+        try:
+            # Get user input (synchronously from stdin)
+            user_input = await asyncio.get_event_loop().run_in_executor(None, input)
+            user_input = user_input.strip()
+
+            # Skip empty input
+            if not user_input:
+                continue
+
+            # Handle quit command
+            if user_input.lower() in ["quit", "exit"]:
+                logger.info("Quit command received, shutting down gracefully")
+                break
+
+            # Log user input
+            file_msg = f"User: {user_input[:100]}{'...' if len(user_input) > 100 else ''}"
+            logger.info(f"User: {user_input}", extra={"file_message": file_msg})
+
+            # Process user input (no retry - fail fast)
+            messages, previous_response_id = await process_user_input(agent, messages, user_input, previous_response_id)
+
+        except KeyboardInterrupt:
+            logger.info("Keyboard interrupt received")
+            break
+        except EOFError:
+            # Handle EOF from Electron
+            logger.info("EOF received, shutting down")
+            break
+        except Exception as e:
+            # This should rarely happen since process_user_input handles errors
+            logger.error(f"Unexpected error in main loop: {e}")
+            msg = json.dumps({"type": "error", "message": "An unexpected error occurred."})
+            print(f"__JSON__{msg}__JSON__", flush=True)
+
+    # Clean up MCP servers
+    for server in mcp_servers:
+        try:
+            # Use asyncio.wait_for with a timeout to prevent hanging
+            await asyncio.wait_for(server.__aexit__(None, None, None), timeout=2.0)
+        except asyncio.TimeoutError:
+            logger.warning("Timeout while closing MCP server")
+        except asyncio.CancelledError:
+            logger.warning("MCP server cleanup cancelled")
+        except Exception as e:
+            logger.warning(f"Error closing MCP server: {e}")
+
+    logger.info("Chat Juicer shutdown complete")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

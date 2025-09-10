@@ -5,7 +5,8 @@
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "electron . --dev"
+    "dev": "electron . --dev",
+    "inspect": "electron . --inspect"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.3",
