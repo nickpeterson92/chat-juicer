@@ -26,7 +26,7 @@ chat-juicer/
 │   ├── constants.py  # Centralized configuration constants
 │   └── requirements.txt  # Python dependencies
 ├── sources/          # Source documents for processing
-├── generated/        # Generated documentation output
+├── output/           # Generated documentation output
 ├── templates/        # Document templates with {{placeholders}}
 ├── logs/             # Log files (gitignored)
 └── docs/             # Documentation
