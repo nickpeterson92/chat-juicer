@@ -14,7 +14,7 @@ from agents import Agent, Runner, set_default_openai_client, set_tracing_disable
 from agents.mcp import MCPServerStdio
 from dotenv import load_dotenv
 from openai import APIConnectionError, APIStatusError, AsyncOpenAI, RateLimitError
-from tool_patch import apply_tool_patches, patch_native_tools
+from tool_patch import apply_tool_patch, patch_native_tools
 
 # Import function tools for Agent/Runner
 from functions import AGENT_TOOLS
@@ -63,7 +63,7 @@ async def setup_mcp_servers():
     servers = []
 
     # Apply the MCP patch to mitigate race conditions
-    apply_tool_patches()
+    apply_tool_patch()
 
     # Sequential Thinking Server - our primary reasoning tool
     try:

@@ -55,7 +55,7 @@ def create_delayed_wrapper(original_func, tool_name):
     return delayed_wrapper
 
 
-def apply_tool_patches():
+def apply_tool_patch():
     """Apply the monkey patch to MCP servers. Native tool patching happens separately."""
 
     # Report status for MCP patch
