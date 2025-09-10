@@ -19,7 +19,8 @@ chat-juicer/
 │   └── index.html    # Main chat UI
 ├── src/              # Python backend (Agent/Runner pattern)
 │   ├── main.py       # Agent/Runner implementation with MCP support
-│   ├── functions.py  # Document generation and file tools
+│   ├── functions.py  # Document generation and file tools (synchronous)
+│   ├── tool_patch.py # Tool call delay patches for race condition mitigation
 │   ├── logger.py     # Python logging framework (JSON format)
 │   ├── utils.py      # Token management and rate limiting utilities
 │   ├── constants.py  # Centralized configuration constants
@@ -40,7 +41,7 @@ The application now uses OpenAI's Agent/Runner pattern which provides:
 - **Native MCP Server Integration**: Direct support for Model Context Protocol servers
 - **Sequential Thinking**: Advanced reasoning capabilities for complex problem-solving
 - **Automatic Tool Orchestration**: Framework handles function calling automatically
-- **Async/Await Architecture**: Modern async patterns throughout the application
+- **Async/Await Architecture**: Modern async patterns for Agent/Runner and MCP servers
 - **Streaming Events**: Structured event handling for real-time responses
 
 ### MCP Server Integration
@@ -147,7 +148,7 @@ The Agent/Runner pattern provides structured events:
 - Servers initialized with `MCPServerStdio`
 - Automatic tool discovery and registration
 - Graceful cleanup on shutdown
-- Full async/await support
+- Async/await for MCP server management
 
 ### State Management
 - Conversation history maintained in messages array
@@ -186,7 +187,7 @@ The Sequential Thinking server is configured in `setup_mcp_servers()` and can be
 
 - No formal test framework configured
 - Manual validation required
-- Agent/Runner pattern with full async support
+- Agent/Runner pattern with async for MCP and streaming
 - MCP servers run as subprocesses
 
 ## Important Implementation Notes
@@ -219,7 +220,7 @@ Chat Juicer now leverages the modern Agent/Runner pattern with native MCP server
 Key strengths:
 - **Sequential Thinking**: Advanced reasoning capabilities
 - **Native MCP Support**: Direct integration without bridge functions
-- **Modern Architecture**: Full async/await with structured events
+- **Modern Architecture**: Async/await for streaming and MCP with structured events
 - **Cleaner Code**: Significant reduction in boilerplate
 - **Future-Proof**: Aligned with OpenAI's strategic direction
 

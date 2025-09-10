@@ -18,30 +18,38 @@
 
 # Chat Juicer
 
-An Electron + Python application for Azure OpenAI chat interactions using the Responses API, providing a desktop interface for AI conversations with integrated function calling capabilities.
+An Electron + Python desktop application for Azure OpenAI chat interactions using the **Agent/Runner pattern** with native **MCP (Model Context Protocol) server support**, providing advanced reasoning capabilities through Sequential Thinking and sophisticated document generation.
 
 ## Features
 
 - 🖥️ **Desktop Application**: Native Electron app with modern UI
-- 🔄 **Streaming Responses**: Real-time AI response streaming
-- 🛠️ **Function Calling**: Integrated tool and function execution
+- 🤖 **Agent/Runner Pattern**: Modern OpenAI architecture with automatic orchestration
+- 🧠 **Sequential Thinking**: MCP server for advanced multi-step reasoning
+- 🔄 **Streaming Responses**: Real-time AI response streaming with structured events
+- 🛠️ **Function Calling**: Native and MCP tool integration with automatic execution
 - 📝 **Conversation Logging**: Structured JSON logging for all interactions
 - 🔐 **Azure OpenAI Integration**: Secure connection to Azure OpenAI services
 - 📊 **Token Counting**: Exact token counting with tiktoken and content optimization
+- ⚡ **Async Architecture**: Full async/await support for better performance
+- 📄 **Document Generation**: Template-based document creation with multi-format support
 
 ## Architecture
 
-Chat Juicer uses Azure OpenAI's **Responses API** (not Chat Completions API) which provides:
-- Stateful conversation management via `previous_response_id`
-- Server-side context retention
-- Efficient token usage without resending full history
+Chat Juicer uses OpenAI's **Agent/Runner pattern** which provides:
+- **Native MCP Server Integration**: Direct support for Model Context Protocol servers
+- **Sequential Thinking**: Advanced reasoning capabilities for complex problem-solving
+- **Automatic Tool Orchestration**: Framework handles function calling automatically
+- **Async/Await Architecture**: Modern async patterns throughout the application
+- **Streaming Events**: Structured event handling for real-time responses
+- **Stateless Design**: No manual response_id tracking needed
 
 ## Prerequisites
 
 - Node.js 16+ and npm
 - Python 3.8+
-- Azure OpenAI resource with deployment supporting Responses API
+- Azure OpenAI resource with deployment (e.g., gpt-4, gpt-3.5-turbo)
 - Azure OpenAI API credentials
+- Internet connection for MCP server downloads
 
 ## Requirements
 
@@ -69,15 +77,19 @@ Chat Juicer uses Azure OpenAI's **Responses API** (not Chat Completions API) whi
 3. **Install Python dependencies**
    ```bash
    cd src/
-   # Install with full document format support
-   pip install 'markitdown[all]'
    pip install -r requirements.txt
 
-   # Or use the install script:
-   # bash scripts/install-deps.sh
+   # For full document format support (PDF, Word, Excel, etc.):
+   pip install 'markitdown[all]'
    ```
 
-4. **Configure environment variables**
+4. **Install MCP Server (for Sequential Thinking)**
+   ```bash
+   # Install globally for the Sequential Thinking MCP server
+   npm install -g @modelcontextprotocol/server-sequential-thinking
+   ```
+
+5. **Configure environment variables**
    ```bash
    cd src/
    cp .env.example .env
@@ -120,35 +132,40 @@ python src/main.py
 ```
 chat-juicer/
 ├── electron/          # Electron main process and utilities
-│   ├── main.js       # Electron main process
-│   ├── preload.js    # Preload script for IPC
+│   ├── main.js       # Electron main process, IPC handlers
+│   ├── preload.js    # Preload script for secure IPC
 │   ├── renderer.js   # Renderer process script
-│   └── logger.js     # Electron-side logging
+│   └── logger.js     # Electron-side structured logging
 ├── ui/               # Frontend assets
-│   └── index.html    # Main UI
-├── src/              # Python backend
-│   ├── main.py       # Main chat loop and streaming handler
-│   ├── azure_client.py  # Azure OpenAI setup and configuration
-│   ├── functions.py  # Function handlers and tool definitions
-│   ├── logger.py     # Python logging framework
-│   ├── utils.py      # Utility functions for token management and rate limiting
-│   └── constants.py  # Centralized configuration and constants
-├── logs/             # Log files (auto-generated)
+│   └── index.html    # Main chat UI
+├── src/              # Python backend (Agent/Runner pattern)
+│   ├── main.py       # Agent/Runner implementation with MCP support
+│   ├── functions.py  # Document generation and file tools
+│   ├── tool_patch.py # Tool call delay patches for race condition mitigation
+│   ├── logger.py     # Python logging framework (JSON format)
+│   ├── utils.py      # Token management and rate limiting utilities
+│   ├── constants.py  # Centralized configuration constants
+│   └── requirements.txt  # Python dependencies
+├── sources/          # Source documents for processing
+├── generated/        # Generated documentation output
+├── templates/        # Document templates with {{placeholders}}
+├── logs/             # Log files (gitignored)
 │   ├── conversations.jsonl  # Structured conversation logs
 │   └── errors.jsonl  # Error logs
 └── docs/             # Documentation
+    └── agent-runner-migration-analysis.md  # Migration documentation
 ```
 
 ## Key Components
 
 ### Python Backend (`src/`)
 
-- **main.py**: Handles the chat loop, streaming responses, and function execution
-- **azure_client.py**: Manages Azure OpenAI client initialization and configuration
-- **functions.py**: Implements tool definitions and function handlers
-- **logger.py**: Provides structured JSON logging for conversations and errors
-- **utils.py**: Token management utilities including estimation, optimization, and rate limiting
-- **constants.py**: Centralized configuration for rate limits, file sizes, and other constants
+- **main.py**: Agent/Runner implementation with MCP server integration and streaming event handling
+- **functions.py**: Function implementations for file operations and document generation
+- **tool_patch.py**: Monkey patches for adding delays to mitigate race conditions in tool calls
+- **logger.py**: Structured JSON logging for conversations and errors
+- **utils.py**: Token management utilities including exact counting, optimization, and rate limiting
+- **constants.py**: Centralized configuration including tool delays, file sizes, and other constants
 
 ### Electron Frontend (`electron/`)
 
@@ -159,18 +176,28 @@ chat-juicer/
 
 ## Function Calling
 
-The application supports function calling with:
-- Directory listing and file system exploration
-- File reading with automatic format conversion (PDF, Word, Excel, PowerPoint, HTML, CSV, JSON)
-- Document template loading and generation
+The application supports both native functions and MCP server tools:
+
+### Native Functions
+- **list_directory**: Directory listing with metadata
+- **read_file**: File reading with automatic format conversion (PDF, Word, Excel, PowerPoint, HTML, CSV, JSON)
+- **generate_document**: Document generation from templates
+
+### MCP Server Integration
+- **Sequential Thinking**: Advanced multi-step reasoning and problem decomposition
+- Extensible to add more MCP servers (filesystem, GitHub, databases, etc.)
+
+### Features
+- Automatic tool orchestration by Agent/Runner framework
 - Exact token counting using tiktoken
 - Content optimization to reduce token usage
-- Extensible function registry for custom tools
+- Race condition mitigation with configurable delays
 
 Add new functions by:
 1. Defining the function in `src/functions.py`
 2. Adding it to the `TOOLS` array
 3. Registering in `FUNCTION_REGISTRY`
+4. Function automatically available to Agent (including MCP tools)
 
 ## Logging
 
@@ -226,12 +253,13 @@ npm start
 
 ## Features in Detail
 
-### Rate Limiting
-The application includes automatic rate limit handling with:
-- Exponential backoff (1s base delay, max 10s)
-- Up to 5 retry attempts
-- Real-time UI notifications when rate limits are hit
-- Graceful error handling without crashing
+### Rate Limiting & Error Handling
+The application includes robust error handling:
+- Automatic rate limit handling with exponential backoff
+- Up to 5 retry attempts with configurable delays
+- Real-time UI notifications for rate limits
+- Race condition mitigation for MCP/tool calls (configurable delays)
+- Graceful handling of RS_ and FC_ streaming errors
 - Centralized configuration in `constants.py`
 
 ### Token Counting & Optimization
@@ -262,11 +290,12 @@ Recent improvements for better maintainability:
 ### Python Dependencies
 
 Required dependencies (from `src/requirements.txt`):
-- `openai-agents>=0.1.0`: Provides agents module for Responses API support
+- `openai-agents>=0.1.0`: Agent/Runner framework with MCP support
 - `openai>=1.0.0`: Azure OpenAI client library
 - `python-dotenv>=1.0.0`: Environment variable management (.env file loading)
-- `markitdown>=0.1.0`: Document conversion to markdown (PDF, Word, Excel, HTML, etc.)
+- `markitdown[all]>=0.1.0`: Document conversion to markdown (PDF, Word, Excel, HTML, etc.)
 - `tiktoken>=0.5.0`: OpenAI's official token counting library for exact token counts
+- `httpx>=0.25.0`: Modern HTTP client for handling network errors and retries
 - `python-json-logger>=2.0.0`: Structured JSON logging (required)
 ## Troubleshooting
 
