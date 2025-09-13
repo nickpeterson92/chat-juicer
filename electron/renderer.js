@@ -405,33 +405,35 @@ function sendMessage() {
   window.electronAPI.sendUserInput(message);
 }
 
+// Buffer for accumulating multi-line JSON messages
+let jsonBuffer = "";
+
 // Handle bot output (streaming response with JSON protocol)
 window.electronAPI.onBotOutput((output) => {
   console.log("Raw output received:", output);
-  // Parse the output to handle different scenarios
-  const lines = output.split("\n");
 
-  for (const line of lines) {
-    // Skip the initial connection message from Python bot (legacy format)
-    if (
-      appState.connection.isInitial &&
-      (line.includes("Welcome to Chat Juicer!") ||
-        line.includes("Connected to") ||
-        line.includes("Using deployment:") ||
-        line.includes("Type 'quit'") ||
-        line.includes("====") ||
-        line.includes("Enter your message"))
-    ) {
-      appState.setState("connection.isInitial", false);
-      appState.setState("connection.hasShownWelcome", true);
-      continue; // Skip all initial bot output
+  // Add output to buffer
+  jsonBuffer += output;
+
+  // Process all complete JSON messages in the buffer
+  let startIndex;
+  while ((startIndex = jsonBuffer.indexOf("__JSON__")) !== -1) {
+    const endIndex = jsonBuffer.indexOf("__JSON__", startIndex + 8);
+
+    if (endIndex === -1) {
+      // Incomplete JSON message, wait for more data
+      break;
     }
 
-    // Check for JSON messages
-    const jsonMatch = line.match(/__JSON__(.+?)__JSON__/);
-    if (jsonMatch) {
-      try {
-        const message = JSON.parse(jsonMatch[1]);
+    // Extract complete JSON message
+    const jsonStr = jsonBuffer.substring(startIndex + 8, endIndex);
+
+    // Remove processed message from buffer
+    jsonBuffer = jsonBuffer.substring(endIndex + 8);
+
+    // Parse and handle the JSON message
+    try {
+      const message = JSON.parse(jsonStr);
 
         switch (message.type) {
           case "assistant_start": {
@@ -539,12 +541,14 @@ window.electronAPI.onBotOutput((output) => {
             // Function execution complete
             console.log("Function completed:", message);
             if (message.success) {
+              // Use the actual output if provided, otherwise show "Success"
+              const result = message.output || "Success";
               updateFunctionCallStatus(message.call_id, "completed", {
-                result: "Success",
+                result: result,
               });
             } else {
               updateFunctionCallStatus(message.call_id, "error", {
-                error: message.error,
+                error: message.error || message.output || "Unknown error",
               });
             }
             // Clean up after a delay
@@ -617,18 +621,40 @@ window.electronAPI.onBotOutput((output) => {
           }
         }
       } catch (e) {
-        console.error("Failed to parse JSON message:", e);
+        console.error("Failed to parse JSON message:", e, jsonStr);
       }
-    } else if (line.startsWith("You:")) {
-    } else if (line.includes("Enter your message") || line.includes("Type 'exit'")) {
     }
-  }
 
-  // Check for exit conditions
-  if (output.includes("Goodbye!") || output.includes("An error occurred")) {
-    setConnectionStatus(false);
-    if (output.includes("Goodbye!")) {
-      addMessage('Chat session ended. Click "Restart Bot" to start a new session.', "system");
+  // Process any non-JSON lines for legacy format handling
+  const lines = output.split("\n");
+  for (const line of lines) {
+    // Skip empty lines
+    if (!line.trim()) continue;
+
+    // Skip lines that are part of JSON messages
+    if (line.includes("__JSON__")) continue;
+
+    // Skip the initial connection message from Python bot (legacy format)
+    if (
+      appState.connection.isInitial &&
+      (line.includes("Welcome to Chat Juicer!") ||
+        line.includes("Connected to") ||
+        line.includes("Using deployment:") ||
+        line.includes("Type 'quit'") ||
+        line.includes("====") ||
+        line.includes("Enter your message"))
+    ) {
+      appState.setState("connection.isInitial", false);
+      appState.setState("connection.hasShownWelcome", true);
+      continue;
+    }
+
+    // Check for exit conditions
+    if (line.includes("Goodbye!") || line.includes("An error occurred")) {
+      setConnectionStatus(false);
+      if (line.includes("Goodbye!")) {
+        addMessage('Chat session ended. Click "Restart Bot" to start a new session.', "system");
+      }
     }
   }
 });

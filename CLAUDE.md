@@ -11,38 +11,43 @@ Chat Juicer is an Electron + Python desktop application that provides a chat int
 ```
 chat-juicer/
 ├── electron/          # Electron main process and utilities
-│   ├── main.js       # Electron main process, IPC handlers
+│   ├── main.js       # Electron main process, IPC handlers, health monitoring
 │   ├── preload.js    # Preload script for secure IPC
-│   ├── renderer.js   # Renderer process script
-│   └── logger.js     # Electron-side structured logging
+│   ├── renderer.js   # Renderer process script with UI interaction logic
+│   └── logger.js     # Electron-side structured logging with levels
 ├── ui/               # Frontend assets
-│   └── index.html    # Main chat UI
+│   └── index.html    # Main chat UI with markdown rendering
 ├── src/              # Python backend (Agent/Runner pattern)
 │   ├── main.py       # Agent/Runner implementation with MCP support
+│   ├── session.py    # TokenAwareSQLiteSession with auto-summarization
 │   ├── functions.py  # Document generation and file tools (synchronous)
 │   ├── tool_patch.py # Tool call delay patches for race condition mitigation
-│   ├── logger.py     # Python logging framework (JSON format)
-│   ├── utils.py      # Token management and rate limiting utilities
+│   ├── logger.py     # Python logging framework (JSON format, rotating files)
+│   ├── utils.py      # Token management and content optimization utilities
 │   ├── constants.py  # Centralized configuration constants
 │   └── requirements.txt  # Python dependencies
 ├── sources/          # Source documents for processing
 ├── output/           # Generated documentation output
 ├── templates/        # Document templates with {{placeholders}}
 ├── logs/             # Log files (gitignored)
+│   ├── conversations.jsonl  # Structured conversation logs
+│   └── errors.jsonl  # Error and debugging logs
 └── docs/             # Documentation
-    └── agent-runner-migration-analysis.md  # Migration documentation
+    ├── agent-runner-migration-analysis.md  # Migration documentation
+    └── token-streaming-implementation.md   # Token streaming details
 ```
 
 ## Key Architectural Concepts
 
 ### Agent/Runner Pattern with MCP
-The application now uses OpenAI's Agent/Runner pattern which provides:
+The application uses OpenAI's Agent/Runner pattern which provides:
 
 - **Native MCP Server Integration**: Direct support for Model Context Protocol servers
 - **Sequential Thinking**: Advanced reasoning capabilities for complex problem-solving
 - **Automatic Tool Orchestration**: Framework handles function calling automatically
-- **Async/Await Architecture**: Modern async patterns for Agent/Runner and MCP servers
+- **Hybrid Async Architecture**: Async/await for Agent/Runner and MCP servers, synchronous for functions
 - **Streaming Events**: Structured event handling for real-time responses
+- **Token-Aware Sessions**: SQLite-based session management with automatic summarization
 
 ### MCP Server Integration
 The application integrates the Sequential Thinking MCP server:
@@ -63,16 +68,20 @@ agent = Agent(
 ```
 
 ### Function Architecture
-Available functions remain the same:
-1. **list_directory**: List directory contents with metadata
-2. **read_file**: Read files with automatic format conversion
-3. **generate_document**: Generate docs from templates
+Available functions (all synchronous):
+1. **list_directory**: List directory contents with metadata (size, modified time, file count)
+2. **read_file**: Read files with automatic format conversion via markitdown
+3. **generate_document**: Generate docs from templates with placeholder replacement
+4. **text_edit**: Find and replace exact text in documents
+5. **regex_edit**: Pattern-based editing using regular expressions
+6. **insert_text**: Add new content before or after existing text
 
 ### Document Generation System
-- Process multiple source formats using markitdown
+- Process multiple source formats using markitdown (PDF, Word, Excel, HTML, CSV, JSON, images)
+- Template-first workflow with placeholder replacement
 - Sequential Thinking for complex document structuring
-- Token-aware content optimization
-- Professional documentation generation
+- Token-aware content optimization (removes redundant whitespace, headers)
+- Professional documentation generation with Mermaid diagram support
 
 ## Essential Commands
 
@@ -128,11 +137,12 @@ Required:
 
 #### Python Dependencies (src/requirements.txt)
 - `openai>=1.0.0` - Azure OpenAI client library (AsyncOpenAI)
-- `openai-agents>=0.2.0` - Agent/Runner framework with MCP support
-- `markitdown>=0.1.0` - Document conversion to markdown
-- `tiktoken>=0.5.0` - Exact token counting
-- `python-json-logger>=2.0.0` - Structured JSON logging
+- `openai-agents>=0.2.0` - Agent/Runner framework with MCP support and SQLiteSession
+- `markitdown>=0.1.0` - Document conversion to markdown (install with [all] for full format support)
+- `tiktoken>=0.5.0` - Exact token counting for all models
+- `python-json-logger>=2.0.0` - Structured JSON logging with rotating file handlers
 - `python-dotenv>=1.0.0` - Environment variable management
+- `httpx>=0.25.0` - Modern HTTP client (dependency of openai)
 
 #### Node Dependencies
 - `electron` - Desktop application framework
@@ -151,9 +161,11 @@ The Agent/Runner pattern provides structured events:
 - Async/await for MCP server management
 
 ### State Management
-- Conversation history maintained in messages array
-- Agent handles context automatically
-- No manual response_id tracking needed
+- TokenAwareSQLiteSession manages conversation context with automatic summarization
+- Session tracks tokens and triggers summarization at 80% of model limit
+- In-memory SQLite database for fast session storage during app lifetime
+- Accumulated tool tokens tracked separately from conversation tokens
+- Minimal client state - session handles all conversation management
 
 ## Common Development Tasks
 
@@ -188,7 +200,9 @@ The Sequential Thinking server is configured in `setup_mcp_servers()` and can be
 - No formal test framework configured
 - Manual validation required
 - Agent/Runner pattern with async for MCP and streaming
-- MCP servers run as subprocesses
+- MCP servers run as subprocesses via npx
+- Functions remain synchronous (not async)
+- Tool call delays configured at 0.2s to prevent race conditions
 
 ## Important Implementation Notes
 
