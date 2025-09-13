@@ -120,6 +120,54 @@ class TokenAwareSQLiteSession(SQLiteSession):
 
         return total
 
+    def _collect_recent_exchanges(self, items: list[dict], keep_recent: int) -> list[dict]:
+        """Collect the most recent complete user-assistant exchanges.
+
+        Uses a single forward pass O(n) algorithm.
+
+        Args:
+            items: List of conversation items
+            keep_recent: Number of recent user messages to keep
+
+        Returns:
+            List of items representing the most recent exchanges
+        """
+        if not items or keep_recent <= 0:
+            return []
+
+        # Find all complete exchanges in a single forward pass
+        exchanges = []
+        pending_user_idx = None
+
+        for i, item in enumerate(items):
+            role = item.get("role")
+
+            # Skip ephemeral content
+            if role == "tool" or item.get("tool_calls"):
+                pending_user_idx = None  # Reset any pending exchange
+                continue
+
+            if role == "user":
+                pending_user_idx = i  # Start of potential exchange
+
+            elif role == "assistant" and pending_user_idx is not None:
+                # Complete exchange found!
+                exchanges.append((pending_user_idx, i))
+                pending_user_idx = None
+
+        # Handle orphaned user message at the end
+        if pending_user_idx is not None:
+            exchanges.append((pending_user_idx, pending_user_idx))
+
+        # Take the last N exchanges and build result
+        recent_exchanges = exchanges[-keep_recent:] if exchanges else []
+
+        result = []
+        for start_idx, end_idx in recent_exchanges:
+            result.extend(items[start_idx : end_idx + 1])
+
+        return result
+
     async def should_summarize(self) -> bool:
         """Check if summarization should be triggered based on token count.
 
@@ -181,47 +229,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
 
             # Keep only the last N user-assistant exchanges (no tool messages)
             # Tool calls and results are execution details that belong in the summary
-            recent_items: list[dict] = []
-            user_count = 0
-
-            # Walk backwards to find complete user-assistant pairs
-            i = len(items) - 1
-            while i >= 0 and user_count < keep_recent:
-                item = items[i]
-                role = item.get("role")
-
-                # Skip tool results - they're ephemeral
-                if role == "tool":
-                    i -= 1
-                    continue
-
-                # Skip messages with tool_calls - they're incomplete without results
-                if item.get("tool_calls"):
-                    i -= 1
-                    continue
-
-                # Found a clean assistant message
-                if role == "assistant":
-                    # Look for its user message
-                    j = i - 1
-                    while j >= 0:
-                        if items[j].get("role") == "user":
-                            # Found a complete user-assistant pair
-                            recent_items = items[j : i + 1] + recent_items
-                            user_count += 1
-                            i = j - 1
-                            break
-                        j -= 1
-                    else:
-                        # No user message found, skip this assistant message
-                        i -= 1
-                elif role == "user":
-                    # Orphaned user message (no response yet), keep it
-                    recent_items = [item, *recent_items]
-                    user_count += 1
-                    i -= 1
-                else:
-                    i -= 1
+            recent_items = self._collect_recent_exchanges(items, keep_recent)
 
             # If nothing to summarize, don't proceed
             if not items or len(recent_items) == len(items):

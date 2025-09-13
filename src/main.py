@@ -19,6 +19,7 @@ from openai import APIConnectionError, APIStatusError, AsyncOpenAI, RateLimitErr
 from constants import SYSTEM_INSTRUCTIONS
 from functions import AGENT_TOOLS
 from logger import logger
+from sdk_token_tracker import connect_session, disconnect_session, patch_sdk_for_auto_tracking
 from session import TokenAwareSQLiteSession
 from tool_patch import apply_tool_patch, patch_native_tools
 from utils import estimate_tokens
@@ -273,7 +274,6 @@ async def process_user_input(session, user_input):
 
     response_text = ""
     call_id_tracker = {}  # Track function call IDs
-    tool_tokens = 0  # Track tokens from tool calls
 
     # No retry logic - fail fast on errors
     try:
@@ -281,11 +281,11 @@ async def process_user_input(session, user_input):
         # This returns a RunResultStreaming object
         result = await session.run_with_auto_summary(session.agent, user_input, max_turns=50)
 
-        # Stream the events
+        # Stream the events (SDK tracker handles token counting automatically)
         async for event in result.stream_events():
             # Convert to Electron IPC format with call_id tracking
+            # Note: We still return tokens for IPC display, but don't need to track them
             ipc_msg, tokens = await handle_electron_ipc(event, call_id_tracker)
-            tool_tokens += tokens  # Accumulate tool tokens
             if ipc_msg:
                 print(f"__JSON__{ipc_msg}__JSON__", flush=True)
 
@@ -316,21 +316,17 @@ async def process_user_input(session, user_input):
         file_msg = f"AI: {response_text[:100]}{'...' if len(response_text) > 100 else ''}"
         logger.info(f"AI: {response_text}", extra={"file_message": file_msg})
 
-    # Update token count in session after the run completes
-    # First update conversation items tokens (preserving accumulated tool tokens)
+    # SDK token tracker handles all token updates automatically
+    # Just update conversation tokens from items
     items = await session.get_items()
     items_tokens = session._calculate_total_tokens(items)
     session.total_tokens = items_tokens + session.accumulated_tool_tokens
 
-    # Then add tool tokens (they're not stored in items)
-    if tool_tokens > 0:
-        session.update_with_tool_tokens(tool_tokens)
-    else:
-        # Still log the current token usage even if no tools were used
-        logger.info(
-            f"Token usage: {session.total_tokens}/{session.trigger_tokens} "
-            f"({int(session.total_tokens / session.trigger_tokens * 100)}%)"
-        )
+    # Log current token usage (SDK tracker already updated tool tokens)
+    logger.info(
+        f"Token usage: {session.total_tokens}/{session.trigger_tokens} "
+        f"({int(session.total_tokens / session.trigger_tokens * 100)}%)"
+    )
 
     # CRITICAL FIX: Check if we need to summarize AFTER the run
     # This catches cases where tool tokens pushed us over the threshold
@@ -371,6 +367,12 @@ async def main():
     # Disable tracing to avoid 401 errors with Azure
     set_tracing_disabled(True)
 
+    # Enable SDK-level automatic token tracking
+    if patch_sdk_for_auto_tracking():
+        logger.info("SDK-level token tracking enabled")
+    else:
+        logger.warning("SDK-level token tracking not available, using manual tracking")
+
     # Set up MCP servers
     mcp_servers = await setup_mcp_servers()
 
@@ -405,6 +407,9 @@ async def main():
         threshold=0.8,
     )
     logger.info(f"Session created with id: {session.session_id}")
+
+    # Connect session to SDK token tracker for automatic tracking
+    connect_session(session)
 
     # Main chat loop
     # Session manages all conversation state internally
@@ -442,6 +447,9 @@ async def main():
             logger.error(f"Unexpected error in main loop: {e}")
             msg = json.dumps({"type": "error", "message": "An unexpected error occurred."})
             print(f"__JSON__{msg}__JSON__", flush=True)
+
+    # Disconnect SDK token tracker
+    disconnect_session()
 
     # Clean up MCP servers
     for server in mcp_servers:

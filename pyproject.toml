@@ -113,7 +113,7 @@ force-single-line = false
 # Import sections order
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 # Define first-party packages (your local modules)
-known-first-party = ["constants", "logger", "utils", "functions", "azure_client", "main", "tool_patch", "session"]
+known-first-party = ["constants", "logger", "utils", "functions", "azure_client", "main", "tool_patch", "session", "sdk_token_tracker"]
 
 [tool.ruff.lint.mccabe]
 # Maximum complexity
