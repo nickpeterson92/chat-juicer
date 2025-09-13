@@ -677,11 +677,7 @@ def line_edit(
     )
 
 
-# Function removed - functionality merged into generate_document
-
-
-# Tool definitions for Azure OpenAI Responses API
-# Note: The Responses API uses a simpler format than Chat Completions API
+# Tool definitions for the Agent
 TOOLS = [
     {
         "type": "function",

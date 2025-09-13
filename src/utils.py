@@ -87,7 +87,6 @@ def optimize_content_for_tokens(
 ) -> tuple[str, dict]:
     """
     Optimize content for minimal token usage while preserving information.
-    Now with exact token counting using tiktoken for intelligent optimization decisions.
 
     Args:
         content: The text content to optimize
@@ -110,16 +109,11 @@ def optimize_content_for_tokens(
         "original_lines": len(lines),
         "original_tokens": initial_tokens,
         "removed_blank_lines": 0,
-        "removed_headers": 0,
-        "removed_footers": 0,
         "whitespace_trimmed": 0,
-        "redundant_removed": 0,
     }
 
     # Only optimize if content is large enough to benefit (>1000 tokens)
-    # Small documents don't need aggressive optimization
     if initial_tokens <= 1000:
-        # Content is small enough, no optimization needed
         stats["final_length"] = original_length
         stats["final_lines"] = len(lines)
         stats["final_tokens"] = initial_tokens
@@ -130,7 +124,7 @@ def optimize_content_for_tokens(
         stats["skip_reason"] = f"Content too small ({initial_tokens} tokens <= 1000)"
         return content, stats
 
-    # Step 1: Remove excessive blank lines (keep max 1 between sections)
+    # Remove excessive blank lines (keep max 1 between sections)
     optimized_lines = []
     prev_blank = False
     for line in lines:
@@ -144,105 +138,30 @@ def optimize_content_for_tokens(
             optimized_lines.append(line)
             prev_blank = False
 
-    # Step 2: Detect and remove common headers/footers
-    if len(optimized_lines) > 10:
-        # Common header patterns (first 5 lines)
-        header_patterns = [
-            r"^[-=]{3,}$",  # Separator lines
-            r"^Page \d+",  # Page numbers
-            r"^\s*Confidential",  # Confidentiality notices
-            r"^\s*Copyright",  # Copyright notices
-            r"^\s*Generated on",  # Generation timestamps
-            r"^\s*Printed on",  # Print timestamps
-        ]
+    # Trim trailing whitespace from all lines
+    optimized_lines = [line.rstrip() for line in optimized_lines]
+    stats["whitespace_trimmed"] = sum(1 for line in optimized_lines if line)
 
-        # Check first 5 lines for headers
-        lines_to_remove = []
-        for i in range(min(5, len(optimized_lines))):
-            for pattern in header_patterns:
-                if re.match(pattern, optimized_lines[i], re.IGNORECASE):
-                    lines_to_remove.append(i)
-                    stats["removed_headers"] += 1
-                    break
-
-        # Remove headers (in reverse to maintain indices)
-        for i in reversed(lines_to_remove):
-            if i < len(optimized_lines):
-                optimized_lines.pop(i)
-
-        # Check last 5 lines for footers
-        footer_patterns = [
-            *header_patterns,
-            r"^\s*End of (document|file|report)",
-            r"^\s*\d+\s*$",  # Lone page numbers
-        ]
-
-        lines_to_remove = []
-        start_idx = max(0, len(optimized_lines) - 5)
-        for i in range(start_idx, len(optimized_lines)):
-            for pattern in footer_patterns:
-                if re.match(pattern, optimized_lines[i], re.IGNORECASE):
-                    lines_to_remove.append(i)
-                    stats["removed_footers"] += 1
-                    break
-
-        # Remove footers
-        for i in reversed(lines_to_remove):
-            if i < len(optimized_lines):
-                optimized_lines.pop(i)
-
-    # Step 3: Format-specific optimizations
-    if format_type in {"csv", "markdown_table"}:
-        # Remove redundant column separators
-        optimized_lines = [re.sub(r"\s*\|\s*", "|", line) for line in optimized_lines]
-        stats["whitespace_trimmed"] = sum(1 for line in optimized_lines if "|" in line)
-
-    elif format_type == "json":
-        # Compact JSON formatting (remove extra spaces around : and ,)
+    # Format-specific optimizations
+    if format_type == "json":
+        # Compact JSON formatting
         content_joined = "\n".join(optimized_lines)
         content_joined = re.sub(r"\s*:\s*", ":", content_joined)
         content_joined = re.sub(r"\s*,\s*", ",", content_joined)
         optimized_lines = content_joined.splitlines()
-        stats["whitespace_trimmed"] = len(optimized_lines)
-
-    # Step 4: Trim trailing whitespace from all lines
-    optimized_lines = [line.rstrip() for line in optimized_lines]
-
-    # Step 5: Remove redundant separators (multiple dashes, equals, etc.)
-    final_lines = []
-    prev_separator = False
-    for line in optimized_lines:
-        # Check if line is just separators
-        if re.match(r"^[\s\-=_*#]{3,}$", line):
-            if not prev_separator:
-                final_lines.append(line[:20])  # Keep shortened separator
-                prev_separator = True
-            else:
-                stats["redundant_removed"] += 1
-        else:
-            final_lines.append(line)
-            prev_separator = False
-
-    # Step 6: For markdown, optimize heading spacing
-    if format_type == "markdown" or "markdown" in format_type:
-        compressed: list[str] = []
-        for i, line in enumerate(final_lines):
-            # Remove blank lines before headings (markdown renders spacing)
-            if line.startswith("#") and i > 0 and compressed and compressed[-1] == "":
-                compressed.pop()
-                stats["removed_blank_lines"] += 1
-            compressed.append(line)
-        final_lines = compressed
+    elif format_type in {"csv", "markdown_table"}:
+        # Remove redundant column separators
+        optimized_lines = [re.sub(r"\s*\|\s*", "|", line) for line in optimized_lines]
 
     # Join back together
-    optimized_content = "\n".join(final_lines)
+    optimized_content = "\n".join(optimized_lines)
 
     # Calculate final stats with exact token counts
     final_token_count = estimate_tokens(optimized_content, model)
     final_tokens = final_token_count.get("exact_tokens") or final_token_count.get("estimated_tokens", 0)
 
     stats["final_length"] = len(optimized_content)
-    stats["final_lines"] = len(final_lines)
+    stats["final_lines"] = len(optimized_lines)
     stats["final_tokens"] = final_tokens
     stats["bytes_saved"] = original_length - stats["final_length"]
     stats["tokens_saved"] = initial_tokens - final_tokens
