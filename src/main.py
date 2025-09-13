@@ -317,9 +317,10 @@ async def process_user_input(session, user_input):
         logger.info(f"AI: {response_text}", extra={"file_message": file_msg})
 
     # Update token count in session after the run completes
-    # First update conversation items tokens
+    # First update conversation items tokens (preserving accumulated tool tokens)
     items = await session.get_items()
-    session.total_tokens = session._calculate_total_tokens(items)
+    items_tokens = session._calculate_total_tokens(items)
+    session.total_tokens = items_tokens + session.accumulated_tool_tokens
 
     # Then add tool tokens (they're not stored in items)
     if tool_tokens > 0:

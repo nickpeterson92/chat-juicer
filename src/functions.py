@@ -447,86 +447,113 @@ def generate_document(
         return json_response(error=f"Failed to generate document: {e!s}")
 
 
-def regex_edit(
+def text_edit(
     file_path: str,
-    pattern: str,
-    replacement: str = "",
+    find: str,
+    replace_with: str,
     replace_all: bool = False,
 ) -> str:
     """
-    Edit file content using regular expressions.
+    Simple text find and replace in documents.
+    Set replace_with to empty string to delete text.
 
     Args:
         file_path: Path to file to edit
-        pattern: Regex pattern to match
-        replacement: Replacement text (can use backreferences like \\1, \\2)
-        replace_all: Replace all matches (default: first match only)
+        find: Exact text to find
+        replace_with: Text to replace with (empty string to delete)
+        replace_all: Replace all occurrences (default: first only)
 
     Returns:
-        JSON with success status and number of replacements made
+        JSON with success status and replacements made
     """
 
-    def do_regex_edit(content, pattern, replacement, replace_all):
+    def do_edit(content, **kwargs):
+        """Inner function to perform text replacement."""
+        find_text = kwargs.get("find")
+        replace_text = kwargs.get("replace_with")
+        replace_all = kwargs.get("replace_all", False)
+
+        occurrences = content.count(find_text)
+        if occurrences == 0:
+            return None, {"success": False, "warning": "Text not found", "find": find_text}
+
+        if replace_all:
+            new_content = content.replace(find_text, replace_text)
+            replacements = occurrences
+        else:
+            new_content = content.replace(find_text, replace_text, 1)
+            replacements = 1
+
+        operation = "delete" if replace_text == "" else "replace"
+        return new_content, {
+            "operation": operation,
+            "replacements": replacements,
+            "text_found": find_text[:50] + "..." if len(find_text) > 50 else find_text,
+        }
+
+    return file_operation(file_path, do_edit, find=find, replace_with=replace_with, replace_all=replace_all)
+
+
+def regex_edit(
+    file_path: str,
+    pattern: str,
+    replacement: str,
+    replace_all: bool = False,
+    flags: str = "ms",
+) -> str:
+    """
+    Pattern-based editing using regular expressions.
+    Supports capture groups and backreferences.
+
+    Args:
+        file_path: Path to file to edit
+        pattern: Regular expression pattern to match
+        replacement: Replacement text (can use \1, \2 for capture groups)
+        replace_all: Replace all matches (default: first only)
+        flags: Regex flags - m=multiline, s=dotall, i=ignorecase (default: 'ms')
+
+    Returns:
+        JSON with success status and replacements made
+    """
+
+    def do_regex_edit(content, **kwargs):
         """Inner function to perform regex replacement."""
+        pattern_str = kwargs.get("pattern")
+        replacement = kwargs.get("replacement")
+        replace_all = kwargs.get("replace_all", False)
+        flags_str = kwargs.get("flags", "ms")
+
+        # Build regex flags
+        regex_flags = 0
+        if "m" in flags_str:
+            regex_flags |= re.MULTILINE
+        if "s" in flags_str:
+            regex_flags |= re.DOTALL
+        if "i" in flags_str:
+            regex_flags |= re.IGNORECASE
+
         try:
-            regex_pattern = re.compile(pattern, re.MULTILINE | re.DOTALL)
+            regex_pattern = re.compile(pattern_str, regex_flags)
         except re.error as e:
             return None, {"error": f"Invalid regex pattern: {e}"}
 
         matches = list(regex_pattern.finditer(content))
         if not matches:
-            return None, {"success": False, "warning": "No matches found", "pattern": pattern, "matches": 0}
+            return None, {"success": False, "warning": "No matches found", "pattern": pattern_str}
 
         if replace_all:
             new_content = regex_pattern.sub(replacement, content)
-            replacements_made = len(matches)
+            replacements = len(matches)
         else:
             new_content = regex_pattern.sub(replacement, content, count=1)
-            replacements_made = 1
+            replacements = 1
 
-        return new_content, {"replacements": replacements_made, "pattern": pattern}
+        operation = "delete" if replacement == "" else "replace"
+        return new_content, {"operation": operation, "pattern": pattern_str, "replacements": replacements}
 
-    return file_operation(file_path, do_regex_edit, pattern=pattern, replacement=replacement, replace_all=replace_all)
-
-
-def replace_text(
-    file_path: str,
-    find: str,
-    replace_with: str = "",
-    replace_all: bool = False,
-) -> str:
-    """
-    Replace literal text in a file (no regex).
-
-    Args:
-        file_path: Path to file to edit
-        find: Exact text to find
-        replace_with: Replacement text
-        replace_all: Replace all occurrences (default: first only)
-
-    Returns:
-        JSON with success status and number of replacements made
-    """
-
-    def do_replace(content, find, replace_with, replace_all):
-        """Inner function to perform the replacement."""
-        occurrences = content.count(find)
-        if occurrences == 0:
-            return None, {"success": False, "warning": "Text not found", "find": find, "matches": 0}
-
-        if replace_all:
-            new_content = content.replace(find, replace_with)
-            replacements_made = occurrences
-        else:
-            new_content = content.replace(find, replace_with, 1)
-            replacements_made = 1
-
-        return new_content, {
-            "replacements": replacements_made,
-            "text_replaced": find[:50] + "..." if len(find) > 50 else find,
-        }
-
-    return file_operation(file_path, do_replace, find=find, replace_with=replace_with, replace_all=replace_all)
+    return file_operation(
+        file_path, do_regex_edit, pattern=pattern, replacement=replacement, replace_all=replace_all, flags=flags
+    )
 
 
 def insert_text(
@@ -534,147 +561,47 @@ def insert_text(
     anchor: str,
     text: str,
     position: str = "after",
-    use_regex: bool = False,
 ) -> str:
     """
-    Insert text before or after a specific anchor point.
+    Insert text before or after an anchor point in a document.
 
     Args:
         file_path: Path to file to edit
-        anchor: Text or pattern to find as insertion point
+        anchor: Text to find as the insertion point
         text: Text to insert
-        position: "before" or "after" the anchor
-        use_regex: Treat anchor as regex pattern
+        position: Where to insert - 'before' or 'after' the anchor
 
     Returns:
         JSON with success status
     """
 
-    def do_insert(content, anchor, text, position, use_regex):
+    def do_insert(content, **kwargs):
         """Inner function to perform text insertion."""
-        # Find insertion point
-        if use_regex:
-            try:
-                pattern = re.compile(anchor, re.MULTILINE | re.DOTALL)
-                match = pattern.search(content)
-                if not match:
-                    return None, f"Pattern not found: {anchor}"
-                insert_pos = match.end() if position == "after" else match.start()
-            except re.error as e:
-                return None, f"Invalid regex pattern: {e}"
+        anchor_text = kwargs.get("anchor")
+        insert_text = kwargs.get("text")
+        position = kwargs.get("position", "after")
+
+        idx = content.find(anchor_text)
+        if idx == -1:
+            return None, {"error": f"Anchor text not found: {anchor_text}"}
+
+        if position == "after":
+            insert_pos = idx + len(anchor_text)
+        elif position == "before":
+            insert_pos = idx
         else:
-            idx = content.find(anchor)
-            if idx == -1:
-                return None, f"Anchor text not found: {anchor}"
-            insert_pos = (idx + len(anchor)) if position == "after" else idx
+            return None, {"error": f"Invalid position: {position}. Use 'before' or 'after'"}
 
-        # Insert text
-        new_content = content[:insert_pos] + text + content[insert_pos:]
-
-        return new_content, {"position": position, "anchor": anchor[:50] + "..." if len(anchor) > 50 else anchor}
-
-    return file_operation(file_path, do_insert, anchor=anchor, text=text, position=position, use_regex=use_regex)
-
-
-def append_prepend(
-    file_path: str,
-    text: str,
-    position: str = "append",
-) -> str:
-    """
-    Append or prepend text to a file.
-
-    Args:
-        file_path: Path to file to edit
-        text: Text to add
-        position: "append" (end of file) or "prepend" (beginning of file)
-
-    Returns:
-        JSON with success status
-    """
-
-    def do_append_prepend(content, text, position):
-        """Inner function to perform append/prepend."""
-        if position == "append":
-            new_content = content + text
-        elif position == "prepend":
-            new_content = text + content
-        else:
-            return None, {"error": f"Invalid position: {position}. Use 'append' or 'prepend'"}
-
-        return new_content, {"position": position, "text_length": len(text)}
-
-    return file_operation(file_path, do_append_prepend, text=text, position=position)
-
-
-def line_edit(
-    file_path: str,
-    line_number: int | None = None,
-    line_range: list[int] | None = None,
-    text: str = "",
-    operation: str = "replace",
-) -> str:
-    """
-    Edit specific lines in a file.
-
-    Args:
-        file_path: Path to file to edit
-        line_number: Single line number (1-based)
-        line_range: List of [start, end] line numbers (1-based, inclusive)
-        text: Text for replacement or insertion
-        operation: "replace", "insert", or "delete"
-
-    Returns:
-        JSON with success status
-    """
-
-    def do_line_edit(content, line_number, line_range, text, operation):
-        """Inner function to perform line-based editing."""
-        # Split into lines
-        lines = content.splitlines(keepends=True)
-
-        # Determine target lines
-        if line_number:
-            if line_number < 1 or line_number > len(lines):
-                return None, f"Line {line_number} out of range (1-{len(lines)})"
-            start_idx = line_number - 1
-            end_idx = line_number
-        elif line_range:
-            start, end = line_range[0], line_range[1]
-            if start < 1 or end > len(lines) or start > end:
-                return None, f"Invalid line range {start}-{end} (file has {len(lines)} lines)"
-            start_idx = start - 1
-            end_idx = end
-        else:
-            return None, "Either line_number or line_range must be specified"
-
-        # Perform operation
-        if operation == "replace":
-            # Ensure text ends with newline if replacing full lines
-            if not text.endswith("\n") and end_idx < len(lines):
-                text += "\n"
-            new_lines = [*lines[:start_idx], text, *lines[end_idx:]]
-        elif operation == "insert":
-            # Insert before the specified line
-            if not text.endswith("\n"):
-                text += "\n"
-            new_lines = [*lines[:start_idx], text, *lines[start_idx:]]
-        elif operation == "delete":
-            new_lines = lines[:start_idx] + lines[end_idx:]
-        else:
-            return None, f"Invalid operation: {operation}"
-
-        # Reconstruct content
-        new_content = "".join(new_lines)
+        new_content = content[:insert_pos] + insert_text + content[insert_pos:]
 
         return new_content, {
-            "operation": operation,
-            "lines_affected": end_idx - start_idx if operation != "insert" else 1,
+            "operation": "insert",
+            "position": position,
+            "anchor": anchor_text[:50] + "..." if len(anchor_text) > 50 else anchor_text,
+            "text_length": len(insert_text),
         }
 
-    return file_operation(
-        file_path, do_line_edit, line_number=line_number, line_range=line_range, text=text, operation=operation
-    )
+    return file_operation(file_path, do_insert, anchor=anchor, text=text, position=position)
 
 
 # Tool definitions for the Agent
@@ -682,17 +609,17 @@ TOOLS = [
     {
         "type": "function",
         "name": "list_directory",
-        "description": "List contents of a directory for project discovery. Returns files and subdirectories with metadata.",
+        "description": "List files and folders in a directory. Use this to explore project structure and discover documents. Returns metadata including file sizes and types.",
         "parameters": {
             "type": "object",
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "Directory path to list (default: current directory)",
+                    "description": "Directory path to list. Leave empty for current directory. Example: 'sources/' or 'templates/'",
                 },
                 "show_hidden": {
                     "type": "boolean",
-                    "description": "Whether to include hidden files/folders (default: false)",
+                    "description": "Include hidden files starting with dot (.) - default is false",
                 },
             },
         },
@@ -700,17 +627,17 @@ TOOLS = [
     {
         "type": "function",
         "name": "read_file",
-        "description": "Read a file's contents for documentation processing. Returns file content and metadata.",
+        "description": "Read any file to view its contents. Automatically converts PDFs, Word docs, Excel sheets, and other formats to text. Use this before editing or analyzing documents.",
         "parameters": {
             "type": "object",
             "properties": {
                 "file_path": {
                     "type": "string",
-                    "description": "Path to the file to read",
+                    "description": "Path to the file. Examples: 'document.txt', 'sources/report.pdf', 'data.xlsx'",
                 },
                 "max_size": {
                     "type": "integer",
-                    "description": "Maximum file size in bytes (default: 1MB)",
+                    "description": "Maximum file size in bytes to read. Default is 1MB (1048576). Increase for larger files.",
                 },
             },
             "required": ["file_path"],
@@ -719,21 +646,21 @@ TOOLS = [
     {
         "type": "function",
         "name": "generate_document",
-        "description": "Generate and save documentation to a file. Takes the complete document content and saves it to the specified location.",
+        "description": "Save generated content to a file. Use this after creating or modifying document content. Creates the file if it doesn't exist, overwrites if it does.",
         "parameters": {
             "type": "object",
             "properties": {
                 "content": {
                     "type": "string",
-                    "description": "The complete document content to save",
+                    "description": "The complete document content to save. Can be markdown, plain text, or any text format.",
                 },
                 "output_file": {
                     "type": "string",
-                    "description": "Path where to save the generated document",
+                    "description": "Where to save the file. Examples: 'output/report.md', 'summary.txt', 'docs/guide.md'",
                 },
                 "create_backup": {
                     "type": "boolean",
-                    "description": "Whether to backup existing file if it exists (default: false)",
+                    "description": "Create a backup (.bak) of existing file before overwriting - default is false",
                 },
             },
             "required": ["content", "output_file"],
@@ -741,53 +668,26 @@ TOOLS = [
     },
     {
         "type": "function",
-        "name": "regex_edit",
-        "description": "Edit file using regular expressions with support for capture groups and backreferences",
+        "name": "text_edit",
+        "description": "Find and replace exact text in a document. Use for simple text changes like updating names, dates, or fixing typos. To delete text, set replace_with to empty string ''.",
         "parameters": {
             "type": "object",
             "properties": {
                 "file_path": {
                     "type": "string",
-                    "description": "Path to file to edit",
-                },
-                "pattern": {
-                    "type": "string",
-                    "description": "Regular expression pattern to match",
-                },
-                "replacement": {
-                    "type": "string",
-                    "description": "Replacement text (can use \1, \2 for capture groups)",
-                },
-                "replace_all": {
-                    "type": "boolean",
-                    "description": "Replace all matches vs first match only (default: false)",
-                },
-            },
-            "required": ["file_path", "pattern", "replacement"],
-        },
-    },
-    {
-        "type": "function",
-        "name": "replace_text",
-        "description": "Simple literal text replacement in a file (no regex)",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "file_path": {
-                    "type": "string",
-                    "description": "Path to file to edit",
+                    "description": "Path to file to edit. Example: 'document.md', 'output/report.txt'",
                 },
                 "find": {
                     "type": "string",
-                    "description": "Exact text to find and replace",
+                    "description": "Exact text to search for. Must match exactly including spaces and punctuation.",
                 },
                 "replace_with": {
                     "type": "string",
-                    "description": "Text to replace with",
+                    "description": "New text to replace with. Use empty string '' to delete the found text.",
                 },
                 "replace_all": {
                     "type": "boolean",
-                    "description": "Replace all occurrences vs first only (default: false)",
+                    "description": "true = replace ALL occurrences, false = replace only FIRST occurrence (default: false)",
                 },
             },
             "required": ["file_path", "find", "replace_with"],
@@ -795,93 +695,61 @@ TOOLS = [
     },
     {
         "type": "function",
-        "name": "insert_text",
-        "description": "Insert text before or after a specific anchor point in a file",
+        "name": "regex_edit",
+        "description": "Advanced find/replace using regex patterns. Use for complex patterns like 'all dates', 'version numbers', or text with wildcards. Supports capture groups with \1, \2 in replacement.",
         "parameters": {
             "type": "object",
             "properties": {
                 "file_path": {
                     "type": "string",
-                    "description": "Path to file to edit",
+                    "description": "Path to file to edit. Example: 'document.md', 'output/report.txt'",
+                },
+                "pattern": {
+                    "type": "string",
+                    "description": "Regex pattern. Examples: '\\d{4}-\\d{2}-\\d{2}' for dates, 'v\\d+\\.\\d+' for versions, 'Chapter \\d+:' for chapters",
+                },
+                "replacement": {
+                    "type": "string",
+                    "description": "Replacement text. Use \\1, \\2 for capture groups. Example: 'Version \\1.\\2' or empty string '' to delete matches",
+                },
+                "replace_all": {
+                    "type": "boolean",
+                    "description": "true = replace ALL matches, false = replace only FIRST match (default: false)",
+                },
+                "flags": {
+                    "type": "string",
+                    "description": "Regex flags as string: 'm' for multiline, 's' for dotall, 'i' for case-insensitive. Default 'ms'. Example: 'msi' for all three",
+                },
+            },
+            "required": ["file_path", "pattern", "replacement"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "insert_text",
+        "description": "Add new text at a specific location without replacing existing content. Use to insert new sections, paragraphs, or content before/after existing text.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to file to edit. Example: 'document.md', 'output/report.txt'",
                 },
                 "anchor": {
                     "type": "string",
-                    "description": "Text or pattern to find as insertion point",
+                    "description": "Existing text to use as reference point. The new text will be inserted relative to this. Example: '## Introduction' or 'Chapter 1:'",
                 },
                 "text": {
                     "type": "string",
-                    "description": "Text to insert",
+                    "description": "New text to insert. Can include newlines for multi-line content. Example: '\n## New Section\nContent here\n'",
                 },
                 "position": {
                     "type": "string",
-                    "description": "Insert 'before' or 'after' the anchor",
+                    "description": "Where to insert relative to anchor: 'before' inserts BEFORE the anchor, 'after' inserts AFTER the anchor (default: 'after')",
                     "enum": ["before", "after"],
-                },
-                "use_regex": {
-                    "type": "boolean",
-                    "description": "Treat anchor as regex pattern (default: false)",
                 },
             },
             "required": ["file_path", "anchor", "text"],
-        },
-    },
-    {
-        "type": "function",
-        "name": "append_prepend",
-        "description": "Append text to end or prepend to beginning of a file",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "file_path": {
-                    "type": "string",
-                    "description": "Path to file to edit",
-                },
-                "text": {
-                    "type": "string",
-                    "description": "Text to add to file",
-                },
-                "position": {
-                    "type": "string",
-                    "description": "Where to add text: 'append' (end) or 'prepend' (beginning)",
-                    "enum": ["append", "prepend"],
-                },
-            },
-            "required": ["file_path", "text"],
-        },
-    },
-    {
-        "type": "function",
-        "name": "line_edit",
-        "description": "Edit specific lines in a file by line number",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "file_path": {
-                    "type": "string",
-                    "description": "Path to file to edit",
-                },
-                "line_number": {
-                    "type": "integer",
-                    "description": "Single line number to edit (1-based)",
-                },
-                "line_range": {
-                    "type": "array",
-                    "description": "Range of lines [start, end] (1-based, inclusive)",
-                    "items": {"type": "integer"},
-                    "minItems": 2,
-                    "maxItems": 2,
-                },
-                "text": {
-                    "type": "string",
-                    "description": "Text for replacement or insertion",
-                },
-                "operation": {
-                    "type": "string",
-                    "description": "Operation to perform: 'replace', 'insert', or 'delete'",
-                    "enum": ["replace", "insert", "delete"],
-                },
-            },
-            "required": ["file_path", "operation"],
         },
     },
 ]
@@ -892,11 +760,9 @@ FUNCTION_REGISTRY = {
     "list_directory": list_directory,
     "read_file": read_file,
     "generate_document": generate_document,
+    "text_edit": text_edit,
     "regex_edit": regex_edit,
-    "replace_text": replace_text,
     "insert_text": insert_text,
-    "append_prepend": append_prepend,
-    "line_edit": line_edit,
 }
 
 # Agent/Runner tools - wrap functions with function_tool decorator
@@ -907,11 +773,9 @@ try:
     list_directory_tool = function_tool(list_directory)
     read_file_tool = function_tool(read_file)
     generate_document_tool = function_tool(generate_document)
+    text_edit_tool = function_tool(text_edit)
     regex_edit_tool = function_tool(regex_edit)
-    replace_text_tool = function_tool(replace_text)
     insert_text_tool = function_tool(insert_text)
-    append_prepend_tool = function_tool(append_prepend)
-    line_edit_tool = function_tool(line_edit)
 
     # List of tools for Agent
     AGENT_TOOLS = [
@@ -919,10 +783,8 @@ try:
         read_file_tool,
         generate_document_tool,
         regex_edit_tool,
-        replace_text_tool,
+        text_edit_tool,
         insert_text_tool,
-        append_prepend_tool,
-        line_edit_tool,
     ]
 except ImportError:
     # If agents module not available, provide empty tools list

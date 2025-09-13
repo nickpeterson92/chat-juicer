@@ -51,6 +51,8 @@ class TokenAwareSQLiteSession(SQLiteSession):
 
         # Track tokens (calculated from session items)
         self.total_tokens = 0
+        # Track accumulated tool tokens separately (not stored in session items)
+        self.accumulated_tool_tokens = 0
 
         # Async lock to prevent concurrent summarizations
         self._summarization_lock = asyncio.Lock()
@@ -272,6 +274,8 @@ class TokenAwareSQLiteSession(SQLiteSession):
 
             # Update token count
             self.total_tokens = summary_tokens + recent_tokens
+            # Reset accumulated tool tokens since they're now part of the summary
+            self.accumulated_tool_tokens = 0
 
             # Emit summarization complete event
             output_summary = summary_text[:500] + "..." if len(summary_text) > 500 else summary_text
@@ -331,6 +335,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
         Args:
             tool_tokens: Number of tokens used by tool calls
         """
+        self.accumulated_tool_tokens += tool_tokens
         self.total_tokens += tool_tokens
         logger.info(
             f"Added {tool_tokens} tool tokens. Total: {self.total_tokens}/{self.trigger_tokens} "
