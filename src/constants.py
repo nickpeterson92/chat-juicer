@@ -63,3 +63,24 @@ MCP_TOOL_DELAY = 0.2  # Delay in seconds after MCP server tool calls
 NATIVE_TOOL_DELAY = 0.2  # Delay in seconds after native function tool calls
 # Set either to 0 to disable that specific delay, or increase if still getting errors (e.g., 0.2 for 200ms)
 # You may need different values as MCP tools (subprocess) may have different timing than native tools
+
+# Token Management Configuration
+TOKEN_SUMMARIZATION_THRESHOLD = 0.8  # Trigger summarization at 80% of model's token limit
+KEEP_LAST_N_MESSAGES = 2  # Keep last N messages when summarizing (1 user-assistant pair)
+
+# Model Token Limits (conservative to account for system messages)
+# Using INPUT limits since that's what we're tracking for summarization
+MODEL_TOKEN_LIMITS = {
+    # GPT-5 models (272k input limit, being conservative)
+    "gpt-5": 250000,
+    "gpt-5-mini": 250000,
+    "gpt-5-nano": 250000,
+    # GPT-4 models (120k practical limit)
+    "gpt-4o": 120000,
+    "gpt-4o-mini": 120000,
+    "gpt-4": 120000,
+    "gpt-4-turbo": 120000,
+    # GPT-3.5 models
+    "gpt-3.5-turbo": 15000,
+    "gpt-35-turbo": 15000,  # Azure naming
+}

@@ -9,8 +9,9 @@ import asyncio
 import json
 import os
 import sys
+import uuid
 
-from agents import Agent, Runner, set_default_openai_client, set_tracing_disabled
+from agents import Agent, set_default_openai_client, set_tracing_disabled
 from agents.mcp import MCPServerStdio
 from dotenv import load_dotenv
 from openai import APIConnectionError, APIStatusError, AsyncOpenAI, RateLimitError
@@ -18,7 +19,11 @@ from openai import APIConnectionError, APIStatusError, AsyncOpenAI, RateLimitErr
 # Import function tools for Agent/Runner
 from functions import AGENT_TOOLS
 from logger import logger
+
+# Using refactored session that leverages SDK's SQLiteSession
+from session import TokenAwareSQLiteSession
 from tool_patch import apply_tool_patch, patch_native_tools
+from utils import estimate_tokens
 
 # System instructions for the documentation bot
 SYSTEM_INSTRUCTIONS = """You are a technical documentation automation assistant.
@@ -47,9 +52,10 @@ When asked to create documentation:
 Key points:
 - Read ALL files of ALL extensions in the sources/ directory:
 - .md, .txt, .docx, .doc, .pptx, .ppt, .xlsx, .xls, .pdf, .csv, .html, .htm, .xml, .json, .ipynb, etc.
-- The read_file tool is safe to run in parallel with multiple sources
+- If reading multiple files from the sources/ directory, then you MUST use read_file in parallel!
 - Templates are markdown files in templates/ directory - use read_file to access them
-- Load the most relevant template for the documentation type requested
+- Load the most relevant template for the documentation type requested ONLY!
+- If you load irrelevant templates the user will be VERY UPSET!
 - The generate_document function takes the complete document content and saves it
 - Ensure that all sections of the template are filled with content relevant to the source files
 - Ensure the content of the document is accurate and complete
@@ -85,11 +91,14 @@ async def setup_mcp_servers():
 # Event handler functions for different item types
 def handle_message_output(item):
     """Handle message output items (assistant responses)"""
-    if hasattr(item, "raw_item") and hasattr(item.raw_item, "content") and item.raw_item.content:
-        for content_item in item.raw_item.content:
-            if hasattr(content_item, "text") and content_item.text:
-                return json.dumps({"type": "assistant_delta", "content": content_item.text})
-    return None
+    if hasattr(item, "raw_item"):
+        raw = item.raw_item
+        content = getattr(raw, "content", []) or []  # Ensure we always have a list
+        for content_item in content:
+            text = getattr(content_item, "text", "")
+            if text:
+                return json.dumps({"type": "assistant_delta", "content": text}), 0
+    return None, 0
 
 
 def handle_tool_call(item, call_id_tracker):
@@ -97,82 +106,105 @@ def handle_tool_call(item, call_id_tracker):
     tool_name = "unknown"
     call_id = ""
     arguments = "{}"
+    tokens = 0
 
     if hasattr(item, "raw_item"):
-        if hasattr(item.raw_item, "name"):
-            tool_name = item.raw_item.name
-        # Use call_id (not id) - this is what the UI expects
-        if hasattr(item.raw_item, "call_id"):
-            call_id = item.raw_item.call_id
-            # Store call_id with tool name for parallel tracking
+        raw = item.raw_item
+
+        # Extract tool details
+        tool_name = getattr(raw, "name", "unknown")
+        arguments = getattr(raw, "arguments", "{}")
+
+        # Get call_id with fallback to id
+        call_id = getattr(raw, "call_id", getattr(raw, "id", ""))
+
+        # Track active calls for matching with outputs
+        if call_id:
             if "active_calls" not in call_id_tracker:
                 call_id_tracker["active_calls"] = []
             call_id_tracker["active_calls"].append({"call_id": call_id, "tool_name": tool_name})
-        elif hasattr(item.raw_item, "id"):
-            # Fallback to id if call_id not available
-            call_id = item.raw_item.id
-        if hasattr(item.raw_item, "arguments"):
-            arguments = item.raw_item.arguments
 
-    return json.dumps({"type": "function_detected", "name": tool_name, "call_id": call_id, "arguments": arguments})
+        # Count argument tokens
+        tokens = estimate_tokens(arguments).get("exact_tokens", 0)
+
+    return (
+        json.dumps({"type": "function_detected", "name": tool_name, "call_id": call_id, "arguments": arguments}),
+        tokens,
+    )
 
 
 def handle_reasoning(item):
     """Handle reasoning items (Sequential Thinking output)"""
-    if hasattr(item, "raw_item") and hasattr(item.raw_item, "content") and item.raw_item.content:
-        for content_item in item.raw_item.content:
-            if hasattr(content_item, "text") and content_item.text:
-                return json.dumps({"type": "assistant_delta", "content": f"[Thinking] {content_item.text}"})
-    return None
+    if hasattr(item, "raw_item"):
+        raw = item.raw_item
+        content = getattr(raw, "content", []) or []  # Ensure we always have a list
+        for content_item in content:
+            text = getattr(content_item, "text", "")
+            if text:
+                tokens = estimate_tokens(text).get("exact_tokens", 0)
+                return json.dumps({"type": "assistant_delta", "content": f"[Thinking] {text}"}), tokens
+    return None, 0
 
 
 def handle_tool_output(item, call_id_tracker):
     """Handle tool call output items (function results)"""
-    output_text = ""
     call_id = ""
     success = True
+    tokens = 0
 
-    # Try to match this output with a call_id
+    # Match output with a call_id from tracker
     if call_id_tracker.get("active_calls"):
-        # Pop the first active call (FIFO order)
         call_info = call_id_tracker["active_calls"].pop(0)
         call_id = call_info["call_id"]
 
-    # Get output and check for errors
-    if hasattr(item, "raw_item"):
-        if hasattr(item.raw_item, "output"):
-            output_text = str(item.raw_item.output)
-        # Check for errors
-        if hasattr(item.raw_item, "error") and item.raw_item.error:
-            success = False
-            output_text = str(item.raw_item.error)
-    elif hasattr(item, "output"):
-        output_text = str(item.output)
+    # Get output and count tokens
+    if hasattr(item, "output"):
+        output = item.output
+        # Convert to string for consistent token counting
+        output_str = json.dumps(output) if isinstance(output, dict) else str(output)
+        tokens = estimate_tokens(output_str).get("exact_tokens", 0)
+    else:
+        output_str = ""
 
-    # Truncate if too long
-    if len(output_text) > 100:
-        output_text = output_text[:100] + "..."
+    # Check for errors
+    if hasattr(item, "raw_item") and isinstance(item.raw_item, dict) and item.raw_item.get("error"):
+        success = False
+        output_str = str(item.raw_item["error"])
+        tokens = estimate_tokens(output_str).get("exact_tokens", 0)
 
-    return json.dumps({"type": "function_completed", "call_id": call_id, "success": success, "output": output_text})
+    return (
+        json.dumps({"type": "function_completed", "call_id": call_id, "success": success, "output": output_str}),
+        tokens,
+    )
 
 
 def handle_handoff_call(item):
-    """Handle handoff call items (multi-agent orchestration)"""
-    target_agent = "unknown"
-    if hasattr(item, "raw_item") and hasattr(item.raw_item, "target"):
-        target_agent = item.raw_item.target
-    return json.dumps({"type": "handoff_started", "target_agent": target_agent})
+    """Handle handoff call items (multi-agent requests)"""
+    if hasattr(item, "raw_item"):
+        raw = item.raw_item
+        target_agent = getattr(raw, "target", "unknown")
+    else:
+        target_agent = "unknown"
+
+    return json.dumps({"type": "handoff_started", "target_agent": target_agent}), 0
 
 
 def handle_handoff_output(item):
     """Handle handoff output items (multi-agent results)"""
     source_agent = "unknown"
-    result = ""
-    if hasattr(item, "raw_item") and hasattr(item.raw_item, "source"):
-        source_agent = item.raw_item.source
-    if hasattr(item, "output"):
-        result = str(item.output)[:100]  # Truncate if long
-    return json.dumps({"type": "handoff_completed", "source_agent": source_agent, "result": result})
+    tokens = 0
+
+    if hasattr(item, "raw_item"):
+        raw = item.raw_item
+        source_agent = getattr(raw, "source", "unknown")
+
+    # Get output and count tokens
+    output = getattr(item, "output", "")
+    output_str = str(output) if output else ""
+    if output_str:
+        tokens = estimate_tokens(output_str).get("exact_tokens", 0)
+
+    return json.dumps({"type": "handoff_completed", "source_agent": source_agent, "result": output_str}), tokens
 
 
 async def handle_electron_ipc(event, call_id_tracker=None):
@@ -181,6 +213,9 @@ async def handle_electron_ipc(event, call_id_tracker=None):
     Args:
         event: The streaming event
         call_id_tracker: Dict to track call_ids between tool_call and tool_call_output events
+
+    Returns:
+        Tuple of (ipc_message, token_count)
     """
     if call_id_tracker is None:
         call_id_tracker = {}
@@ -206,9 +241,9 @@ async def handle_electron_ipc(event, call_id_tracker=None):
 
     # Handle agent updated events
     elif event.type == "agent_updated_stream_event":
-        return json.dumps({"type": "agent_updated", "name": event.new_agent.name})
+        return json.dumps({"type": "agent_updated", "name": event.new_agent.name}), 0
 
-    return None
+    return None, 0
 
 
 def handle_streaming_error(error):
@@ -261,21 +296,16 @@ def handle_streaming_error(error):
     print(f"__JSON__{end_msg}__JSON__", flush=True)
 
 
-async def process_user_input(agent, messages, user_input, previous_response_id=None):
-    """Process a single user input and return updated messages
+async def process_user_input(session, user_input):
+    """Process a single user input using token-aware SQLite session.
 
     Args:
-        agent: The AI agent instance
-        messages: Conversation history (kept for logging, not sent to API)
+        session: TokenAwareSQLiteSession instance
         user_input: User's message
-        previous_response_id: ID from previous response for conversation continuity
 
     Returns:
-        Tuple of (messages, response_id) for next turn
+        None (session manages all state internally)
     """
-
-    # Add user message to our local history (for logging)
-    messages.append({"role": "user", "content": user_input})
 
     # Send start message for Electron
     msg = json.dumps({"type": "assistant_start"})
@@ -283,25 +313,19 @@ async def process_user_input(agent, messages, user_input, previous_response_id=N
 
     response_text = ""
     call_id_tracker = {}  # Track function call IDs
-    result = None  # Store result for response_id extraction
+    tool_tokens = 0  # Track tokens from tool calls
 
     # No retry logic - fail fast on errors
     try:
-        # Run agent with streaming
-        # Use conversation_id for persistent conversation state across turns
-        conversation_id = getattr(agent, "_conversation_id", None)
+        # Use the new session's convenience method that handles auto-summarization
+        # This returns a RunResultStreaming object
+        result = await session.run_with_auto_summary(session.agent, user_input, max_turns=50)
 
-        result = Runner.run_streamed(
-            agent,
-            input=user_input,  # Always pass string input, let Agent manage context
-            previous_response_id=previous_response_id,  # For continuing conversation
-            conversation_id=conversation_id,  # For persistent conversation storage
-            max_turns=20,  # Reasonable limit for turns
-        )
-
+        # Stream the events
         async for event in result.stream_events():
             # Convert to Electron IPC format with call_id tracking
-            ipc_msg = await handle_electron_ipc(event, call_id_tracker)
+            ipc_msg, tokens = await handle_electron_ipc(event, call_id_tracker)
+            tool_tokens += tokens  # Accumulate tool tokens
             if ipc_msg:
                 print(f"__JSON__{ipc_msg}__JSON__", flush=True)
 
@@ -312,21 +336,16 @@ async def process_user_input(agent, messages, user_input, previous_response_id=N
                 and event.item
                 and event.item.type == "message_output_item"
                 and hasattr(event.item, "raw_item")
-                and hasattr(event.item.raw_item, "content")
-                and event.item.raw_item.content
             ):
-                for content_item in event.item.raw_item.content:
-                    if hasattr(content_item, "text") and content_item.text:
-                        response_text += content_item.text
+                content = getattr(event.item.raw_item, "content", []) or []  # Ensure we always have a list
+                for content_item in content:
+                    text = getattr(content_item, "text", "")
+                    if text:
+                        response_text += text
 
     except Exception as e:
         handle_streaming_error(e)
-        return messages, None
-
-    # For streaming, we accumulate the response text during streaming
-    # and add it to history once streaming is complete
-    if response_text:
-        messages.append({"role": "assistant", "content": response_text})
+        return
 
     # Send end message
     msg = json.dumps({"type": "assistant_end"})
@@ -337,23 +356,32 @@ async def process_user_input(agent, messages, user_input, previous_response_id=N
         file_msg = f"AI: {response_text[:100]}{'...' if len(response_text) > 100 else ''}"
         logger.info(f"AI: {response_text}", extra={"file_message": file_msg})
 
-    # Extract response_id from result for next turn
-    response_id = None
-    if result:
-        try:
-            # The RunResultStreaming has last_response_id attribute
-            if hasattr(result, "last_response_id"):
-                response_id = result.last_response_id
-                logger.info(f"Response ID extracted for next turn: {response_id}")
-            else:
-                logger.warning("Result has no last_response_id attribute")
+    # Update token count in session after the run completes
+    # First update conversation items tokens
+    items = await session.get_items()
+    session.total_tokens = session._calculate_total_tokens(items)
 
-            # Store conversation_id on the agent for future turns if available
-            # Note: RunResultStreaming doesn't have conversation_id, that's handled internally
-        except Exception as e:
-            logger.warning(f"Could not extract response_id: {e}")
+    # Then add tool tokens (they're not stored in items)
+    if tool_tokens > 0:
+        session.update_with_tool_tokens(tool_tokens)
+    else:
+        # Still log the current token usage even if no tools were used
+        logger.info(
+            f"Token usage: {session.total_tokens}/{session.trigger_tokens} "
+            f"({int(session.total_tokens / session.trigger_tokens * 100)}%)"
+        )
 
-    return messages, response_id
+    # CRITICAL FIX: Check if we need to summarize AFTER the run
+    # This catches cases where tool tokens pushed us over the threshold
+    if await session.should_summarize():
+        logger.info(f"Post-run summarization triggered: {session.total_tokens}/{session.trigger_tokens} tokens")
+        await session.summarize_with_agent()
+
+        # Log new token count after summarization
+        logger.info(
+            f"Token usage after summarization: {session.total_tokens}/{session.trigger_tokens} "
+            f"({int(session.total_tokens / session.trigger_tokens * 100)}%)"
+        )
 
 
 async def main():
@@ -397,8 +425,6 @@ async def main():
         mcp_servers=mcp_servers,
     )
 
-    # Runner class is used directly (static methods)
-
     # Log startup
     logger.info(f"Chat Juicer starting - Deployment: {deployment}")
     logger.info(f"Agent configured with {len(patched_tools)} tools and {len(mcp_servers)} MCP servers")
@@ -408,11 +434,19 @@ async def main():
     if mcp_servers:
         print("MCP Servers: Sequential Thinking enabled")
 
-    # Conversation history and response tracking
-    messages = []
-    previous_response_id = None  # Track response_id for conversation continuity
+    # Create token-aware session built on SDK's SQLiteSession
+    # Using in-memory database for session persistence during app lifetime
+    session = TokenAwareSQLiteSession(
+        session_id=f"chat_{uuid.uuid4().hex[:8]}",  # Unique session per app run
+        db_path=None,  # In-memory database (use "chat_history.db" for persistence)
+        agent=agent,
+        model=deployment,
+        threshold=0.8,
+    )
+    logger.info(f"Session created with id: {session.session_id}")
 
     # Main chat loop
+    # Session manages all conversation state internally
     while True:
         try:
             # Get user input (synchronously from stdin)
@@ -432,8 +466,8 @@ async def main():
             file_msg = f"User: {user_input[:100]}{'...' if len(user_input) > 100 else ''}"
             logger.info(f"User: {user_input}", extra={"file_message": file_msg})
 
-            # Process user input (no retry - fail fast)
-            messages, previous_response_id = await process_user_input(agent, messages, user_input, previous_response_id)
+            # Process user input through session (handles summarization automatically)
+            await process_user_input(session, user_input)
 
         except KeyboardInterrupt:
             logger.info("Keyboard interrupt received")

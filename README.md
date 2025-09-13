@@ -41,7 +41,7 @@ Chat Juicer uses OpenAI's **Agent/Runner pattern** which provides:
 - **Automatic Tool Orchestration**: Framework handles function calling automatically
 - **Async/Await Architecture**: Modern async patterns throughout the application
 - **Streaming Events**: Structured event handling for real-time responses
-- **Stateless Design**: No manual response_id tracking needed
+- **Stateless Design**: Conversation state managed server-side (only tracks current response_id)
 
 ## Prerequisites
 

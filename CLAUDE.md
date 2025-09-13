@@ -151,9 +151,10 @@ The Agent/Runner pattern provides structured events:
 - Async/await for MCP server management
 
 ### State Management
-- Conversation history maintained in messages array
-- Agent handles context automatically
-- No manual response_id tracking needed
+- Server maintains full conversation context via response_id chaining
+- Client only tracks current response_id for continuity
+- Agent handles context automatically server-side
+- Minimal client state (just previous_response_id variable)
 
 ## Common Development Tasks
 
