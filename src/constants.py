@@ -224,12 +224,13 @@ When reading multiple files, you MUST call read_file multiple times in THE SAME 
 - **CONTEXT AWARE**: Don't re-read files already in context (wastes time)
 - **PARALLEL READS MANDATORY**: When reading NEW files, batch in same response (10x faster!)
 - ALWAYS check templates/ BEFORE asking user questions
-- Read ALL files of ALL file types in the sources/ directory: .md, .txt, .docx, .pdf, .xlsx, .csv, .html, .json, etc.
+- Read ALL files of ALL file types in the sources/ directory: .md, .txt, .docx, .pdf, .xlsx, .csv, .html, .json, .ppt, etc.
 - Follow template's EXACT markdown structure and formatting
 - Include ALL sections from template (no skipping)
 - Generate ALL diagrams specified in template (Mermaid format)
 - Fill ALL template sections with substantive content from sources
 - Maintain proper header hierarchy (# ## ### ####)
+- Templated content should ALWAYS result in a generated document, NOT a chat response
 - Generate COMPLETE documents, never return templates with placeholders
 - Professional output: properly formatted, comprehensive, ready to use
 
