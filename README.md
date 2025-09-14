@@ -40,13 +40,12 @@ An Electron + Python desktop application for Azure OpenAI chat interactions usin
 
 Chat Juicer uses OpenAI's **Agent/Runner pattern** which provides:
 - **Native MCP Server Integration**: Direct support for Model Context Protocol servers
-- **Sequential Thinking**: Advanced reasoning capabilities for complex problem-solving
 - **Automatic Tool Orchestration**: Framework handles function calling automatically
 - **Token-Aware Sessions**: SQLite-based session management with automatic summarization
 - **Hybrid Async Model**: Async/await for Agent/Runner and MCP servers, synchronous for functions
 - **Streaming Events**: Structured event handling for real-time responses
 - **Smart State Management**: Session handles conversation context with token tracking
-- **Race Condition Mitigation**: Configurable delays for tool calls to prevent RS_/FC_ errors
+- **Race Condition Mitigation**: Configurable delays for tool calls to prevent syncing errors server-side (currently disabled with client side sessions)
 
 ## Prerequisites
 
