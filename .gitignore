@@ -38,6 +38,7 @@ out/
 # Project specific
 .serena/
 .juicer/
+sources/
 None
 None-wal
 None-shm
