@@ -11,18 +11,78 @@ import os
 import sys
 import uuid
 
+from dataclasses import dataclass, field
+
 from agents import Agent, set_default_openai_client, set_tracing_disabled
 from agents.mcp import MCPServerStdio
 from dotenv import load_dotenv
 from openai import APIConnectionError, APIStatusError, AsyncOpenAI, RateLimitError
 
-from constants import SYSTEM_INSTRUCTIONS
+from constants import (
+    AGENT_UPDATED_STREAM_EVENT,
+    HANDOFF_CALL_ITEM,
+    HANDOFF_OUTPUT_ITEM,
+    MESSAGE_OUTPUT_ITEM,
+    REASONING_ITEM,
+    RUN_ITEM_STREAM_EVENT,
+    SYSTEM_INSTRUCTIONS,
+    TOOL_CALL_ITEM,
+    TOOL_CALL_OUTPUT_ITEM,
+)
 from functions import AGENT_TOOLS
 from logger import logger
 from sdk_token_tracker import connect_session, disconnect_session, patch_sdk_for_auto_tracking
 from session import TokenAwareSQLiteSession
 from tool_patch import apply_tool_patch, patch_native_tools
 from utils import estimate_tokens
+
+
+@dataclass
+class CallTracker:
+    """Tracks tool call IDs for matching outputs with their calls."""
+
+    active_calls: list[dict[str, str]] = field(default_factory=list)
+
+    def add_call(self, call_id: str, tool_name: str) -> None:
+        """Add a new tool call to track."""
+        if call_id:
+            self.active_calls.append({"call_id": call_id, "tool_name": tool_name})
+
+    def pop_call(self) -> dict[str, str] | None:
+        """Get and remove the oldest tracked call."""
+        return self.active_calls.pop(0) if self.active_calls else None
+
+
+class IPCManager:
+    """Manages IPC communication with clean abstraction."""
+
+    DELIMITER = "__JSON__"
+
+    @staticmethod
+    def send(message: dict) -> None:
+        """Send a message to the Electron frontend via IPC."""
+        msg = json.dumps(message)
+        print(f"{IPCManager.DELIMITER}{msg}{IPCManager.DELIMITER}", flush=True)
+
+    @staticmethod
+    def send_raw(message: str) -> None:
+        """Send a raw JSON string message (for backwards compatibility)."""
+        print(f"{IPCManager.DELIMITER}{message}{IPCManager.DELIMITER}", flush=True)
+
+    @staticmethod
+    def send_error(message: str) -> None:
+        """Send an error message to the frontend."""
+        IPCManager.send({"type": "error", "message": message})
+
+    @staticmethod
+    def send_assistant_start() -> None:
+        """Send assistant start signal."""
+        IPCManager.send({"type": "assistant_start"})
+
+    @staticmethod
+    def send_assistant_end() -> None:
+        """Send assistant end signal."""
+        IPCManager.send({"type": "assistant_end"})
 
 
 async def setup_mcp_servers():
@@ -62,7 +122,7 @@ def handle_message_output(item):
     return None, 0
 
 
-def handle_tool_call(item, call_id_tracker):
+def handle_tool_call(item, tracker: CallTracker):
     """Handle tool call items (function invocations)"""
     tool_name = "unknown"
     call_id = ""
@@ -80,10 +140,7 @@ def handle_tool_call(item, call_id_tracker):
         call_id = getattr(raw, "call_id", getattr(raw, "id", ""))
 
         # Track active calls for matching with outputs
-        if call_id:
-            if "active_calls" not in call_id_tracker:
-                call_id_tracker["active_calls"] = []
-            call_id_tracker["active_calls"].append({"call_id": call_id, "tool_name": tool_name})
+        tracker.add_call(call_id, tool_name)
 
         # Count argument tokens
         tokens = estimate_tokens(arguments).get("exact_tokens", 0)
@@ -107,15 +164,15 @@ def handle_reasoning(item):
     return None, 0
 
 
-def handle_tool_output(item, call_id_tracker):
+def handle_tool_output(item, tracker: CallTracker):
     """Handle tool call output items (function results)"""
     call_id = ""
     success = True
     tokens = 0
 
     # Match output with a call_id from tracker
-    if call_id_tracker.get("active_calls"):
-        call_info = call_id_tracker["active_calls"].pop(0)
+    call_info = tracker.pop_call()
+    if call_info:
         call_id = call_info["call_id"]
 
     # Get output and count tokens
@@ -168,31 +225,28 @@ def handle_handoff_output(item):
     return json.dumps({"type": "handoff_completed", "source_agent": source_agent, "result": output_str}), tokens
 
 
-async def handle_electron_ipc(event, call_id_tracker=None):
+async def handle_electron_ipc(event, tracker: CallTracker):
     """Convert Agent/Runner events to Electron IPC format
 
     Args:
         event: The streaming event
-        call_id_tracker: Dict to track call_ids between tool_call and tool_call_output events
+        tracker: CallTracker instance to track call_ids between tool_call and tool_call_output events
 
     Returns:
         Tuple of (ipc_message, token_count)
     """
-    if call_id_tracker is None:
-        call_id_tracker = {}
-
     # Handle run item stream events
-    if event.type == "run_item_stream_event":
+    if event.type == RUN_ITEM_STREAM_EVENT:
         item = event.item
 
         # Map item types to handler functions
         handlers = {
-            "message_output_item": lambda: handle_message_output(item),
-            "tool_call_item": lambda: handle_tool_call(item, call_id_tracker),
-            "reasoning_item": lambda: handle_reasoning(item),
-            "tool_call_output_item": lambda: handle_tool_output(item, call_id_tracker),
-            "handoff_call_item": lambda: handle_handoff_call(item),
-            "handoff_output_item": lambda: handle_handoff_output(item),
+            MESSAGE_OUTPUT_ITEM: lambda: handle_message_output(item),
+            TOOL_CALL_ITEM: lambda: handle_tool_call(item, tracker),
+            REASONING_ITEM: lambda: handle_reasoning(item),
+            TOOL_CALL_OUTPUT_ITEM: lambda: handle_tool_output(item, tracker),
+            HANDOFF_CALL_ITEM: lambda: handle_handoff_call(item),
+            HANDOFF_OUTPUT_ITEM: lambda: handle_handoff_output(item),
         }
 
         # Get and execute the appropriate handler
@@ -201,7 +255,7 @@ async def handle_electron_ipc(event, call_id_tracker=None):
             return handler()
 
     # Handle agent updated events
-    elif event.type == "agent_updated_stream_event":
+    elif event.type == AGENT_UPDATED_STREAM_EVENT:
         return json.dumps({"type": "agent_updated", "name": event.new_agent.name}), 0
 
     return None, 0
@@ -249,12 +303,10 @@ def handle_streaming_error(error):
     error_msg = handler(error)
 
     # Send error message to UI
-    msg = json.dumps(error_msg)
-    print(f"__JSON__{msg}__JSON__", flush=True)
+    IPCManager.send(error_msg)
 
     # Send assistant_end to properly close the stream
-    end_msg = json.dumps({"type": "assistant_end"})
-    print(f"__JSON__{end_msg}__JSON__", flush=True)
+    IPCManager.send_assistant_end()
 
 
 async def process_user_input(session, user_input):
@@ -269,11 +321,10 @@ async def process_user_input(session, user_input):
     """
 
     # Send start message for Electron
-    msg = json.dumps({"type": "assistant_start"})
-    print(f"__JSON__{msg}__JSON__", flush=True)
+    IPCManager.send_assistant_start()
 
     response_text = ""
-    call_id_tracker = {}  # Track function call IDs
+    tracker = CallTracker()  # Track function call IDs
 
     # No retry logic - fail fast on errors
     try:
@@ -285,16 +336,16 @@ async def process_user_input(session, user_input):
         async for event in result.stream_events():
             # Convert to Electron IPC format with call_id tracking
             # Note: We still return tokens for IPC display, but don't need to track them
-            ipc_msg, tokens = await handle_electron_ipc(event, call_id_tracker)
+            ipc_msg, tokens = await handle_electron_ipc(event, tracker)
             if ipc_msg:
-                print(f"__JSON__{ipc_msg}__JSON__", flush=True)
+                IPCManager.send_raw(ipc_msg)
 
             # Accumulate response text for logging
             if (
-                event.type == "run_item_stream_event"
+                event.type == RUN_ITEM_STREAM_EVENT
                 and hasattr(event, "item")
                 and event.item
-                and event.item.type == "message_output_item"
+                and event.item.type == MESSAGE_OUTPUT_ITEM
                 and hasattr(event.item, "raw_item")
             ):
                 content = getattr(event.item.raw_item, "content", []) or []  # Ensure we always have a list
@@ -308,8 +359,7 @@ async def process_user_input(session, user_input):
         return
 
     # Send end message
-    msg = json.dumps({"type": "assistant_end"})
-    print(f"__JSON__{msg}__JSON__", flush=True)
+    IPCManager.send_assistant_end()
 
     # Log response
     if response_text:
@@ -319,7 +369,7 @@ async def process_user_input(session, user_input):
     # SDK token tracker handles all token updates automatically
     # Just update conversation tokens from items
     items = await session.get_items()
-    items_tokens = session._calculate_total_tokens(items)
+    items_tokens = session.calculate_items_tokens(items)
     session.total_tokens = items_tokens + session.accumulated_tool_tokens
 
     # Log current token usage (SDK tracker already updated tool tokens)
@@ -445,8 +495,7 @@ async def main():
         except Exception as e:
             # This should rarely happen since process_user_input handles errors
             logger.error(f"Unexpected error in main loop: {e}")
-            msg = json.dumps({"type": "error", "message": "An unexpected error occurred."})
-            print(f"__JSON__{msg}__JSON__", flush=True)
+            IPCManager.send_error("An unexpected error occurred.")
 
     # Disconnect SDK token tracker
     disconnect_session()

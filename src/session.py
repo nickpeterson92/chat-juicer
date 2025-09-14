@@ -120,6 +120,17 @@ class TokenAwareSQLiteSession(SQLiteSession):
 
         return total
 
+    def calculate_items_tokens(self, items: list[dict]) -> int:
+        """Public method to calculate total tokens from conversation items.
+
+        Args:
+            items: List of conversation items
+
+        Returns:
+            Total token count
+        """
+        return self._calculate_total_tokens(items)
+
     def _collect_recent_exchanges(self, items: list[dict], keep_recent: int) -> list[dict]:
         """Collect the most recent complete user-assistant exchanges.
 
@@ -209,105 +220,143 @@ class TokenAwareSQLiteSession(SQLiteSession):
             if len(items) < 3:  # Need at least a few messages to summarize
                 return ""
 
-            # Emit summarization start event for UI
-            call_id = f"sum_{uuid.uuid4().hex[:8]}"
-            msg = json.dumps(
-                {
-                    "type": "function_detected",
-                    "name": "summarize_conversation",
-                    "call_id": call_id,
-                    "arguments": json.dumps(
-                        {
-                            "messages_count": len(items),
-                            "tokens_before": self.total_tokens,
-                            "threshold": self.trigger_tokens,
-                        }
-                    ),
-                }
-            )
-            print(f"__JSON__{msg}__JSON__", flush=True)
-
-            # Keep only the last N user-assistant exchanges (no tool messages)
-            # Tool calls and results are execution details that belong in the summary
-            recent_items = self._collect_recent_exchanges(items, keep_recent)
+            # Prepare items for summarization
+            recent_items = self._prepare_summary_items(items, keep_recent)
 
             # If nothing to summarize, don't proceed
             if not items or len(recent_items) == len(items):
                 return ""
 
-            # Build conversation text for summarization (include ALL items for context)
-            conversation_text = ""
-            for item in items:
-                role = item.get("role", "unknown")
-                content = item.get("content", "")
+            # Generate the summary
+            summary_text = await self._generate_summary_text(items)
 
-                # Handle tool calls specially
-                if item.get("tool_calls"):
-                    tool_names = [tc.get("function", {}).get("name", "unknown") for tc in item["tool_calls"]]
-                    conversation_text += f"{role}: [Called tools: {', '.join(tool_names)}]\n\n"
-                elif content:
-                    # Truncate very long content for summarization
-                    if isinstance(content, str) and len(content) > 1000:
-                        content = content[:1000] + "..."
-                    conversation_text += f"{role}: {content}\n\n"
-
-            # Request summary from agent
-            summary_prompt = (
-                "Summarize the key points of the following conversation. "
-                "Be concise but include all important context, decisions, and current task state:\n\n"
-                f"{conversation_text}"
-            )
-
-            logger.info(f"Summarizing {len(items)} messages ({self.total_tokens} tokens)")
-
-            # Run summarization (using the agent directly)
-            result = await Runner.run(self.agent, summary_prompt)
-            summary_text = result.final_output
-
-            # Count summary tokens
-            summary_tokens = self._count_tokens(summary_text)
-
-            # Calculate tokens for recent items
-            recent_tokens = self._calculate_total_tokens(recent_items)
-
-            # Clear session and add summary + recent messages
-            await self.clear_session()
-
-            # Add summary as a system message
-            await self.add_items([{"role": "system", "content": f"Previous conversation summary:\n{summary_text}"}])
-
-            # Re-add recent messages (now guaranteed to have complete tool chains)
-            if recent_items:
-                await self.add_items(recent_items)
-
-            # Update token count
-            self.total_tokens = summary_tokens + recent_tokens
-            # Reset accumulated tool tokens since they're now part of the summary
-            self.accumulated_tool_tokens = 0
-
-            # Emit summarization complete event
-            output_summary = summary_text[:500] + "..." if len(summary_text) > 500 else summary_text
-            msg = json.dumps(
-                {
-                    "type": "function_completed",
-                    "call_id": call_id,
-                    "success": True,
-                    "output": output_summary,
-                    "metadata": {
-                        "tokens_before": self.total_tokens + len(items) * 10,
-                        "tokens_after": summary_tokens + recent_tokens,
-                        "tokens_saved": (self.total_tokens + len(items) * 10) - (summary_tokens + recent_tokens),
-                    },
-                }
-            )
-            print(f"__JSON__{msg}__JSON__", flush=True)
-
-            logger.info(
-                f"Summarization complete: {summary_tokens} tokens summary + "
-                f"{recent_tokens} recent = {self.total_tokens} total"
-            )
+            # Update session with summary
+            await self._update_session_with_summary(summary_text, recent_items)
 
             return summary_text
+
+    def _prepare_summary_items(self, items: list[dict], keep_recent: int) -> list[dict]:
+        """Prepare recent items to keep after summarization.
+
+        Args:
+            items: All conversation items
+            keep_recent: Number of recent user messages to keep
+
+        Returns:
+            List of recent items to preserve
+        """
+        # Emit summarization start event for UI
+        call_id = f"sum_{uuid.uuid4().hex[:8]}"
+        msg = json.dumps(
+            {
+                "type": "function_detected",
+                "name": "summarize_conversation",
+                "call_id": call_id,
+                "arguments": json.dumps(
+                    {
+                        "messages_count": len(items),
+                        "tokens_before": self.total_tokens,
+                        "threshold": self.trigger_tokens,
+                    }
+                ),
+            }
+        )
+        print(f"__JSON__{msg}__JSON__", flush=True)
+
+        # Keep only the last N user-assistant exchanges (no tool messages)
+        # Tool calls and results are execution details that belong in the summary
+        recent_items = self._collect_recent_exchanges(items, keep_recent)
+
+        return recent_items
+
+    async def _generate_summary_text(self, items: list[dict]) -> str:
+        """Generate summary text from conversation items.
+
+        Args:
+            items: Conversation items to summarize
+
+        Returns:
+            Generated summary text
+        """
+        # Build conversation text for summarization (include ALL items for context)
+        conversation_text = ""
+        for item in items:
+            role = item.get("role", "unknown")
+            content = item.get("content", "")
+
+            # Handle tool calls specially
+            if item.get("tool_calls"):
+                tool_names = [tc.get("function", {}).get("name", "unknown") for tc in item["tool_calls"]]
+                conversation_text += f"{role}: [Called tools: {', '.join(tool_names)}]\n\n"
+            elif content:
+                # Truncate very long content for summarization
+                if isinstance(content, str) and len(content) > 1000:
+                    content = content[:1000] + "..."
+                conversation_text += f"{role}: {content}\n\n"
+
+        # Request summary from agent
+        summary_prompt = (
+            "Summarize the key points of the following conversation. "
+            "Be concise but include all important context, decisions, and current task state:\n\n"
+            f"{conversation_text}"
+        )
+
+        logger.info(f"Summarizing {len(items)} messages ({self.total_tokens} tokens)")
+
+        # Run summarization (using the agent directly)
+        result = await Runner.run(self.agent, summary_prompt)
+        return result.final_output
+
+    async def _update_session_with_summary(self, summary_text: str, recent_items: list[dict]) -> None:
+        """Update session with summary and recent items.
+
+        Args:
+            summary_text: The generated summary
+            recent_items: Recent items to preserve
+        """
+        # Count summary tokens
+        summary_tokens = self._count_tokens(summary_text)
+
+        # Calculate tokens for recent items
+        recent_tokens = self._calculate_total_tokens(recent_items)
+
+        # Clear session and add summary + recent messages
+        await self.clear_session()
+
+        # Add summary as a system message
+        await self.add_items([{"role": "system", "content": f"Previous conversation summary:\n{summary_text}"}])
+
+        # Re-add recent messages (now guaranteed to have complete tool chains)
+        if recent_items:
+            await self.add_items(recent_items)
+
+        # Update token count
+        self.total_tokens = summary_tokens + recent_tokens
+        # Reset accumulated tool tokens since they're now part of the summary
+        self.accumulated_tool_tokens = 0
+
+        # Emit summarization complete event
+        call_id = f"sum_{uuid.uuid4().hex[:8]}"
+        output_summary = summary_text[:500] + "..." if len(summary_text) > 500 else summary_text
+        msg = json.dumps(
+            {
+                "type": "function_completed",
+                "call_id": call_id,
+                "success": True,
+                "output": output_summary,
+                "metadata": {
+                    "tokens_before": self.total_tokens + len(recent_items) * 10,
+                    "tokens_after": summary_tokens + recent_tokens,
+                    "tokens_saved": (self.total_tokens + len(recent_items) * 10) - (summary_tokens + recent_tokens),
+                },
+            }
+        )
+        print(f"__JSON__{msg}__JSON__", flush=True)
+
+        logger.info(
+            f"Summarization complete: {summary_tokens} tokens summary + "
+            f"{recent_tokens} recent = {self.total_tokens} total"
+        )
 
     async def run_with_auto_summary(self, agent: Any, user_input: str, **kwargs):
         """Run agent with automatic summarization when needed.

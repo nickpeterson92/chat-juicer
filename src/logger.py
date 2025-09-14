@@ -17,6 +17,7 @@ import pathlib
 import sys
 import uuid
 
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -29,6 +30,19 @@ from constants import (
     LOG_PREVIEW_LENGTH,
     SESSION_ID_LENGTH,
 )
+
+
+@dataclass
+class ConversationTurn:
+    """Structured representation of a conversation turn for logging."""
+
+    user_input: str
+    response: str
+    function_calls: list[str] = field(default_factory=list)
+    duration_ms: float | None = None
+    tokens_used: int | None = None
+    session_id: str = ""
+    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
 
 class ConversationFilter(logging.Filter):
@@ -172,41 +186,51 @@ class ChatLogger:
             duration_ms: Response time in milliseconds
             tokens_used: Number of tokens used
         """
+        # Create structured conversation turn
+        turn = ConversationTurn(
+            user_input=user_input,
+            response=response,
+            function_calls=function_calls or [],
+            duration_ms=duration_ms,
+            tokens_used=tokens_used,
+            session_id=self.session_id,
+        )
+
         # Create concise summary for log file
-        user_preview = user_input[:LOG_PREVIEW_LENGTH].replace("\\n", " ")
-        if len(user_input) > LOG_PREVIEW_LENGTH:
+        user_preview = turn.user_input[:LOG_PREVIEW_LENGTH].replace("\\n", " ")
+        if len(turn.user_input) > LOG_PREVIEW_LENGTH:
             user_preview += "..."
 
-        response_preview = response[:LOG_PREVIEW_LENGTH].replace("\\n", " ")
-        if len(response) > LOG_PREVIEW_LENGTH:
+        response_preview = turn.response[:LOG_PREVIEW_LENGTH].replace("\\n", " ")
+        if len(turn.response) > LOG_PREVIEW_LENGTH:
             response_preview += "..."
 
         # Build concise message
         msg_parts = [f"User: {user_preview} → AI: {response_preview}"]
 
-        if function_calls:
-            msg_parts.append(f"[{len(function_calls)} functions]")
+        if turn.function_calls:
+            msg_parts.append(f"[{len(turn.function_calls)} functions]")
 
-        if duration_ms:
-            msg_parts.append(f"[{duration_ms:.0f}ms]")
+        if turn.duration_ms:
+            msg_parts.append(f"[{turn.duration_ms:.0f}ms]")
 
-        if tokens_used:
-            msg_parts.append(f"[{tokens_used} tokens]")
+        if turn.tokens_used:
+            msg_parts.append(f"[{turn.tokens_used} tokens]")
 
         # Log concise message with minimal extra data
         extra_data = {
             "conversation_turn": True,  # Flag for filter
-            "timestamp": datetime.utcnow().isoformat(),
-            "session_id": self.session_id,
-            "chars": len(user_input) + len(response),
-            "functions": len(function_calls) if function_calls else 0,
+            "timestamp": turn.timestamp,
+            "session_id": turn.session_id,
+            "chars": len(turn.user_input) + len(turn.response),
+            "functions": len(turn.function_calls),
         }
 
         # Only add performance metrics if present
-        if duration_ms is not None:
-            extra_data["ms"] = int(duration_ms)
-        if tokens_used is not None:
-            extra_data["tokens"] = tokens_used
+        if turn.duration_ms is not None:
+            extra_data["ms"] = int(turn.duration_ms)
+        if turn.tokens_used is not None:
+            extra_data["tokens"] = turn.tokens_used
 
         # Log with special flag for conversation filter
         self.logger.info(" ".join(msg_parts), extra=extra_data)

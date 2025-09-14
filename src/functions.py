@@ -149,19 +149,25 @@ def json_response(success: bool = True, error: str | None = None, **kwargs) -> s
     """
     Build a consistent JSON response.
 
+    Response structure:
+    - Success: {"success": true, "data": {...}}
+    - Error: {"success": false, "error": "message"}
+
     Args:
         success: Whether the operation succeeded
         error: Error message if failed
-        **kwargs: Additional fields to include in response
+        **kwargs: Additional fields to include in response data
 
     Returns:
         JSON string with consistent structure
     """
     if error:
-        return json.dumps({"error": error}, indent=2)
+        return json.dumps({"success": False, "error": error}, indent=2)
 
-    response = {"success": success} if success else {}
-    response.update(kwargs)
+    # Always include success status and wrap other fields in data
+    response: dict[str, Any] = {"success": success}
+    if kwargs:
+        response["data"] = kwargs
     return json.dumps(response, indent=2)
 
 
@@ -177,35 +183,36 @@ def file_operation(file_path: str, operation_func, **kwargs):
     Returns:
         JSON response string
     """
-    # Validate path
-    target_path, error = validate_file_path(file_path)
-    if error:
-        return json_response(error=error)
+    # Early validation and content reading with single exit point
+    target_path, path_error = validate_file_path(file_path)
+    if not path_error:
+        content, read_error = read_file_content(target_path)
+        if not read_error:
+            # Perform operation in try block
+            try:
+                new_content, result_data = operation_func(content, **kwargs)
 
-    # Read content
-    content, error = read_file_content(target_path)
-    if error:
-        return json_response(error=error)
+                # Determine the response based on operation result
+                if "error" in result_data:
+                    response = json_response(error=result_data["error"])
+                elif new_content is None:
+                    response = json_response(success=True, **result_data)
+                else:
+                    # Write back and check for write errors
+                    write_error = write_file_content(target_path, new_content)
+                    if write_error:
+                        response = json_response(error=write_error)
+                    else:
+                        result_data["file"] = str(target_path)
+                        response = json_response(success=True, **result_data)
+            except Exception as e:
+                response = json_response(error=str(e))
+        else:
+            response = json_response(error=read_error)
+    else:
+        response = json_response(error=path_error)
 
-    # Perform operation
-    try:
-        new_content, result_data = operation_func(content, **kwargs)
-
-        # If operation returned an error/warning without new content
-        if new_content is None:
-            return json_response(success=True, **result_data)
-
-        # Write back
-        error = write_file_content(target_path, new_content)
-        if error:
-            return json_response(error=error)
-
-        # Add file path to result
-        result_data["file"] = str(target_path)
-        return json_response(success=True, **result_data)
-
-    except Exception as e:
-        return json_response(error=str(e))
+    return response
 
 
 def list_directory(path: str = ".", show_hidden: bool = False) -> str:
@@ -254,7 +261,7 @@ def list_directory(path: str = ".", show_hidden: bool = False) -> str:
         logger.info(f"Listed {target_path.name}: {dirs} dirs, {files} files, {total_size:,} bytes total")
 
         # Return minimal data to model - just items, no counts or stats
-        return json_response(items=items)
+        return json_response(success=True, items=items)
 
     except Exception as e:
         return json_response(error=f"Failed to list directory: {e!s}")
@@ -367,7 +374,9 @@ def read_file(file_path: str, max_size: int = DEFAULT_MAX_FILE_SIZE) -> str:
 
         # Build successful result
         return json_response(
-            content=content, file_path=str(target_file.relative_to(cwd) if cwd in target_file.parents else target_file)
+            success=True,
+            content=content,
+            file_path=str(target_file.relative_to(cwd) if cwd in target_file.parents else target_file),
         )
 
     except Exception as e:
@@ -475,7 +484,7 @@ def text_edit(
 
         occurrences = content.count(find_text)
         if occurrences == 0:
-            return None, {"success": False, "warning": "Text not found", "find": find_text}
+            return None, {"warning": "Text not found", "find": find_text}
 
         if replace_all:
             new_content = content.replace(find_text, replace_text)
@@ -539,7 +548,7 @@ def regex_edit(
 
         matches = list(regex_pattern.finditer(content))
         if not matches:
-            return None, {"success": False, "warning": "No matches found", "pattern": pattern_str}
+            return None, {"warning": "No matches found", "pattern": pattern_str}
 
         if replace_all:
             new_content = regex_pattern.sub(replacement, content)

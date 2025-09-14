@@ -57,6 +57,18 @@ TEMPLATE_EXTENSIONS = [".md", ".txt", ".template", ""]
 # System limits
 SESSION_ID_LENGTH = 8
 
+# Agent/Runner Event Types
+RUN_ITEM_STREAM_EVENT = "run_item_stream_event"
+AGENT_UPDATED_STREAM_EVENT = "agent_updated_stream_event"
+
+# Item Types for streaming events
+MESSAGE_OUTPUT_ITEM = "message_output_item"
+TOOL_CALL_ITEM = "tool_call_item"
+REASONING_ITEM = "reasoning_item"
+TOOL_CALL_OUTPUT_ITEM = "tool_call_output_item"
+HANDOFF_CALL_ITEM = "handoff_call_item"
+HANDOFF_OUTPUT_ITEM = "handoff_output_item"
+
 # MCP Server Configuration
 # Tool call delays to mitigate RS_/FC_ race conditions in Agent/Runner streaming
 MCP_TOOL_DELAY = 0.0  # Delay in seconds after MCP server tool calls
