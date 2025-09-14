@@ -292,13 +292,7 @@ def handle_streaming_error(error):
 
     def handle_api_status(e):
         logger.error(f"API status error during streaming: {e}")
-        error_msg = str(e).lower()
-
-        # Check for specific error types in the message
-        if "rs_" in error_msg or "fc_" in error_msg:
-            return {"type": "error", "message": "The response was interrupted. Please try your request again."}
-        else:
-            return {"type": "error", "message": f"API error (status {e.status_code}). Please try your request again."}
+        return {"type": "error", "message": f"API error (status {e.status_code}). Please try your request again."}
 
     def handle_generic(e):
         logger.error(f"Unexpected error during streaming: {e}")
