@@ -69,6 +69,14 @@ TOOL_CALL_OUTPUT_ITEM = "tool_call_output_item"
 HANDOFF_CALL_ITEM = "handoff_call_item"
 HANDOFF_OUTPUT_ITEM = "handoff_output_item"
 
+# SDK Token Tracking source labels
+TOKEN_SOURCE_TOOL_CALL = "tool_call"
+TOKEN_SOURCE_TOOL_OUTPUT = "tool_output"
+TOKEN_SOURCE_TOOL_ERROR = "tool_error"
+TOKEN_SOURCE_REASONING = "reasoning"
+TOKEN_SOURCE_HANDOFF = "handoff"
+TOKEN_SOURCE_UNKNOWN = "unknown"
+
 # MCP Server Configuration
 # Tool call delays to mitigate RS_/FC_ race conditions in Agent/Runner streaming
 MCP_TOOL_DELAY = 0.0  # Delay in seconds after MCP server tool calls

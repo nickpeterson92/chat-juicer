@@ -10,6 +10,19 @@ import json
 from functools import wraps
 from typing import TYPE_CHECKING, Any
 
+from constants import (
+    HANDOFF_OUTPUT_ITEM,
+    REASONING_ITEM,
+    RUN_ITEM_STREAM_EVENT,
+    TOKEN_SOURCE_HANDOFF,
+    TOKEN_SOURCE_REASONING,
+    TOKEN_SOURCE_TOOL_CALL,
+    TOKEN_SOURCE_TOOL_ERROR,
+    TOKEN_SOURCE_TOOL_OUTPUT,
+    TOKEN_SOURCE_UNKNOWN,
+    TOOL_CALL_ITEM,
+    TOOL_CALL_OUTPUT_ITEM,
+)
 from logger import logger
 from utils import estimate_tokens
 
@@ -51,7 +64,7 @@ class SDKTokenTracker:
         self.session = None
         self._total_tracked = 0
 
-    def track_content(self, content: Any, source: str = "unknown") -> int:
+    def track_content(self, content: Any, source: str = TOKEN_SOURCE_UNKNOWN) -> int:
         """Track tokens for any content and auto-update session.
 
         Args:
@@ -104,32 +117,32 @@ def track_streaming_event(event: Any) -> Any:
         return event
 
     # Check if this is a run_item_stream_event with tool data
-    if hasattr(event, "type") and event.type == "run_item_stream_event" and hasattr(event, "item") and event.item:
+    if hasattr(event, "type") and event.type == RUN_ITEM_STREAM_EVENT and hasattr(event, "item") and event.item:
         item = event.item
         item_type = getattr(item, "type", "")
 
         # Track tool call arguments
-        if item_type == "tool_call_item":
+        if item_type == TOOL_CALL_ITEM:
             if hasattr(item, "raw_item"):
                 raw = item.raw_item
                 # Track the arguments being sent to the tool
                 arguments = getattr(raw, "arguments", None)
                 if arguments:
-                    tracker.track_content(arguments, f"tool_call:{getattr(raw, 'name', 'unknown')}")
+                    tracker.track_content(arguments, f"{TOKEN_SOURCE_TOOL_CALL}:{getattr(raw, 'name', 'unknown')}")
 
         # Track tool call outputs
-        elif item_type == "tool_call_output_item":
+        elif item_type == TOOL_CALL_OUTPUT_ITEM:
             if hasattr(item, "output"):
                 # Track the output from the tool
-                tracker.track_content(item.output, "tool_output")
+                tracker.track_content(item.output, TOKEN_SOURCE_TOOL_OUTPUT)
             # Also check for errors
             if hasattr(item, "raw_item") and isinstance(item.raw_item, dict):
                 error = item.raw_item.get("error")
                 if error:
-                    tracker.track_content(error, "tool_error")
+                    tracker.track_content(error, TOKEN_SOURCE_TOOL_ERROR)
 
         # Track reasoning (Sequential Thinking)
-        elif item_type == "reasoning_item":
+        elif item_type == REASONING_ITEM:
             if hasattr(item, "raw_item"):
                 raw = item.raw_item
                 content = getattr(raw, "content", [])
@@ -137,11 +150,11 @@ def track_streaming_event(event: Any) -> Any:
                     for content_item in content:
                         text = getattr(content_item, "text", None)
                         if text:
-                            tracker.track_content(text, "reasoning")
+                            tracker.track_content(text, TOKEN_SOURCE_REASONING)
 
         # Track multi-agent handoffs
-        elif item_type == "handoff_output_item" and hasattr(item, "output"):
-            tracker.track_content(item.output, "handoff")
+        elif item_type == HANDOFF_OUTPUT_ITEM and hasattr(item, "output"):
+            tracker.track_content(item.output, TOKEN_SOURCE_HANDOFF)
 
     return event
 
