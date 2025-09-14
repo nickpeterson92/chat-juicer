@@ -59,6 +59,17 @@ repos:
       - id: python-no-eval              # Check for eval() usage
       - id: python-no-log-warn          # Check for logger.warn (use warning instead)
 
+  # Biome - JavaScript/TypeScript linter and formatter
+  - repo: local
+    hooks:
+      - id: biome
+        name: Biome check
+        entry: npx @biomejs/biome check --write
+        language: system
+        files: \.(js|jsx|ts|tsx)$
+        exclude: ^(node_modules/|dist/|build/|logs/)
+        pass_filenames: true
+
 # Configuration
 default_stages: [pre-commit]
 fail_fast: false

@@ -6,7 +6,10 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "inspect": "electron . --inspect"
+    "inspect": "electron . --inspect",
+    "lint": "biome check electron/*.js",
+    "lint:fix": "biome check electron/*.js --write",
+    "format": "biome format electron/*.js --write"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.3",

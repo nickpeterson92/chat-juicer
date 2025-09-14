@@ -5,7 +5,7 @@ const MAX_FUNCTION_CALLS = 50;
 const MAX_FUNCTION_BUFFERS = 20;
 const MAX_MESSAGES = 100; // Limit chat history to prevent memory issues
 const FUNCTION_CARD_CLEANUP_DELAY = 30000; // 30 seconds
-const RECONNECT_DELAY = 2000; // 2 seconds
+const _RECONNECT_DELAY = 2000; // 2 seconds
 const CONNECTION_RESET_DELAY = 1000; // 1 second
 const OLD_CARD_THRESHOLD = 60000; // 1 minute
 
@@ -108,7 +108,7 @@ class AppState {
   // Optimized state change - avoid deep path parsing for common cases
   setState(path, value) {
     // Fast path for common single-level updates
-    if (!path.includes('.')) {
+    if (!path.includes(".")) {
       const oldValue = this[path];
       this[path] = value;
       this.notifyListeners(path, value, oldValue);
@@ -259,7 +259,7 @@ function addMessage(content, type = "assistant") {
   elements.chatContainer.appendChild(messageDiv);
 
   // Limit message history to prevent memory issues
-  const messages = elements.chatContainer.querySelectorAll('.message');
+  const messages = elements.chatContainer.querySelectorAll(".message");
   if (messages.length > MAX_MESSAGES) {
     // Remove oldest messages, keeping recent ones
     const toRemove = messages.length - MAX_MESSAGES;
@@ -283,11 +283,11 @@ function updateAssistantMessage(content) {
   // Update only the text content
   if (appState.message.currentAssistant) {
     // Hide loading dots when we have content
-    const messageDiv = appState.message.currentAssistant.closest('.message');
+    const messageDiv = appState.message.currentAssistant.closest(".message");
     if (messageDiv && content.length > 0) {
-      const loadingDots = messageDiv.querySelector('.loading-dots');
+      const loadingDots = messageDiv.querySelector(".loading-dots");
       if (loadingDots) {
-        loadingDots.style.display = 'none';
+        loadingDots.style.display = "none";
       }
     }
     appState.message.currentAssistant.textContent = content;
@@ -507,9 +507,11 @@ const messageBatch = {
     // Process all messages in batch
     const messages = this.buffer.splice(0);
     requestAnimationFrame(() => {
-      messages.forEach(msg => processMessage(msg));
+      for (const msg of messages) {
+        processMessage(msg);
+      }
     });
-  }
+  },
 };
 
 // Handle bot output (streaming response with JSON protocol)
@@ -521,8 +523,8 @@ window.electronAPI.onBotOutput((output) => {
   jsonBuffer += output;
 
   // Process all complete JSON messages in the buffer
-  let startIndex;
-  while ((startIndex = jsonBuffer.indexOf("__JSON__")) !== -1) {
+  let startIndex = jsonBuffer.indexOf("__JSON__");
+  while (startIndex !== -1) {
     const endIndex = jsonBuffer.indexOf("__JSON__", startIndex + 8);
 
     if (endIndex === -1) {
@@ -535,6 +537,9 @@ window.electronAPI.onBotOutput((output) => {
 
     // Remove processed message from buffer
     jsonBuffer = jsonBuffer.substring(endIndex + 8);
+
+    // Update startIndex for next iteration
+    startIndex = jsonBuffer.indexOf("__JSON__");
 
     // Parse and handle the JSON message
     try {
@@ -559,194 +564,194 @@ window.electronAPI.onBotOutput((output) => {
     }
   }
 
-// Separate function to process messages (for batching)
-function processMessage(message) {
-  try {
+  // Separate function to process messages (for batching)
+  function processMessage(message) {
+    try {
+      switch (message.type) {
+        case "assistant_start": {
+          // No longer using the old thinking message
 
-        switch (message.type) {
-          case "assistant_start": {
-            // No longer using the old thinking message
-
-            // Hide AI thinking indicator (static one if it exists)
-            if (elements.aiThinking) {
-              elements.aiThinking.classList.remove("active");
-            }
-
-            // Hide legacy typing indicator and start new message
-            elements.typingIndicator.classList.remove("active");
-            elements.typingIndicator.parentElement.style.display = "none";
-            appState.setState("message.isTyping", false);
-
-            // Create assistant message with streaming indicator
-            const messageDiv = document.createElement("div");
-            messageDiv.className = "message assistant streaming";
-
-            const contentDiv = document.createElement("div");
-            contentDiv.className = "message-content";
-
-            // Add loading dots initially
-            const loadingSpan = document.createElement("span");
-            loadingSpan.className = "loading-dots";
-            loadingSpan.innerHTML = '<span>•</span><span>•</span><span>•</span>';
-
-            const textSpan = document.createElement("span");
-            textSpan.className = "streaming-text";
-
-            contentDiv.appendChild(loadingSpan);
-            contentDiv.appendChild(textSpan);
-            messageDiv.appendChild(contentDiv);
-            elements.chatContainer.appendChild(messageDiv);
-
-            appState.setState("message.currentAssistant", textSpan);
-            appState.setState("message.assistantBuffer", "");
-
-            // Auto-scroll to bottom
-            elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight;
-            break;
+          // Hide AI thinking indicator (static one if it exists)
+          if (elements.aiThinking) {
+            elements.aiThinking.classList.remove("active");
           }
 
-          case "assistant_delta":
-            // Add content to buffer exactly as received
-            console.log("Assistant delta received:", message.content);
-            if (appState.message.currentAssistant) {
-              const newBuffer = appState.message.assistantBuffer + message.content;
-              appState.setState("message.assistantBuffer", newBuffer);
-              updateAssistantMessage(newBuffer);
-            } else {
-              console.warn("No current assistant message element!");
-            }
-            break;
+          // Hide legacy typing indicator and start new message
+          elements.typingIndicator.classList.remove("active");
+          elements.typingIndicator.parentElement.style.display = "none";
+          appState.setState("message.isTyping", false);
 
-          case "assistant_end":
-            // Message complete, remove streaming indicators
-            const streamingMsg = elements.chatContainer.querySelector(".message.assistant.streaming");
-            if (streamingMsg) {
-              streamingMsg.classList.remove("streaming");
-              const cursor = streamingMsg.querySelector(".streaming-cursor");
-              if (cursor) {
-                cursor.remove();
-              }
-            }
-            appState.setState("message.currentAssistant", null);
-            // Ensure AI thinking indicator is hidden
-            if (elements.aiThinking) {
-              elements.aiThinking.classList.remove("active");
-            }
-            break;
+          // Create assistant message with streaming indicator
+          const messageDiv = document.createElement("div");
+          messageDiv.className = "message assistant streaming";
 
-          case "error":
-            // Display error message as a system/error message
-            console.error("Error from backend:", message.message);
-            if (elements.aiThinking) {
-              elements.aiThinking.classList.remove("active");
-            }
-            // Hide typing indicator
-            elements.typingIndicator.classList.remove("active");
-            elements.typingIndicator.parentElement.style.display = "none";
-            appState.setState("message.isTyping", false);
-            // Add error message with red styling
-            addMessage(message.message, "error");
-            break;
+          const contentDiv = document.createElement("div");
+          contentDiv.className = "message-content";
 
-          case "function_detected": {
-            // Function call detected - show card immediately
-            console.log("Function detected:", message);
-            const _card = createFunctionCallCard(message.call_id, message.name, "preparing...");
-            if (message.arguments) {
-              updateFunctionCallStatus(message.call_id, "ready", {
-                arguments: message.arguments,
-              });
-            }
-            break;
+          // Add loading dots initially
+          const loadingSpan = document.createElement("span");
+          loadingSpan.className = "loading-dots";
+          loadingSpan.innerHTML = "<span>•</span><span>•</span><span>•</span>";
+
+          const textSpan = document.createElement("span");
+          textSpan.className = "streaming-text";
+
+          contentDiv.appendChild(loadingSpan);
+          contentDiv.appendChild(textSpan);
+          messageDiv.appendChild(contentDiv);
+          elements.chatContainer.appendChild(messageDiv);
+
+          appState.setState("message.currentAssistant", textSpan);
+          appState.setState("message.assistantBuffer", "");
+
+          // Auto-scroll to bottom
+          elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight;
+          break;
+        }
+
+        case "assistant_delta":
+          // Add content to buffer exactly as received
+          console.log("Assistant delta received:", message.content);
+          if (appState.message.currentAssistant) {
+            const newBuffer = appState.message.assistantBuffer + message.content;
+            appState.setState("message.assistantBuffer", newBuffer);
+            updateAssistantMessage(newBuffer);
+          } else {
+            console.warn("No current assistant message element!");
           }
+          break;
 
-          case "function_executing":
-            // Function is being executed
-            console.log("Function executing:", message);
-            updateFunctionCallStatus(message.call_id, "executing...", {
+        case "assistant_end": {
+          // Message complete, remove streaming indicators
+          const streamingMsg = elements.chatContainer.querySelector(".message.assistant.streaming");
+          if (streamingMsg) {
+            streamingMsg.classList.remove("streaming");
+            const cursor = streamingMsg.querySelector(".streaming-cursor");
+            if (cursor) {
+              cursor.remove();
+            }
+          }
+          appState.setState("message.currentAssistant", null);
+          // Ensure AI thinking indicator is hidden
+          if (elements.aiThinking) {
+            elements.aiThinking.classList.remove("active");
+          }
+          break;
+        }
+
+        case "error":
+          // Display error message as a system/error message
+          console.error("Error from backend:", message.message);
+          if (elements.aiThinking) {
+            elements.aiThinking.classList.remove("active");
+          }
+          // Hide typing indicator
+          elements.typingIndicator.classList.remove("active");
+          elements.typingIndicator.parentElement.style.display = "none";
+          appState.setState("message.isTyping", false);
+          // Add error message with red styling
+          addMessage(message.message, "error");
+          break;
+
+        case "function_detected": {
+          // Function call detected - show card immediately
+          console.log("Function detected:", message);
+          const _card = createFunctionCallCard(message.call_id, message.name, "preparing...");
+          if (message.arguments) {
+            updateFunctionCallStatus(message.call_id, "ready", {
               arguments: message.arguments,
             });
-            break;
-
-          case "function_completed": {
-            // Function execution complete
-            console.log("Function completed:", message);
-            if (message.success) {
-              // Use the actual output if provided, otherwise show "Success"
-              const result = message.output || "Success";
-              updateFunctionCallStatus(message.call_id, "completed", {
-                result: result,
-              });
-            } else {
-              updateFunctionCallStatus(message.call_id, "error", {
-                error: message.error || message.output || "Unknown error",
-              });
-            }
-            // Clean up after a delay
-            scheduleFunctionCardCleanup(message.call_id);
-            break;
           }
-
-          case "rate_limit_hit":
-            // Show rate limit notification
-            console.log("Rate limit hit:", message);
-            addMessage(
-              `⏳ Rate limit reached. Waiting ${message.wait_time}s before retry (attempt ${message.retry_count})...`,
-              "system"
-            );
-            break;
-
-          case "rate_limit_failed":
-            // Show rate limit failure
-            console.error("Rate limit failed:", message);
-            addMessage(`❌ ${message.message}. Please try again later.`, "error");
-            break;
-
-          case "function_call_added":
-            // Legacy event - now handled by function_detected
-            break;
-
-          case "function_call_arguments_delta":
-            // Streaming function arguments
-            if (message.item_id || message.call_id) {
-              const callId = message.call_id || message.item_id;
-              updateFunctionArguments(callId, message.delta, false);
-            }
-            break;
-
-          case "function_call_arguments_done":
-            // Function arguments complete
-            if (message.item_id || message.call_id) {
-              const callId = message.call_id || message.item_id;
-              updateFunctionArguments(callId, null, true);
-            }
-            break;
-
-          case "function_call_ready":
-            // Function is ready to execute
-            updateFunctionCallStatus(message.call_id, "ready to execute");
-            break;
-
-          case "function_executed": {
-            // Function execution complete
-            if (message.success) {
-              updateFunctionCallStatus(message.call_id, "completed", {
-                result: message.result_preview || "Success",
-              });
-            } else {
-              updateFunctionCallStatus(message.call_id, "error", {
-                error: message.error,
-              });
-            }
-            // Clean up after a delay
-            scheduleFunctionCardCleanup(message.call_id);
-            break;
-          }
+          break;
         }
-  } catch (e) {
-    console.error("Error processing message:", e);
+
+        case "function_executing":
+          // Function is being executed
+          console.log("Function executing:", message);
+          updateFunctionCallStatus(message.call_id, "executing...", {
+            arguments: message.arguments,
+          });
+          break;
+
+        case "function_completed": {
+          // Function execution complete
+          console.log("Function completed:", message);
+          if (message.success) {
+            // Use the actual output if provided, otherwise show "Success"
+            const result = message.output || "Success";
+            updateFunctionCallStatus(message.call_id, "completed", {
+              result: result,
+            });
+          } else {
+            updateFunctionCallStatus(message.call_id, "error", {
+              error: message.error || message.output || "Unknown error",
+            });
+          }
+          // Clean up after a delay
+          scheduleFunctionCardCleanup(message.call_id);
+          break;
+        }
+
+        case "rate_limit_hit":
+          // Show rate limit notification
+          console.log("Rate limit hit:", message);
+          addMessage(
+            `⏳ Rate limit reached. Waiting ${message.wait_time}s before retry (attempt ${message.retry_count})...`,
+            "system"
+          );
+          break;
+
+        case "rate_limit_failed":
+          // Show rate limit failure
+          console.error("Rate limit failed:", message);
+          addMessage(`❌ ${message.message}. Please try again later.`, "error");
+          break;
+
+        case "function_call_added":
+          // Legacy event - now handled by function_detected
+          break;
+
+        case "function_call_arguments_delta":
+          // Streaming function arguments
+          if (message.item_id || message.call_id) {
+            const callId = message.call_id || message.item_id;
+            updateFunctionArguments(callId, message.delta, false);
+          }
+          break;
+
+        case "function_call_arguments_done":
+          // Function arguments complete
+          if (message.item_id || message.call_id) {
+            const callId = message.call_id || message.item_id;
+            updateFunctionArguments(callId, null, true);
+          }
+          break;
+
+        case "function_call_ready":
+          // Function is ready to execute
+          updateFunctionCallStatus(message.call_id, "ready to execute");
+          break;
+
+        case "function_executed": {
+          // Function execution complete
+          if (message.success) {
+            updateFunctionCallStatus(message.call_id, "completed", {
+              result: message.result_preview || "Success",
+            });
+          } else {
+            updateFunctionCallStatus(message.call_id, "error", {
+              error: message.error,
+            });
+          }
+          // Clean up after a delay
+          scheduleFunctionCardCleanup(message.call_id);
+          break;
+        }
+      }
+    } catch (e) {
+      console.error("Error processing message:", e);
+    }
   }
-}
 
   // Process any non-JSON lines for legacy format handling
   const lines = output.split("\n");
