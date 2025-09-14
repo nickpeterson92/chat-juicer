@@ -4,7 +4,31 @@ Utility functions for token management, rate limiting, and optimization.
 
 import re
 
+from functools import lru_cache
+
 import tiktoken
+
+# Cache for tiktoken encoders to avoid recreation
+_encoder_cache = {}
+
+
+def _get_encoder(model: str):
+    """Get cached encoder for model."""
+    if model not in _encoder_cache:
+        try:
+            # Try to get encoding for the specific model
+            _encoder_cache[model] = tiktoken.encoding_for_model(model)
+        except KeyError:
+            # If model not recognized, use cl100k_base encoding
+            _encoder_cache[model] = tiktoken.get_encoding("cl100k_base")
+    return _encoder_cache[model]
+
+
+@lru_cache(maxsize=128)
+def _count_tokens_cached(text: str, model: str) -> int:
+    """Cached token counting - caches last 128 unique text/model pairs."""
+    encoding = _get_encoder(model)
+    return len(encoding.encode(text))
 
 
 def estimate_tokens(text: str, model: str = "gpt-4o-mini") -> dict:
@@ -19,18 +43,8 @@ def estimate_tokens(text: str, model: str = "gpt-4o-mini") -> dict:
         Dict with exact and estimated token counts
     """
     try:
-        # Try to get exact encoding for the model
-        try:
-            # Try to get encoding for the specific model
-            encoding = tiktoken.encoding_for_model(model)
-        except KeyError:
-            # If model not recognized, use cl100k_base encoding
-            # This is the encoding used by GPT-4 and newer models
-            encoding = tiktoken.get_encoding("cl100k_base")
-
-        # Get exact token count
-        tokens = encoding.encode(text)
-        exact_count = len(tokens)
+        # Use cached token counting
+        exact_count = _count_tokens_cached(text, model)
 
         # Also provide character and word stats for context
         char_count = len(text)
@@ -45,7 +59,7 @@ def estimate_tokens(text: str, model: str = "gpt-4o-mini") -> dict:
             "word_count": word_count,
             "chars_per_token": round(chars_per_token, 2),
             "model": model,
-            "encoding": encoding.name,
+            "encoding": _get_encoder(model).name,
         }
 
     except Exception as e:

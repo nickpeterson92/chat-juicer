@@ -15,8 +15,12 @@ from typing import Any
 # Optional dependency: MarkItDown for document conversion
 try:
     from markitdown import MarkItDown  # type: ignore
+
+    # Create singleton converter instance with plugins enabled
+    _markitdown_converter = MarkItDown(enable_plugins=True) if MarkItDown else None
 except ImportError:  # pragma: no cover - optional dependency
     MarkItDown = None  # type: ignore
+    _markitdown_converter = None
 
 
 from constants import (
@@ -293,16 +297,15 @@ def read_file(file_path: str, max_size: int = DEFAULT_MAX_FILE_SIZE) -> str:
 
         if needs_conversion:
             # Try conversion with MarkItDown
-            if MarkItDown is None:
+            if _markitdown_converter is None:
                 return json_response(
                     error=f"MarkItDown is required for reading {extension} files. Install with: pip install markitdown",
                     file_path=str(target_file),
                 )
 
             try:
-                # Initialize MarkItDown with plugin support for better format handling
-                converter = MarkItDown(enable_plugins=True)
-                conversion_result = converter.convert(str(target_file))
+                # Use singleton converter instance
+                conversion_result = _markitdown_converter.convert(str(target_file))
                 content = conversion_result.text_content
                 conversion_method = "markitdown"
 

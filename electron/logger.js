@@ -27,11 +27,13 @@ class Logger {
     // Configuration from environment or defaults
     this.level = this.parseLevel(process.env.LOG_LEVEL || options.level || "INFO");
     this.format = process.env.LOG_FORMAT || (process.env.NODE_ENV === "production" ? "json" : "pretty");
+    // PERFORMANCE: Default to console-only logging (no file I/O) unless explicitly enabled
     this.destination = process.env.LOG_DESTINATION || "console";
 
-    // Performance tracking
+    // Performance tracking with size limits to prevent memory leaks
     this.metrics = new Map();
     this.timers = new Map();
+    this.maxMetricsSize = 1000; // Prevent unbounded growth
 
     // Async write queue for non-blocking file I/O
     this.writeQueue = [];
@@ -363,11 +365,23 @@ class Logger {
       this.output(this.formatMessage("METRIC", `Metric: ${name}`, metricData), "METRIC");
     }
 
-    // Store for aggregation
+    // Store for aggregation with size limit
     if (!this.metrics.has(name)) {
       this.metrics.set(name, []);
     }
-    this.metrics.get(name).push({ value, timestamp: Date.now() });
+    const metricArray = this.metrics.get(name);
+    metricArray.push({ value, timestamp: Date.now() });
+
+    // Prevent memory leak - keep only last 100 entries per metric
+    if (metricArray.length > 100) {
+      metricArray.shift();
+    }
+
+    // Limit total metrics tracked
+    if (this.metrics.size > this.maxMetricsSize) {
+      const firstKey = this.metrics.keys().next().value;
+      this.metrics.delete(firstKey);
+    }
   }
 
   // Start timing an operation

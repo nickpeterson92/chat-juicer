@@ -3,44 +3,71 @@
 // Constants
 const MAX_FUNCTION_CALLS = 50;
 const MAX_FUNCTION_BUFFERS = 20;
+const MAX_MESSAGES = 100; // Limit chat history to prevent memory issues
 const FUNCTION_CARD_CLEANUP_DELAY = 30000; // 30 seconds
 const RECONNECT_DELAY = 2000; // 2 seconds
 const CONNECTION_RESET_DELAY = 1000; // 1 second
 const OLD_CARD_THRESHOLD = 60000; // 1 minute
 
-// DOM element references (immutable)
-const elements = {
-  chatContainer: document.getElementById("chat-container"),
-  userInput: document.getElementById("user-input"),
-  sendBtn: document.getElementById("send-btn"),
-  restartBtn: document.getElementById("restart-btn"),
-  statusIndicator: document.getElementById("status-indicator"),
-  statusText: document.getElementById("status-text"),
-  typingIndicator: document.getElementById("typing-indicator"),
-  aiThinking: document.getElementById("ai-thinking"),
-  toolsContainer: document.getElementById("tools-container"),
-  toolsPanel: document.getElementById("tools-panel"),
-  toggleToolsBtn: document.getElementById("toggle-tools-btn"),
-  themeToggle: document.getElementById("theme-toggle"),
-  themeIcon: document.getElementById("theme-icon"),
-  themeText: document.getElementById("theme-text"),
-};
+// DOM element references (cached for performance)
+const elements = {};
 
-// Bounded Map class for memory management
+// Initialize elements immediately since script runs after DOM loads
+function initializeElements() {
+  elements.chatContainer = document.getElementById("chat-container");
+  elements.userInput = document.getElementById("user-input");
+  elements.sendBtn = document.getElementById("send-btn");
+  elements.restartBtn = document.getElementById("restart-btn");
+  elements.statusIndicator = document.getElementById("status-indicator");
+  elements.statusText = document.getElementById("status-text");
+  elements.typingIndicator = document.getElementById("typing-indicator");
+  elements.aiThinking = document.getElementById("ai-thinking");
+  elements.toolsContainer = document.getElementById("tools-container");
+  elements.toolsPanel = document.getElementById("tools-panel");
+  elements.toggleToolsBtn = document.getElementById("toggle-tools-btn");
+  elements.themeToggle = document.getElementById("theme-toggle");
+  elements.themeIcon = document.getElementById("theme-icon");
+  elements.themeText = document.getElementById("theme-text");
+}
 
+// Initialize immediately since renderer.js loads at end of body
+initializeElements();
+
+// Efficient Bounded Map class for memory management
 class BoundedMap extends Map {
   constructor(maxSize = 100) {
     super();
     this.maxSize = maxSize;
+    this.keyOrder = []; // Track insertion order efficiently
   }
 
   set(key, value) {
-    // If at max size, delete oldest entry (FIFO)
-    if (this.size >= this.maxSize) {
-      const firstKey = this.keys().next().value;
-      this.delete(firstKey);
+    // If key exists, just update value (no order change needed)
+    if (this.has(key)) {
+      return super.set(key, value);
     }
+
+    // New key - check size limit
+    if (this.size >= this.maxSize) {
+      const oldestKey = this.keyOrder.shift();
+      this.delete(oldestKey);
+    }
+
+    this.keyOrder.push(key);
     return super.set(key, value);
+  }
+
+  delete(key) {
+    const index = this.keyOrder.indexOf(key);
+    if (index > -1) {
+      this.keyOrder.splice(index, 1);
+    }
+    return super.delete(key);
+  }
+
+  clear() {
+    this.keyOrder = [];
+    return super.clear();
   }
 }
 
@@ -78,8 +105,17 @@ class AppState {
     this.listeners = new Map();
   }
 
-  // State change notification
+  // Optimized state change - avoid deep path parsing for common cases
   setState(path, value) {
+    // Fast path for common single-level updates
+    if (!path.includes('.')) {
+      const oldValue = this[path];
+      this[path] = value;
+      this.notifyListeners(path, value, oldValue);
+      return;
+    }
+
+    // Handle nested paths only when necessary
     const keys = path.split(".");
     let target = this;
 
@@ -88,8 +124,9 @@ class AppState {
       target = target[keys[i]];
     }
 
-    const oldValue = target[keys[keys.length - 1]];
-    target[keys[keys.length - 1]] = value;
+    const lastKey = keys[keys.length - 1];
+    const oldValue = target[lastKey];
+    target[lastKey] = value;
 
     // Notify listeners
     this.notifyListeners(path, value, oldValue);
@@ -209,7 +246,7 @@ function addManagedEventListener(element, event, handler, options) {
   }
 }
 
-// Function to add message to chat
+// Function to add message to chat with history limit
 function addMessage(content, type = "assistant") {
   const messageDiv = document.createElement("div");
   messageDiv.className = `message ${type}`;
@@ -220,6 +257,16 @@ function addMessage(content, type = "assistant") {
 
   messageDiv.appendChild(contentDiv);
   elements.chatContainer.appendChild(messageDiv);
+
+  // Limit message history to prevent memory issues
+  const messages = elements.chatContainer.querySelectorAll('.message');
+  if (messages.length > MAX_MESSAGES) {
+    // Remove oldest messages, keeping recent ones
+    const toRemove = messages.length - MAX_MESSAGES;
+    for (let i = 0; i < toRemove; i++) {
+      messages[i].remove();
+    }
+  }
 
   // Auto-scroll to bottom
   elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight;
@@ -401,6 +448,12 @@ function scheduleFunctionCardCleanup(callId) {
 
 // Send message function
 function sendMessage() {
+  // Ensure elements are initialized
+  if (!elements.userInput || !elements.sendBtn) {
+    console.error("Elements not initialized properly");
+    return;
+  }
+
   const message = elements.userInput.value.trim();
 
   if (!message || appState.connection.status !== "CONNECTED") return;
@@ -424,9 +477,45 @@ function sendMessage() {
 // Buffer for accumulating multi-line JSON messages
 let jsonBuffer = "";
 
+// Message batching for performance
+const messageBatch = {
+  buffer: [],
+  timeout: null,
+  maxBatchSize: 10,
+  maxDelay: 16, // One animation frame
+
+  add(message) {
+    this.buffer.push(message);
+
+    // Process immediately if batch is full
+    if (this.buffer.length >= this.maxBatchSize) {
+      this.flush();
+    } else if (!this.timeout) {
+      // Schedule flush for next frame
+      this.timeout = setTimeout(() => this.flush(), this.maxDelay);
+    }
+  },
+
+  flush() {
+    if (this.timeout) {
+      clearTimeout(this.timeout);
+      this.timeout = null;
+    }
+
+    if (this.buffer.length === 0) return;
+
+    // Process all messages in batch
+    const messages = this.buffer.splice(0);
+    requestAnimationFrame(() => {
+      messages.forEach(msg => processMessage(msg));
+    });
+  }
+};
+
 // Handle bot output (streaming response with JSON protocol)
 window.electronAPI.onBotOutput((output) => {
-  console.log("Raw output received:", output);
+  // Only log if debugging
+  // console.log("Raw output received:", output);
 
   // Add output to buffer
   jsonBuffer += output;
@@ -450,6 +539,29 @@ window.electronAPI.onBotOutput((output) => {
     // Parse and handle the JSON message
     try {
       const message = JSON.parse(jsonStr);
+
+      // Handle different message types
+      console.log("Processing message type:", message.type);
+
+      if (message.type === "assistant_delta") {
+        // For streaming, process immediately for responsiveness
+        processMessage(message);
+      } else if (message.type === "assistant_end") {
+        // Flush any pending messages before processing end
+        messageBatch.flush();
+        processMessage(message);
+      } else {
+        // Process other messages immediately
+        processMessage(message);
+      }
+    } catch (e) {
+      console.error("Failed to parse JSON message:", e, jsonStr);
+    }
+  }
+
+// Separate function to process messages (for batching)
+function processMessage(message) {
+  try {
 
         switch (message.type) {
           case "assistant_start": {
@@ -495,10 +607,13 @@ window.electronAPI.onBotOutput((output) => {
 
           case "assistant_delta":
             // Add content to buffer exactly as received
+            console.log("Assistant delta received:", message.content);
             if (appState.message.currentAssistant) {
               const newBuffer = appState.message.assistantBuffer + message.content;
               appState.setState("message.assistantBuffer", newBuffer);
               updateAssistantMessage(newBuffer);
+            } else {
+              console.warn("No current assistant message element!");
             }
             break;
 
@@ -628,10 +743,10 @@ window.electronAPI.onBotOutput((output) => {
             break;
           }
         }
-      } catch (e) {
-        console.error("Failed to parse JSON message:", e, jsonStr);
-      }
-    }
+  } catch (e) {
+    console.error("Error processing message:", e);
+  }
+}
 
   // Process any non-JSON lines for legacy format handling
   const lines = output.split("\n");
@@ -723,39 +838,69 @@ window.electronAPI.onBotRestarted(() => {
   }, CONNECTION_RESET_DELAY);
 });
 
-// Event listeners (using managed listeners for cleanup)
-addManagedEventListener(elements.sendBtn, "click", sendMessage);
-
-addManagedEventListener(elements.userInput, "keypress", (e) => {
-  if (e.key === "Enter" && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
+// Initialize all event listeners after DOM elements are ready
+function initializeEventListeners() {
+  // Send button
+  if (elements.sendBtn) {
+    addManagedEventListener(elements.sendBtn, "click", sendMessage);
   }
-});
 
-addManagedEventListener(elements.restartBtn, "click", () => {
-  window.electronAPI.restartBot();
-});
+  // Enter key to send
+  if (elements.userInput) {
+    addManagedEventListener(elements.userInput, "keypress", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+  }
 
-// Toggle tools panel handler
-if (elements.toggleToolsBtn) {
-  addManagedEventListener(elements.toggleToolsBtn, "click", () => {
-    elements.toolsPanel.classList.toggle("collapsed");
-    document.body.classList.toggle("tools-collapsed");
-    // Update arrow direction: ◀ when collapsed (to expand), ▶ when open (to collapse)
-    elements.toggleToolsBtn.textContent = elements.toolsPanel.classList.contains("collapsed") ? "◀" : "▶";
-    elements.toggleToolsBtn.title = elements.toolsPanel.classList.contains("collapsed")
-      ? "Show function calls"
-      : "Hide function calls";
-  });
+  // Restart button
+  if (elements.restartBtn) {
+    addManagedEventListener(elements.restartBtn, "click", () => {
+      window.electronAPI.restartBot();
+    });
+  }
+
+  // Toggle tools panel handler
+  if (elements.toggleToolsBtn) {
+    addManagedEventListener(elements.toggleToolsBtn, "click", () => {
+      elements.toolsPanel.classList.toggle("collapsed");
+      document.body.classList.toggle("tools-collapsed");
+      // Update arrow direction: ◀ when collapsed (to expand), ▶ when open (to collapse)
+      elements.toggleToolsBtn.textContent = elements.toolsPanel.classList.contains("collapsed") ? "◀" : "▶";
+      elements.toggleToolsBtn.title = elements.toolsPanel.classList.contains("collapsed")
+        ? "Show function calls"
+        : "Hide function calls";
+    });
+  }
+
+  // Theme toggle
+  if (elements.themeToggle) {
+    addManagedEventListener(elements.themeToggle, "click", toggleTheme);
+  }
 }
+
+// Call after elements are initialized
+initializeEventListeners();
 
 // Focus input on load and ensure it's enabled
 window.addEventListener("load", () => {
+  // Re-initialize elements to be safe (in case DOM wasn't ready)
+  if (Object.keys(elements).length === 0) {
+    initializeElements();
+    initializeEventListeners();
+  }
+
   // Ensure input is enabled from the start
-  elements.userInput.disabled = false;
-  elements.sendBtn.disabled = false;
-  elements.userInput.focus();
+  if (elements.userInput) {
+    elements.userInput.disabled = false;
+    elements.userInput.focus();
+  }
+  if (elements.sendBtn) {
+    elements.sendBtn.disabled = false;
+  }
+
   setConnectionStatus(true); // Start as connected
 
   // Initialize dark mode from localStorage
@@ -804,10 +949,7 @@ function toggleTheme() {
   }
 }
 
-// Add event listener for theme toggle button
-if (elements.themeToggle) {
-  addManagedEventListener(elements.themeToggle, "click", toggleTheme);
-}
+// Theme toggle listener moved to initializeEventListeners()
 
 // Comprehensive cleanup function to prevent memory leaks
 function cleanup() {

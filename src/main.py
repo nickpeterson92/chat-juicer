@@ -11,7 +11,10 @@ import os
 import sys
 import uuid
 
+from collections import deque
 from dataclasses import dataclass, field
+from functools import partial
+from typing import ClassVar
 
 from agents import Agent, set_default_openai_client, set_tracing_disabled
 from agents.mcp import MCPServerStdio
@@ -41,7 +44,7 @@ from utils import estimate_tokens
 class CallTracker:
     """Tracks tool call IDs for matching outputs with their calls."""
 
-    active_calls: list[dict[str, str]] = field(default_factory=list)
+    active_calls: deque[dict[str, str]] = field(default_factory=deque)
 
     def add_call(self, call_id: str, tool_name: str) -> None:
         """Add a new tool call to track."""
@@ -50,18 +53,24 @@ class CallTracker:
 
     def pop_call(self) -> dict[str, str] | None:
         """Get and remove the oldest tracked call."""
-        return self.active_calls.pop(0) if self.active_calls else None
+        return self.active_calls.popleft() if self.active_calls else None
 
 
 class IPCManager:
     """Manages IPC communication with clean abstraction."""
 
-    DELIMITER = "__JSON__"
+    DELIMITER: ClassVar[str] = "__JSON__"
+
+    # Pre-create common JSON templates to avoid repeated serialization
+    _TEMPLATES: ClassVar[dict[str, str]] = {
+        "assistant_start": '{"type": "assistant_start"}',
+        "assistant_end": '{"type": "assistant_end"}',
+    }
 
     @staticmethod
     def send(message: dict) -> None:
         """Send a message to the Electron frontend via IPC."""
-        msg = json.dumps(message)
+        msg = _json_builder(message)
         print(f"{IPCManager.DELIMITER}{msg}{IPCManager.DELIMITER}", flush=True)
 
     @staticmethod
@@ -77,12 +86,12 @@ class IPCManager:
     @staticmethod
     def send_assistant_start() -> None:
         """Send assistant start signal."""
-        IPCManager.send({"type": "assistant_start"})
+        IPCManager.send_raw(IPCManager._TEMPLATES["assistant_start"])
 
     @staticmethod
     def send_assistant_end() -> None:
         """Send assistant end signal."""
-        IPCManager.send({"type": "assistant_end"})
+        IPCManager.send_raw(IPCManager._TEMPLATES["assistant_end"])
 
 
 async def setup_mcp_servers():
@@ -109,6 +118,10 @@ async def setup_mcp_servers():
     return servers
 
 
+# Pre-create partial JSON builders for common patterns
+_json_builder = partial(json.dumps, separators=(",", ":"))  # Compact JSON
+
+
 # Event handler functions for different item types
 def handle_message_output(item):
     """Handle message output items (assistant responses)"""
@@ -118,7 +131,7 @@ def handle_message_output(item):
         for content_item in content:
             text = getattr(content_item, "text", "")
             if text:
-                return json.dumps({"type": "assistant_delta", "content": text}), 0
+                return _json_builder({"type": "assistant_delta", "content": text}), 0
     return None, 0
 
 
@@ -146,7 +159,7 @@ def handle_tool_call(item, tracker: CallTracker):
         tokens = estimate_tokens(arguments).get("exact_tokens", 0)
 
     return (
-        json.dumps({"type": "function_detected", "name": tool_name, "call_id": call_id, "arguments": arguments}),
+        _json_builder({"type": "function_detected", "name": tool_name, "call_id": call_id, "arguments": arguments}),
         tokens,
     )
 
@@ -160,7 +173,7 @@ def handle_reasoning(item):
             text = getattr(content_item, "text", "")
             if text:
                 tokens = estimate_tokens(text).get("exact_tokens", 0)
-                return json.dumps({"type": "assistant_delta", "content": f"[Thinking] {text}"}), tokens
+                return _json_builder({"type": "assistant_delta", "content": f"[Thinking] {text}"}), tokens
     return None, 0
 
 
@@ -179,7 +192,7 @@ def handle_tool_output(item, tracker: CallTracker):
     if hasattr(item, "output"):
         output = item.output
         # Convert to string for consistent token counting
-        output_str = json.dumps(output) if isinstance(output, dict) else str(output)
+        output_str = _json_builder(output) if isinstance(output, dict) else str(output)
         tokens = estimate_tokens(output_str).get("exact_tokens", 0)
     else:
         output_str = ""
@@ -191,7 +204,7 @@ def handle_tool_output(item, tracker: CallTracker):
         tokens = estimate_tokens(output_str).get("exact_tokens", 0)
 
     return (
-        json.dumps({"type": "function_completed", "call_id": call_id, "success": success, "output": output_str}),
+        _json_builder({"type": "function_completed", "call_id": call_id, "success": success, "output": output_str}),
         tokens,
     )
 
@@ -204,7 +217,7 @@ def handle_handoff_call(item):
     else:
         target_agent = "unknown"
 
-    return json.dumps({"type": "handoff_started", "target_agent": target_agent}), 0
+    return _json_builder({"type": "handoff_started", "target_agent": target_agent}), 0
 
 
 def handle_handoff_output(item):
@@ -222,7 +235,7 @@ def handle_handoff_output(item):
     if output_str:
         tokens = estimate_tokens(output_str).get("exact_tokens", 0)
 
-    return json.dumps({"type": "handoff_completed", "source_agent": source_agent, "result": output_str}), tokens
+    return _json_builder({"type": "handoff_completed", "source_agent": source_agent, "result": output_str}), tokens
 
 
 async def handle_electron_ipc(event, tracker: CallTracker):
@@ -256,7 +269,7 @@ async def handle_electron_ipc(event, tracker: CallTracker):
 
     # Handle agent updated events
     elif event.type == AGENT_UPDATED_STREAM_EVENT:
-        return json.dumps({"type": "agent_updated", "name": event.new_agent.name}), 0
+        return _json_builder({"type": "agent_updated", "name": event.new_agent.name}), 0
 
     return None, 0
 
