@@ -37,7 +37,6 @@ from logger import logger
 from sdk_token_tracker import connect_session, disconnect_session, patch_sdk_for_auto_tracking
 from session import TokenAwareSQLiteSession
 from tool_patch import apply_tool_patch, patch_native_tools
-from utils import estimate_tokens
 
 
 @dataclass
@@ -131,8 +130,8 @@ def handle_message_output(item):
         for content_item in content:
             text = getattr(content_item, "text", "")
             if text:
-                return _json_builder({"type": "assistant_delta", "content": text}), 0
-    return None, 0
+                return _json_builder({"type": "assistant_delta", "content": text})
+    return None
 
 
 def handle_tool_call(item, tracker: CallTracker):
@@ -140,7 +139,6 @@ def handle_tool_call(item, tracker: CallTracker):
     tool_name = "unknown"
     call_id = ""
     arguments = "{}"
-    tokens = 0
 
     if hasattr(item, "raw_item"):
         raw = item.raw_item
@@ -155,13 +153,7 @@ def handle_tool_call(item, tracker: CallTracker):
         # Track active calls for matching with outputs
         tracker.add_call(call_id, tool_name)
 
-        # Count argument tokens
-        tokens = estimate_tokens(arguments).get("exact_tokens", 0)
-
-    return (
-        _json_builder({"type": "function_detected", "name": tool_name, "call_id": call_id, "arguments": arguments}),
-        tokens,
-    )
+    return _json_builder({"type": "function_detected", "name": tool_name, "call_id": call_id, "arguments": arguments})
 
 
 def handle_reasoning(item):
@@ -172,28 +164,25 @@ def handle_reasoning(item):
         for content_item in content:
             text = getattr(content_item, "text", "")
             if text:
-                tokens = estimate_tokens(text).get("exact_tokens", 0)
-                return _json_builder({"type": "assistant_delta", "content": f"[Thinking] {text}"}), tokens
-    return None, 0
+                return _json_builder({"type": "assistant_delta", "content": f"[Thinking] {text}"})
+    return None
 
 
 def handle_tool_output(item, tracker: CallTracker):
     """Handle tool call output items (function results)"""
     call_id = ""
     success = True
-    tokens = 0
 
     # Match output with a call_id from tracker
     call_info = tracker.pop_call()
     if call_info:
         call_id = call_info["call_id"]
 
-    # Get output and count tokens
+    # Get output
     if hasattr(item, "output"):
         output = item.output
-        # Convert to string for consistent token counting
+        # Convert to string for consistent handling
         output_str = _json_builder(output) if isinstance(output, dict) else str(output)
-        tokens = estimate_tokens(output_str).get("exact_tokens", 0)
     else:
         output_str = ""
 
@@ -201,12 +190,8 @@ def handle_tool_output(item, tracker: CallTracker):
     if hasattr(item, "raw_item") and isinstance(item.raw_item, dict) and item.raw_item.get("error"):
         success = False
         output_str = str(item.raw_item["error"])
-        tokens = estimate_tokens(output_str).get("exact_tokens", 0)
 
-    return (
-        _json_builder({"type": "function_completed", "call_id": call_id, "success": success, "output": output_str}),
-        tokens,
-    )
+    return _json_builder({"type": "function_completed", "call_id": call_id, "success": success, "output": output_str})
 
 
 def handle_handoff_call(item):
@@ -217,25 +202,22 @@ def handle_handoff_call(item):
     else:
         target_agent = "unknown"
 
-    return _json_builder({"type": "handoff_started", "target_agent": target_agent}), 0
+    return _json_builder({"type": "handoff_started", "target_agent": target_agent})
 
 
 def handle_handoff_output(item):
     """Handle handoff output items (multi-agent results)"""
     source_agent = "unknown"
-    tokens = 0
 
     if hasattr(item, "raw_item"):
         raw = item.raw_item
         source_agent = getattr(raw, "source", "unknown")
 
-    # Get output and count tokens
+    # Get output
     output = getattr(item, "output", "")
     output_str = str(output) if output else ""
-    if output_str:
-        tokens = estimate_tokens(output_str).get("exact_tokens", 0)
 
-    return _json_builder({"type": "handoff_completed", "source_agent": source_agent, "result": output_str}), tokens
+    return _json_builder({"type": "handoff_completed", "source_agent": source_agent, "result": output_str})
 
 
 async def handle_electron_ipc(event, tracker: CallTracker):
@@ -246,7 +228,7 @@ async def handle_electron_ipc(event, tracker: CallTracker):
         tracker: CallTracker instance to track call_ids between tool_call and tool_call_output events
 
     Returns:
-        Tuple of (ipc_message, token_count)
+        The IPC message JSON string or None
     """
     # Handle run item stream events
     if event.type == RUN_ITEM_STREAM_EVENT:
@@ -269,9 +251,9 @@ async def handle_electron_ipc(event, tracker: CallTracker):
 
     # Handle agent updated events
     elif event.type == AGENT_UPDATED_STREAM_EVENT:
-        return _json_builder({"type": "agent_updated", "name": event.new_agent.name}), 0
+        return _json_builder({"type": "agent_updated", "name": event.new_agent.name})
 
-    return None, 0
+    return None
 
 
 def handle_streaming_error(error):
@@ -342,8 +324,7 @@ async def process_user_input(session, user_input):
         # Stream the events (SDK tracker handles token counting automatically)
         async for event in result.stream_events():
             # Convert to Electron IPC format with call_id tracking
-            # Note: We still return tokens for IPC display, but don't need to track them
-            ipc_msg, tokens = await handle_electron_ipc(event, tracker)
+            ipc_msg = await handle_electron_ipc(event, tracker)
             if ipc_msg:
                 IPCManager.send_raw(ipc_msg)
 

@@ -96,16 +96,14 @@ def estimate_tokens(text: str, model: str = "gpt-4o-mini") -> dict:
         }
 
 
-def optimize_content_for_tokens(
-    content: str, format_type: str = "text", model: str = "gpt-4o-mini"
-) -> tuple[str, dict]:
+def optimize_content_for_tokens(content: str, format_type: str = "text", model: str = "gpt-5-mini") -> tuple[str, dict]:
     """
     Optimize content for minimal token usage while preserving information.
 
     Args:
         content: The text content to optimize
         format_type: Type of content (markdown, csv, json, text, etc.)
-        model: Model name for token counting (default: gpt-4o-mini)
+        model: Model name for token counting (default: gpt-5-mini)
 
     Returns:
         Tuple of (optimized_content, optimization_stats)
