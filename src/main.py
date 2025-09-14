@@ -407,8 +407,9 @@ async def process_user_input(session, user_input):
 async def main():
     """Main entry point for Chat Juicer with Agent/Runner pattern"""
 
-    # Load environment variables
-    load_dotenv()
+    # Load environment variables from src/.env
+    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    load_dotenv(env_path)
 
     # Get Azure configuration
     api_key = os.getenv("AZURE_OPENAI_API_KEY")
