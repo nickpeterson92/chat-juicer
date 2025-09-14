@@ -1,4 +1,13 @@
 // Renderer process JavaScript
+
+// Constants
+const MAX_FUNCTION_CALLS = 50;
+const MAX_FUNCTION_BUFFERS = 20;
+const FUNCTION_CARD_CLEANUP_DELAY = 30000; // 30 seconds
+const RECONNECT_DELAY = 2000; // 2 seconds
+const CONNECTION_RESET_DELAY = 1000; // 1 second
+const OLD_CARD_THRESHOLD = 60000; // 1 minute
+
 // DOM element references (immutable)
 const elements = {
   chatContainer: document.getElementById("chat-container"),
@@ -17,9 +26,7 @@ const elements = {
   themeText: document.getElementById("theme-text"),
 };
 
-// Bounded Map class for memory management (define before use)
-const _MAX_FUNCTION_CALLS = 50;
-const _MAX_FUNCTION_BUFFERS = 20;
+// Bounded Map class for memory management
 
 class BoundedMap extends Map {
   constructor(maxSize = 100) {
@@ -56,8 +63,8 @@ class AppState {
 
     // Function call tracking
     this.functions = {
-      activeCalls: new BoundedMap(50),
-      argumentsBuffer: new BoundedMap(20),
+      activeCalls: new BoundedMap(MAX_FUNCTION_CALLS),
+      argumentsBuffer: new BoundedMap(MAX_FUNCTION_BUFFERS),
       activeTimers: new Set(),
     };
 
@@ -383,6 +390,15 @@ function setConnectionStatus(connected) {
   }
 }
 
+// Helper function to schedule function card cleanup
+function scheduleFunctionCardCleanup(callId) {
+  const timerId = setTimeout(() => {
+    appState.functions.activeCalls.delete(callId);
+    appState.functions.activeTimers.delete(timerId);
+  }, FUNCTION_CARD_CLEANUP_DELAY);
+  appState.functions.activeTimers.add(timerId);
+}
+
 // Send message function
 function sendMessage() {
   const message = elements.userInput.value.trim();
@@ -552,11 +568,7 @@ window.electronAPI.onBotOutput((output) => {
               });
             }
             // Clean up after a delay
-            const timerId = setTimeout(() => {
-              appState.functions.activeCalls.delete(message.call_id);
-              appState.functions.activeTimers.delete(timerId);
-            }, 30000); // Keep cards visible for 30 seconds
-            appState.functions.activeTimers.add(timerId);
+            scheduleFunctionCardCleanup(message.call_id);
             break;
           }
 
@@ -612,11 +624,7 @@ window.electronAPI.onBotOutput((output) => {
               });
             }
             // Clean up after a delay
-            const timerId2 = setTimeout(() => {
-              appState.functions.activeCalls.delete(message.call_id);
-              appState.functions.activeTimers.delete(timerId2);
-            }, 30000); // Keep cards visible for 30 seconds
-            appState.functions.activeTimers.add(timerId2);
+            scheduleFunctionCardCleanup(message.call_id);
             break;
           }
         }
@@ -712,7 +720,7 @@ window.electronAPI.onBotRestarted(() => {
   setTimeout(() => {
     setConnectionStatus(true);
     addMessage("Bot restarted successfully. Ready for new conversation.", "system");
-  }, 1000);
+  }, CONNECTION_RESET_DELAY);
 });
 
 // Event listeners (using managed listeners for cleanup)
@@ -879,8 +887,8 @@ document.addEventListener("visibilitychange", () => {
     // Clear old function cards when tab is hidden
     const now = Date.now();
     appState.functions.activeCalls.forEach((card, callId) => {
-      // Remove cards older than 1 minute when tab is hidden
-      if (card.timestamp && now - card.timestamp > 60000) {
+      // Remove cards older than threshold when tab is hidden
+      if (card.timestamp && now - card.timestamp > OLD_CARD_THRESHOLD) {
         appState.functions.activeCalls.delete(callId);
       }
     });

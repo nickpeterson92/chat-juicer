@@ -3,6 +3,13 @@ const { spawn } = require("node:child_process");
 const path = require("node:path");
 const Logger = require("./logger");
 
+// Constants
+const RESTART_DELAY = 2000; // 2 seconds
+const RESTART_CALLBACK_DELAY = 500; // 500ms
+const GRACEFUL_SHUTDOWN_TIMEOUT = 5000; // 5 seconds
+const HEALTH_CHECK_INTERVAL = 30000; // 30 seconds
+const SIGTERM_DELAY = 500; // 500ms
+
 // Initialize logger for main process
 const logger = new Logger("main");
 
@@ -117,7 +124,7 @@ function startPythonBot() {
           if (!isShuttingDown) {
             startPythonBot();
           }
-        }, 2000);
+        }, RESTART_DELAY);
       }
     }
   });
@@ -165,8 +172,8 @@ ipcMain.on("restart-bot", () => {
         if (mainWindow) {
           mainWindow.webContents.send("bot-restarted");
         }
-      }, 500);
-    }, 2000);
+      }, RESTART_CALLBACK_DELAY);
+    }, RESTART_DELAY);
   });
 });
 
@@ -230,7 +237,7 @@ async function stopPythonBot() {
         }
       }
       resolve();
-    }, 5000); // 5 second timeout
+    }, GRACEFUL_SHUTDOWN_TIMEOUT);
 
     // Listen for process exit
     pythonProcess.once("close", () => {
@@ -263,7 +270,7 @@ async function stopPythonBot() {
             }
           }
         }
-      }, 500);
+      }, SIGTERM_DELAY);
     }
   });
 }
@@ -299,7 +306,7 @@ function startHealthCheck() {
         }
       }
     }
-  }, 30000);
+  }, HEALTH_CHECK_INTERVAL);
 }
 
 function stopHealthCheck() {
