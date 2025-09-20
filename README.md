@@ -22,10 +22,10 @@ An Electron + Python desktop application for Azure OpenAI chat interactions usin
 
 ## Features
 
-- 🖥️ **Desktop Application**: Native Electron app with modern UI and health monitoring
+- 🖥️ **Desktop Application**: Electron app with modern UI and health monitoring
 - 🤖 **Agent/Runner Pattern**: Modern OpenAI architecture with automatic orchestration
 - 🧠 **Sequential Thinking**: MCP server for advanced multi-step reasoning and problem decomposition
-- 💾 **Smart Session Management**: Token-aware SQLite sessions with automatic summarization at 80% threshold
+- 💾 **Smart Session Management**: Token-aware SQLite sessions with automatic summarization at configured % threshold
 - 🔄 **Streaming Responses**: Real-time AI response streaming with structured event handling
 - 🛠️ **Function Calling**: Native tools and MCP server integration with race condition mitigation
 - 📝 **Conversation Logging**: Structured JSON logging with rotating file management
