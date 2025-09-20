@@ -31,7 +31,7 @@ An Electron + Python desktop application for Azure OpenAI chat interactions usin
 - 📝 **Conversation Logging**: Structured JSON logging with rotating file management
 - 🔐 **Azure OpenAI Integration**: Secure connection to Azure OpenAI services
 - 📊 **Token Management**: Exact token counting with tiktoken, automatic optimization, and model-aware limits
-- ⚡ **Async Architecture**: Async/await for Agent/Runner and MCP servers, and functions
+- ⚡ **Async Architecture**: Async/await for Agent/Runner, MCP servers, and functions
 - 📄 **Document Generation**: Template-based document creation with multi-format support (PDF, Word, Excel, HTML)
 - 🔧 **Editing Tools**: Text, regex, and insert operations for document modification
 - 🎯 **Error Resilience**: Graceful handling of rate limits, streaming errors, and connection issues
