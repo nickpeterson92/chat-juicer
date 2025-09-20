@@ -29,6 +29,7 @@ from constants import (
     REASONING_ITEM,
     RUN_ITEM_STREAM_EVENT,
     SYSTEM_INSTRUCTIONS,
+    TOKEN_SUMMARIZATION_THRESHOLD,
     TOOL_CALL_ITEM,
     TOOL_CALL_OUTPUT_ITEM,
 )
@@ -443,7 +444,7 @@ async def main():
         db_path=None,  # In-memory database (use "chat_history.db" for persistence)
         agent=agent,
         model=deployment,
-        threshold=0.8,
+        threshold=TOKEN_SUMMARIZATION_THRESHOLD,
     )
     logger.info(f"Session created with id: {session.session_id}")
 

@@ -85,7 +85,7 @@ NATIVE_TOOL_DELAY = 0.0  # Delay in seconds after native function tool calls
 # You may need different values as MCP tools (subprocess) may have different timing than native tools
 
 # Token Management Configuration
-TOKEN_SUMMARIZATION_THRESHOLD = 0.8  # Trigger summarization at 80% of model's token limit
+TOKEN_SUMMARIZATION_THRESHOLD = 0.2  # Trigger summarization at x% of model's token limit
 KEEP_LAST_N_MESSAGES = 2  # Keep last N messages when summarizing (1 user-assistant pair)
 
 # Model Token Limits (conservative to account for system messages)

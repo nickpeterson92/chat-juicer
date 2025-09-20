@@ -35,10 +35,16 @@ venv/
 dist/
 out/
 
+# SQLite
+None
+None-wal
+None-shm
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
 # Project specific
 .serena/
 .juicer/
 sources/
-None
-None-wal
-None-shm
+output/
