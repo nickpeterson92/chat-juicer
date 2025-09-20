@@ -12,8 +12,8 @@ Chat Juicer is an Electron + Python desktop application that provides a chat int
 chat-juicer/
 ├── electron/          # Electron main process and utilities
 │   ├── main.js       # Electron main process, IPC handlers, health monitoring
-│   ├── preload.js    # Preload script for secure IPC
-│   ├── renderer.js   # Renderer process script with UI interaction logic
+│   ├── preload.js    # Preload script for secure IPC with logging API
+│   ├── renderer.js   # Renderer process script with structured logging (no console.*)
 │   └── logger.js     # Electron-side structured logging with levels
 ├── ui/               # Frontend assets
 │   └── index.html    # Main chat UI with markdown rendering
@@ -22,15 +22,16 @@ chat-juicer/
 │   ├── session.py    # TokenAwareSQLiteSession with auto-summarization
 │   ├── functions.py  # Document generation and file tools (synchronous)
 │   ├── tool_patch.py # Tool call delay patches for race condition mitigation
-│   ├── logger.py     # Python logging framework (JSON format, rotating files)
+│   ├── logger.py     # Python logging framework (JSON format, token metadata, rotating files)
 │   ├── utils.py      # Token management and content optimization utilities
 │   ├── constants.py  # Centralized configuration constants
+│   ├── sdk_token_tracker.py # SDK-level automatic token tracking for all tool calls
 │   └── requirements.txt  # Python dependencies
 ├── sources/          # Source documents for processing
 ├── output/           # Generated documentation output
 ├── templates/        # Document templates with {{placeholders}}
 ├── logs/             # Log files (gitignored)
-│   ├── conversations.jsonl  # Structured conversation logs
+│   ├── conversations.jsonl  # Structured conversation logs with token metadata
 │   └── errors.jsonl  # Error and debugging logs
 └── docs/             # Documentation
     ├── agent-runner-migration-analysis.md  # Migration documentation
@@ -162,9 +163,11 @@ The Agent/Runner pattern provides structured events:
 
 ### State Management
 - TokenAwareSQLiteSession manages conversation context with automatic summarization
-- Session tracks tokens and triggers summarization at 80% of model limit
+- Session tracks tokens and triggers summarization at 20% of model limit (54,400 tokens for GPT-5)
+- Model-aware token limits: GPT-5 (272k), GPT-4o (128k), GPT-3.5-turbo (15.3k)
 - In-memory SQLite database for fast session storage during app lifetime
 - Accumulated tool tokens tracked separately from conversation tokens
+- SDK-level automatic token tracking for all tool calls (native, MCP, future agents)
 - Minimal client state - session handles all conversation management
 
 ## Common Development Tasks
@@ -202,9 +205,16 @@ The Sequential Thinking server is configured in `setup_mcp_servers()` and can be
 - Agent/Runner pattern with async for MCP and streaming
 - MCP servers run as subprocesses via npx
 - Functions remain synchronous (not async)
-- Tool call delays configured at 0.2s to prevent race conditions
+- Tool call delays configured at 0.2s to prevent race conditions (currently disabled with client-side sessions)
 
 ## Important Implementation Notes
+
+### Logging Architecture
+- Structured JSON logging with rotating files (conversations.jsonl, errors.jsonl)
+- All logs include session_id automatically injected by ChatLogger
+- Function operations log exact token counts for cost/usage analysis
+- Renderer process logs forwarded to main process via IPC for centralized logging
+- Replaced console.* statements with structured logging throughout
 
 ### Testing Approach
 - Test Agent/Runner integration thoroughly

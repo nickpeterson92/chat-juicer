@@ -347,7 +347,11 @@ def list_directory(path: str = ".", show_hidden: bool = False) -> str:
         dirs = sum(1 for i in items if i["type"] == "directory")
         files = sum(1 for i in items if i["type"] == "file")
         total_size = sum(int(i.get("size", "0")) for i in items if i["type"] == "file")
-        logger.info(f"Listed {target_path.name}: {dirs} dirs, {files} files, {total_size:,} bytes total")
+        # Note: for list_directory, bytes make more sense than tokens
+        logger.info(
+            f"Listed {target_path.name}: {dirs} dirs, {files} files, {total_size:,} bytes total",
+            functions="list_directory",
+        )
 
         # Return minimal data to model - just items, no counts or stats
         return json_response(success=True, items=items)
@@ -443,11 +447,19 @@ async def read_file(file_path: str, max_size: int | None = None) -> str:
             # Log metadata for non-summarized content
             logger.info(
                 f"Read {target_file.name}: {file_size} bytes → {len(content)} chars, "
-                f"{len(content.splitlines())} lines, {exact_tokens} tokens"
+                f"{len(content.splitlines())} lines, {exact_tokens} tokens",
+                tokens=exact_tokens,
+                functions="read_file",
+                func="read_file",
             )
 
         if needs_conversion:
-            logger.info(f"Converted from {extension} to markdown via {conversion_method}")
+            logger.info(
+                f"Converted from {extension} to markdown via {conversion_method}",
+                tokens=exact_tokens,
+                functions="read_file",
+                func=conversion_method,
+            )
 
         # Build successful result
         return json_response(
@@ -511,8 +523,13 @@ async def generate_document(
         char_count = len(content)
 
         # Log the operation with meaningful stats
+        # Calculate tokens for generated content
+        token_info = estimate_tokens(content)
         logger.info(
-            f"Generated document: {output_path.name}, {char_count:,} chars, {line_count} lines, {byte_count} bytes"
+            f"Generated document: {output_path.name}, {char_count:,} chars, {line_count} lines, {byte_count} bytes",
+            tokens=token_info["exact_tokens"],
+            functions="generate_document",
+            func="generate_document",
         )
 
         # Build result with useful metadata

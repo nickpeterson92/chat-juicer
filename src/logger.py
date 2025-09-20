@@ -114,7 +114,7 @@ def setup_logging(name: str = "chat-juicer", debug: bool | None = None) -> loggi
 
     # Use JSON formatter for conversations
     conv_formatter = jsonlogger.JsonFormatter(
-        "%(timestamp)s %(levelname)s %(message)s %(session_id)s %(chars)s %(functions)s %(func)s",
+        "%(timestamp)s %(levelname)s %(message)s %(session_id)s %(tokens)s %(functions)s %(func)s",
         timestamp=True,
     )
 
@@ -154,18 +154,26 @@ class ChatLogger:
 
     def debug(self, message: str, **kwargs):
         """Debug level logging"""
+        # Merge session_id into kwargs for all log calls
+        kwargs["session_id"] = self.session_id
         self.logger.debug(message, extra=kwargs)
 
     def info(self, message: str, **kwargs):
         """Info level logging"""
+        # Merge session_id into kwargs for all log calls
+        kwargs["session_id"] = self.session_id
         self.logger.info(message, extra=kwargs)
 
     def warning(self, message: str, **kwargs):
         """Warning level logging"""
+        # Merge session_id into kwargs for all log calls
+        kwargs["session_id"] = self.session_id
         self.logger.warning(message, extra=kwargs)
 
     def error(self, message: str, exc_info=False, **kwargs):
         """Error level logging with optional exception info"""
+        # Merge session_id into kwargs for all log calls
+        kwargs["session_id"] = self.session_id
         self.logger.error(message, extra=kwargs, exc_info=exc_info)
 
     def log_conversation_turn(

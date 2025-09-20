@@ -212,8 +212,10 @@ Add new functions by:
 ## Logging
 
 Structured logs are automatically generated in `logs/`:
-- **conversations.jsonl**: Complete conversation history with metadata
+- **conversations.jsonl**: Complete conversation history with session_id, token usage, functions, and metadata
 - **errors.jsonl**: Error tracking and debugging information
+- **IPC Logging**: Renderer process logs are forwarded through main process for centralized logging
+- **Token Tracking**: All operations log exact token counts for cost and usage analysis
 
 ## Development
 
