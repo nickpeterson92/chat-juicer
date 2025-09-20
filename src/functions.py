@@ -5,12 +5,16 @@ Separate module for all tool/function implementations.
 
 from __future__ import annotations
 
+import inspect
 import json
+import os
 import re
 import shutil
 
 from pathlib import Path
 from typing import Any
+
+import aiofiles
 
 # Optional dependency: MarkItDown for document conversion
 try:
@@ -22,6 +26,23 @@ except ImportError:  # pragma: no cover - optional dependency
     MarkItDown = None  # type: ignore
     _markitdown_converter = None
 
+# Import async OpenAI client for summarization
+try:
+    from dotenv import load_dotenv
+    from openai import AsyncOpenAI
+
+    # Load environment variables
+    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    load_dotenv(env_path)
+
+    # Create async OpenAI client for summarization
+    api_key = os.getenv("AZURE_OPENAI_API_KEY")
+    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+    deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5-mini")
+
+    _async_client = AsyncOpenAI(api_key=api_key, base_url=endpoint) if api_key and endpoint else None
+except ImportError:
+    _async_client = None
 
 from constants import (
     CONVERTIBLE_EXTENSIONS,
@@ -30,6 +51,65 @@ from constants import (
 )
 from logger import logger
 from utils import estimate_tokens, optimize_content_for_tokens
+
+
+async def summarize_content(content: str, file_name: str = "document", model: str = "gpt-5-mini") -> str:
+    """
+    Summarize large document content using Azure OpenAI.
+
+    Args:
+        content: The document content to summarize
+        file_name: Name of the file being summarized (for context)
+        model: Model to use for token counting
+
+    Returns:
+        Summarized content or original if summarization fails
+    """
+    if not _async_client:
+        logger.warning("OpenAI client not available for summarization, returning original content")
+        return content
+
+    try:
+        # Get deployment name from environment
+        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5-mini")
+
+        # Create summarization prompt
+        prompt = f"""Please provide a comprehensive summary of the following document ({file_name}).
+Include key points, important details, and maintain the overall structure and meaning.
+The summary should be detailed enough to understand the document's content without reading the original.
+
+Document content:
+{content}"""
+
+        # Make async API call with 6k max output tokens - non-blocking!
+        response = await _async_client.chat.completions.create(
+            model=deployment,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that creates detailed document summaries."},
+                {"role": "user", "content": prompt},
+            ],
+            max_completion_tokens=6000,
+        )
+
+        summarized = response.choices[0].message.content
+
+        # Log summarization stats
+        original_tokens = estimate_tokens(content, model)
+        summary_tokens = estimate_tokens(summarized, model)
+
+        orig_count = original_tokens.get("exact_tokens", 0)
+        summ_count = summary_tokens.get("exact_tokens", 0)
+
+        logger.info(
+            f"Summarized {file_name}: {orig_count:,} tokens → {summ_count:,} tokens "
+            f"({int((1 - summ_count / orig_count) * 100)}% reduction)"
+        )
+
+        return summarized
+
+    except Exception as e:
+        logger.error(f"Summarization failed: {e}", exc_info=True)
+        return content  # Return original on error
 
 
 def validate_file_path(
@@ -76,9 +156,9 @@ def validate_file_path(
         return Path(), f"Path validation failed: {e!s}"
 
 
-def read_file_content(target_path: Path) -> tuple[str, str | None]:
+async def read_file_content(target_path: Path) -> tuple[str, str | None]:
     """
-    Read text content from a file.
+    Read text content from a file asynchronously.
 
     Args:
         target_path: Path object to read from
@@ -88,7 +168,8 @@ def read_file_content(target_path: Path) -> tuple[str, str | None]:
         If error_message is None, read was successful
     """
     try:
-        content = target_path.read_text(encoding="utf-8")
+        async with aiofiles.open(target_path, encoding="utf-8") as f:
+            content = await f.read()
         return content, None
     except UnicodeDecodeError:
         return "", "File is not text/UTF-8 encoded"
@@ -96,9 +177,9 @@ def read_file_content(target_path: Path) -> tuple[str, str | None]:
         return "", f"Failed to read file: {e!s}"
 
 
-def write_file_content(target_path: Path, content: str) -> str | None:
+async def write_file_content(target_path: Path, content: str) -> str | None:
     """
-    Write text content to a file.
+    Write text content to a file asynchronously.
 
     Args:
         target_path: Path object to write to
@@ -108,7 +189,8 @@ def write_file_content(target_path: Path, content: str) -> str | None:
         Error message if failed, None if successful
     """
     try:
-        target_path.write_text(content, encoding="utf-8")
+        async with aiofiles.open(target_path, "w", encoding="utf-8") as f:
+            await f.write(content)
         return None
     except Exception as e:
         return f"Failed to write file: {e!s}"
@@ -175,7 +257,7 @@ def json_response(success: bool = True, error: str | None = None, **kwargs) -> s
     return json.dumps(response, indent=2)
 
 
-def file_operation(file_path: str, operation_func, **kwargs):
+async def file_operation(file_path: str, operation_func, **kwargs):
     """
     Common pattern for file operations: validate, read, operate, write.
 
@@ -190,11 +272,15 @@ def file_operation(file_path: str, operation_func, **kwargs):
     # Early validation and content reading with single exit point
     target_path, path_error = validate_file_path(file_path)
     if not path_error:
-        content, read_error = read_file_content(target_path)
+        content, read_error = await read_file_content(target_path)
         if not read_error:
             # Perform operation in try block
             try:
-                new_content, result_data = operation_func(content, **kwargs)
+                # Check if operation_func is async and await if needed
+                if inspect.iscoroutinefunction(operation_func):
+                    new_content, result_data = await operation_func(content, **kwargs)
+                else:
+                    new_content, result_data = operation_func(content, **kwargs)
 
                 # Determine the response based on operation result
                 if "error" in result_data:
@@ -203,7 +289,7 @@ def file_operation(file_path: str, operation_func, **kwargs):
                     response = json_response(success=True, **result_data)
                 else:
                     # Write back and check for write errors
-                    write_error = write_file_content(target_path, new_content)
+                    write_error = await write_file_content(target_path, new_content)
                     if write_error:
                         response = json_response(error=write_error)
                     else:
@@ -271,7 +357,7 @@ def list_directory(path: str = ".", show_hidden: bool = False) -> str:
         return json_response(error=f"Failed to list directory: {e!s}")
 
 
-def read_file(file_path: str, max_size: int = DEFAULT_MAX_FILE_SIZE) -> str:
+async def read_file(file_path: str, max_size: int = DEFAULT_MAX_FILE_SIZE) -> str:
     """
     Read a file's contents for documentation processing.
     Automatically converts non-markdown formats to markdown for token efficiency.
@@ -331,7 +417,7 @@ def read_file(file_path: str, max_size: int = DEFAULT_MAX_FILE_SIZE) -> str:
 
         # If no conversion or conversion failed, try direct read
         if not content:
-            content, error = read_file_content(target_file)
+            content, error = await read_file_content(target_file)
             if error:
                 return json_response(error=error, file_path=str(target_file))
 
@@ -352,19 +438,36 @@ def read_file(file_path: str, max_size: int = DEFAULT_MAX_FILE_SIZE) -> str:
                 format_type=format_type,
             )
 
-        # Token counting for logging
+        # Token counting for logging and summarization check
         token_count = estimate_tokens(content)
-        exact_tokens = token_count.get("exact_tokens") or token_count.get("estimated_tokens", "?")
+        exact_tokens = token_count.get("exact_tokens") or token_count.get("estimated_tokens", 0)
 
         # Get relative path
         cwd = Path.cwd()
         file_size = target_file.stat().st_size
 
-        # Log metadata
-        logger.info(
-            f"Read {target_file.name}: {file_size} bytes → {len(content)} chars, "
-            f"{len(content.splitlines())} lines, {exact_tokens} tokens (exact)"
-        )
+        # Check if content needs summarization (> 10,000 tokens)
+        if exact_tokens > 10000:
+            logger.info(f"Document {target_file.name} has {exact_tokens:,} tokens, summarizing for efficiency...")
+            # Summarize the content
+            content = await summarize_content(content, target_file.name)
+
+            # Add note about summarization to the beginning of content
+            content = f"[Note: This document was automatically summarized from {exact_tokens:,} tokens to improve processing efficiency]\n\n{content}"
+
+            # Recalculate token count after summarization
+            new_token_count = estimate_tokens(content)
+            new_exact_tokens = new_token_count.get("exact_tokens") or new_token_count.get("estimated_tokens", 0)
+
+            logger.info(
+                f"Read {target_file.name}: {file_size} bytes → summarized from {exact_tokens:,} to {new_exact_tokens:,} tokens"
+            )
+        else:
+            # Log metadata for non-summarized content
+            logger.info(
+                f"Read {target_file.name}: {file_size} bytes → {len(content)} chars, "
+                f"{len(content.splitlines())} lines, {exact_tokens} tokens"
+            )
 
         if optimization_stats:
             logger.info(
@@ -386,7 +489,7 @@ def read_file(file_path: str, max_size: int = DEFAULT_MAX_FILE_SIZE) -> str:
         return json_response(error=f"Failed to read file: {e!s}")
 
 
-def generate_document(
+async def generate_document(
     content: str,
     output_file: str,
     create_backup: bool = False,
@@ -427,7 +530,7 @@ def generate_document(
             logger.info(f"Created backup: {backup_created}")
 
         # Write the content using helper
-        error = write_file_content(output_path, content)
+        error = await write_file_content(output_path, content)
         if error:
             return json_response(error=error)
 
@@ -459,7 +562,7 @@ def generate_document(
         return json_response(error=f"Failed to generate document: {e!s}")
 
 
-def text_edit(
+async def text_edit(
     file_path: str,
     find: str,
     replace_with: str,
@@ -503,10 +606,10 @@ def text_edit(
             "text_found": find_text[:50] + "..." if len(find_text) > 50 else find_text,
         }
 
-    return file_operation(file_path, do_edit, find=find, replace_with=replace_with, replace_all=replace_all)
+    return await file_operation(file_path, do_edit, find=find, replace_with=replace_with, replace_all=replace_all)
 
 
-def regex_edit(
+async def regex_edit(
     file_path: str,
     pattern: str,
     replacement: str,
@@ -563,12 +666,12 @@ def regex_edit(
         operation = "delete" if replacement == "" else "replace"
         return new_content, {"operation": operation, "pattern": pattern_str, "replacements": replacements}
 
-    return file_operation(
+    return await file_operation(
         file_path, do_regex_edit, pattern=pattern, replacement=replacement, replace_all=replace_all, flags=flags
     )
 
 
-def insert_text(
+async def insert_text(
     file_path: str,
     anchor: str,
     text: str,
@@ -613,7 +716,7 @@ def insert_text(
             "text_length": len(insert_text),
         }
 
-    return file_operation(file_path, do_insert, anchor=anchor, text=text, position=position)
+    return await file_operation(file_path, do_insert, anchor=anchor, text=text, position=position)
 
 
 # Tool definitions for the Agent

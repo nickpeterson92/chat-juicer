@@ -18,3 +18,6 @@ httpx>=0.25.0  # Modern HTTP client for handling network errors and retries
 
 # Structured Logging (REQUIRED)
 python-json-logger>=2.0.0  # JSON formatted logging for structured logs
+
+# Async File I/O (REQUIRED for async functions)
+aiofiles>=23.0.0  # Async file operations for non-blocking I/O

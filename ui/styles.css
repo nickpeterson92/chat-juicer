@@ -108,6 +108,7 @@ body {
   display: flex;
   flex: 1;
   overflow: hidden;
+  position: relative;
 }
 
 .chat-panel {
@@ -123,13 +124,19 @@ body {
   display: flex;
   flex-direction: column;
   background: var(--tools-bg);
-  transition: width 0.3s ease;
   position: relative;
+  /* No animation on the panel itself */
 }
 
 .tools-panel.collapsed {
-  width: 0;
-  overflow: hidden;
+  /* Use margin to slide it out instead of width */
+  margin-right: -420px;
+  transition: margin-right 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tools-panel:not(.collapsed) {
+  margin-right: 0;
+  transition: margin-right 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .tools-panel.collapsed .tools-header,
@@ -144,7 +151,7 @@ body {
   top: 50%;
   transform: translateY(-50%);
   z-index: 100;
-  transition: right 0.3s ease;
+  transition: right 0.12s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 body.tools-collapsed .tools-toggle-wrapper {
@@ -761,4 +768,48 @@ body.tools-collapsed .tools-toggle-wrapper {
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+/* Performance Optimizations for Heavy Content */
+.function-result {
+  contain: layout style paint !important;
+  will-change: scroll-position !important;
+}
+
+.tools-container {
+  contain: layout style paint !important;
+  /* Limit number of visible cards for performance */
+  max-height: 100vh;
+  overflow-y: auto;
+}
+
+.main-content {
+  contain: layout style !important;
+}
+
+/* Expand/Collapse button for large results */
+.function-expand-btn {
+  margin-top: 8px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.8);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  transition: background 0.1s;
+}
+
+.function-expand-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.function-result-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Hide old function cards to reduce DOM nodes */
+.function-call-card.old-card {
+  display: none;
 }
