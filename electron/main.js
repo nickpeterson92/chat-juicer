@@ -138,6 +138,16 @@ function startPythonBot() {
   });
 }
 
+// IPC handler for renderer logging
+ipcMain.on("renderer-log", (event, { level, message, data }) => {
+  const rendererLogger = new Logger("renderer");
+  if (data) {
+    rendererLogger[level](message, data);
+  } else {
+    rendererLogger[level](message);
+  }
+});
+
 // IPC handler for user input
 ipcMain.on("user-input", (event, message) => {
   logger.logIPC("receive", "user-input", message, { fromRenderer: true });

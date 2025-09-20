@@ -49,7 +49,7 @@ from constants import (
     MAX_BACKUP_VERSIONS,
 )
 from logger import logger
-from utils import estimate_tokens, optimize_content_for_tokens
+from utils import estimate_tokens
 
 
 async def summarize_content(content: str, file_name: str = "document", model: str = "gpt-5-mini") -> str:
@@ -96,8 +96,8 @@ Document content:
         original_tokens = estimate_tokens(content, model)
         summary_tokens = estimate_tokens(summarized, model)
 
-        orig_count = original_tokens.get("exact_tokens", 0)
-        summ_count = summary_tokens.get("exact_tokens", 0)
+        orig_count = original_tokens["exact_tokens"]
+        summ_count = summary_tokens["exact_tokens"]
 
         logger.info(
             f"Summarized {file_name}: {orig_count:,} tokens → {summ_count:,} tokens "
@@ -378,7 +378,6 @@ async def read_file(file_path: str, max_size: int | None = None) -> str:
         needs_conversion = extension in CONVERTIBLE_EXTENSIONS
         content = None
         conversion_method = "none"
-        optimization_stats = None
 
         if needs_conversion:
             # Try conversion with MarkItDown
@@ -397,12 +396,6 @@ async def read_file(file_path: str, max_size: int | None = None) -> str:
                 # Check if conversion actually produced content
                 if not content or content.strip() == "":
                     raise ValueError(f"MarkItDown returned empty content for {extension} file")
-
-                # Apply optimization
-                content, optimization_stats = optimize_content_for_tokens(
-                    content,
-                    format_type="markdown",
-                )
             except ImportError as ie:
                 return json_response(
                     error=f"Missing dependencies for {extension}: {ie!s}. Try: pip install 'markitdown[all]'",
@@ -422,24 +415,9 @@ async def read_file(file_path: str, max_size: int | None = None) -> str:
 
             conversion_method = "direct_read"
 
-            # Determine format type for optimization
-            format_type = {
-                ".md": "markdown",
-                ".markdown": "markdown",
-                ".json": "json",
-                ".csv": "csv",
-                ".docx": "text",
-            }.get(extension, "text")
-
-            # Apply optimization
-            content, optimization_stats = optimize_content_for_tokens(
-                content,
-                format_type=format_type,
-            )
-
         # Token counting for logging and summarization check
         token_count = estimate_tokens(content)
-        exact_tokens = token_count.get("exact_tokens") or token_count.get("estimated_tokens", 0)
+        exact_tokens = token_count["exact_tokens"]
 
         # Get relative path
         cwd = Path.cwd()
@@ -456,7 +434,7 @@ async def read_file(file_path: str, max_size: int | None = None) -> str:
 
             # Recalculate token count after summarization
             new_token_count = estimate_tokens(content)
-            new_exact_tokens = new_token_count.get("exact_tokens") or new_token_count.get("estimated_tokens", 0)
+            new_exact_tokens = new_token_count["exact_tokens"]
 
             logger.info(
                 f"Read {target_file.name}: {file_size} bytes → summarized from {exact_tokens:,} to {new_exact_tokens:,} tokens"
@@ -466,12 +444,6 @@ async def read_file(file_path: str, max_size: int | None = None) -> str:
             logger.info(
                 f"Read {target_file.name}: {file_size} bytes → {len(content)} chars, "
                 f"{len(content.splitlines())} lines, {exact_tokens} tokens"
-            )
-
-        if optimization_stats:
-            logger.info(
-                f"Optimization: saved {optimization_stats['percentage_saved']}% "
-                f"({optimization_stats['bytes_saved']} bytes)"
             )
 
         if needs_conversion:

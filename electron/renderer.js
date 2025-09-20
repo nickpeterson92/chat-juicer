@@ -200,7 +200,7 @@ class AppState {
       this.setState("connection.status", status);
       this.handleConnectionChange(status);
     } else {
-      console.warn(`Invalid state transition: ${currentStatus} -> ${status}`);
+      window.electronAPI.log("warn", `Invalid state transition: ${currentStatus} -> ${status}`);
     }
   }
 
@@ -297,7 +297,7 @@ function updateAssistantMessage(content) {
 
 // Function to create or update function call card
 function createFunctionCallCard(callId, functionName, status = "preparing") {
-  console.log("Creating function card:", callId, functionName, status);
+  window.electronAPI.log("info", "Creating function card", { callId, functionName, status });
 
   // Handle case where callId might not be provided initially
   if (!callId) {
@@ -450,7 +450,7 @@ function scheduleFunctionCardCleanup(callId) {
 function sendMessage() {
   // Ensure elements are initialized
   if (!elements.userInput || !elements.sendBtn) {
-    console.error("Elements not initialized properly");
+    window.electronAPI.log("error", "Elements not initialized properly");
     return;
   }
 
@@ -517,7 +517,6 @@ const messageBatch = {
 // Handle bot output (streaming response with JSON protocol)
 window.electronAPI.onBotOutput((output) => {
   // Only log if debugging
-  // console.log("Raw output received:", output);
 
   // Add output to buffer
   jsonBuffer += output;
@@ -546,7 +545,7 @@ window.electronAPI.onBotOutput((output) => {
       const message = JSON.parse(jsonStr);
 
       // Handle different message types
-      console.log("Processing message type:", message.type);
+      window.electronAPI.log("debug", "Processing message type", { type: message.type });
 
       if (message.type === "assistant_delta") {
         // For streaming, process immediately for responsiveness
@@ -560,7 +559,7 @@ window.electronAPI.onBotOutput((output) => {
         processMessage(message);
       }
     } catch (e) {
-      console.error("Failed to parse JSON message:", e, jsonStr);
+      window.electronAPI.log("error", "Failed to parse JSON message", { error: e.message, json: jsonStr });
     }
   }
 
@@ -611,13 +610,13 @@ window.electronAPI.onBotOutput((output) => {
 
         case "assistant_delta":
           // Add content to buffer exactly as received
-          console.log("Assistant delta received:", message.content);
+          window.electronAPI.log("debug", "Assistant delta received", { content: message.content });
           if (appState.message.currentAssistant) {
             const newBuffer = appState.message.assistantBuffer + message.content;
             appState.setState("message.assistantBuffer", newBuffer);
             updateAssistantMessage(newBuffer);
           } else {
-            console.warn("No current assistant message element!");
+            window.electronAPI.log("warn", "No current assistant message element");
           }
           break;
 
@@ -641,7 +640,7 @@ window.electronAPI.onBotOutput((output) => {
 
         case "error":
           // Display error message as a system/error message
-          console.error("Error from backend:", message.message);
+          window.electronAPI.log("error", "Error from backend", { message: message.message });
           if (elements.aiThinking) {
             elements.aiThinking.classList.remove("active");
           }
@@ -655,7 +654,7 @@ window.electronAPI.onBotOutput((output) => {
 
         case "function_detected": {
           // Function call detected - show card immediately
-          console.log("Function detected:", message);
+          window.electronAPI.log("debug", "Function detected", message);
           const _card = createFunctionCallCard(message.call_id, message.name, "preparing...");
           if (message.arguments) {
             updateFunctionCallStatus(message.call_id, "ready", {
@@ -667,7 +666,7 @@ window.electronAPI.onBotOutput((output) => {
 
         case "function_executing":
           // Function is being executed
-          console.log("Function executing:", message);
+          window.electronAPI.log("debug", "Function executing", message);
           updateFunctionCallStatus(message.call_id, "executing...", {
             arguments: message.arguments,
           });
@@ -675,7 +674,7 @@ window.electronAPI.onBotOutput((output) => {
 
         case "function_completed": {
           // Function execution complete
-          console.log("Function completed:", message);
+          window.electronAPI.log("debug", "Function completed", message);
           if (message.success) {
             // Use the actual output if provided, otherwise show "Success"
             const result = message.output || "Success";
@@ -694,7 +693,7 @@ window.electronAPI.onBotOutput((output) => {
 
         case "rate_limit_hit":
           // Show rate limit notification
-          console.log("Rate limit hit:", message);
+          window.electronAPI.log("info", "Rate limit hit", message);
           addMessage(
             `⏳ Rate limit reached. Waiting ${message.wait_time}s before retry (attempt ${message.retry_count})...`,
             "system"
@@ -703,7 +702,7 @@ window.electronAPI.onBotOutput((output) => {
 
         case "rate_limit_failed":
           // Show rate limit failure
-          console.error("Rate limit failed:", message);
+          window.electronAPI.log("error", "Rate limit failed", message);
           addMessage(`❌ ${message.message}. Please try again later.`, "error");
           break;
 
@@ -749,7 +748,7 @@ window.electronAPI.onBotOutput((output) => {
         }
       }
     } catch (e) {
-      console.error("Error processing message:", e);
+      window.electronAPI.log("error", "Error processing message", { error: e.message, stack: e.stack });
     }
   }
 
@@ -789,7 +788,7 @@ window.electronAPI.onBotOutput((output) => {
 
 // Handle bot errors
 window.electronAPI.onBotError((error) => {
-  console.error("Bot error:", error);
+  window.electronAPI.log("error", "Bot error", { error });
 
   // Hide AI thinking indicator on error
   if (elements.aiThinking) {
@@ -958,7 +957,7 @@ function toggleTheme() {
 
 // Comprehensive cleanup function to prevent memory leaks
 function cleanup() {
-  console.log("Cleaning up renderer resources...");
+  window.electronAPI.log("info", "Cleaning up renderer resources");
 
   // 1. Clear all setTimeout/setInterval timers
   appState.functions.activeTimers.forEach((timerId) => {
@@ -1022,7 +1021,7 @@ function cleanup() {
     });
   }
 
-  console.log("Cleanup complete");
+  window.electronAPI.log("info", "Cleanup complete");
 }
 
 // Clean up on page unload

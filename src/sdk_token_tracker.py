@@ -85,7 +85,7 @@ class SDKTokenTracker:
 
         # Count tokens
         result = estimate_tokens(content_str)
-        tokens = result.get("exact_tokens", 0)
+        tokens = result["exact_tokens"]
 
         if tokens > 0:
             # Auto-update session

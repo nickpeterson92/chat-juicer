@@ -84,28 +84,28 @@ NATIVE_TOOL_DELAY = 0.0  # Delay in seconds after native function tool calls
 # You may need different values as MCP tools (subprocess) may have different timing than native tools
 
 # Token Management Configuration
-TOKEN_SUMMARIZATION_THRESHOLD = 0.2  # Trigger summarization at x% of model's token limit
+TOKEN_SUMMARIZATION_THRESHOLD = 0.2  # Trigger summarization at % of model's token limit
 KEEP_LAST_N_MESSAGES = 2  # Keep last N messages when summarizing (1 user-assistant pair)
 
-# Model Token Limits (conservative to account for system messages)
+# Model Token Limits
 # Using INPUT limits since that's what we're tracking for summarization
 MODEL_TOKEN_LIMITS = {
-    # GPT-5 models (272k input limit, being conservative)
-    "gpt-5": 250000,
-    "gpt-5-mini": 250000,
-    "gpt-5-nano": 250000,
-    # GPT-4 models (120k practical limit)
-    "gpt-4o": 120000,
-    "gpt-4o-mini": 120000,
-    "gpt-4": 120000,
-    "gpt-4-turbo": 120000,
+    # GPT-5 models
+    "gpt-5": 272000,
+    "gpt-5-mini": 272000,
+    "gpt-5-nano": 272000,
+    # GPT-4 models
+    "gpt-4o": 128000,
+    "gpt-4o-mini": 128000,
+    "gpt-4": 128000,
+    "gpt-4-turbo": 128000,
     # GPT-3.5 models
-    "gpt-3.5-turbo": 15000,
-    "gpt-35-turbo": 15000,  # Azure naming
+    "gpt-3.5-turbo": 15360,
+    "gpt-35-turbo": 15360,  # Azure naming
 }
 
 # System Instructions for the Agent
-SYSTEM_INSTRUCTIONS = r"""You are a technical documentation assistant that reads source files and generates professional documentation.
+SYSTEM_INSTRUCTIONS = r"""You are a technical analyst that reads source files and generates professional documentation.
 
 ## CRITICAL: Template-First Workflow
 

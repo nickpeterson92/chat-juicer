@@ -249,7 +249,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
     def _count_tokens(self, text: str) -> int:
         """Count tokens in text using the model's tokenizer."""
         result = estimate_tokens(text, self.model)
-        return result.get("exact_tokens") or result.get("estimated_tokens", 0)
+        return result["exact_tokens"]
 
     def _calculate_total_tokens(self, items: list[dict]) -> int:
         """Calculate total tokens from conversation items including tool calls."""
@@ -410,20 +410,19 @@ class TokenAwareSQLiteSession(SQLiteSession):
         # Analyze items and their types for better understanding
         role_counts: dict[str, int] = {}
         item_types: dict[str, int] = {}
-        for i, item in enumerate(items):
+        for item in items:
             role = str(item.get("role", "unknown"))
             role_counts[role] = role_counts.get(role, 0) + 1
 
-            # Log detailed info about items without roles
+            # Count items without roles for summary logging
             if role == "unknown":
                 item_type = str(item.get("type", "no_type"))
                 item_types[item_type] = item_types.get(item_type, 0) + 1
 
-                # Log first few of each type to understand structure
-                if item_types[item_type] <= 2:
-                    logger.info(f"Item #{i} type '{item_type}' keys: {list(item.keys())}")
-                    # Log the actual item for complete visibility
-                    logger.info(f"  Full item: {json.dumps(item, default=str)[:500]}")
+                # Debug logging commented out - uncomment if needed for debugging
+                # if item_types[item_type] <= 2:
+                #     logger.info(f"Item #{i} type '{item_type}' keys: {list(item.keys())}")
+                #     logger.info(f"  Full item: {json.dumps(item, default=str)[:500]}")
 
         logger.info(f"Summarization check: {len(items)} total items - Roles: {role_counts}, Types: {item_types}")
 

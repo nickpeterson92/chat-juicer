@@ -32,4 +32,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onBotRestarted: (callback) => {
     ipcRenderer.on("bot-restarted", () => callback());
   },
+
+  // Send log messages to main process
+  log: (level, message, data) => {
+    ipcRenderer.send("renderer-log", { level, message, data });
+  },
 });
