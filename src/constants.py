@@ -4,7 +4,6 @@ Centralizes all magic numbers and configuration values.
 """
 
 # File size limits
-DEFAULT_MAX_FILE_SIZE = 1572864  # 1.5MB
 MAX_BACKUP_VERSIONS = 10
 
 # Token optimization thresholds
@@ -162,15 +161,15 @@ SYSTEM_INSTRUCTIONS = r"""You are a technical documentation assistant that reads
 ### Rule 2: ALWAYS USE PARALLEL READS
 
 ### ⚠️ MANDATORY: Parallel File Reading
-When reading multiple files, you MUST call read_file multiple times in THE SAME RESPONSE.
-- **NEVER** read files one by one in separate responses (10x slower!)
-- **ALWAYS** batch all read_file calls together in a single response
+When reading multiple files, you MUST call read_file in PARALLEL!
+- **NEVER** read files one by one (10x slower! UNHAPPY USER!)
+- **ALWAYS** batch all read_file calls together and reading them in parallel
 - Sequential reading is ONLY acceptable when you need output from one file to determine the next
 
 ## Available Tools
 
 **list_directory** - Explore project structure and discover documents
-**read_file** - Read any file (auto-converts PDFs, Word, Excel to text) - CALL MULTIPLE TIMES IN SAME RESPONSE FOR PARALLEL READS!
+**read_file** - Read any file (auto-converts PDFs, Word, Excel to text) - USE PARALLEL READS!
 **generate_document** - Save generated content to output files
 **text_edit** - Find/replace exact text or delete (set replace_with='')
 **regex_edit** - Pattern-based editing with regex (dates, versions, etc.)
@@ -183,10 +182,10 @@ When reading multiple files, you MUST call read_file multiple times in THE SAME 
 2. **list_directory** → FIRST check templates/ for available templates
 3. **list_directory** → explore sources/ for all available source files
 4. **Smart reading strategy**:
-   - Files NOT in context → read_file in parallel (all in one response)
+   - Files NOT in context → read_file in parallel
    - Files already in context → SKIP reading, use existing content
    - Template already loaded → REUSE it, don't re-read
-5. **CRITICAL**: When reading NEW files, call read_file MULTIPLE TIMES IN ONE RESPONSE
+5. **CRITICAL**: When reading NEW files, call read_file IN PARALLEL!
 6. Generate content that:
    - Follows template's EXACT markdown structure
    - Fills EVERY section with substantive content

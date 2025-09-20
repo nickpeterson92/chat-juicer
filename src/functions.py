@@ -46,7 +46,6 @@ except ImportError:
 
 from constants import (
     CONVERTIBLE_EXTENSIONS,
-    DEFAULT_MAX_FILE_SIZE,
     MAX_BACKUP_VERSIONS,
 )
 from logger import logger
@@ -88,7 +87,7 @@ Document content:
                 {"role": "system", "content": "You are a helpful assistant that creates detailed document summaries."},
                 {"role": "user", "content": prompt},
             ],
-            max_completion_tokens=6000,
+            max_completion_tokens=4000,
         )
 
         summarized = response.choices[0].message.content
@@ -357,19 +356,19 @@ def list_directory(path: str = ".", show_hidden: bool = False) -> str:
         return json_response(error=f"Failed to list directory: {e!s}")
 
 
-async def read_file(file_path: str, max_size: int = DEFAULT_MAX_FILE_SIZE) -> str:
+async def read_file(file_path: str, max_size: int | None = None) -> str:
     """
     Read a file's contents for documentation processing.
     Automatically converts non-markdown formats to markdown for token efficiency.
 
     Args:
         file_path: Path to the file to read
-        max_size: Maximum file size in bytes (default 1MB)
+        max_size: Maximum file size in bytes (None = no limit)
 
     Returns:
         JSON string with file contents and metadata
     """
-    # Validate path with size check
+    # Validate path with optional size check
     target_file, error = validate_file_path(file_path, check_exists=True, max_size=max_size)
     if error:
         return json_response(error=error)
@@ -447,7 +446,7 @@ async def read_file(file_path: str, max_size: int = DEFAULT_MAX_FILE_SIZE) -> st
         file_size = target_file.stat().st_size
 
         # Check if content needs summarization (> 10,000 tokens)
-        if exact_tokens > 10000:
+        if exact_tokens > 7000:
             logger.info(f"Document {target_file.name} has {exact_tokens:,} tokens, summarizing for efficiency...")
             # Summarize the content
             content = await summarize_content(content, target_file.name)
@@ -742,7 +741,7 @@ TOOLS = [
     {
         "type": "function",
         "name": "read_file",
-        "description": "Read any file to view its contents. Automatically converts PDFs, Word docs, Excel sheets, and other formats to text. Use this before editing or analyzing documents.",
+        "description": "Read any file to view its contents. Automatically converts PDFs, Word docs, Excel sheets, and other formats to text. Use this before editing or analyzing documents. Read multiple files in parallel for efficiency.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -752,7 +751,7 @@ TOOLS = [
                 },
                 "max_size": {
                     "type": "integer",
-                    "description": "Maximum file size in bytes to read. Default is 1MB (1048576). Increase for larger files.",
+                    "description": "Maximum file size in bytes to read. Unlimited by default.",
                 },
             },
             "required": ["file_path"],
