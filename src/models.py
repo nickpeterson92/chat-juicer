@@ -109,18 +109,18 @@ class SessionItem(BaseModel):
     role: Literal["user", "assistant", "system", "tool", "unknown"] | None = Field(
         default="unknown", description="Role of the message sender"
     )
-    content: str | list | dict | None = Field(default=None, description="Content of the message")
+    content: str | list[Any] | dict[str, Any] | None = Field(default=None, description="Content of the message")
     type: str | None = Field(default=None, description="Type of the item (for SDK internal items)")
 
     @field_validator("content")
     @classmethod
-    def normalize_content(cls, v):
+    def normalize_content(cls, v: Any) -> Any:
         """Ensure content is in a usable format."""
         if v is None or v == "":
             return None
         return v
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for session storage."""
         return self.model_dump(exclude_none=True)
 
@@ -130,7 +130,7 @@ class FunctionCallItem(BaseModel):
 
     type: Literal["function_call"]
     name: str
-    arguments: str | dict = Field(default="{}")
+    arguments: str | dict[str, Any] = Field(default="{}")
 
     def to_session_item(self) -> SessionItem:
         """Convert to SessionItem format."""
@@ -164,9 +164,9 @@ class UserInput(BaseModel):
 
     @field_validator("content")
     @classmethod
-    def clean_content(cls, v):
+    def clean_content(cls, v: Any) -> str:
         """Strip whitespace and validate."""
-        cleaned = v.strip()
+        cleaned: str = v.strip()
         if not cleaned:
             raise ValueError("Input cannot be empty")
         return cleaned

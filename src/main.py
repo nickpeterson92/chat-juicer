@@ -23,13 +23,13 @@ from openai import APIConnectionError, APIStatusError, AsyncOpenAI, RateLimitErr
 
 from constants import (
     AGENT_UPDATED_STREAM_EVENT,
+    CONVERSATION_SUMMARIZATION_THRESHOLD,
     HANDOFF_CALL_ITEM,
     HANDOFF_OUTPUT_ITEM,
     MESSAGE_OUTPUT_ITEM,
     REASONING_ITEM,
     RUN_ITEM_STREAM_EVENT,
     SYSTEM_INSTRUCTIONS,
-    TOKEN_SUMMARIZATION_THRESHOLD,
     TOOL_CALL_ITEM,
     TOOL_CALL_OUTPUT_ITEM,
     get_settings,
@@ -44,6 +44,10 @@ from models import (
     ToolCallNotification,
     ToolResultNotification,
     UserInput,
+)
+from sdk_models import (
+    RunItem,
+    StreamingEvent,
 )
 from sdk_token_tracker import connect_session, disconnect_session, patch_sdk_for_auto_tracking
 from session import TokenAwareSQLiteSession
@@ -78,7 +82,7 @@ class IPCManager:
     }
 
     @staticmethod
-    def send(message: dict) -> None:
+    def send(message: dict[str, Any]) -> None:
         """Send a message to the Electron frontend via IPC."""
         msg = _json_builder(message)
         print(f"{IPCManager.DELIMITER}{msg}{IPCManager.DELIMITER}", flush=True)
@@ -89,7 +93,7 @@ class IPCManager:
         print(f"{IPCManager.DELIMITER}{message}{IPCManager.DELIMITER}", flush=True)
 
     @staticmethod
-    def send_error(message: str, code: str | None = None, details: dict | None = None) -> None:
+    def send_error(message: str, code: str | None = None, details: dict[str, Any] | None = None) -> None:
         """Send an error message to the frontend with validation."""
         # Use Pydantic model for validation, but maintain backward compatibility
         error_msg = ErrorNotification(type="error", message=message, code=code, details=details)
@@ -136,7 +140,7 @@ _json_builder = partial(json.dumps, separators=(",", ":"))  # Compact JSON
 
 
 # Event handler functions for different item types
-def handle_message_output(item: Any) -> str | None:
+def handle_message_output(item: RunItem) -> str | None:
     """Handle message output items (assistant responses)"""
     if hasattr(item, "raw_item"):
         raw = item.raw_item
@@ -149,7 +153,7 @@ def handle_message_output(item: Any) -> str | None:
     return None
 
 
-def handle_tool_call(item: Any, tracker: CallTracker) -> str | None:
+def handle_tool_call(item: RunItem, tracker: CallTracker) -> str | None:
     """Handle tool call items (function invocations) with validation."""
     tool_name = "unknown"
     call_id = ""
@@ -178,7 +182,7 @@ def handle_tool_call(item: Any, tracker: CallTracker) -> str | None:
     return _json_builder(tool_msg.model_dump(exclude_none=True))
 
 
-def handle_reasoning(item: Any) -> str | None:
+def handle_reasoning(item: RunItem) -> str | None:
     """Handle reasoning items (Sequential Thinking output)"""
     if hasattr(item, "raw_item"):
         raw = item.raw_item
@@ -191,7 +195,7 @@ def handle_reasoning(item: Any) -> str | None:
     return None
 
 
-def handle_tool_output(item: Any, tracker: CallTracker) -> str | None:
+def handle_tool_output(item: RunItem, tracker: CallTracker) -> str | None:
     """Handle tool call output items (function results) with validation."""
     call_id = ""
     success = True
@@ -227,7 +231,7 @@ def handle_tool_output(item: Any, tracker: CallTracker) -> str | None:
     return _json_builder(result_msg.model_dump(exclude_none=True))
 
 
-def handle_handoff_call(item: Any) -> str | None:
+def handle_handoff_call(item: RunItem) -> str | None:
     """Handle handoff call items (multi-agent requests)"""
     if hasattr(item, "raw_item"):
         raw = item.raw_item
@@ -239,7 +243,7 @@ def handle_handoff_call(item: Any) -> str | None:
     return msg.to_json()
 
 
-def handle_handoff_output(item: Any) -> str | None:
+def handle_handoff_output(item: RunItem) -> str | None:
     """Handle handoff output items (multi-agent results)"""
     source_agent = "unknown"
 
@@ -255,7 +259,7 @@ def handle_handoff_output(item: Any) -> str | None:
     return msg.to_json()
 
 
-async def handle_electron_ipc(event: Any, tracker: CallTracker) -> str | None:
+async def handle_electron_ipc(event: StreamingEvent, tracker: CallTracker) -> str | None:
     """Convert Agent/Runner events to Electron IPC format
 
     Args:
@@ -267,7 +271,7 @@ async def handle_electron_ipc(event: Any, tracker: CallTracker) -> str | None:
     """
     # Handle run item stream events
     if event.type == RUN_ITEM_STREAM_EVENT:
-        item = event.item
+        item = event.item  # type: ignore[attr-defined]
 
         # Map item types to handler functions
         handlers = {
@@ -282,11 +286,11 @@ async def handle_electron_ipc(event: Any, tracker: CallTracker) -> str | None:
         # Get and execute the appropriate handler
         handler = handlers.get(item.type)
         if handler:
-            return handler()
+            return handler()  # type: ignore[no-untyped-call]
 
     # Handle agent updated events
     elif event.type == AGENT_UPDATED_STREAM_EVENT:
-        msg = AgentUpdateMessage(type="agent_updated", name=event.new_agent.name)
+        msg = AgentUpdateMessage(type="agent_updated", name=event.new_agent.name)  # type: ignore[attr-defined]
         return msg.to_json()
 
     return None
@@ -300,24 +304,24 @@ def handle_streaming_error(error: Any) -> None:
     """
 
     # Define error handlers for different exception types
-    def handle_rate_limit(e):
+    def handle_rate_limit(e: Any) -> dict[str, str]:
         logger.error(f"Rate limit error during streaming: {e}")
         return {"type": "error", "message": "Rate limit reached. Please wait a moment and try your request again."}
 
-    def handle_connection_error(e):
+    def handle_connection_error(e: Any) -> dict[str, str]:
         logger.error(f"Connection error during streaming: {e}")
         return {"type": "error", "message": "Connection interrupted. Please try your request again."}
 
-    def handle_api_status(e):
+    def handle_api_status(e: Any) -> dict[str, str]:
         logger.error(f"API status error during streaming: {e}")
         return {"type": "error", "message": f"API error (status {e.status_code}). Please try your request again."}
 
-    def handle_generic(e):
+    def handle_generic(e: Any) -> dict[str, str]:
         logger.error(f"Unexpected error during streaming: {e}")
         return {"type": "error", "message": "An error occurred. Please try your request again."}
 
     # Map exception types to handlers
-    error_handlers = {
+    error_handlers: dict[type[Exception], Any] = {
         RateLimitError: handle_rate_limit,
         APIConnectionError: handle_connection_error,
         APIStatusError: handle_api_status,
@@ -486,7 +490,7 @@ async def main() -> None:
         db_path=None,  # In-memory database (use "chat_history.db" for persistence)
         agent=agent,
         model=deployment,
-        threshold=TOKEN_SUMMARIZATION_THRESHOLD,
+        threshold=CONVERSATION_SUMMARIZATION_THRESHOLD,
     )
     logger.info(f"Session created with id: {session.session_id}")
 

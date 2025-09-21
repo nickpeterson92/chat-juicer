@@ -27,7 +27,7 @@ class MessageNormalizer:
     # Valid content types for OpenAI chat.completions API
     VALID_CONTENT_TYPES: ClassVar[set[str]] = {"text", "image_url", "input_audio", "refusal", "audio", "file"}
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the message normalizer with content type handlers."""
         # Strategy pattern for handling different SDK internal item types
         self.content_type_handlers = {
@@ -54,7 +54,7 @@ class MessageNormalizer:
         # Handle other types by converting to string
         return str(content) if content else ""
 
-    def _normalize_content_list(self, content_list: list) -> str:
+    def _normalize_content_list(self, content_list: list[Any]) -> str:
         """Normalize a list of content items.
 
         Args:
@@ -75,7 +75,7 @@ class MessageNormalizer:
 
         return "\n".join(text_parts) if text_parts else ""
 
-    def _extract_text_from_dict(self, content_item: dict) -> str | None:
+    def _extract_text_from_dict(self, content_item: dict[str, Any]) -> str | None:
         """Extract text from a dictionary content item.
 
         Args:
@@ -191,7 +191,7 @@ class MessageNormalizer:
         return messages
 
 
-class TokenAwareSQLiteSession(SQLiteSession):
+class TokenAwareSQLiteSession(SQLiteSession):  # type: ignore[misc]
     """Extends SQLiteSession with automatic token-based summarization."""
 
     def __init__(
@@ -256,7 +256,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
         result = estimate_tokens(text, self.model)
         return int(result["exact_tokens"])  # Ensure return type is int
 
-    def _calculate_total_tokens(self, items: list[dict]) -> int:
+    def _calculate_total_tokens(self, items: list[dict[str, Any]]) -> int:
         """Calculate total tokens from conversation items including tool calls."""
         total = 0
         for item in items:
@@ -293,7 +293,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
 
         return total
 
-    def calculate_items_tokens(self, items: list[dict]) -> int:
+    def calculate_items_tokens(self, items: list[dict[str, Any]]) -> int:
         """Public method to calculate total tokens from conversation items.
 
         Args:
@@ -304,7 +304,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
         """
         return self._calculate_total_tokens(items)
 
-    def _collect_recent_exchanges(self, items: list[dict], keep_recent: int) -> list[dict]:
+    def _collect_recent_exchanges(self, items: list[dict[str, Any]], keep_recent: int) -> list[dict[str, Any]]:
         """Collect the most recent complete user-assistant exchanges.
 
         Uses a single forward pass O(n) algorithm.
@@ -442,7 +442,9 @@ class TokenAwareSQLiteSession(SQLiteSession):
         # If nothing to summarize, don't proceed
         if not items or len(recent_items) == len(items):
             logger.warning(f"Aborting summarization: all {len(items)} items are recent, nothing to summarize")
-            self._emit_completion_event(call_id, success=False, error="All items are recent - nothing to summarize")
+            await self._emit_completion_event(
+                call_id, success=False, error="All items are recent - nothing to summarize"
+            )
             return ""
 
         try:
@@ -452,7 +454,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
 
             if not summary_text:
                 logger.error("Summarization failed: empty summary returned")
-                self._emit_completion_event(call_id, success=False, error="Empty summary returned")
+                await self._emit_completion_event(call_id, success=False, error="Empty summary returned")
                 return ""
 
             logger.info(f"Summary generated successfully ({len(summary_text)} chars)")
@@ -464,12 +466,12 @@ class TokenAwareSQLiteSession(SQLiteSession):
 
         except Exception as e:
             logger.error(f"Summarization failed with error: {e}", exc_info=True)
-            self._emit_completion_event(call_id, success=False, error=str(e))
+            await self._emit_completion_event(call_id, success=False, error=str(e))
             return ""
 
-    def _emit_completion_event(
+    async def _emit_completion_event(
         self, call_id: str, success: bool = True, error: str | None = None, output: str | None = None
-    ):
+    ) -> None:
         """Emit a completion event to the frontend.
 
         Args:
@@ -611,14 +613,14 @@ class TokenAwareSQLiteSession(SQLiteSession):
             f"Tokens saved: {old_tokens - self.total_tokens}"
         )
 
-        self._emit_completion_event(call_id, success=True, output=f"{summary_text}\n\n[{metadata_str}]")
+        await self._emit_completion_event(call_id, success=True, output=f"{summary_text}\n\n[{metadata_str}]")
 
         logger.info(
             f"Summarization complete: {summary_tokens} tokens summary + "
             f"{recent_tokens} recent = {self.total_tokens} total"
         )
 
-    async def run_with_auto_summary(self, agent: Any, user_input: str, **kwargs):
+    async def run_with_auto_summary(self, agent: Any, user_input: str, **kwargs: Any) -> Any:
         """Run agent with automatic summarization when needed.
 
         This is a convenience method that checks tokens before running

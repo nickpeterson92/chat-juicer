@@ -3,6 +3,7 @@ Utility functions for token management, rate limiting, and optimization.
 """
 
 from functools import lru_cache
+from typing import Any
 
 import tiktoken
 
@@ -10,7 +11,7 @@ import tiktoken
 _encoder_cache = {}
 
 
-def _get_encoder(model: str):
+def _get_encoder(model: str) -> Any:
     """Get cached encoder for model."""
     if model not in _encoder_cache:
         try:
@@ -29,7 +30,7 @@ def _count_tokens_cached(text: str, model: str) -> int:
     return len(encoding.encode(text))
 
 
-def estimate_tokens(text: str, model: str = "gpt-5-mini") -> dict:
+def estimate_tokens(text: str, model: str = "gpt-5-mini") -> dict[str, Any]:
     """
     Count exact tokens using tiktoken for accurate token counting.
 

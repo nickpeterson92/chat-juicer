@@ -10,7 +10,6 @@ from typing import Any
 
 from agents.mcp.server import _MCPServerWithClientSession
 from agents.tool import FunctionTool
-from mcp.types import CallToolResult
 
 from constants import MCP_TOOL_DELAY, NATIVE_TOOL_DELAY
 from logger import logger
@@ -19,7 +18,7 @@ from logger import logger
 _original_mcp_call_tool = _MCPServerWithClientSession.call_tool
 
 
-async def patched_mcp_call_tool(self, tool_name: str, arguments: dict[str, Any] | None) -> CallToolResult:
+async def patched_mcp_call_tool(self: Any, tool_name: str, arguments: dict[str, Any] | None) -> Any:
     """
     Patched version of MCP call_tool that adds a small delay after execution
     to help mitigate RS_/FC_ race conditions in streaming.
@@ -38,10 +37,10 @@ async def patched_mcp_call_tool(self, tool_name: str, arguments: dict[str, Any] 
     return result
 
 
-def create_delayed_wrapper(original_func, tool_name):
+def create_delayed_wrapper(original_func: Any, tool_name: str) -> Any:
     """Create a wrapper that adds delay after the original function executes"""
 
-    async def delayed_wrapper(ctx, input_str):
+    async def delayed_wrapper(ctx: Any, input_str: str) -> Any:
         # Call the original function
         result = await original_func(ctx, input_str)
 
@@ -55,7 +54,7 @@ def create_delayed_wrapper(original_func, tool_name):
     return delayed_wrapper
 
 
-def apply_tool_patch():
+def apply_tool_patch() -> None:
     """Apply the monkey patch to MCP servers. Native tool patching happens separately."""
 
     # Report status for MCP patch
@@ -69,7 +68,7 @@ def apply_tool_patch():
     _MCPServerWithClientSession.call_tool = patched_mcp_call_tool
 
 
-def patch_native_tools(tools):
+def patch_native_tools(tools: list[Any]) -> list[Any]:
     """
     Patch native function tools to add delays.
     This must be called AFTER the tools are created.

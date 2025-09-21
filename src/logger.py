@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from pythonjsonlogger import jsonlogger  # Third-party dependency
+from pythonjsonlogger import jsonlogger
 
 from constants import (
     LOG_BACKUP_COUNT_CONVERSATIONS,
@@ -48,7 +48,7 @@ class ConversationTurn:
 class ConversationFilter(logging.Filter):
     """Filter to allow all INFO level logs for conversations"""
 
-    def filter(self, record):
+    def filter(self, record: logging.LogRecord) -> bool:
         # Allow all INFO and above logs (not DEBUG)
         return record.levelno >= logging.INFO
 
@@ -56,7 +56,7 @@ class ConversationFilter(logging.Filter):
 class ErrorFilter(logging.Filter):
     """Filter to only allow ERROR and CRITICAL logs"""
 
-    def filter(self, record):
+    def filter(self, record: logging.LogRecord) -> bool:
         return record.levelno >= logging.ERROR
 
 
@@ -152,25 +152,25 @@ class ChatLogger:
         self.logger = setup_logging(name)
         self.session_id = str(uuid.uuid4())[:SESSION_ID_LENGTH]
 
-    def debug(self, message: str, **kwargs):
+    def debug(self, message: str, **kwargs: Any) -> None:
         """Debug level logging"""
         # Merge session_id into kwargs for all log calls
         kwargs["session_id"] = self.session_id
         self.logger.debug(message, extra=kwargs)
 
-    def info(self, message: str, **kwargs):
+    def info(self, message: str, **kwargs: Any) -> None:
         """Info level logging"""
         # Merge session_id into kwargs for all log calls
         kwargs["session_id"] = self.session_id
         self.logger.info(message, extra=kwargs)
 
-    def warning(self, message: str, **kwargs):
+    def warning(self, message: str, **kwargs: Any) -> None:
         """Warning level logging"""
         # Merge session_id into kwargs for all log calls
         kwargs["session_id"] = self.session_id
         self.logger.warning(message, extra=kwargs)
 
-    def error(self, message: str, exc_info=False, **kwargs):
+    def error(self, message: str, exc_info: bool = False, **kwargs: Any) -> None:
         """Error level logging with optional exception info"""
         # Merge session_id into kwargs for all log calls
         kwargs["session_id"] = self.session_id
@@ -180,10 +180,10 @@ class ChatLogger:
         self,
         user_input: str,
         response: str,
-        function_calls: list | None = None,
+        function_calls: list[Any] | None = None,
         duration_ms: float | None = None,
         tokens_used: int | None = None,
-    ):
+    ) -> None:
         """
         Log a complete conversation turn to conversations.jsonl
 
@@ -243,7 +243,7 @@ class ChatLogger:
         # Log with special flag for conversation filter
         self.logger.info(" ".join(msg_parts), extra=extra_data)
 
-    def log_function_call(self, function_name: str, args: dict, result: Any):
+    def log_function_call(self, function_name: str, args: dict[str, Any], result: Any) -> None:
         """
         Log a function call - verbose to console, concise to file.
 

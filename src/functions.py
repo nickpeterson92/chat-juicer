@@ -17,7 +17,7 @@ from typing import Any, Callable
 import aiofiles
 
 # Import settings function
-from constants import get_settings
+from constants import DOCUMENT_SUMMARIZATION_THRESHOLD, get_settings
 
 # Import response models for type safety
 from models import (
@@ -248,7 +248,7 @@ def validate_directory_path(dir_path: str, check_exists: bool = True) -> tuple[P
         return Path(), f"Path validation failed: {e!s}"
 
 
-def json_response(success: bool = True, error: str | None = None, **kwargs) -> str:
+def json_response(success: bool = True, error: str | None = None, **kwargs: Any) -> str:
     """
     Build a consistent JSON response.
 
@@ -274,7 +274,9 @@ def json_response(success: bool = True, error: str | None = None, **kwargs) -> s
     return json.dumps(response, indent=2)
 
 
-async def file_operation(file_path: str, operation_func: Callable, **kwargs: Any) -> str:
+async def file_operation(
+    file_path: str, operation_func: Callable[..., tuple[str, dict[str, Any]]], **kwargs: Any
+) -> str:
     """
     Common pattern for file operations: validate, read, operate, write.
 
@@ -337,7 +339,7 @@ async def file_operation(file_path: str, operation_func: Callable, **kwargs: Any
                 response = TextEditResponse(success=False, file_path=str(file_path), error=str(e)).to_json()
 
     # Single exit point
-    return response  # This line should never be reached now
+    return response
 
 
 def list_directory(path: str = ".", show_hidden: bool = False) -> str:
@@ -464,8 +466,8 @@ async def read_file(file_path: str, max_size: int | None = None) -> str:
         cwd = Path.cwd()
         file_size = target_file.stat().st_size
 
-        # Check if content needs summarization (> 10,000 tokens)
-        if exact_tokens > 7000:
+        # Check if content needs summarization
+        if exact_tokens > DOCUMENT_SUMMARIZATION_THRESHOLD:
             logger.info(f"Document {target_file.name} has {exact_tokens:,} tokens, summarizing for efficiency...")
             # Summarize the content
             content = await summarize_content(content, target_file.name)
@@ -908,7 +910,7 @@ TOOLS: list[dict[str, Any]] = [
 
 
 # Function registry for execution
-FUNCTION_REGISTRY: dict[str, Callable] = {
+FUNCTION_REGISTRY: dict[str, Any] = {
     "list_directory": list_directory,
     "read_file": read_file,
     "generate_document": generate_document,

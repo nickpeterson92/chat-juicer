@@ -92,9 +92,11 @@ NATIVE_TOOL_DELAY = 0.0  # Delay in seconds after native function tool calls
 # You may need different values as MCP tools (subprocess) may have different timing than native tools
 
 # Token Management Configuration
-TOKEN_SUMMARIZATION_THRESHOLD = 0.2  # Trigger summarization at % of model's token limit
+CONVERSATION_SUMMARIZATION_THRESHOLD = 0.2  # Trigger conversation summarization at configured % of model's token limit
 KEEP_LAST_N_MESSAGES = 2  # Keep last N messages when summarizing (1 user-assistant pair)
-
+DOCUMENT_SUMMARIZATION_THRESHOLD = (
+    7000  # Amount of tokens to trigger document summarization during read_file operations.
+)
 # Model Token Limits
 # Using INPUT limits since that's what we're tracking for summarization
 MODEL_TOKEN_LIMITS = {
@@ -254,7 +256,7 @@ For complex problems, the Sequential Thinking tool helps:
 # ============================================================================
 
 
-class Settings(BaseSettings):
+class Settings(BaseSettings):  # type: ignore[misc]
     """Environment settings with validation.
 
     Loads from environment variables and .env file.
@@ -306,4 +308,4 @@ def get_settings() -> Settings:
     Uses LRU cache to ensure we only load and validate settings once.
     This function will raise validation errors at startup if config is invalid.
     """
-    return Settings()  # BaseSettings loads from env
+    return Settings()
