@@ -12,7 +12,7 @@ import re
 import shutil
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import aiofiles
 
@@ -274,7 +274,7 @@ def json_response(success: bool = True, error: str | None = None, **kwargs) -> s
     return json.dumps(response, indent=2)
 
 
-async def file_operation(file_path: str, operation_func, **kwargs):
+async def file_operation(file_path: str, operation_func: Callable, **kwargs: Any) -> str:
     """
     Common pattern for file operations: validate, read, operate, write.
 
@@ -638,7 +638,7 @@ async def text_edit(
         }
 
     result = await file_operation(file_path, do_edit, find=find, replace_with=replace_with, replace_all=replace_all)
-    return result  # type: ignore[no-any-return]
+    return result
 
 
 async def regex_edit(
@@ -701,7 +701,7 @@ async def regex_edit(
     result = await file_operation(
         file_path, do_regex_edit, pattern=pattern, replacement=replacement, replace_all=replace_all, flags=flags
     )
-    return result  # type: ignore[no-any-return]
+    return result
 
 
 async def insert_text(
@@ -753,11 +753,11 @@ async def insert_text(
         }
 
     result = await file_operation(file_path, do_insert, anchor=anchor, text=text, position=position)
-    return result  # type: ignore[no-any-return]
+    return result
 
 
 # Tool definitions for the Agent
-TOOLS = [
+TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "name": "list_directory",
@@ -908,7 +908,7 @@ TOOLS = [
 
 
 # Function registry for execution
-FUNCTION_REGISTRY = {
+FUNCTION_REGISTRY: dict[str, Callable] = {
     "list_directory": list_directory,
     "read_file": read_file,
     "generate_document": generate_document,
@@ -918,6 +918,9 @@ FUNCTION_REGISTRY = {
 }
 
 # Agent/Runner tools - wrap functions with function_tool decorator
+# Type declaration for AGENT_TOOLS
+AGENT_TOOLS: list[Any]
+
 try:
     from agents import function_tool
 

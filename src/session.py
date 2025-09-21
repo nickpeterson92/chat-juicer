@@ -36,7 +36,7 @@ class MessageNormalizer:
             "reasoning": self._handle_reasoning,
         }
 
-    def normalize_content(self, content):
+    def normalize_content(self, content: Any) -> str:
         """Normalize Agent/Runner content to OpenAI format.
 
         Args:
@@ -54,7 +54,7 @@ class MessageNormalizer:
         # Handle other types by converting to string
         return str(content) if content else ""
 
-    def _normalize_content_list(self, content_list):
+    def _normalize_content_list(self, content_list: list) -> str:
         """Normalize a list of content items.
 
         Args:
@@ -75,7 +75,7 @@ class MessageNormalizer:
 
         return "\n".join(text_parts) if text_parts else ""
 
-    def _extract_text_from_dict(self, content_item):
+    def _extract_text_from_dict(self, content_item: dict) -> str | None:
         """Extract text from a dictionary content item.
 
         Args:
@@ -90,20 +90,20 @@ class MessageNormalizer:
         if content_type and content_type not in self.VALID_CONTENT_TYPES:
             # Try to extract text content regardless of the type
             if "text" in content_item:
-                return content_item["text"]
+                return str(content_item["text"])
             elif "output" in content_item:
                 return str(content_item["output"])
         elif content_type in self.VALID_CONTENT_TYPES:
             # For valid types, preserve them if it's text
             if content_type == "text" and "text" in content_item:
-                return content_item["text"]
+                return str(content_item["text"])
         elif "text" in content_item:
             # No type field, but has text
-            return content_item["text"]
+            return str(content_item["text"])
 
         return None
 
-    def normalize_item(self, item):
+    def normalize_item(self, item: Any) -> dict[str, Any] | None:
         """Normalize a single conversation item.
 
         Args:
@@ -126,7 +126,7 @@ class MessageNormalizer:
 
         return None
 
-    def _handle_internal_item(self, item):
+    def _handle_internal_item(self, item: Any) -> dict[str, Any] | None:
         """Handle SDK internal items without proper roles.
 
         Args:
@@ -147,22 +147,22 @@ class MessageNormalizer:
 
         return None
 
-    def _handle_function_call(self, item):
+    def _handle_function_call(self, item: Any) -> dict[str, Any]:
         """Handle function_call type items."""
         tool_name = item.get("name", "unknown")
         arguments = item.get("arguments", "{}")
         return {"role": "assistant", "content": f"[Called tool: {tool_name} with arguments: {arguments}]"}
 
-    def _handle_function_call_output(self, item):
+    def _handle_function_call_output(self, item: Any) -> dict[str, Any]:
         """Handle function_call_output type items."""
         output = item.get("output", "")
         return {"role": "assistant", "content": f"[Tool result: {output}]"}
 
-    def _handle_reasoning(self, item):
+    def _handle_reasoning(self, item: Any) -> dict[str, Any] | None:
         """Handle reasoning type items - skip for summarization."""
         return None  # Skip reasoning items (usually empty)
 
-    def create_summary_messages(self, items, system_prompt):
+    def create_summary_messages(self, items: list[Any], system_prompt: str) -> Any:
         """Create normalized messages for summarization.
 
         Args:
@@ -644,7 +644,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
 
         return result
 
-    def update_with_tool_tokens(self, tool_tokens: int):
+    def update_with_tool_tokens(self, tool_tokens: int) -> None:
         """Update token count with tokens from tool calls.
 
         Args:

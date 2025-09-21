@@ -14,7 +14,7 @@ import uuid
 from collections import deque
 from dataclasses import dataclass, field
 from functools import partial
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from agents import Agent, set_default_openai_client, set_tracing_disabled
 from agents.mcp import MCPServerStdio
@@ -107,7 +107,7 @@ class IPCManager:
         IPCManager.send_raw(IPCManager._TEMPLATES["assistant_end"])
 
 
-async def setup_mcp_servers():
+async def setup_mcp_servers() -> list[Any]:
     """Configure and initialize MCP servers"""
     servers = []
 
@@ -136,7 +136,7 @@ _json_builder = partial(json.dumps, separators=(",", ":"))  # Compact JSON
 
 
 # Event handler functions for different item types
-def handle_message_output(item):
+def handle_message_output(item: Any) -> str | None:
     """Handle message output items (assistant responses)"""
     if hasattr(item, "raw_item"):
         raw = item.raw_item
@@ -149,7 +149,7 @@ def handle_message_output(item):
     return None
 
 
-def handle_tool_call(item, tracker: CallTracker):
+def handle_tool_call(item: Any, tracker: CallTracker) -> str | None:
     """Handle tool call items (function invocations) with validation."""
     tool_name = "unknown"
     call_id = ""
@@ -178,7 +178,7 @@ def handle_tool_call(item, tracker: CallTracker):
     return _json_builder(tool_msg.model_dump(exclude_none=True))
 
 
-def handle_reasoning(item):
+def handle_reasoning(item: Any) -> str | None:
     """Handle reasoning items (Sequential Thinking output)"""
     if hasattr(item, "raw_item"):
         raw = item.raw_item
@@ -191,7 +191,7 @@ def handle_reasoning(item):
     return None
 
 
-def handle_tool_output(item, tracker: CallTracker):
+def handle_tool_output(item: Any, tracker: CallTracker) -> str | None:
     """Handle tool call output items (function results) with validation."""
     call_id = ""
     success = True
@@ -227,7 +227,7 @@ def handle_tool_output(item, tracker: CallTracker):
     return _json_builder(result_msg.model_dump(exclude_none=True))
 
 
-def handle_handoff_call(item):
+def handle_handoff_call(item: Any) -> str | None:
     """Handle handoff call items (multi-agent requests)"""
     if hasattr(item, "raw_item"):
         raw = item.raw_item
@@ -239,7 +239,7 @@ def handle_handoff_call(item):
     return msg.to_json()
 
 
-def handle_handoff_output(item):
+def handle_handoff_output(item: Any) -> str | None:
     """Handle handoff output items (multi-agent results)"""
     source_agent = "unknown"
 
@@ -255,7 +255,7 @@ def handle_handoff_output(item):
     return msg.to_json()
 
 
-async def handle_electron_ipc(event, tracker: CallTracker):
+async def handle_electron_ipc(event: Any, tracker: CallTracker) -> str | None:
     """Convert Agent/Runner events to Electron IPC format
 
     Args:
@@ -292,7 +292,7 @@ async def handle_electron_ipc(event, tracker: CallTracker):
     return None
 
 
-def handle_streaming_error(error):
+def handle_streaming_error(error: Any) -> None:
     """Handle streaming errors with appropriate user messages
 
     Args:
@@ -334,7 +334,7 @@ def handle_streaming_error(error):
     IPCManager.send_assistant_end()
 
 
-async def process_user_input(session, user_input):
+async def process_user_input(session: Any, user_input: str) -> None:
     """Process a single user input using token-aware SQLite session.
 
     Args:
@@ -415,7 +415,7 @@ async def process_user_input(session, user_input):
         )
 
 
-async def main():
+async def main() -> None:
     """Main entry point for Chat Juicer with Agent/Runner pattern"""
 
     # Load environment variables from src/.env
