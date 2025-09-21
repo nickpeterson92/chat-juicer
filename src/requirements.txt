@@ -21,3 +21,7 @@ python-json-logger>=2.0.0  # JSON formatted logging for structured logs
 
 # Async File I/O (REQUIRED for async functions)
 aiofiles>=23.0.0  # Async file operations for non-blocking I/O
+
+# Data Validation (REQUIRED for runtime type safety)
+pydantic>=2.5.0  # Runtime data validation with type hints
+pydantic-settings>=2.0.0  # Settings management with environment variables

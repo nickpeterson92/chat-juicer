@@ -16,17 +16,31 @@ from typing import Any
 
 import aiofiles
 
+# Import settings function
+from constants import get_settings
+
+# Import response models for type safety
+from models import (
+    DirectoryListResponse,
+    DocumentGenerateResponse,
+    FileInfo,
+    FileReadResponse,
+    TextEditResponse,
+)
+
 # Optional dependency: MarkItDown for document conversion
 try:
-    from markitdown import MarkItDown  # type: ignore
+    from markitdown import MarkItDown
 
     # Create singleton converter instance with plugins enabled
-    _markitdown_converter = MarkItDown(enable_plugins=True) if MarkItDown else None
+    _markitdown_converter: Any = MarkItDown(enable_plugins=True)
 except ImportError:  # pragma: no cover - optional dependency
-    MarkItDown = None  # type: ignore
+    MarkItDown = None  # type: ignore[misc,assignment]
     _markitdown_converter = None
 
 # Import async OpenAI client for summarization
+_async_client: Any = None  # Initialize at module level
+
 try:
     from dotenv import load_dotenv
     from openai import AsyncOpenAI
@@ -35,21 +49,22 @@ try:
     env_path = os.path.join(os.path.dirname(__file__), ".env")
     load_dotenv(env_path)
 
-    # Create async OpenAI client for summarization
-    api_key = os.getenv("AZURE_OPENAI_API_KEY")
-    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-    deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5-mini")
-
-    _async_client = AsyncOpenAI(api_key=api_key, base_url=endpoint) if api_key and endpoint else None
+    # Create async OpenAI client for summarization using validated settings
+    try:
+        settings = get_settings()
+        _async_client = AsyncOpenAI(api_key=settings.azure_openai_api_key, base_url=settings.azure_endpoint_str)
+    except Exception:
+        # If settings fail to load, client remains None and summarization will be skipped
+        pass
 except ImportError:
-    _async_client = None
+    pass
 
-from constants import (
+from constants import (  # noqa: E402
     CONVERTIBLE_EXTENSIONS,
     MAX_BACKUP_VERSIONS,
 )
-from logger import logger
-from utils import estimate_tokens
+from logger import logger  # noqa: E402
+from utils import estimate_tokens  # noqa: E402
 
 
 async def summarize_content(content: str, file_name: str = "document", model: str = "gpt-5-mini") -> str:
@@ -69,8 +84,8 @@ async def summarize_content(content: str, file_name: str = "document", model: st
         return content
 
     try:
-        # Get deployment name from environment
-        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5-mini")
+        settings = get_settings()
+        deployment = settings.azure_openai_deployment
 
         # Create summarization prompt
         prompt = f"""Please provide a comprehensive summary of the following document ({file_name}).
@@ -91,6 +106,9 @@ Document content:
         )
 
         summarized = response.choices[0].message.content
+        if not summarized:
+            logger.warning("API returned empty summary, returning original content")
+            return content
 
         # Log summarization stats
         original_tokens = estimate_tokens(content, model)
@@ -104,7 +122,7 @@ Document content:
             f"({int((1 - summ_count / orig_count) * 100)}% reduction)"
         )
 
-        return summarized
+        return str(summarized)
 
     except Exception as e:
         logger.error(f"Summarization failed: {e}", exc_info=True)
@@ -268,11 +286,20 @@ async def file_operation(file_path: str, operation_func, **kwargs):
     Returns:
         JSON response string
     """
-    # Early validation and content reading with single exit point
+    # Initialize response variable to ensure single exit point
+    response = None
+
+    # Early validation and content reading
     target_path, path_error = validate_file_path(file_path)
-    if not path_error:
+
+    if path_error:
+        response = TextEditResponse(success=False, file_path=str(file_path), error=path_error).to_json()
+    else:
         content, read_error = await read_file_content(target_path)
-        if not read_error:
+
+        if read_error:
+            response = TextEditResponse(success=False, file_path=str(file_path), error=read_error).to_json()
+        else:
             # Perform operation in try block
             try:
                 # Check if operation_func is async and await if needed
@@ -283,25 +310,34 @@ async def file_operation(file_path: str, operation_func, **kwargs):
 
                 # Determine the response based on operation result
                 if "error" in result_data:
-                    response = json_response(error=result_data["error"])
+                    response = TextEditResponse(
+                        success=False, file_path=str(file_path), error=result_data["error"]
+                    ).to_json()
                 elif new_content is None:
+                    # No write needed, operation was read-only or failed gracefully
                     response = json_response(success=True, **result_data)
                 else:
                     # Write back and check for write errors
                     write_error = await write_file_content(target_path, new_content)
                     if write_error:
-                        response = json_response(error=write_error)
+                        response = TextEditResponse(
+                            success=False, file_path=str(target_path), error=write_error
+                        ).to_json()
                     else:
-                        result_data["file"] = str(target_path)
-                        response = json_response(success=True, **result_data)
+                        # Build success response with operation details
+                        response = TextEditResponse(
+                            success=True,
+                            file_path=str(target_path),
+                            changes_made=result_data.get("replacements", result_data.get("changes_made", 1)),
+                            message=f"{result_data.get('operation', 'edit')} operation completed",
+                            original_text=result_data.get("text_found", result_data.get("anchor")),
+                            new_text=result_data.get("text_inserted", result_data.get("replacement")),
+                        ).to_json()
             except Exception as e:
-                response = json_response(error=str(e))
-        else:
-            response = json_response(error=read_error)
-    else:
-        response = json_response(error=path_error)
+                response = TextEditResponse(success=False, file_path=str(file_path), error=str(e)).to_json()
 
-    return response
+    # Single exit point
+    return response  # This line should never be reached now
 
 
 def list_directory(path: str = ".", show_hidden: bool = False) -> str:
@@ -319,7 +355,7 @@ def list_directory(path: str = ".", show_hidden: bool = False) -> str:
         # Validate directory path
         target_path, error = validate_directory_path(path, check_exists=True)
         if error:
-            return json_response(error=error)
+            return DirectoryListResponse(success=False, path=path, items=[], error=error).to_json()
 
         items = []
         for item in target_path.iterdir():
@@ -327,37 +363,37 @@ def list_directory(path: str = ".", show_hidden: bool = False) -> str:
             if item.name.startswith(".") and not show_hidden:
                 continue
 
-            item_info = {
-                "name": item.name,
-                "type": "directory" if item.is_dir() else "file",
-                "path": str(item.relative_to(Path.cwd()) if Path.cwd() in item.parents or item == Path.cwd() else item),
-            }
-
-            # Add file size for files
-            if item.is_file():
-                item_info["size"] = str(item.stat().st_size)  # Convert to string for JSON
-                item_info["extension"] = item.suffix
-
-            items.append(item_info)
+            # Create FileInfo model for each item
+            file_info = FileInfo(
+                name=item.name,
+                type="folder" if item.is_dir() else "file",
+                size=item.stat().st_size if item.is_file() else 0,
+                modified=str(item.stat().st_mtime),
+                file_count=len(list(item.iterdir())) if item.is_dir() else None,
+                extension=item.suffix if item.is_file() else None,
+            )
+            items.append(file_info)
 
         # Sort directories first, then files
-        items.sort(key=lambda x: (x["type"] != "directory", x["name"].lower()))
+        items.sort(key=lambda x: (x.type != "folder", x.name.lower()))
 
         # Log metadata for humans
-        dirs = sum(1 for i in items if i["type"] == "directory")
-        files = sum(1 for i in items if i["type"] == "file")
-        total_size = sum(int(i.get("size", "0")) for i in items if i["type"] == "file")
+        dirs = sum(1 for i in items if i.type == "folder")
+        files = sum(1 for i in items if i.type == "file")
+        total_size = sum(i.size for i in items if i.type == "file")
         # Note: for list_directory, bytes make more sense than tokens
         logger.info(
             f"Listed {target_path.name}: {dirs} dirs, {files} files, {total_size:,} bytes total",
             functions="list_directory",
         )
 
-        # Return minimal data to model - just items, no counts or stats
-        return json_response(success=True, items=items)
+        # Return validated response
+        return DirectoryListResponse(success=True, path=str(target_path), items=items).to_json()
 
     except Exception as e:
-        return json_response(error=f"Failed to list directory: {e!s}")
+        return DirectoryListResponse(
+            success=False, path=path, items=[], error=f"Failed to list directory: {e!s}"
+        ).to_json()
 
 
 async def read_file(file_path: str, max_size: int | None = None) -> str:
@@ -375,7 +411,7 @@ async def read_file(file_path: str, max_size: int | None = None) -> str:
     # Validate path with optional size check
     target_file, error = validate_file_path(file_path, check_exists=True, max_size=max_size)
     if error:
-        return json_response(error=error)
+        return FileReadResponse(success=False, file_path=file_path, error=error).to_json()
 
     try:
         extension = target_file.suffix.lower()
@@ -386,11 +422,11 @@ async def read_file(file_path: str, max_size: int | None = None) -> str:
         if needs_conversion:
             # Try conversion with MarkItDown
             if _markitdown_converter is None:
-                return json_response(
-                    error=f"MarkItDown is required for reading {extension} files. Install with: pip install markitdown",
+                return FileReadResponse(
+                    success=False,
                     file_path=str(target_file),
-                )
-
+                    error=f"MarkItDown is required for reading {extension} files. Install with: pip install markitdown",
+                ).to_json()
             try:
                 # Use singleton converter instance
                 conversion_result = _markitdown_converter.convert(str(target_file))
@@ -401,11 +437,12 @@ async def read_file(file_path: str, max_size: int | None = None) -> str:
                 if not content or content.strip() == "":
                     raise ValueError(f"MarkItDown returned empty content for {extension} file")
             except ImportError as ie:
-                return json_response(
-                    error=f"Missing dependencies for {extension}: {ie!s}. Try: pip install 'markitdown[all]'",
+                return FileReadResponse(
+                    success=False,
                     file_path=str(target_file),
-                    extension=extension,
-                )
+                    format=extension,
+                    error=f"Missing dependencies for {extension}: {ie!s}. Try: pip install 'markitdown[all]'",
+                ).to_json()
             except Exception as conv_error:
                 logger.error(f"Conversion error: {conv_error}", exc_info=True)
                 # Fall back to direct read
@@ -415,7 +452,7 @@ async def read_file(file_path: str, max_size: int | None = None) -> str:
         if not content:
             content, error = await read_file_content(target_file)
             if error:
-                return json_response(error=error, file_path=str(target_file))
+                return FileReadResponse(success=False, file_path=str(target_file), error=error).to_json()
 
             conversion_method = "direct_read"
 
@@ -461,15 +498,17 @@ async def read_file(file_path: str, max_size: int | None = None) -> str:
                 func=conversion_method,
             )
 
-        # Build successful result
-        return json_response(
+        # Build successful result with Pydantic model
+        return FileReadResponse(
             success=True,
             content=content,
             file_path=str(target_file.relative_to(cwd) if cwd in target_file.parents else target_file),
-        )
+            size=file_size,
+            format=extension if extension else "text",
+        ).to_json()
 
     except Exception as e:
-        return json_response(error=f"Failed to read file: {e!s}")
+        return FileReadResponse(success=False, file_path=file_path, error=f"Failed to read file: {e!s}").to_json()
 
 
 async def generate_document(
@@ -493,7 +532,7 @@ async def generate_document(
         # Validate path (don't check exists since we're creating)
         output_path, error = validate_file_path(output_file, check_exists=False)
         if error:
-            return json_response(error=error)
+            return DocumentGenerateResponse(success=False, output_file=output_file, error=error).to_json()
 
         # Create parent directories if needed
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -515,7 +554,7 @@ async def generate_document(
         # Write the content using helper
         error = await write_file_content(output_path, content)
         if error:
-            return json_response(error=error)
+            return DocumentGenerateResponse(success=False, output_file=str(output_path), error=error).to_json()
 
         # Calculate stats for logging
         byte_count = len(content.encode("utf-8"))
@@ -532,22 +571,23 @@ async def generate_document(
             func="generate_document",
         )
 
-        # Build result with useful metadata
+        # Build result with Pydantic model
         cwd = Path.cwd()
-        result_data: dict[str, Any] = {
-            "file_path": str(output_path.relative_to(cwd) if cwd in output_path.parents else output_path),
-            "bytes_written": byte_count,
-            "lines_written": line_count,
-            "chars_written": char_count,
-        }
-
+        message = f"Document saved: {byte_count:,} bytes, {line_count} lines"
         if backup_created:
-            result_data["backup_created"] = backup_created
+            message += f" (backup: {backup_created})"
 
-        return json_response(success=True, **result_data)
+        return DocumentGenerateResponse(
+            success=True,
+            output_file=str(output_path.relative_to(cwd) if cwd in output_path.parents else output_path),
+            size=byte_count,
+            message=message,
+        ).to_json()
 
     except Exception as e:
-        return json_response(error=f"Failed to generate document: {e!s}")
+        return DocumentGenerateResponse(
+            success=False, output_file=output_file, error=f"Failed to generate document: {e!s}"
+        ).to_json()
 
 
 async def text_edit(
@@ -570,15 +610,18 @@ async def text_edit(
         JSON with success status and replacements made
     """
 
-    def do_edit(content, **kwargs):
+    def do_edit(content: str, **kwargs: Any) -> tuple[str, dict[str, Any]]:
         """Inner function to perform text replacement."""
-        find_text = kwargs.get("find")
-        replace_text = kwargs.get("replace_with")
-        replace_all = kwargs.get("replace_all", False)
+        find_text: str = kwargs.get("find", "")
+        replace_text: str = kwargs.get("replace_with", "")
+        replace_all: bool = kwargs.get("replace_all", False)
+
+        if not find_text:
+            return content, {"error": "Find text cannot be empty"}
 
         occurrences = content.count(find_text)
         if occurrences == 0:
-            return None, {"warning": "Text not found", "find": find_text}
+            return content, {"warning": "Text not found", "find": find_text}
 
         if replace_all:
             new_content = content.replace(find_text, replace_text)
@@ -594,7 +637,8 @@ async def text_edit(
             "text_found": find_text[:50] + "..." if len(find_text) > 50 else find_text,
         }
 
-    return await file_operation(file_path, do_edit, find=find, replace_with=replace_with, replace_all=replace_all)
+    result = await file_operation(file_path, do_edit, find=find, replace_with=replace_with, replace_all=replace_all)
+    return result  # type: ignore[no-any-return]
 
 
 async def regex_edit(
@@ -619,12 +663,12 @@ async def regex_edit(
         JSON with success status and replacements made
     """
 
-    def do_regex_edit(content, **kwargs):
+    def do_regex_edit(content: str, **kwargs: Any) -> tuple[str, dict[str, Any]]:
         """Inner function to perform regex replacement."""
-        pattern_str = kwargs.get("pattern")
-        replacement = kwargs.get("replacement")
-        replace_all = kwargs.get("replace_all", False)
-        flags_str = kwargs.get("flags", "ms")
+        pattern_str: str = kwargs.get("pattern", "")
+        replacement: str = kwargs.get("replacement", "")
+        replace_all: bool = kwargs.get("replace_all", False)
+        flags_str: str = kwargs.get("flags", "ms")
 
         # Build regex flags
         regex_flags = 0
@@ -638,11 +682,11 @@ async def regex_edit(
         try:
             regex_pattern = re.compile(pattern_str, regex_flags)
         except re.error as e:
-            return None, {"error": f"Invalid regex pattern: {e}"}
+            return content, {"error": f"Invalid regex pattern: {e}"}
 
         matches = list(regex_pattern.finditer(content))
         if not matches:
-            return None, {"warning": "No matches found", "pattern": pattern_str}
+            return content, {"warning": "No matches found", "pattern": pattern_str}
 
         if replace_all:
             new_content = regex_pattern.sub(replacement, content)
@@ -654,9 +698,10 @@ async def regex_edit(
         operation = "delete" if replacement == "" else "replace"
         return new_content, {"operation": operation, "pattern": pattern_str, "replacements": replacements}
 
-    return await file_operation(
+    result = await file_operation(
         file_path, do_regex_edit, pattern=pattern, replacement=replacement, replace_all=replace_all, flags=flags
     )
+    return result  # type: ignore[no-any-return]
 
 
 async def insert_text(
@@ -678,22 +723,25 @@ async def insert_text(
         JSON with success status
     """
 
-    def do_insert(content, **kwargs):
+    def do_insert(content: str, **kwargs: Any) -> tuple[str, dict[str, Any]]:
         """Inner function to perform text insertion."""
-        anchor_text = kwargs.get("anchor")
-        insert_text = kwargs.get("text")
-        position = kwargs.get("position", "after")
+        anchor_text: str = kwargs.get("anchor", "")
+        insert_text: str = kwargs.get("text", "")
+        position: str = kwargs.get("position", "after")
+
+        if not anchor_text or not insert_text:
+            return content, {"error": "Anchor and text cannot be empty"}
 
         idx = content.find(anchor_text)
         if idx == -1:
-            return None, {"error": f"Anchor text not found: {anchor_text}"}
+            return content, {"error": f"Anchor text not found: {anchor_text}"}
 
         if position == "after":
             insert_pos = idx + len(anchor_text)
         elif position == "before":
             insert_pos = idx
         else:
-            return None, {"error": f"Invalid position: {position}. Use 'before' or 'after'"}
+            return content, {"error": f"Invalid position: {position}. Use 'before' or 'after'"}
 
         new_content = content[:insert_pos] + insert_text + content[insert_pos:]
 
@@ -704,7 +752,8 @@ async def insert_text(
             "text_length": len(insert_text),
         }
 
-    return await file_operation(file_path, do_insert, anchor=anchor, text=text, position=position)
+    result = await file_operation(file_path, do_insert, anchor=anchor, text=text, position=position)
+    return result  # type: ignore[no-any-return]
 
 
 # Tool definitions for the Agent

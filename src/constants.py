@@ -1,7 +1,15 @@
 """
 Constants and configuration for Chat Juicer.
 Centralizes all magic numbers and configuration values.
+Includes Pydantic validation for environment variables.
 """
+
+from __future__ import annotations
+
+from functools import lru_cache
+
+from pydantic import Field, HttpUrl, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # File size limits
 MAX_BACKUP_VERSIONS = 10
@@ -239,3 +247,63 @@ For complex problems, the Sequential Thinking tool helps:
 - Revise understanding as you progress
 - Generate and verify hypotheses
 - Maintain context across reasoning steps"""
+
+
+# ============================================================================
+# Environment Configuration with Pydantic Validation
+# ============================================================================
+
+
+class Settings(BaseSettings):
+    """Environment settings with validation.
+
+    Loads from environment variables and .env file.
+    Validates at startup to fail fast on configuration errors.
+    """
+
+    # Required Azure OpenAI settings
+    azure_openai_api_key: str = Field(description="Azure OpenAI API key for authentication")
+    azure_openai_endpoint: HttpUrl = Field(description="Azure OpenAI endpoint URL")
+    azure_openai_deployment: str = Field(default="gpt-5-mini", description="Azure OpenAI deployment name")
+
+    # Optional debug setting
+    debug: bool = Field(default=False, description="Enable debug logging")
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,  # Allow both AZURE_OPENAI_API_KEY and azure_openai_api_key
+        extra="ignore",  # Ignore extra environment variables
+    )
+
+    @field_validator("azure_openai_endpoint")
+    @classmethod
+    def ensure_endpoint_format(cls, v: HttpUrl) -> HttpUrl:
+        """Ensure endpoint URL ends with trailing slash for OpenAI client."""
+        url_str = str(v)
+        if not url_str.endswith("/"):
+            return HttpUrl(url_str + "/")
+        return v
+
+    @field_validator("azure_openai_api_key")
+    @classmethod
+    def validate_api_key(cls, v: str) -> str:
+        """Basic validation of API key format."""
+        if not v or len(v) < 10:
+            raise ValueError("Invalid API key format")
+        return v
+
+    @property
+    def azure_endpoint_str(self) -> str:
+        """Get endpoint as string for OpenAI client."""
+        return str(self.azure_openai_endpoint)
+
+
+@lru_cache
+def get_settings() -> Settings:
+    """Get cached settings instance.
+
+    Uses LRU cache to ensure we only load and validate settings once.
+    This function will raise validation errors at startup if config is invalid.
+    """
+    return Settings()  # BaseSettings loads from env

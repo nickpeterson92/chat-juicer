@@ -32,9 +32,19 @@ from constants import (
     TOKEN_SUMMARIZATION_THRESHOLD,
     TOOL_CALL_ITEM,
     TOOL_CALL_OUTPUT_ITEM,
+    get_settings,
 )
 from functions import AGENT_TOOLS
 from logger import logger
+from models import (
+    AgentUpdateMessage,
+    AssistantMessage,
+    ErrorNotification,
+    HandoffMessage,
+    ToolCallNotification,
+    ToolResultNotification,
+    UserInput,
+)
 from sdk_token_tracker import connect_session, disconnect_session, patch_sdk_for_auto_tracking
 from session import TokenAwareSQLiteSession
 from tool_patch import apply_tool_patch, patch_native_tools
@@ -63,8 +73,8 @@ class IPCManager:
 
     # Pre-create common JSON templates to avoid repeated serialization
     _TEMPLATES: ClassVar[dict[str, str]] = {
-        "assistant_start": '{"type": "assistant_start"}',
-        "assistant_end": '{"type": "assistant_end"}',
+        "assistant_start": AssistantMessage(type="assistant_start").to_json(),
+        "assistant_end": AssistantMessage(type="assistant_end").to_json(),
     }
 
     @staticmethod
@@ -79,9 +89,12 @@ class IPCManager:
         print(f"{IPCManager.DELIMITER}{message}{IPCManager.DELIMITER}", flush=True)
 
     @staticmethod
-    def send_error(message: str) -> None:
-        """Send an error message to the frontend."""
-        IPCManager.send({"type": "error", "message": message})
+    def send_error(message: str, code: str | None = None, details: dict | None = None) -> None:
+        """Send an error message to the frontend with validation."""
+        # Use Pydantic model for validation, but maintain backward compatibility
+        error_msg = ErrorNotification(type="error", message=message, code=code, details=details)
+        # Convert to dict and send using existing method to maintain format
+        IPCManager.send(error_msg.model_dump(exclude_none=True))
 
     @staticmethod
     def send_assistant_start() -> None:
@@ -131,12 +144,13 @@ def handle_message_output(item):
         for content_item in content:
             text = getattr(content_item, "text", "")
             if text:
-                return _json_builder({"type": "assistant_delta", "content": text})
+                msg = AssistantMessage(type="assistant_delta", content=text)
+                return msg.to_json()
     return None
 
 
 def handle_tool_call(item, tracker: CallTracker):
-    """Handle tool call items (function invocations)"""
+    """Handle tool call items (function invocations) with validation."""
     tool_name = "unknown"
     call_id = ""
     arguments = "{}"
@@ -154,7 +168,14 @@ def handle_tool_call(item, tracker: CallTracker):
         # Track active calls for matching with outputs
         tracker.add_call(call_id, tool_name)
 
-    return _json_builder({"type": "function_detected", "name": tool_name, "call_id": call_id, "arguments": arguments})
+    # Use Pydantic model for validation
+    tool_msg = ToolCallNotification(
+        type="function_detected",  # Keep existing type for backward compatibility
+        name=tool_name,
+        arguments=arguments,
+        call_id=call_id if call_id else None,
+    )
+    return _json_builder(tool_msg.model_dump(exclude_none=True))
 
 
 def handle_reasoning(item):
@@ -165,19 +186,22 @@ def handle_reasoning(item):
         for content_item in content:
             text = getattr(content_item, "text", "")
             if text:
-                return _json_builder({"type": "assistant_delta", "content": f"[Thinking] {text}"})
+                msg = AssistantMessage(type="assistant_delta", content=f"[Thinking] {text}")
+                return msg.to_json()
     return None
 
 
 def handle_tool_output(item, tracker: CallTracker):
-    """Handle tool call output items (function results)"""
+    """Handle tool call output items (function results) with validation."""
     call_id = ""
     success = True
+    tool_name = "unknown"
 
     # Match output with a call_id from tracker
     call_info = tracker.pop_call()
     if call_info:
         call_id = call_info["call_id"]
+        tool_name = call_info.get("tool_name", "unknown")
 
     # Get output
     if hasattr(item, "output"):
@@ -192,7 +216,15 @@ def handle_tool_output(item, tracker: CallTracker):
         success = False
         output_str = str(item.raw_item["error"])
 
-    return _json_builder({"type": "function_completed", "call_id": call_id, "success": success, "output": output_str})
+    # Use Pydantic model for validation
+    result_msg = ToolResultNotification(
+        type="function_completed",  # Keep existing type for backward compatibility
+        name=tool_name,
+        result=output_str,
+        call_id=call_id if call_id else None,
+        success=success,
+    )
+    return _json_builder(result_msg.model_dump(exclude_none=True))
 
 
 def handle_handoff_call(item):
@@ -203,7 +235,8 @@ def handle_handoff_call(item):
     else:
         target_agent = "unknown"
 
-    return _json_builder({"type": "handoff_started", "target_agent": target_agent})
+    msg = HandoffMessage(type="handoff_started", target_agent=target_agent)
+    return msg.to_json()
 
 
 def handle_handoff_output(item):
@@ -218,7 +251,8 @@ def handle_handoff_output(item):
     output = getattr(item, "output", "")
     output_str = str(output) if output else ""
 
-    return _json_builder({"type": "handoff_completed", "source_agent": source_agent, "result": output_str})
+    msg = HandoffMessage(type="handoff_completed", source_agent=source_agent, result=output_str)
+    return msg.to_json()
 
 
 async def handle_electron_ipc(event, tracker: CallTracker):
@@ -252,7 +286,8 @@ async def handle_electron_ipc(event, tracker: CallTracker):
 
     # Handle agent updated events
     elif event.type == AGENT_UPDATED_STREAM_EVENT:
-        return _json_builder({"type": "agent_updated", "name": event.new_agent.name})
+        msg = AgentUpdateMessage(type="agent_updated", name=event.new_agent.name)
+        return msg.to_json()
 
     return None
 
@@ -387,14 +422,21 @@ async def main():
     env_path = os.path.join(os.path.dirname(__file__), ".env")
     load_dotenv(env_path)
 
-    # Get Azure configuration
-    api_key = os.getenv("AZURE_OPENAI_API_KEY")
-    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-    deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5-mini")
+    # Load and validate settings at startup
+    try:
+        settings = get_settings()
 
-    if not api_key or not endpoint:
-        print("Error: Missing required environment variables:")
-        print("AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT must be set")
+        # Use validated settings
+        api_key = settings.azure_openai_api_key
+        endpoint = settings.azure_endpoint_str
+        deployment = settings.azure_openai_deployment
+
+        logger.info(f"Settings loaded successfully for deployment: {deployment}")
+    except Exception as e:
+        print(f"Error: Configuration validation failed: {e}")
+        print("Please check your .env file has required variables:")
+        print("  AZURE_OPENAI_API_KEY")
+        print("  AZURE_OPENAI_ENDPOINT")
         sys.exit(1)
 
     # Create Azure OpenAI client and set as default for Agent/Runner
@@ -456,11 +498,14 @@ async def main():
     while True:
         try:
             # Get user input (synchronously from stdin)
-            user_input = await asyncio.get_event_loop().run_in_executor(None, input)
-            user_input = user_input.strip()
+            raw_input = await asyncio.get_event_loop().run_in_executor(None, input)
 
-            # Skip empty input
-            if not user_input:
+            # Validate user input with Pydantic
+            try:
+                validated_input = UserInput(content=raw_input)
+                user_input = validated_input.content
+            except ValueError:
+                # Skip invalid input (empty after stripping)
                 continue
 
             # Handle quit command

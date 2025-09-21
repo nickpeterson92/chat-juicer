@@ -113,7 +113,7 @@ force-single-line = false
 # Import sections order
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 # Define first-party packages (your local modules)
-known-first-party = ["constants", "logger", "utils", "functions", "azure_client", "main", "tool_patch", "session", "sdk_token_tracker"]
+known-first-party = ["constants", "logger", "utils", "functions", "models", "main", "tool_patch", "session", "sdk_token_tracker"]
 
 [tool.ruff.lint.mccabe]
 # Maximum complexity
@@ -132,3 +132,81 @@ max-statements = 50
 
 # Main.py needs prints for IPC and has cleanup loops
 "src/main.py" = ["T201", "PERF203"]
+
+[tool.mypy]
+# Specify the Python version
+python_version = "3.13"
+
+# Discover Python files in the src directory
+files = ["src/"]
+
+# Strict mode options (gradually enable these)
+strict = false  # Start permissive, enable later
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+# Error output settings
+pretty = true
+show_error_codes = true
+show_error_context = true
+show_column_numbers = true
+
+# Import discovery
+ignore_missing_imports = true  # External libs without stubs
+follow_imports = "normal"
+namespace_packages = true
+
+# Incremental type checking
+incremental = true
+cache_dir = ".mypy_cache"
+
+# Disallow dynamic typing (gradual adoption)
+disallow_untyped_calls = false  # Start permissive
+disallow_untyped_defs = false   # Start permissive
+disallow_incomplete_defs = false # Start permissive
+disallow_untyped_decorators = false
+check_untyped_defs = true
+
+# None handling
+no_implicit_optional = true
+strict_optional = true
+
+# Per-module options (for gradual adoption)
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "agents.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "openai.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "markitdown.*"
+ignore_missing_imports = true
+
+[tool.black]
+line-length = 120
+target-version = ['py39']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.mypy_cache
+  | \.ruff_cache
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | node_modules
+)/
+'''

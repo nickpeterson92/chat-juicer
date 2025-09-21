@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import uuid
 
 from pathlib import Path
@@ -16,8 +15,9 @@ from typing import Any, ClassVar
 from agents import Runner, SQLiteSession
 from openai import AsyncOpenAI
 
-from constants import MODEL_TOKEN_LIMITS
+from constants import MODEL_TOKEN_LIMITS, get_settings
 from logger import logger
+from models import FunctionEventMessage
 from utils import estimate_tokens
 
 
@@ -181,7 +181,12 @@ class MessageNormalizer:
                 messages.append(normalized_msg)
 
         # Add the summary request
-        messages.append({"role": "user", "content": "Please summarize the above conversation."})
+        messages.append(
+            {
+                "role": "user",
+                "content": "Please summarize the above conversation and NOTHING else. Do NOT ask any follow up questions. A summary is the ONLY thing I need from you.",
+            }
+        )
 
         return messages
 
@@ -207,7 +212,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
             threshold: Trigger summarization at this fraction of token limit (0.8 = 80%)
         """
         # Initialize parent SQLiteSession
-        super().__init__(session_id, db_path)  # type: ignore[arg-type]
+        super().__init__(session_id, db_path)
 
         self.agent = agent
         self.model = model
@@ -249,7 +254,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
     def _count_tokens(self, text: str) -> int:
         """Count tokens in text using the model's tokenizer."""
         result = estimate_tokens(text, self.model)
-        return result["exact_tokens"]
+        return int(result["exact_tokens"])  # Ensure return type is int
 
     def _calculate_total_tokens(self, items: list[dict]) -> int:
         """Calculate total tokens from conversation items including tool calls."""
@@ -473,13 +478,12 @@ class TokenAwareSQLiteSession(SQLiteSession):
             error: Error message if failed
             output: Output summary if succeeded
         """
-        event = {"type": "function_completed", "call_id": call_id, "success": success}
-        if error:
-            event["error"] = error
-        if output:
-            event["output"] = output
+        # Use Pydantic model for validation and serialization
+        event = FunctionEventMessage(
+            type="function_completed", call_id=call_id, success=success, error=error, output=output
+        )
 
-        msg = json.dumps(event)
+        msg = event.to_json()
         print(f"__JSON__{msg}__JSON__", flush=True)
 
     def _prepare_summary_items(self, items: list[Any], keep_recent: int) -> tuple[str, list[Any]]:
@@ -530,10 +534,11 @@ class TokenAwareSQLiteSession(SQLiteSession):
         # Use the responses API (same as Agent/Runner uses internally)
         # This handles complex content structures seamlessly
 
-        # Create client same way as functions.py
-        api_key = os.getenv("AZURE_OPENAI_API_KEY")
-        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5-mini")
+        # Create client using validated settings
+        settings = get_settings()
+        api_key = settings.azure_openai_api_key
+        endpoint = settings.azure_endpoint_str
+        deployment = settings.azure_openai_deployment
 
         client = AsyncOpenAI(api_key=api_key, base_url=endpoint)
 
