@@ -14,7 +14,7 @@ import uuid
 from collections import deque
 from dataclasses import dataclass, field
 from functools import partial
-from typing import Any, ClassVar
+from typing import Any, Callable, ClassVar, cast
 
 from agents import Agent, set_default_openai_client, set_tracing_disabled
 from agents.mcp import MCPServerStdio
@@ -46,7 +46,14 @@ from models import (
     UserInput,
 )
 from sdk_models import (
+    AgentUpdatedStreamEvent,
+    ContentLike,
+    EventHandler,
+    RawHandoffLike,
+    RawMessageLike,
+    RawToolCallLike,
     RunItem,
+    RunItemStreamEvent,
     StreamingEvent,
 )
 from sdk_token_tracker import connect_session, disconnect_session, patch_sdk_for_auto_tracking
@@ -144,9 +151,12 @@ def handle_message_output(item: RunItem) -> str | None:
     """Handle message output items (assistant responses)"""
     if hasattr(item, "raw_item"):
         raw = item.raw_item
-        content = getattr(raw, "content", []) or []  # Ensure we always have a list
+        content = raw.content or [] if isinstance(raw, RawMessageLike) else getattr(raw, "content", []) or []
         for content_item in content:
-            text = getattr(content_item, "text", "")
+            if isinstance(content_item, ContentLike):
+                text = content_item.text or ""
+            else:
+                text = getattr(content_item, "text", "")
             if text:
                 msg = AssistantMessage(type="assistant_delta", content=text)
                 return msg.to_json()
@@ -162,12 +172,17 @@ def handle_tool_call(item: RunItem, tracker: CallTracker) -> str | None:
     if hasattr(item, "raw_item"):
         raw = item.raw_item
 
-        # Extract tool details
-        tool_name = getattr(raw, "name", "unknown")
-        arguments = getattr(raw, "arguments", "{}")
+        if isinstance(raw, RawToolCallLike):
+            tool_name = raw.name
+            arguments = raw.arguments
+            call_id = raw.call_id or (raw.id or "")
+        else:
+            # Extract tool details
+            tool_name = getattr(raw, "name", "unknown")
+            arguments = getattr(raw, "arguments", "{}")
 
-        # Get call_id with fallback to id
-        call_id = getattr(raw, "call_id", getattr(raw, "id", ""))
+            # Get call_id with fallback to id
+            call_id = getattr(raw, "call_id", getattr(raw, "id", ""))
 
         # Track active calls for matching with outputs
         tracker.add_call(call_id, tool_name)
@@ -186,9 +201,12 @@ def handle_reasoning(item: RunItem) -> str | None:
     """Handle reasoning items (Sequential Thinking output)"""
     if hasattr(item, "raw_item"):
         raw = item.raw_item
-        content = getattr(raw, "content", []) or []  # Ensure we always have a list
+        content = raw.content or [] if isinstance(raw, RawMessageLike) else getattr(raw, "content", []) or []
         for content_item in content:
-            text = getattr(content_item, "text", "")
+            if isinstance(content_item, ContentLike):
+                text = content_item.text or ""
+            else:
+                text = getattr(content_item, "text", "")
             if text:
                 msg = AssistantMessage(type="assistant_delta", content=f"[Thinking] {text}")
                 return msg.to_json()
@@ -235,7 +253,7 @@ def handle_handoff_call(item: RunItem) -> str | None:
     """Handle handoff call items (multi-agent requests)"""
     if hasattr(item, "raw_item"):
         raw = item.raw_item
-        target_agent = getattr(raw, "target", "unknown")
+        target_agent = raw.target or "unknown" if isinstance(raw, RawHandoffLike) else getattr(raw, "target", "unknown")
     else:
         target_agent = "unknown"
 
@@ -249,7 +267,7 @@ def handle_handoff_output(item: RunItem) -> str | None:
 
     if hasattr(item, "raw_item"):
         raw = item.raw_item
-        source_agent = getattr(raw, "source", "unknown")
+        source_agent = raw.source or "unknown" if isinstance(raw, RawHandoffLike) else getattr(raw, "source", "unknown")
 
     # Get output
     output = getattr(item, "output", "")
@@ -259,22 +277,20 @@ def handle_handoff_output(item: RunItem) -> str | None:
     return msg.to_json()
 
 
-async def handle_electron_ipc(event: StreamingEvent, tracker: CallTracker) -> str | None:
-    """Convert Agent/Runner events to Electron IPC format
+def _build_event_handlers(tracker: CallTracker) -> dict[str, EventHandler]:
+    """Create a registry of event handlers keyed by event type.
 
-    Args:
-        event: The streaming event
-        tracker: CallTracker instance to track call_ids between tool_call and tool_call_output events
-
-    Returns:
-        The IPC message JSON string or None
+    Uses closures to capture `tracker` while conforming to EventHandler.
     """
-    # Handle run item stream events
-    if event.type == RUN_ITEM_STREAM_EVENT:
-        item = event.item  # type: ignore[attr-defined]
 
-        # Map item types to handler functions
-        handlers = {
+    def handle_run_item_event(event: StreamingEvent) -> str | None:
+        # Guard by event type, then cast for attribute access
+        if getattr(event, "type", None) != RUN_ITEM_STREAM_EVENT:
+            return None
+        rie = cast(RunItemStreamEvent, event)
+        item: RunItem = rie.item
+
+        item_handlers: dict[str, Callable[[], str | None]] = {
             MESSAGE_OUTPUT_ITEM: lambda: handle_message_output(item),
             TOOL_CALL_ITEM: lambda: handle_tool_call(item, tracker),
             REASONING_ITEM: lambda: handle_reasoning(item),
@@ -283,16 +299,29 @@ async def handle_electron_ipc(event: StreamingEvent, tracker: CallTracker) -> st
             HANDOFF_OUTPUT_ITEM: lambda: handle_handoff_output(item),
         }
 
-        # Get and execute the appropriate handler
-        handler = handlers.get(item.type)
-        if handler:
-            return handler()  # type: ignore[no-untyped-call]
+        ih = item_handlers.get(item.type)
+        return ih() if ih else None
 
-    # Handle agent updated events
-    elif event.type == AGENT_UPDATED_STREAM_EVENT:
-        msg = AgentUpdateMessage(type="agent_updated", name=event.new_agent.name)  # type: ignore[attr-defined]
+    def handle_agent_updated_event(event: StreamingEvent) -> str | None:
+        if getattr(event, "type", None) != AGENT_UPDATED_STREAM_EVENT:
+            return None
+        aue = cast(AgentUpdatedStreamEvent, event)
+        msg = AgentUpdateMessage(type="agent_updated", name=aue.new_agent.name)
         return msg.to_json()
 
+    return {
+        RUN_ITEM_STREAM_EVENT: handle_run_item_event,
+        AGENT_UPDATED_STREAM_EVENT: handle_agent_updated_event,
+    }
+
+
+async def handle_electron_ipc(event: StreamingEvent, tracker: CallTracker) -> str | None:
+    """Convert Agent/Runner events to Electron IPC format using a typed registry."""
+
+    handlers = _build_event_handlers(tracker)
+    handler = handlers.get(event.type)
+    if handler:
+        return handler(event)
     return None
 
 

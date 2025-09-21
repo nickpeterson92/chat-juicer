@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Any
 from constants import (
     HANDOFF_OUTPUT_ITEM,
     REASONING_ITEM,
-    RUN_ITEM_STREAM_EVENT,
     TOKEN_SOURCE_HANDOFF,
     TOKEN_SOURCE_REASONING,
     TOKEN_SOURCE_TOOL_CALL,
@@ -24,6 +23,12 @@ from constants import (
     TOOL_CALL_OUTPUT_ITEM,
 )
 from logger import logger
+from sdk_models import (
+    ContentLike,
+    RawMessageLike,
+    RawToolCallLike,
+    RunItemStreamEvent,
+)
 from utils import estimate_tokens
 
 # Optional SDK import at module level to satisfy linter; handled if missing
@@ -116,8 +121,8 @@ def track_streaming_event(event: Any) -> Any:
     if not tracker.enabled or not tracker.session:
         return event
 
-    # Check if this is a run_item_stream_event with tool data
-    if hasattr(event, "type") and event.type == RUN_ITEM_STREAM_EVENT and hasattr(event, "item") and event.item:
+    # Check if this is a run_item_stream_event with tool data using Protocol
+    if isinstance(event, RunItemStreamEvent):
         item = event.item
         item_type = getattr(item, "type", "")
 
@@ -126,9 +131,13 @@ def track_streaming_event(event: Any) -> Any:
             if hasattr(item, "raw_item"):
                 raw = item.raw_item
                 # Track the arguments being sent to the tool
-                arguments = getattr(raw, "arguments", None)
-                if arguments:
-                    tracker.track_content(arguments, f"{TOKEN_SOURCE_TOOL_CALL}:{getattr(raw, 'name', 'unknown')}")
+                if isinstance(raw, RawToolCallLike):
+                    if raw.arguments:
+                        tracker.track_content(raw.arguments, f"{TOKEN_SOURCE_TOOL_CALL}:{raw.name}")
+                else:
+                    arguments = getattr(raw, "arguments", None)
+                    if arguments:
+                        tracker.track_content(arguments, f"{TOKEN_SOURCE_TOOL_CALL}:{getattr(raw, 'name', 'unknown')}")
 
         # Track tool call outputs
         elif item_type == TOOL_CALL_OUTPUT_ITEM:
@@ -145,10 +154,15 @@ def track_streaming_event(event: Any) -> Any:
         elif item_type == REASONING_ITEM:
             if hasattr(item, "raw_item"):
                 raw = item.raw_item
-                content = getattr(raw, "content", [])
-                if content:
-                    for content_item in content:
-                        text = getattr(content_item, "text", None)
+                # Extract content tokens from message-like structure
+                contents = raw.content or [] if isinstance(raw, RawMessageLike) else getattr(raw, "content", []) or []
+                if contents:
+                    for content_item in contents:
+                        text = (
+                            content_item.text
+                            if isinstance(content_item, ContentLike)
+                            else getattr(content_item, "text", None)
+                        )
                         if text:
                             tracker.track_content(text, TOKEN_SOURCE_REASONING)
 

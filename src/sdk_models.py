@@ -28,7 +28,7 @@ class AgentUpdatedStreamEvent(Protocol):
 
     type: Literal["agent_updated_stream_event"]
     name: str
-    new_agent: Any  # Agent instance
+    new_agent: AgentLike  # Minimal agent shape used at runtime
 
 
 # ============================================================================
@@ -41,39 +41,35 @@ class RunItem(Protocol):
     """Protocol for all run items from SDK."""
 
     type: str
-    raw_item: Any | None
-    output: Any | None
+    raw_item: object | None
+    output: object | None
 
 
-class MessageOutputItem(TypedDict):
-    """Message output item with content."""
+@runtime_checkable
+class AgentLike(Protocol):
+    """Minimal Agent interface used by the app at runtime."""
 
-    type: Literal["message_output_item"]
-    raw_item: RawMessageItem
-
-
-class RawMessageItem(TypedDict):
-    """Raw message item structure."""
-
-    content: list[ContentItem] | None
+    name: str
 
 
-class ContentItem(TypedDict):
-    """Content item within a message."""
+# Narrow protocols for common raw item shapes used at runtime
+@runtime_checkable
+class ContentLike(Protocol):
+    """Protocol for content items that expose optional text."""
 
-    type: str
     text: str | None
 
 
-class ToolCallItem(TypedDict):
-    """Tool call item structure."""
+@runtime_checkable
+class RawMessageLike(Protocol):
+    """Protocol for raw message objects with content list."""
 
-    type: Literal["tool_call_item"]
-    raw_item: RawToolCallItem
+    content: list[ContentLike] | None
 
 
-class RawToolCallItem(TypedDict):
-    """Raw tool call details."""
+@runtime_checkable
+class RawToolCallLike(Protocol):
+    """Protocol for raw tool call details used by handlers."""
 
     name: str
     arguments: str
@@ -81,41 +77,12 @@ class RawToolCallItem(TypedDict):
     id: str | None
 
 
-class ToolCallOutputItem(TypedDict):
-    """Tool call output item structure."""
+@runtime_checkable
+class RawHandoffLike(Protocol):
+    """Protocol for raw handoff objects (multi-agent)."""
 
-    type: Literal["tool_call_output_item"]
-    output: Any
-    raw_item: dict[str, Any] | None
-
-
-class ReasoningItem(TypedDict):
-    """Reasoning item for Sequential Thinking."""
-
-    type: Literal["reasoning_item"]
-    raw_item: RawMessageItem
-
-
-class HandoffCallItem(TypedDict):
-    """Multi-agent handoff call item."""
-
-    type: Literal["handoff_call_item"]
-    raw_item: RawHandoffItem
-
-
-class HandoffOutputItem(TypedDict):
-    """Multi-agent handoff output item."""
-
-    type: Literal["handoff_output_item"]
-    output: Any
-    raw_item: RawHandoffItem | None
-
-
-class RawHandoffItem(TypedDict, total=False):
-    """Raw handoff item structure."""
-
-    target_agent: str | None
-    source_agent: str | None
+    target: str | None
+    source: str | None
     arguments: str | None
 
 
@@ -132,11 +99,17 @@ class StreamingEvent(Protocol):
     type: str
 
 
-# Union type for all possible run items
-AnyRunItem = MessageOutputItem | ToolCallItem | ToolCallOutputItem | ReasoningItem | HandoffCallItem | HandoffOutputItem
+# Type for event handlers (callables handling streaming events)
+@runtime_checkable
+class EventHandler(Protocol):
+    """Protocol for functions that handle a streaming event.
 
-# Type for event handlers
-EventHandler = Any  # Will be replaced with proper Protocol in future
+    Handlers receive a `StreamingEvent` and return an optional string
+    (e.g., an IPC message) or `None` when no output is produced.
+    """
+
+    def __call__(self, event: StreamingEvent) -> str | None:  # pragma: no cover - structural typing only
+        ...
 
 
 # ============================================================================
@@ -157,21 +130,15 @@ class SessionConversationItem(TypedDict, total=False):
 
 # Export all types
 __all__ = [
+    "AgentLike",
     "AgentUpdatedStreamEvent",
-    "AnyRunItem",
-    "ContentItem",
+    "ContentLike",
     "EventHandler",
-    "HandoffCallItem",
-    "HandoffOutputItem",
-    "MessageOutputItem",
-    "RawHandoffItem",
-    "RawMessageItem",
-    "RawToolCallItem",
-    "ReasoningItem",
+    "RawHandoffLike",
+    "RawMessageLike",
+    "RawToolCallLike",
     "RunItem",
     "RunItemStreamEvent",
     "SessionConversationItem",
     "StreamingEvent",
-    "ToolCallItem",
-    "ToolCallOutputItem",
 ]

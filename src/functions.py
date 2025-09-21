@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 
+from collections.abc import Awaitable
 from pathlib import Path
 from typing import Any, Callable
 
@@ -910,7 +911,8 @@ TOOLS: list[dict[str, Any]] = [
 
 
 # Function registry for execution
-FUNCTION_REGISTRY: dict[str, Any] = {
+# Functions may be sync (return str) or async (return Awaitable[str])
+FUNCTION_REGISTRY: dict[str, Callable[..., str] | Callable[..., Awaitable[str]]] = {
     "list_directory": list_directory,
     "read_file": read_file,
     "generate_document": generate_document,
@@ -920,7 +922,7 @@ FUNCTION_REGISTRY: dict[str, Any] = {
 }
 
 # Agent/Runner tools - wrap functions with function_tool decorator
-# Type declaration for AGENT_TOOLS
+# The concrete tool type comes from the external agents SDK; keep as Any at boundary
 AGENT_TOOLS: list[Any]
 
 try:
