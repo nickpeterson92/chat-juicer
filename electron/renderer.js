@@ -676,14 +676,14 @@ window.electronAPI.onBotOutput((output) => {
           // Function execution complete
           window.electronAPI.log("debug", "Function completed", message);
           if (message.success) {
-            // Use the actual output if provided, otherwise show "Success"
-            const result = message.output || "Success";
+            // Use the actual result from the backend (field changed from output to result)
+            const result = message.result || message.output || "Success";
             updateFunctionCallStatus(message.call_id, "completed", {
               result: result,
             });
           } else {
             updateFunctionCallStatus(message.call_id, "error", {
-              error: message.error || message.output || "Unknown error",
+              error: message.error || message.result || message.output || "Unknown error",
             });
           }
           // Clean up after a delay
