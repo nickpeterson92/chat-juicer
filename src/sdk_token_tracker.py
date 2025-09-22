@@ -29,7 +29,7 @@ from sdk_models import (
     RawToolCallLike,
     RunItemStreamEvent,
 )
-from utils import estimate_tokens
+from utils import count_tokens
 
 # Optional SDK import at module level to satisfy linter; handled if missing
 try:
@@ -89,7 +89,7 @@ class SDKTokenTracker:
         content_str = json.dumps(content) if isinstance(content, (dict, list)) else str(content)
 
         # Count tokens
-        result = estimate_tokens(content_str)
+        result = count_tokens(content_str)
         tokens = result["exact_tokens"]
 
         if tokens > 0:

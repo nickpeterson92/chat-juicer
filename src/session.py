@@ -18,7 +18,7 @@ from openai import AsyncOpenAI
 from constants import MODEL_TOKEN_LIMITS, get_settings
 from logger import logger
 from models import FunctionEventMessage
-from utils import estimate_tokens
+from utils import count_tokens
 
 
 class MessageNormalizer:
@@ -253,7 +253,7 @@ class TokenAwareSQLiteSession(SQLiteSession):  # type: ignore[misc]
 
     def _count_tokens(self, text: str) -> int:
         """Count tokens in text using the model's tokenizer."""
-        result = estimate_tokens(text, self.model)
+        result = count_tokens(text, self.model)
         return int(result["exact_tokens"])  # Ensure return type is int
 
     def _calculate_total_tokens(self, items: list[dict[str, Any]]) -> int:

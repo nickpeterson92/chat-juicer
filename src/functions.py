@@ -65,7 +65,7 @@ from constants import (  # noqa: E402
     MAX_BACKUP_VERSIONS,
 )
 from logger import logger  # noqa: E402
-from utils import estimate_tokens  # noqa: E402
+from utils import count_tokens  # noqa: E402
 
 
 async def summarize_content(content: str, file_name: str = "document", model: str = "gpt-5-mini") -> str:
@@ -112,8 +112,8 @@ Document content:
             return content
 
         # Log summarization stats
-        original_tokens = estimate_tokens(content, model)
-        summary_tokens = estimate_tokens(summarized, model)
+        original_tokens = count_tokens(content, model)
+        summary_tokens = count_tokens(summarized, model)
 
         orig_count = original_tokens["exact_tokens"]
         summ_count = summary_tokens["exact_tokens"]
@@ -460,7 +460,7 @@ async def read_file(file_path: str, max_size: int | None = None) -> str:
             conversion_method = "direct_read"
 
         # Token counting for logging and summarization check
-        token_count = estimate_tokens(content)
+        token_count = count_tokens(content)
         exact_tokens = token_count["exact_tokens"]
 
         # Get relative path
@@ -477,7 +477,7 @@ async def read_file(file_path: str, max_size: int | None = None) -> str:
             content = f"[Note: This document was automatically summarized from {exact_tokens:,} tokens to improve processing efficiency]\n\n{content}"
 
             # Recalculate token count after summarization
-            new_token_count = estimate_tokens(content)
+            new_token_count = count_tokens(content)
             new_exact_tokens = new_token_count["exact_tokens"]
 
             logger.info(
@@ -566,7 +566,7 @@ async def generate_document(
 
         # Log the operation with meaningful stats
         # Calculate tokens for generated content
-        token_info = estimate_tokens(content)
+        token_info = count_tokens(content)
         logger.info(
             f"Generated document: {output_path.name}, {char_count:,} chars, {line_count} lines, {byte_count} bytes",
             tokens=token_info["exact_tokens"],

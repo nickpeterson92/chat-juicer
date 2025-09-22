@@ -30,7 +30,7 @@ def _count_tokens_cached(text: str, model: str) -> int:
     return len(encoding.encode(text))
 
 
-def estimate_tokens(text: str, model: str = "gpt-5-mini") -> dict[str, Any]:
+def count_tokens(text: str, model: str = "gpt-5-mini") -> dict[str, Any]:
     """
     Count exact tokens using tiktoken for accurate token counting.
 
