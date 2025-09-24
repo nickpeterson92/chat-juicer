@@ -22,50 +22,123 @@ An Electron + Python desktop application for Azure OpenAI chat interactions usin
 
 ## Features
 
-- 🖥️ **Desktop Application**: Electron app with modern UI and health monitoring
-- 🤖 **Agent/Runner Pattern**: Modern OpenAI architecture with automatic orchestration
+- 🖥️ **Desktop Application**: Production-grade Electron app with health monitoring and auto-recovery
+- 🤖 **Agent/Runner Pattern**: Native OpenAI Agents SDK with automatic tool orchestration
 - 🧠 **Sequential Thinking**: MCP server for advanced multi-step reasoning and problem decomposition
-- 💾 **Smart Session Management**: Token-aware SQLite sessions with automatic summarization at configured % threshold
+- 💾 **Smart Session Management**: TokenAwareSQLiteSession with auto-summarization at 20% threshold
 - 🔄 **Streaming Responses**: Real-time AI response streaming with structured event handling
-- 🛠️ **Function Calling**: Native tools and MCP server integration with race condition mitigation
-- 📝 **Conversation Logging**: Structured JSON logging with rotating file management
+- 🛠️ **Function Calling**: Async native tools and MCP server integration
+- 📝 **Structured Logging**: Enterprise-grade JSON logging with rotation and session correlation
 - 🔐 **Azure OpenAI Integration**: Secure connection to Azure OpenAI services
-- 📊 **Token Management**: Exact token counting with tiktoken, automatic optimization, and model-aware limits
-- ⚡ **Async Architecture**: Async/await for Agent/Runner, MCP servers, and functions
+- 📊 **Token Management**: SDK-level universal token tracking with exact counting via tiktoken
+- ⚡ **Full Async Architecture**: Consistent async/await throughout backend
 - 📄 **Document Generation**: Template-based document creation with multi-format support (PDF, Word, Excel, HTML)
 - 🔧 **Editing Tools**: Text, regex, and insert operations for document modification
-- 🎯 **Error Resilience**: Graceful handling of rate limits, streaming errors, and connection issues
+- 🎯 **Type Safety**: Full mypy strict compliance with Pydantic runtime validation
+- 🏗️ **Production Features**: Memory management, error recovery, performance optimization
 
-## Architecture
+## Architecture## Architecture
 
 Chat Juicer uses OpenAI's **Agent/Runner pattern** which provides:
 - **Native MCP Server Integration**: Direct support for Model Context Protocol servers
 - **Automatic Tool Orchestration**: Framework handles function calling automatically
 - **Token-Aware Sessions**: SQLite-based session management with automatic summarization
-- **Hybrid Async Model**: Async/await for Agent/Runner and MCP servers, synchronous for functions
+- **Full Async Architecture**: Consistent async/await for Agent/Runner, MCP servers, and all functions
 - **Streaming Events**: Structured event handling for real-time responses
 - **Smart State Management**: Session handles conversation context with token tracking
-- **Race Condition Mitigation**: Configurable delays for tool calls to prevent syncing errors server-side (currently disabled with client side sessions)
+- **SDK-Level Token Tracking**: Universal token tracking via elegant monkey-patching
 
-## Prerequisites
+### Architecture Flow
+
+```mermaid
+graph TB
+    subgraph "Electron Frontend"
+        UI[Chat UI<br/>index.html]
+        Renderer[Renderer Process<br/>BoundedMap + AppState]
+        Main[Main Process<br/>Health Monitor]
+        Preload[Preload Script<br/>Secure IPC Bridge]
+    end
+
+    subgraph "Python Backend"
+        Agent[Agent/Runner<br/>main.py]
+        Session[(TokenAwareSQLiteSession<br/>Auto-summarization @ 20%)]
+        Functions[Async Functions<br/>functions.py]
+        Models[Pydantic Models<br/>Runtime Validation]
+        TokenTracker[SDK Token Tracker<br/>Universal Tracking]
+    end
+
+    subgraph "MCP Servers"
+        SeqThinking[Sequential Thinking<br/>Multi-step Reasoning]
+        Future[Future MCP Servers<br/>GitHub, DB, etc.]
+    end
+
+    subgraph "External Services"
+        Azure[Azure OpenAI<br/>GPT-5/GPT-4]
+        Docs[(Documents<br/>PDF/Word/Excel)]
+    end
+
+    subgraph "Logging & Storage"
+        Logs[JSON Logs<br/>conversations.jsonl]
+        Templates[Document Templates<br/>with placeholders]
+        Output[Generated Output<br/>Markdown/Reports]
+    end
+
+    UI -->|User Input| Renderer
+    Renderer -->|IPC| Preload
+    Preload -->|Secure Bridge| Main
+    Main -->|Spawn Process| Agent
+
+    Agent -->|Streaming Events| Main
+    Agent -->|Tool Calls| Functions
+    Agent -->|MCP Protocol| SeqThinking
+    Agent -->|MCP Protocol| Future
+    Agent -->|API Calls| Azure
+
+    Agent <-->|Context| Session
+    Session -->|Token Tracking| TokenTracker
+
+    Functions -->|Read/Process| Docs
+    Functions -->|Generate| Output
+    Functions -->|Use| Templates
+
+    Agent -->|Structured Logs| Logs
+    Main -->|5-min Health Check| Agent
+
+    style UI fill:#e1f5fe
+    style Agent fill:#fff3e0
+    style Session fill:#f3e5f5
+    style Azure fill:#e8f5e9
+    style SeqThinking fill:#fce4ec
+    style Logs fill:#f5f5f5
+```
+
+### Key Architectural Components:
+- **Backend**: Python with async functions, Pydantic models, type safety (mypy strict=true)
+- **Frontend**: Electron with memory-bounded state management and health monitoring
+- **Session**: TokenAwareSQLiteSession with 20% threshold auto-summarization
+- **Logging**: Enterprise JSON logging with rotation and session correlation
+- **Type System**: Protocols for SDK integration, Pydantic for validation, TypedDict for data
+
+## Prerequisites## Prerequisites
 
 - Node.js 16+ and npm
-- Python 3.8+
-- Azure OpenAI resource with deployment (e.g., gpt-4, gpt-3.5-turbo)
+- Python 3.9+ (for type annotations and modern async features)
+- Azure OpenAI resource with deployment (e.g., gpt-5-mini, gpt-4o, gpt-4)
 - Azure OpenAI API credentials
 - Internet connection for MCP server downloads
 
-## Requirements
+## Requirements## Requirements
 
 ### Node.js Dependencies
 - `electron`: Desktop application framework (devDependency)
 - Node.js 16+ and npm required
 
 ### Python Dependencies
-- Python 3.8+ required
+- Python 3.9+ required (for modern type hints and async features)
+- Full type safety with mypy strict=true
 - See dependencies section below for package list
 
-## Installation
+## Installation## Installation
 
 1. **Clone the repository**
    ```bash
@@ -144,13 +217,15 @@ chat-juicer/
 │   └── index.html    # Main chat UI
 ├── src/              # Python backend (Agent/Runner pattern)
 │   ├── main.py       # Agent/Runner implementation with MCP support
-│   ├── session.py    # TokenAwareSQLiteSession for auto-summarization
-│   ├── functions.py  # Document generation and file tools (synchronous)
-│   ├── tool_patch.py # Tool call delay patches for race condition mitigation
+│   ├── session.py    # TokenAwareSQLiteSession with auto-summarization
+│   ├── functions.py  # Document generation and file tools (async)
+│   ├── models.py     # Pydantic models for runtime validation
+│   ├── sdk_models.py # Protocol typing for SDK integration
+│   ├── sdk_token_tracker.py # SDK-level automatic token tracking
+│   ├── tool_patch.py # Tool call delay patches (now disabled)
 │   ├── logger.py     # Python logging framework (JSON format)
-│   ├── utils.py      # Token management and rate limiting utilities
-│   ├── constants.py  # Centralized configuration constants
-│   └── requirements.txt  # Python dependencies
+│   ├── utils.py      # Token management utilities
+│   ├── constants.py  # Centralized configuration constants   └── requirements.txt  # Python dependencies
 ├── sources/          # Source documents for processing
 ├── output/           # Generated documentation output
 ├── templates/        # Document templates with {{placeholders}}
@@ -166,25 +241,28 @@ chat-juicer/
 ### Python Backend (`src/`)
 
 - **main.py**: Agent/Runner implementation with MCP server integration and streaming event handling
-- **session.py**: TokenAwareSQLiteSession class extending SDK's SQLiteSession with automatic summarization
-- **functions.py**: Synchronous function implementations for file operations and document generation
-- **tool_patch.py**: Monkey patches for adding configurable delays to mitigate race conditions in tool calls
-- **logger.py**: Structured JSON logging for conversations and errors with rotating file handlers
-- **utils.py**: Token management utilities including exact counting, optimization, and rate limiting
-- **constants.py**: Centralized configuration including tool delays, token limits, and system instructions
+- **session.py**: TokenAwareSQLiteSession class with automatic summarization at 20% token threshold
+- **functions.py**: Async function implementations for file operations and document generation
+- **models.py**: Pydantic models for IPC messages and function responses
+- **sdk_models.py**: Protocol definitions for type-safe SDK integration
+- **sdk_token_tracker.py**: Universal token tracking via SDK monkey-patching
+- **tool_patch.py**: Configurable delays for tool calls (currently set to 0.0 - disabled)
+- **logger.py**: Structured JSON logging with rotation and session correlation
+- **utils.py**: Token management utilities with LRU caching for performance
+- **constants.py**: Centralized configuration with Pydantic Settings validation
 
-### Electron Frontend (`electron/`)
+### Electron Frontend### Electron Frontend (`electron/`)
 
-- **main.js**: Main process handling window creation and IPC communication
-- **preload.js**: Secure bridge between main and renderer processes
-- **renderer.js**: UI interaction logic and Python process management
-- **logger.js**: Frontend logging utilities
+- **main.js**: Main process with health monitoring (5-min intervals), auto-recovery, graceful shutdown
+- **preload.js**: Secure context-isolated bridge between main and renderer processes
+- **renderer.js**: UI state management with BoundedMap for memory safety and AppState pub/sub
+- **logger.js**: Centralized logging with IPC forwarding from renderer to main process
 
-## Function Calling
+## Function Calling## Function Calling
 
 The application supports both native functions and MCP server tools:
 
-### Native Functions (Synchronous)
+### Native Functions (Async)
 - **list_directory**: Directory listing with metadata (size, modified time, file count)
 - **read_file**: File reading with automatic format conversion via markitdown (PDF, Word, Excel, PowerPoint, HTML, CSV, JSON, images)
 - **generate_document**: Template-based document generation with placeholder replacement
@@ -192,16 +270,17 @@ The application supports both native functions and MCP server tools:
 - **regex_edit**: Pattern-based editing using regular expressions
 - **insert_text**: Add new content before or after existing text
 
-### MCP Server Integration
+### MCP Server Integration### MCP Server Integration
 - **Sequential Thinking**: Advanced multi-step reasoning with revision capabilities and hypothesis testing
 - Extensible to add more MCP servers (filesystem, GitHub, databases, etc.)
 
 ### Features
 - Automatic tool orchestration by Agent/Runner framework
-- Exact token counting using tiktoken for all content
+- SDK-level universal token tracking for all tools (native, MCP, future agents)
+- Exact token counting using tiktoken with LRU caching
 - Content optimization to reduce token usage (removes redundant whitespace, headers)
-- Race condition mitigation with configurable delays (0.2s default)
-- Tool call tracking and token accumulation in session
+- Tool call delays configurable but disabled (0.0s) after moving to client-side sessions
+- Accumulated tool token tracking separate from conversation tokens
 
 Add new functions by:
 1. Defining the function in `src/functions.py`
@@ -268,8 +347,8 @@ npm start
 ### Session Management & Summarization
 The application features advanced session management:
 - **TokenAwareSQLiteSession**: Extends SDK's SQLiteSession with automatic summarization
-- **Smart Triggers**: Summarizes at 80% of model's token limit (configurable)
-- **Model-Aware Limits**: GPT-5 (250k), GPT-4 (120k), GPT-3.5 (15k)
+- **Smart Triggers**: Summarizes at 20% of model's token limit (configurable via CONVERSATION_SUMMARIZATION_THRESHOLD)
+- **Model-Aware Limits**: GPT-5 (272k), GPT-4o (128k), GPT-4 (128k), GPT-3.5-turbo (15.3k)
 - **Context Preservation**: Keeps last 2 user messages unsummarized
 - **Seamless Experience**: Transparent summarization without user interruption
 - **Tool Token Tracking**: Accumulates tokens from tool calls separately
@@ -278,11 +357,12 @@ The application features advanced session management:
 ### Rate Limiting & Error Handling
 The application includes robust error handling:
 - Automatic rate limit detection with user-friendly messages
-- Graceful handling of RS_ and FC_ streaming errors
-- Race condition mitigation for MCP/tool calls (configurable 0.2s delays)
+- Graceful handling of RS_ and FC_ streaming errors (now resolved with client-side sessions)
+- Tool call delays configurable but disabled (MCP_TOOL_DELAY=0.0, NATIVE_TOOL_DELAY=0.0)
 - Connection error recovery with auto-restart
-- Process health monitoring every 30 seconds
-- Centralized configuration in `constants.py`
+- Process health monitoring every 5 minutes (optimized from 30 seconds)
+- Connection state machine (CONNECTED/DISCONNECTED/RECONNECTING/ERROR)
+- Centralized configuration in `constants.py` with Pydantic validation
 
 ### Token Counting & Optimization
 Using tiktoken for exact token counting:

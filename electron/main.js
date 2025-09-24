@@ -138,57 +138,58 @@ function startPythonBot() {
   });
 }
 
-// IPC handler for renderer logging
-ipcMain.on("renderer-log", (event, { level, message, data }) => {
-  const rendererLogger = new Logger("renderer");
-  if (data) {
-    rendererLogger[level](message, data);
-  } else {
-    rendererLogger[level](message);
-  }
-});
-
-// IPC handler for user input
-ipcMain.on("user-input", (event, message) => {
-  logger.logIPC("receive", "user-input", message, { fromRenderer: true });
-  logger.logUserInteraction("chat-input", { messageLength: message.length });
-
-  if (pythonProcess && !pythonProcess.killed) {
-    pythonProcess.stdin.write(`${message}\n`);
-    logger.debug("Sent input to Python process");
-  } else {
-    logger.error("Python process is not running");
-    event.reply("bot-error", "Python process is not running");
-  }
-});
-
-// IPC handler for restart request
-ipcMain.on("restart-bot", () => {
-  logger.info("Restart requested");
-
-  // Send disconnected status first
-  if (mainWindow) {
-    mainWindow.webContents.send("bot-disconnected");
-  }
-
-  // Graceful shutdown with proper cleanup (non-blocking)
-  stopPythonBot().then(() => {
-    // Wait a bit longer to ensure process is fully terminated
-    setTimeout(() => {
-      startPythonBot();
-
-      // Send restart event after process starts
-      setTimeout(() => {
-        if (mainWindow) {
-          mainWindow.webContents.send("bot-restarted");
-        }
-      }, RESTART_CALLBACK_DELAY);
-    }, RESTART_DELAY);
-  });
-});
-
 app.whenReady().then(() => {
   logger.info("Electron app ready, initializing...");
+
+  // IPC handler for renderer logging
+  ipcMain.on("renderer-log", (event, { level, message, data }) => {
+    const rendererLogger = new Logger("renderer");
+    if (data) {
+      rendererLogger[level](message, data);
+    } else {
+      rendererLogger[level](message);
+    }
+  });
+
+  // IPC handler for user input
+  ipcMain.on("user-input", (event, message) => {
+    logger.logIPC("receive", "user-input", message, { fromRenderer: true });
+    logger.logUserInteraction("chat-input", { messageLength: message.length });
+
+    if (pythonProcess && !pythonProcess.killed) {
+      pythonProcess.stdin.write(`${message}
+`);
+      logger.debug("Sent input to Python process");
+    } else {
+      logger.error("Python process is not running");
+      event.reply("bot-error", "Python process is not running");
+    }
+  });
+
+  // IPC handler for restart request
+  ipcMain.on("restart-bot", () => {
+    logger.info("Restart requested");
+
+    // Send disconnected status first
+    if (mainWindow) {
+      mainWindow.webContents.send("bot-disconnected");
+    }
+
+    // Graceful shutdown with proper cleanup (non-blocking)
+    stopPythonBot().then(() => {
+      // Wait a bit longer to ensure process is fully terminated
+      setTimeout(() => {
+        startPythonBot();
+
+        // Send restart event after process starts
+        setTimeout(() => {
+          if (mainWindow) {
+            mainWindow.webContents.send("bot-restarted");
+          }
+        }, RESTART_CALLBACK_DELAY);
+      }, RESTART_DELAY);
+    });
+  });
   createWindow();
   startPythonBot();
 

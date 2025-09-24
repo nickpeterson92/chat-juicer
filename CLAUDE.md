@@ -4,28 +4,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Chat Juicer is an Electron + Python desktop application that provides a chat interface for Azure OpenAI using the **Agent/Runner pattern** with native **MCP (Model Context Protocol) server support**. The application features advanced reasoning capabilities through Sequential Thinking and sophisticated document generation.
+Chat Juicer is a production-grade Electron + Python desktop application that provides a chat interface for Azure OpenAI using the **Agent/Runner pattern** with native **MCP (Model Context Protocol) server support**. The application features advanced reasoning capabilities through Sequential Thinking, sophisticated document generation, enterprise-grade logging, and comprehensive type safety.
 
 ## Current Architecture (Agent/Runner Pattern)
 
 ```
 chat-juicer/
 ├── electron/          # Electron main process and utilities
-│   ├── main.js       # Electron main process, IPC handlers, health monitoring
-│   ├── preload.js    # Preload script for secure IPC with logging API
-│   ├── renderer.js   # Renderer process script with structured logging (no console.*)
-│   └── logger.js     # Electron-side structured logging with levels
+│   ├── main.js       # Electron main process, IPC handlers, health monitoring (5-min intervals)
+│   ├── preload.js    # Preload script for secure context-isolated IPC
+│   ├── renderer.js   # Renderer with BoundedMap memory management and AppState pub/sub
+│   └── logger.js     # Centralized structured logging with IPC forwarding
 ├── ui/               # Frontend assets
 │   └── index.html    # Main chat UI with markdown rendering
 ├── src/              # Python backend (Agent/Runner pattern)
 │   ├── main.py       # Agent/Runner implementation with MCP support
-│   ├── session.py    # TokenAwareSQLiteSession with auto-summarization
-│   ├── functions.py  # Document generation and file tools (synchronous)
-│   ├── tool_patch.py # Tool call delay patches for race condition mitigation
-│   ├── logger.py     # Python logging framework (JSON format, token metadata, rotating files)
-│   ├── utils.py      # Token management and content optimization utilities
-│   ├── constants.py  # Centralized configuration constants
-│   ├── sdk_token_tracker.py # SDK-level automatic token tracking for all tool calls
+│   ├── session.py    # TokenAwareSQLiteSession with auto-summarization (20% threshold)
+│   ├── functions.py  # Document generation and file tools (async)
+│   ├── models.py     # Pydantic models for runtime validation
+│   ├── sdk_models.py # Protocol typing for SDK integration
+│   ├── tool_patch.py # Tool call delay patches (now disabled with 0.0s delays)
+│   ├── logger.py     # Enterprise JSON logging with rotation and session correlation
+│   ├── utils.py      # Token management with LRU caching
+│   ├── constants.py  # Configuration with Pydantic Settings validation
+│   ├── sdk_token_tracker.py # SDK-level universal token tracking via monkey-patching
 │   └── requirements.txt  # Python dependencies
 ├── sources/          # Source documents for processing
 ├── output/           # Generated documentation output
@@ -46,9 +48,10 @@ The application uses OpenAI's Agent/Runner pattern which provides:
 - **Native MCP Server Integration**: Direct support for Model Context Protocol servers
 - **Sequential Thinking**: Advanced reasoning capabilities for complex problem-solving
 - **Automatic Tool Orchestration**: Framework handles function calling automatically
-- **Hybrid Async Architecture**: Async/await for Agent/Runner and MCP servers, synchronous for functions
+- **Full Async Architecture**: Consistent async/await for Agent/Runner, MCP servers, and all functions
 - **Streaming Events**: Structured event handling for real-time responses
 - **Token-Aware Sessions**: SQLite-based session management with automatic summarization
+- **Type Safety**: Full mypy strict compliance with Pydantic runtime validation
 
 ### MCP Server Integration
 The application integrates the Sequential Thinking MCP server:
@@ -69,7 +72,7 @@ agent = Agent(
 ```
 
 ### Function Architecture
-Available functions (all synchronous):
+Available functions (all async):
 1. **list_directory**: List directory contents with metadata (size, modified time, file count)
 2. **read_file**: Read files with automatic format conversion via markitdown
 3. **generate_document**: Generate docs from templates with placeholder replacement
@@ -163,8 +166,8 @@ The Agent/Runner pattern provides structured events:
 
 ### State Management
 - TokenAwareSQLiteSession manages conversation context with automatic summarization
-- Session tracks tokens and triggers summarization at 20% of model limit (54,400 tokens for GPT-5)
-- Model-aware token limits: GPT-5 (272k), GPT-4o (128k), GPT-3.5-turbo (15.3k)
+- Session tracks tokens and triggers summarization at 20% of model limit (e.g., 54,400 tokens for GPT-5's 272k limit)
+- Model-aware token limits: GPT-5 (272k), GPT-4o (128k), GPT-4 (128k), GPT-3.5-turbo (15.3k)
 - In-memory SQLite database for fast session storage during app lifetime
 - Accumulated tool tokens tracked separately from conversation tokens
 - SDK-level automatic token tracking for all tool calls (native, MCP, future agents)
@@ -200,12 +203,12 @@ The Sequential Thinking server is configured in `setup_mcp_servers()` and can be
 
 ## Project Constraints
 
-- No formal test framework configured
+- No formal test framework configured (pragmatic choice given rapidly evolving AI SDKs)
 - Manual validation required
-- Agent/Runner pattern with async for MCP and streaming
+- Agent/Runner pattern with full async architecture
 - MCP servers run as subprocesses via npx
-- Functions remain synchronous (not async)
-- Tool call delays configured at 0.2s to prevent race conditions (currently disabled with client-side sessions)
+- All functions now async (updated from original sync implementation)
+- Tool call delays disabled (0.0s) after moving to client-side sessions
 
 ## Important Implementation Notes
 
@@ -224,10 +227,12 @@ The Sequential Thinking server is configured in `setup_mcp_servers()` and can be
 - Test all function calls with new pattern
 
 ### Performance Considerations
-- Async/await throughout for better concurrency
+- Full async/await architecture for optimal concurrency
 - MCP servers add minimal overhead
 - Streaming maintains real-time responsiveness
-- Automatic rate limiting still applies
+- SDK-level token tracking with zero overhead when disabled
+- LRU caching for token counting (last 128 unique text/model pairs)
+- Pre-cached IPC templates for reduced serialization
 
 ### Migration from Responses API
 The project has been fully migrated from the Responses API to Agent/Runner pattern:
@@ -239,13 +244,16 @@ The project has been fully migrated from the Responses API to Agent/Runner patte
 
 ## Summary
 
-Chat Juicer now leverages the modern Agent/Runner pattern with native MCP server integration, providing:
+Chat Juicer is a production-grade application leveraging the modern Agent/Runner pattern with native MCP server integration, providing:
 
 Key strengths:
-- **Sequential Thinking**: Advanced reasoning capabilities
+- **Sequential Thinking**: Advanced reasoning capabilities with revision and hypothesis testing
 - **Native MCP Support**: Direct integration without bridge functions
-- **Modern Architecture**: Async/await for streaming and MCP with structured events
-- **Cleaner Code**: Significant reduction in boilerplate
+- **Full Async Architecture**: Consistent async/await throughout backend
+- **Type Safety**: Full mypy strict compliance with Pydantic runtime validation
+- **Production Features**: Health monitoring, memory management, error recovery
+- **Enterprise Logging**: Structured JSON with rotation and session correlation
+- **Token Management**: SDK-level universal tracking with exact counting
 - **Future-Proof**: Aligned with OpenAI's strategic direction
 
-The application combines real-time AI chat with sophisticated reasoning and document generation capabilities through a clean Electron interface with native MCP server support.
+The application combines real-time AI chat with sophisticated reasoning and document generation capabilities through a production-ready Electron interface with native MCP server support.
