@@ -13,12 +13,12 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from agents import Runner, SQLiteSession
+from core.constants import MODEL_TOKEN_LIMITS, get_settings
+from infrastructure.logger import logger
+from infrastructure.utils import count_tokens
 from openai import AsyncOpenAI
 
-from constants import MODEL_TOKEN_LIMITS, get_settings
-from logger import logger
-from models import FunctionEventMessage
-from utils import count_tokens
+from models.event_models import FunctionEventMessage
 
 
 class MessageNormalizer:
@@ -240,12 +240,14 @@ class TokenAwareSQLiteSession(SQLiteSession):  # type: ignore[misc]
         """Get token limit for the current model."""
         # Check exact match first
         if self.model in MODEL_TOKEN_LIMITS:
-            return MODEL_TOKEN_LIMITS[self.model]
+            limit: int = MODEL_TOKEN_LIMITS[self.model]
+            return limit
 
         # Check if model contains a known base model name
-        for known_model, limit in MODEL_TOKEN_LIMITS.items():
+        for known_model, model_limit in MODEL_TOKEN_LIMITS.items():
             if known_model in self.model.lower():
-                return limit
+                limit_value: int = model_limit
+                return limit_value
 
         # Default conservative limit
         logger.warning(f"Unknown model {self.model}, using conservative 15k limit")

@@ -21,15 +21,14 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from pythonjsonlogger import jsonlogger
-
-from constants import (
+from core.constants import (
     LOG_BACKUP_COUNT_CONVERSATIONS,
     LOG_BACKUP_COUNT_ERRORS,
     LOG_MAX_SIZE,
     LOG_PREVIEW_LENGTH,
     SESSION_ID_LENGTH,
 )
+from pythonjsonlogger import jsonlogger
 
 
 @dataclass
@@ -100,7 +99,7 @@ def setup_logging(name: str = "chat-juicer", debug: bool | None = None) -> loggi
 
     # --- Conversation Log Handler (JSON) ---
     # Use absolute path to project root logs directory
-    project_root = pathlib.Path(__file__).parent.parent
+    project_root = pathlib.Path(__file__).parent.parent.parent
     log_dir = project_root / "logs"
     log_dir.mkdir(exist_ok=True)
 

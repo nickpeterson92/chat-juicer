@@ -99,7 +99,7 @@ DOCUMENT_SUMMARIZATION_THRESHOLD = (
 )
 # Model Token Limits
 # Using INPUT limits since that's what we're tracking for summarization
-MODEL_TOKEN_LIMITS = {
+MODEL_TOKEN_LIMITS: dict[str, int] = {
     # GPT-5 models
     "gpt-5": 272000,
     "gpt-5-mini": 272000,

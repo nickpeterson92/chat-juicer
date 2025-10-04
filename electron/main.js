@@ -72,7 +72,9 @@ function startPythonBot() {
 
   try {
     // Spawn Python process with detached flag for better cleanup
-    pythonProcess = spawn("python", [path.join(__dirname, "..", "src", "main.py")], {
+    // Use virtual environment Python to ensure dependencies are available
+    const venvPython = path.join(__dirname, "..", ".juicer", "bin", "python3");
+    pythonProcess = spawn(venvPython, [path.join(__dirname, "..", "src", "main.py")], {
       env: { ...process.env, PYTHONUNBUFFERED: "1" }, // Ensures real-time output
       stdio: ["pipe", "pipe", "inherit"], // [stdin, stdout, stderr -> terminal]
       detached: process.platform !== "win32", // Detached on Unix for process group management
