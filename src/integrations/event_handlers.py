@@ -22,7 +22,6 @@ from core.constants import (
     TOOL_CALL_ITEM,
     TOOL_CALL_OUTPUT_ITEM,
 )
-
 from models.event_models import (
     AgentUpdateMessage,
     AssistantMessage,

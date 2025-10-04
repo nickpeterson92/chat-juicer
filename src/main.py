@@ -13,6 +13,9 @@ import uuid
 from typing import Any
 
 from agents import set_default_openai_client, set_tracing_disabled
+from dotenv import load_dotenv
+from openai import APIConnectionError, APIStatusError, AsyncOpenAI, RateLimitError
+
 from core.agent import create_agent
 from core.constants import (
     CONVERSATION_SUMMARIZATION_THRESHOLD,
@@ -22,17 +25,14 @@ from core.constants import (
     get_settings,
 )
 from core.session import TokenAwareSQLiteSession
-from dotenv import load_dotenv
 from infrastructure.ipc import IPCManager
 from infrastructure.logger import logger
 from integrations.event_handlers import CallTracker, build_event_handlers
 from integrations.mcp_servers import setup_mcp_servers
 from integrations.sdk_token_tracker import connect_session, disconnect_session, patch_sdk_for_auto_tracking
-from openai import APIConnectionError, APIStatusError, AsyncOpenAI, RateLimitError
-from tools import AGENT_TOOLS
-
 from models.event_models import UserInput
 from models.sdk_models import StreamingEvent
+from tools import AGENT_TOOLS
 
 
 async def handle_electron_ipc(event: StreamingEvent, tracker: CallTracker) -> str | None:

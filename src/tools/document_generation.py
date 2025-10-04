@@ -13,7 +13,6 @@ from core.constants import MAX_BACKUP_VERSIONS
 from infrastructure.file_utils import validate_file_path, write_file_content
 from infrastructure.logger import logger
 from infrastructure.utils import count_tokens
-
 from models.api_models import DocumentGenerateResponse
 
 

@@ -24,7 +24,6 @@ from core.constants import (
 )
 from infrastructure.logger import logger
 from infrastructure.utils import count_tokens
-
 from models.sdk_models import (
     ContentLike,
     RawMessageLike,

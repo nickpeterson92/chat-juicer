@@ -13,11 +13,11 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from agents import Runner, SQLiteSession
+from openai import AsyncOpenAI
+
 from core.constants import MODEL_TOKEN_LIMITS, get_settings
 from infrastructure.logger import logger
 from infrastructure.utils import count_tokens
-from openai import AsyncOpenAI
-
 from models.event_models import FunctionEventMessage
 
 

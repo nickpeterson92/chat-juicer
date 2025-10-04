@@ -209,47 +209,85 @@ python src/main.py
 ```
 chat-juicer/
 ├── electron/          # Electron main process and utilities
-│   ├── main.js       # Electron main process, IPC handlers
-│   ├── preload.js    # Preload script for secure IPC
-│   ├── renderer.js   # Renderer process script
-│   └── logger.js     # Electron-side structured logging
+│   ├── main.js       # Electron main process, IPC handlers, health monitoring
+│   ├── preload.js    # Preload script for secure context-isolated IPC
+│   ├── renderer.js   # Renderer with BoundedMap memory management and AppState pub/sub
+│   └── logger.js     # Centralized structured logging with IPC forwarding
 ├── ui/               # Frontend assets
-│   └── index.html    # Main chat UI
-├── src/              # Python backend (Agent/Runner pattern)
-│   ├── main.py       # Agent/Runner implementation with MCP support
-│   ├── session.py    # TokenAwareSQLiteSession with auto-summarization
-│   ├── functions.py  # Document generation and file tools (async)
-│   ├── models.py     # Pydantic models for runtime validation
-│   ├── sdk_models.py # Protocol typing for SDK integration
-│   ├── sdk_token_tracker.py # SDK-level automatic token tracking
-│   ├── tool_patch.py # Tool call delay patches (now disabled)
-│   ├── logger.py     # Python logging framework (JSON format)
-│   ├── utils.py      # Token management utilities
-│   ├── constants.py  # Centralized configuration constants   └── requirements.txt  # Python dependencies
+│   └── index.html    # Main chat UI with markdown rendering
+├── src/              # Python backend (modular architecture)
+│   ├── main.py       # Application entry point
+│   ├── core/         # Core business logic
+│   │   ├── agent.py       # Agent/Runner implementation with MCP support
+│   │   ├── session.py     # TokenAwareSQLiteSession with auto-summarization
+│   │   └── constants.py   # Configuration with Pydantic Settings validation
+│   ├── models/       # Data models and type definitions
+│   │   ├── api_models.py   # Pydantic models for API responses
+│   │   ├── event_models.py # Event and message models
+│   │   └── sdk_models.py   # Protocol typing for SDK integration
+│   ├── tools/        # Function calling tools
+│   │   ├── document_generation.py # Document generation from templates
+│   │   ├── file_operations.py     # File reading and directory listing
+│   │   ├── text_editing.py        # Text editing operations
+│   │   └── registry.py            # Tool registration and discovery
+│   ├── integrations/ # External integrations
+│   │   ├── mcp_servers.py        # MCP server setup and management
+│   │   ├── event_handlers.py     # Streaming event handlers
+│   │   ├── sdk_token_tracker.py  # SDK-level universal token tracking
+│   │   └── tool_patch.py         # Tool call delay patches (disabled)
+│   ├── infrastructure/ # Infrastructure and utilities
+│   │   ├── logger.py            # Enterprise JSON logging with rotation
+│   │   ├── ipc.py               # IPC manager with pre-cached templates
+│   │   ├── utils.py             # Token management with LRU caching
+│   │   ├── file_utils.py        # File utility functions
+│   │   └── document_processor.py # Document processing utilities
+│   └── requirements.txt  # Python dependencies
 ├── sources/          # Source documents for processing
 ├── output/           # Generated documentation output
 ├── templates/        # Document templates with {{placeholders}}
 ├── logs/             # Log files (gitignored)
-│   ├── conversations.jsonl  # Structured conversation logs
-│   └── errors.jsonl  # Error logs
+│   ├── conversations.jsonl  # Structured conversation logs with token metadata
+│   └── errors.jsonl  # Error and debugging logs
 └── docs/             # Documentation
-    └── agent-runner-migration-analysis.md  # Migration documentation
+    ├── agent-runner-migration-analysis.md  # Migration documentation
+    └── token-streaming-implementation.md   # Token streaming details
 ```
 
 ## Key Components
 
 ### Python Backend (`src/`)
 
-- **main.py**: Agent/Runner implementation with MCP server integration and streaming event handling
+**Core Business Logic** (`core/`)
+- **agent.py**: Agent/Runner implementation with MCP server integration and streaming event handling
 - **session.py**: TokenAwareSQLiteSession class with automatic summarization at 20% token threshold
-- **functions.py**: Async function implementations for file operations and document generation
-- **models.py**: Pydantic models for IPC messages and function responses
+- **constants.py**: Centralized configuration with Pydantic Settings validation
+
+**Data Models** (`models/`)
+- **api_models.py**: Pydantic models for API responses and function returns
+- **event_models.py**: Event and message models for IPC communication
 - **sdk_models.py**: Protocol definitions for type-safe SDK integration
+
+**Tools** (`tools/`)
+- **document_generation.py**: Template-based document generation with placeholder replacement
+- **file_operations.py**: Directory listing and file reading with markitdown support
+- **text_editing.py**: Text, regex, and insert editing operations
+- **registry.py**: Tool registration and discovery system
+
+**Integrations** (`integrations/`)
+- **mcp_servers.py**: MCP server setup and management (Sequential Thinking)
+- **event_handlers.py**: Streaming event handlers for Agent/Runner pattern
 - **sdk_token_tracker.py**: Universal token tracking via SDK monkey-patching
 - **tool_patch.py**: Configurable delays for tool calls (currently set to 0.0 - disabled)
-- **logger.py**: Structured JSON logging with rotation and session correlation
-- **utils.py**: Token management utilities with LRU caching for performance
-- **constants.py**: Centralized configuration with Pydantic Settings validation
+
+**Infrastructure** (`infrastructure/`)
+- **logger.py**: Enterprise JSON logging with rotation and session correlation
+- **ipc.py**: IPC manager with pre-cached templates for performance
+- **utils.py**: Token management utilities with LRU caching
+- **file_utils.py**: File system utility functions
+- **document_processor.py**: Document processing and optimization utilities
+
+**Entry Point**
+- **main.py**: Application entry point and async event loop management
 
 ### Electron Frontend### Electron Frontend (`electron/`)
 

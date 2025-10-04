@@ -17,17 +17,32 @@ chat-juicer/
 │   └── logger.js     # Centralized structured logging with IPC forwarding
 ├── ui/               # Frontend assets
 │   └── index.html    # Main chat UI with markdown rendering
-├── src/              # Python backend (Agent/Runner pattern)
-│   ├── main.py       # Agent/Runner implementation with MCP support
-│   ├── session.py    # TokenAwareSQLiteSession with auto-summarization (20% threshold)
-│   ├── functions.py  # Document generation and file tools (async)
-│   ├── models.py     # Pydantic models for runtime validation
-│   ├── sdk_models.py # Protocol typing for SDK integration
-│   ├── tool_patch.py # Tool call delay patches (now disabled with 0.0s delays)
-│   ├── logger.py     # Enterprise JSON logging with rotation and session correlation
-│   ├── utils.py      # Token management with LRU caching
-│   ├── constants.py  # Configuration with Pydantic Settings validation
-│   ├── sdk_token_tracker.py # SDK-level universal token tracking via monkey-patching
+├── src/              # Python backend (modular architecture)
+│   ├── main.py       # Application entry point and async event loop management
+│   ├── core/         # Core business logic
+│   │   ├── agent.py       # Agent/Runner implementation with MCP support
+│   │   ├── session.py     # TokenAwareSQLiteSession with auto-summarization (20% threshold)
+│   │   └── constants.py   # Configuration with Pydantic Settings validation
+│   ├── models/       # Data models and type definitions
+│   │   ├── api_models.py   # Pydantic models for API responses
+│   │   ├── event_models.py # Event and message models for IPC
+│   │   └── sdk_models.py   # Protocol typing for SDK integration
+│   ├── tools/        # Function calling tools
+│   │   ├── document_generation.py # Document generation from templates
+│   │   ├── file_operations.py     # File reading and directory listing
+│   │   ├── text_editing.py        # Text, regex, and insert editing operations
+│   │   └── registry.py            # Tool registration and discovery
+│   ├── integrations/ # External integrations
+│   │   ├── mcp_servers.py        # MCP server setup and management
+│   │   ├── event_handlers.py     # Streaming event handlers
+│   │   ├── sdk_token_tracker.py  # SDK-level universal token tracking via monkey-patching
+│   │   └── tool_patch.py         # Tool call delay patches (disabled: 0.0s delays)
+│   ├── infrastructure/ # Infrastructure and utilities
+│   │   ├── logger.py            # Enterprise JSON logging with rotation and session correlation
+│   │   ├── ipc.py               # IPC manager with pre-cached templates
+│   │   ├── utils.py             # Token management with LRU caching
+│   │   ├── file_utils.py        # File system utility functions
+│   │   └── document_processor.py # Document processing utilities
 │   └── requirements.txt  # Python dependencies
 ├── sources/          # Source documents for processing
 ├── output/           # Generated documentation output
@@ -72,13 +87,21 @@ agent = Agent(
 ```
 
 ### Function Architecture
-Available functions (all async):
-1. **list_directory**: List directory contents with metadata (size, modified time, file count)
-2. **read_file**: Read files with automatic format conversion via markitdown
-3. **generate_document**: Generate docs from templates with placeholder replacement
-4. **text_edit**: Find and replace exact text in documents
-5. **regex_edit**: Pattern-based editing using regular expressions
-6. **insert_text**: Add new content before or after existing text
+All functions are implemented as async operations organized by module:
+
+**File Operations** (`tools/file_operations.py`):
+- **list_directory**: List directory contents with metadata (size, modified time, file count)
+- **read_file**: Read files with automatic format conversion via markitdown
+
+**Document Generation** (`tools/document_generation.py`):
+- **generate_document**: Generate docs from templates with placeholder replacement
+
+**Text Editing** (`tools/text_editing.py`):
+- **text_edit**: Find and replace exact text in documents
+- **regex_edit**: Pattern-based editing using regular expressions
+- **insert_text**: Add new content before or after existing text
+
+All tools registered in `tools/registry.py` for automatic discovery by Agent/Runner framework.
 
 ### Document Generation System
 - Process multiple source formats using markitdown (PDF, Word, Excel, HTML, CSV, JSON, images)
@@ -176,14 +199,14 @@ The Agent/Runner pattern provides structured events:
 ## Common Development Tasks
 
 ### Adding New Functions
-1. Define function in `TOOLS` array in `src/functions.py`
-2. Implement the function returning JSON string
-3. Register in `FUNCTION_REGISTRY` dict
+1. Create function implementation in appropriate `tools/*.py` module
+2. Define tool schema following Agent/Runner pattern
+3. Register in `tools/registry.py` using `FUNCTION_REGISTRY` dict
 4. Function automatically available to Agent (including MCP tools)
 
 ### Adding New MCP Servers
 ```python
-# In setup_mcp_servers() function
+# In integrations/mcp_servers.py setup_mcp_servers() function
 new_server = MCPServerStdio(
     params={
         "command": "npx",
@@ -195,7 +218,7 @@ servers.append(new_server)
 ```
 
 ### Customizing Sequential Thinking
-The Sequential Thinking server is configured in `setup_mcp_servers()` and can be extended with additional MCP servers for:
+The Sequential Thinking server is configured in `integrations/mcp_servers.py` and can be extended with additional MCP servers for:
 - File system operations
 - GitHub integration
 - Database access

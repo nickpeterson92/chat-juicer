@@ -21,6 +21,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from pythonjsonlogger import jsonlogger
+
 from core.constants import (
     LOG_BACKUP_COUNT_CONVERSATIONS,
     LOG_BACKUP_COUNT_ERRORS,
@@ -28,7 +30,6 @@ from core.constants import (
     LOG_PREVIEW_LENGTH,
     SESSION_ID_LENGTH,
 )
-from pythonjsonlogger import jsonlogger
 
 
 @dataclass
