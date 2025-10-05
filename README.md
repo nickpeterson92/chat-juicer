@@ -53,7 +53,7 @@ make health             # Check system configuration
 - 🎯 **Type Safety**: Full mypy strict compliance with Pydantic runtime validation
 - 🏗️ **Production Features**: Memory management, error recovery, performance optimization
 
-## Architecture## Architecture
+## Architecture
 
 Chat Juicer uses OpenAI's **Agent/Runner pattern** which provides:
 - **Native MCP Server Integration**: Direct support for Model Context Protocol servers
@@ -135,7 +135,7 @@ graph TB
 - **Logging**: Enterprise JSON logging with rotation and session correlation
 - **Type System**: Protocols for SDK integration, Pydantic for validation, TypedDict for data
 
-## Prerequisites## Prerequisites
+## Prerequisites
 
 - Node.js 16+ and npm
 - Python 3.9+ (for type annotations and modern async features)
@@ -143,7 +143,7 @@ graph TB
 - Azure OpenAI API credentials
 - Internet connection for MCP server downloads
 
-## Requirements## Requirements
+## Requirements
 
 ### Node.js Dependencies
 - `electron`: Desktop application framework (devDependency)
@@ -154,7 +154,7 @@ graph TB
 - Full type safety with mypy strict=true
 - See dependencies section below for package list
 
-## Installation## Installation
+## Installation
 
 ### Quick Setup (Recommended)
 
@@ -394,14 +394,14 @@ chat-juicer/
 **Entry Point**
 - **main.py**: Application entry point and async event loop management
 
-### Electron Frontend### Electron Frontend (`electron/`)
+### Electron Frontend (`electron/`)
 
 - **main.js**: Main process with health monitoring (5-min intervals), auto-recovery, graceful shutdown
 - **preload.js**: Secure context-isolated bridge between main and renderer processes
 - **renderer.js**: UI state management with BoundedMap for memory safety and AppState pub/sub
 - **logger.js**: Centralized logging with IPC forwarding from renderer to main process
 
-## Function Calling## Function Calling
+## Function Calling
 
 The application supports both native functions and MCP server tools:
 
@@ -413,7 +413,7 @@ The application supports both native functions and MCP server tools:
 - **regex_edit**: Pattern-based editing using regular expressions
 - **insert_text**: Add new content before or after existing text
 
-### MCP Server Integration### MCP Server Integration
+### MCP Server Integration
 - **Sequential Thinking**: Advanced multi-step reasoning with revision capabilities and hypothesis testing
 - Extensible to add more MCP servers (filesystem, GitHub, databases, etc.)
 
