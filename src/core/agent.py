@@ -9,8 +9,7 @@ from typing import Any
 
 from agents import Agent
 
-from infrastructure.logger import logger
-from integrations.tool_patch import patch_native_tools
+from utils.logger import logger
 
 
 def create_agent(deployment: str, instructions: str, tools: list[Any], mcp_servers: list[Any]) -> Agent:
@@ -19,26 +18,23 @@ def create_agent(deployment: str, instructions: str, tools: list[Any], mcp_serve
     Args:
         deployment: Model deployment name
         instructions: System instructions for the agent
-        tools: List of function tools (will be patched for delays)
+        tools: List of function tools
         mcp_servers: List of initialized MCP servers
 
     Returns:
         Configured Agent instance
     """
-    # Patch native tools to add delays (must be done before passing to Agent)
-    patched_tools = patch_native_tools(tools)
-
     # Create agent with tools and MCP servers
     agent = Agent(
         name="Chat Juicer",
         model=deployment,
         instructions=instructions,
-        tools=patched_tools,
+        tools=tools,
         mcp_servers=mcp_servers,
     )
 
     # Log agent configuration
     logger.info(f"Chat Juicer Agent created - Deployment: {deployment}")
-    logger.info(f"Agent configured with {len(patched_tools)} tools and {len(mcp_servers)} MCP servers")
+    logger.info(f"Agent configured with {len(tools)} tools and {len(mcp_servers)} MCP servers")
 
     return agent

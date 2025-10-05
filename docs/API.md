@@ -344,18 +344,10 @@ All functions implement comprehensive error handling:
 
 ## Tool Patches
 
-### Race Condition Mitigation
+### Race Condition Handling
 
-The application includes configurable delays to prevent RS_/FC_ streaming errors:
-
-**Configuration (constants.py):**
-- `MCP_TOOL_DELAY`: 0.2s delay after MCP server tool calls
-- `NATIVE_TOOL_DELAY`: 0.2s delay after native function calls
-
-**Implementation:**
-- Monkey patches applied via `tool_patch.py`
-- Delays prevent race conditions in streaming responses
-- Configurable per deployment needs
+RS_/FC_ streaming errors have been resolved by moving to client-side TokenAwareSQLiteSession.
+No tool call delays or monkey patches needed.
 
 ---
 
@@ -431,10 +423,6 @@ The application uses python-json-logger for structured logging:
 - GPT-5 models: 250,000 tokens
 - GPT-4 models: 120,000 tokens
 - GPT-3.5 models: 15,000 tokens
-
-**Tool Delays:**
-- `MCP_TOOL_DELAY`: 0.2 seconds
-- `NATIVE_TOOL_DELAY`: 0.2 seconds
 
 ---
 

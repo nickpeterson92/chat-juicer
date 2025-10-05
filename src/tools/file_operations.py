@@ -8,11 +8,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from core.constants import CONVERTIBLE_EXTENSIONS, DOCUMENT_SUMMARIZATION_THRESHOLD
-from infrastructure.document_processor import get_markitdown_converter, summarize_content
-from infrastructure.file_utils import read_file_content, validate_directory_path, validate_file_path
-from infrastructure.logger import logger
-from infrastructure.utils import count_tokens
 from models.api_models import DirectoryListResponse, FileInfo, FileReadResponse
+from utils.document_processor import get_markitdown_converter, summarize_content
+from utils.file_utils import read_file_content, validate_directory_path, validate_file_path
+from utils.logger import logger
+from utils.token_utils import count_tokens
 
 
 def list_directory(path: str = ".", show_hidden: bool = False) -> str:

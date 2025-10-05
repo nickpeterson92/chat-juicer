@@ -16,9 +16,9 @@ from agents import Runner, SQLiteSession
 from openai import AsyncOpenAI
 
 from core.constants import MODEL_TOKEN_LIMITS, get_settings
-from infrastructure.logger import logger
-from infrastructure.utils import count_tokens
 from models.event_models import FunctionEventMessage
+from utils.logger import logger
+from utils.token_utils import count_tokens
 
 
 class MessageNormalizer:

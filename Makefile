@@ -69,7 +69,7 @@ test: ## Run syntax validation and tests
 lint: ## Run ruff linter on Python code
 	@echo "$(BLUE)Running ruff linter...$(NC)"
 	@if [ -f ".juicer/bin/ruff" ]; then \
-		.juicer/bin/ruff check src/ --fix; \
+		.juicer/bin/ruff check src/ --fix --exit-non-zero-on-fix; \
 	else \
 		echo "$(YELLOW)⚠ Ruff not installed in .juicer venv$(NC)"; \
 		echo "$(BLUE)Run: make install-dev$(NC)"; \

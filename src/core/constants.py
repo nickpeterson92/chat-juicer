@@ -85,11 +85,7 @@ TOKEN_SOURCE_HANDOFF = "handoff"
 TOKEN_SOURCE_UNKNOWN = "unknown"
 
 # MCP Server Configuration
-# Tool call delays to mitigate RS_/FC_ race conditions in Agent/Runner streaming
-MCP_TOOL_DELAY = 0.0  # Delay in seconds after MCP server tool calls
-NATIVE_TOOL_DELAY = 0.0  # Delay in seconds after native function tool calls
-# Set either to 0 to disable that specific delay, or increase if still getting errors (e.g., 0.2 for 200ms)
-# You may need different values as MCP tools (subprocess) may have different timing than native tools
+# (Tool call delay patches removed - no longer needed with client-side sessions)
 
 # Token Management Configuration
 CONVERSATION_SUMMARIZATION_THRESHOLD = 0.2  # Trigger conversation summarization at configured % of model's token limit

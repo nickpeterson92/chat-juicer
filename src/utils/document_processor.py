@@ -8,8 +8,8 @@ from __future__ import annotations
 from typing import Any
 
 from core.constants import get_settings
-from infrastructure.logger import logger
-from infrastructure.utils import count_tokens
+from utils.logger import logger
+from utils.token_utils import count_tokens
 
 # Optional dependency: MarkItDown for document conversion
 try:

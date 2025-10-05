@@ -9,8 +9,7 @@ from typing import Any
 
 from agents.mcp import MCPServerStdio
 
-from infrastructure.logger import logger
-from integrations.tool_patch import apply_tool_patch
+from utils.logger import logger
 
 
 async def setup_mcp_servers() -> list[Any]:
@@ -20,9 +19,6 @@ async def setup_mcp_servers() -> list[Any]:
         List of initialized MCP server instances
     """
     servers = []
-
-    # Apply the MCP patch to mitigate race conditions
-    apply_tool_patch()
 
     # Sequential Thinking Server - our primary reasoning tool
     try:

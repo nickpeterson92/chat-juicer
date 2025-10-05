@@ -338,12 +338,11 @@ chat-juicer/
 │   ├── integrations/ # External integrations
 │   │   ├── mcp_servers.py        # MCP server setup and management
 │   │   ├── event_handlers.py     # Streaming event handlers
-│   │   ├── sdk_token_tracker.py  # SDK-level universal token tracking
-│   │   └── tool_patch.py         # Tool call delay patches (disabled)
-│   ├── infrastructure/ # Infrastructure and utilities
+│   │   └── sdk_token_tracker.py  # SDK-level universal token tracking
+│   ├── utils/ # Utility modules
 │   │   ├── logger.py            # Enterprise JSON logging with rotation
 │   │   ├── ipc.py               # IPC manager with pre-cached templates
-│   │   ├── utils.py             # Token management with LRU caching
+│   │   ├── token_utils.py       # Token management with LRU caching
 │   │   ├── file_utils.py        # File utility functions
 │   │   └── document_processor.py # Document processing utilities
 │   └── requirements.txt  # Python dependencies
@@ -382,9 +381,8 @@ chat-juicer/
 - **mcp_servers.py**: MCP server setup and management (Sequential Thinking)
 - **event_handlers.py**: Streaming event handlers for Agent/Runner pattern
 - **sdk_token_tracker.py**: Universal token tracking via SDK monkey-patching
-- **tool_patch.py**: Configurable delays for tool calls (currently set to 0.0 - disabled)
 
-**Infrastructure** (`infrastructure/`)
+**Utilities** (`utils/`)
 - **logger.py**: Enterprise JSON logging with rotation and session correlation
 - **ipc.py**: IPC manager with pre-cached templates for performance
 - **utils.py**: Token management utilities with LRU caching
@@ -422,7 +420,6 @@ The application supports both native functions and MCP server tools:
 - SDK-level universal token tracking for all tools (native, MCP, future agents)
 - Exact token counting using tiktoken with LRU caching
 - Content optimization to reduce token usage (removes redundant whitespace, headers)
-- Tool call delays configurable but disabled (0.0s) after moving to client-side sessions
 - Accumulated tool token tracking separate from conversation tokens
 
 Add new functions by:
@@ -567,7 +564,6 @@ The application features advanced session management:
 The application includes robust error handling:
 - Automatic rate limit detection with user-friendly messages
 - Graceful handling of RS_ and FC_ streaming errors (now resolved with client-side sessions)
-- Tool call delays configurable but disabled (MCP_TOOL_DELAY=0.0, NATIVE_TOOL_DELAY=0.0)
 - Connection error recovery with auto-restart
 - Process health monitoring every 5 minutes (optimized from 30 seconds)
 - Connection state machine (CONNECTED/DISCONNECTED/RECONNECTING/ERROR)

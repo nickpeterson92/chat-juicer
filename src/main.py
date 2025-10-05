@@ -25,14 +25,14 @@ from core.constants import (
     get_settings,
 )
 from core.session import TokenAwareSQLiteSession
-from infrastructure.ipc import IPCManager
-from infrastructure.logger import logger
 from integrations.event_handlers import CallTracker, build_event_handlers
 from integrations.mcp_servers import setup_mcp_servers
 from integrations.sdk_token_tracker import connect_session, disconnect_session, patch_sdk_for_auto_tracking
 from models.event_models import UserInput
 from models.sdk_models import StreamingEvent
 from tools import AGENT_TOOLS
+from utils.ipc import IPCManager
+from utils.logger import logger
 
 
 async def handle_electron_ipc(event: StreamingEvent, tracker: CallTracker) -> str | None:

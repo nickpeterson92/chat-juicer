@@ -35,12 +35,11 @@ chat-juicer/
 │   ├── integrations/ # External integrations
 │   │   ├── mcp_servers.py        # MCP server setup and management
 │   │   ├── event_handlers.py     # Streaming event handlers
-│   │   ├── sdk_token_tracker.py  # SDK-level universal token tracking via monkey-patching
-│   │   └── tool_patch.py         # Tool call delay patches (disabled: 0.0s delays)
-│   ├── infrastructure/ # Infrastructure and utilities
+│   │   └── sdk_token_tracker.py  # SDK-level universal token tracking via monkey-patching
+│   ├── utils/ # Utility modules
 │   │   ├── logger.py            # Enterprise JSON logging with rotation and session correlation
 │   │   ├── ipc.py               # IPC manager with pre-cached templates
-│   │   ├── utils.py             # Token management with LRU caching
+│   │   ├── token_utils.py       # Token management with LRU caching
 │   │   ├── file_utils.py        # File system utility functions
 │   │   └── document_processor.py # Document processing utilities
 │   └── requirements.txt  # Python dependencies
@@ -373,7 +372,6 @@ The Sequential Thinking server is configured in `integrations/mcp_servers.py` an
 - Agent/Runner pattern with full async architecture
 - MCP servers run as subprocesses via npx
 - All functions now async (updated from original sync implementation)
-- Tool call delays disabled (0.0s) after moving to client-side sessions
 
 ## Important Implementation Notes
 
