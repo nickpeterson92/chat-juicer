@@ -23,7 +23,7 @@ from typing import Any
 
 from pythonjsonlogger import jsonlogger
 
-from constants import (
+from core.constants import (
     LOG_BACKUP_COUNT_CONVERSATIONS,
     LOG_BACKUP_COUNT_ERRORS,
     LOG_MAX_SIZE,
@@ -100,7 +100,7 @@ def setup_logging(name: str = "chat-juicer", debug: bool | None = None) -> loggi
 
     # --- Conversation Log Handler (JSON) ---
     # Use absolute path to project root logs directory
-    project_root = pathlib.Path(__file__).parent.parent
+    project_root = pathlib.Path(__file__).parent.parent.parent
     log_dir = project_root / "logs"
     log_dir.mkdir(exist_ok=True)
 
@@ -113,7 +113,7 @@ def setup_logging(name: str = "chat-juicer", debug: bool | None = None) -> loggi
     conv_handler.addFilter(ConversationFilter())
 
     # Use JSON formatter for conversations
-    conv_formatter = jsonlogger.JsonFormatter(
+    conv_formatter = jsonlogger.JsonFormatter(  # type: ignore[attr-defined]
         "%(timestamp)s %(levelname)s %(message)s %(session_id)s %(tokens)s %(functions)s %(func)s",
         timestamp=True,
     )
@@ -131,7 +131,7 @@ def setup_logging(name: str = "chat-juicer", debug: bool | None = None) -> loggi
     error_handler.addFilter(ErrorFilter())
 
     # Use JSON formatter for errors
-    error_formatter = jsonlogger.JsonFormatter(
+    error_formatter = jsonlogger.JsonFormatter(  # type: ignore[attr-defined]
         "%(timestamp)s %(levelname)s %(name)s %(message)s",
         timestamp=True,
     )

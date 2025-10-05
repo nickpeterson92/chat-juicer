@@ -6,322 +6,42 @@ Using Agent/Runner pattern for native MCP integration
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import sys
 import uuid
 
-from collections import deque
-from dataclasses import dataclass, field
-from functools import partial
-from typing import Any, Callable, ClassVar, cast
+from typing import Any
 
-from agents import Agent, set_default_openai_client, set_tracing_disabled
-from agents.mcp import MCPServerStdio
+from agents import set_default_openai_client, set_tracing_disabled
 from dotenv import load_dotenv
 from openai import APIConnectionError, APIStatusError, AsyncOpenAI, RateLimitError
 
-from constants import (
-    AGENT_UPDATED_STREAM_EVENT,
+from core.agent import create_agent
+from core.constants import (
     CONVERSATION_SUMMARIZATION_THRESHOLD,
-    HANDOFF_CALL_ITEM,
-    HANDOFF_OUTPUT_ITEM,
     MESSAGE_OUTPUT_ITEM,
-    REASONING_ITEM,
     RUN_ITEM_STREAM_EVENT,
     SYSTEM_INSTRUCTIONS,
-    TOOL_CALL_ITEM,
-    TOOL_CALL_OUTPUT_ITEM,
     get_settings,
 )
-from functions import AGENT_TOOLS
-from logger import logger
-from models import (
-    AgentUpdateMessage,
-    AssistantMessage,
-    ErrorNotification,
-    HandoffMessage,
-    ToolCallNotification,
-    ToolResultNotification,
-    UserInput,
-)
-from sdk_models import (
-    AgentUpdatedStreamEvent,
-    ContentLike,
-    EventHandler,
-    RawHandoffLike,
-    RawMessageLike,
-    RawToolCallLike,
-    RunItem,
-    RunItemStreamEvent,
-    StreamingEvent,
-)
-from sdk_token_tracker import connect_session, disconnect_session, patch_sdk_for_auto_tracking
-from session import TokenAwareSQLiteSession
-from tool_patch import apply_tool_patch, patch_native_tools
-
-
-@dataclass
-class CallTracker:
-    """Tracks tool call IDs for matching outputs with their calls."""
-
-    active_calls: deque[dict[str, str]] = field(default_factory=deque)
-
-    def add_call(self, call_id: str, tool_name: str) -> None:
-        """Add a new tool call to track."""
-        if call_id:
-            self.active_calls.append({"call_id": call_id, "tool_name": tool_name})
-
-    def pop_call(self) -> dict[str, str] | None:
-        """Get and remove the oldest tracked call."""
-        return self.active_calls.popleft() if self.active_calls else None
-
-
-class IPCManager:
-    """Manages IPC communication with clean abstraction."""
-
-    DELIMITER: ClassVar[str] = "__JSON__"
-
-    # Pre-create common JSON templates to avoid repeated serialization
-    _TEMPLATES: ClassVar[dict[str, str]] = {
-        "assistant_start": AssistantMessage(type="assistant_start").to_json(),
-        "assistant_end": AssistantMessage(type="assistant_end").to_json(),
-    }
-
-    @staticmethod
-    def send(message: dict[str, Any]) -> None:
-        """Send a message to the Electron frontend via IPC."""
-        msg = _json_builder(message)
-        print(f"{IPCManager.DELIMITER}{msg}{IPCManager.DELIMITER}", flush=True)
-
-    @staticmethod
-    def send_raw(message: str) -> None:
-        """Send a raw JSON string message (for backwards compatibility)."""
-        print(f"{IPCManager.DELIMITER}{message}{IPCManager.DELIMITER}", flush=True)
-
-    @staticmethod
-    def send_error(message: str, code: str | None = None, details: dict[str, Any] | None = None) -> None:
-        """Send an error message to the frontend with validation."""
-        # Use Pydantic model for validation, but maintain backward compatibility
-        error_msg = ErrorNotification(type="error", message=message, code=code, details=details)
-        # Convert to dict and send using existing method to maintain format
-        IPCManager.send(error_msg.model_dump(exclude_none=True))
-
-    @staticmethod
-    def send_assistant_start() -> None:
-        """Send assistant start signal."""
-        IPCManager.send_raw(IPCManager._TEMPLATES["assistant_start"])
-
-    @staticmethod
-    def send_assistant_end() -> None:
-        """Send assistant end signal."""
-        IPCManager.send_raw(IPCManager._TEMPLATES["assistant_end"])
-
-
-async def setup_mcp_servers() -> list[Any]:
-    """Configure and initialize MCP servers"""
-    servers = []
-
-    # Apply the MCP patch to mitigate race conditions
-    apply_tool_patch()
-
-    # Sequential Thinking Server - our primary reasoning tool
-    try:
-        seq_thinking = MCPServerStdio(
-            params={
-                "command": "npx",
-                "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
-            }
-        )
-        await seq_thinking.__aenter__()
-        servers.append(seq_thinking)
-        logger.info("Sequential Thinking MCP server initialized")
-    except Exception as e:
-        logger.warning(f"Sequential Thinking server not available: {e}")
-
-    return servers
-
-
-# Pre-create partial JSON builders for common patterns
-_json_builder = partial(json.dumps, separators=(",", ":"))  # Compact JSON
-
-
-# Event handler functions for different item types
-def handle_message_output(item: RunItem) -> str | None:
-    """Handle message output items (assistant responses)"""
-    if hasattr(item, "raw_item"):
-        raw = item.raw_item
-        content = raw.content or [] if isinstance(raw, RawMessageLike) else getattr(raw, "content", []) or []
-        for content_item in content:
-            if isinstance(content_item, ContentLike):
-                text = content_item.text or ""
-            else:
-                text = getattr(content_item, "text", "")
-            if text:
-                msg = AssistantMessage(type="assistant_delta", content=text)
-                return msg.to_json()
-    return None
-
-
-def handle_tool_call(item: RunItem, tracker: CallTracker) -> str | None:
-    """Handle tool call items (function invocations) with validation."""
-    tool_name = "unknown"
-    call_id = ""
-    arguments = "{}"
-
-    if hasattr(item, "raw_item"):
-        raw = item.raw_item
-
-        if isinstance(raw, RawToolCallLike):
-            tool_name = raw.name
-            arguments = raw.arguments
-            call_id = raw.call_id or (raw.id or "")
-        else:
-            # Extract tool details
-            tool_name = getattr(raw, "name", "unknown")
-            arguments = getattr(raw, "arguments", "{}")
-
-            # Get call_id with fallback to id
-            call_id = getattr(raw, "call_id", getattr(raw, "id", ""))
-
-        # Track active calls for matching with outputs
-        tracker.add_call(call_id, tool_name)
-
-    # Use Pydantic model for validation
-    tool_msg = ToolCallNotification(
-        type="function_detected",  # Keep existing type for backward compatibility
-        name=tool_name,
-        arguments=arguments,
-        call_id=call_id if call_id else None,
-    )
-    return _json_builder(tool_msg.model_dump(exclude_none=True))
-
-
-def handle_reasoning(item: RunItem) -> str | None:
-    """Handle reasoning items (Sequential Thinking output)"""
-    if hasattr(item, "raw_item"):
-        raw = item.raw_item
-        content = raw.content or [] if isinstance(raw, RawMessageLike) else getattr(raw, "content", []) or []
-        for content_item in content:
-            if isinstance(content_item, ContentLike):
-                text = content_item.text or ""
-            else:
-                text = getattr(content_item, "text", "")
-            if text:
-                msg = AssistantMessage(type="assistant_delta", content=f"[Thinking] {text}")
-                return msg.to_json()
-    return None
-
-
-def handle_tool_output(item: RunItem, tracker: CallTracker) -> str | None:
-    """Handle tool call output items (function results) with validation."""
-    call_id = ""
-    success = True
-    tool_name = "unknown"
-
-    # Match output with a call_id from tracker
-    call_info = tracker.pop_call()
-    if call_info:
-        call_id = call_info["call_id"]
-        tool_name = call_info.get("tool_name", "unknown")
-
-    # Get output
-    if hasattr(item, "output"):
-        output = item.output
-        # Convert to string for consistent handling
-        output_str = _json_builder(output) if isinstance(output, dict) else str(output)
-    else:
-        output_str = ""
-
-    # Check for errors
-    if hasattr(item, "raw_item") and isinstance(item.raw_item, dict) and item.raw_item.get("error"):
-        success = False
-        output_str = str(item.raw_item["error"])
-
-    # Use Pydantic model for validation
-    result_msg = ToolResultNotification(
-        type="function_completed",  # Keep existing type for backward compatibility
-        name=tool_name,
-        result=output_str,
-        call_id=call_id if call_id else None,
-        success=success,
-    )
-    return _json_builder(result_msg.model_dump(exclude_none=True))
-
-
-def handle_handoff_call(item: RunItem) -> str | None:
-    """Handle handoff call items (multi-agent requests)"""
-    if hasattr(item, "raw_item"):
-        raw = item.raw_item
-        target_agent = raw.target or "unknown" if isinstance(raw, RawHandoffLike) else getattr(raw, "target", "unknown")
-    else:
-        target_agent = "unknown"
-
-    msg = HandoffMessage(type="handoff_started", target_agent=target_agent)
-    return msg.to_json()
-
-
-def handle_handoff_output(item: RunItem) -> str | None:
-    """Handle handoff output items (multi-agent results)"""
-    source_agent = "unknown"
-
-    if hasattr(item, "raw_item"):
-        raw = item.raw_item
-        source_agent = raw.source or "unknown" if isinstance(raw, RawHandoffLike) else getattr(raw, "source", "unknown")
-
-    # Get output
-    output = getattr(item, "output", "")
-    output_str = str(output) if output else ""
-
-    msg = HandoffMessage(type="handoff_completed", source_agent=source_agent, result=output_str)
-    return msg.to_json()
-
-
-def _build_event_handlers(tracker: CallTracker) -> dict[str, EventHandler]:
-    """Create a registry of event handlers keyed by event type.
-
-    Uses closures to capture `tracker` while conforming to EventHandler.
-    """
-
-    def handle_run_item_event(event: StreamingEvent) -> str | None:
-        # Guard by event type, then cast for attribute access
-        if getattr(event, "type", None) != RUN_ITEM_STREAM_EVENT:
-            return None
-        rie = cast(RunItemStreamEvent, event)
-        item: RunItem = rie.item
-
-        item_handlers: dict[str, Callable[[], str | None]] = {
-            MESSAGE_OUTPUT_ITEM: lambda: handle_message_output(item),
-            TOOL_CALL_ITEM: lambda: handle_tool_call(item, tracker),
-            REASONING_ITEM: lambda: handle_reasoning(item),
-            TOOL_CALL_OUTPUT_ITEM: lambda: handle_tool_output(item, tracker),
-            HANDOFF_CALL_ITEM: lambda: handle_handoff_call(item),
-            HANDOFF_OUTPUT_ITEM: lambda: handle_handoff_output(item),
-        }
-
-        ih = item_handlers.get(item.type)
-        return ih() if ih else None
-
-    def handle_agent_updated_event(event: StreamingEvent) -> str | None:
-        if getattr(event, "type", None) != AGENT_UPDATED_STREAM_EVENT:
-            return None
-        aue = cast(AgentUpdatedStreamEvent, event)
-        msg = AgentUpdateMessage(type="agent_updated", name=aue.new_agent.name)
-        return msg.to_json()
-
-    return {
-        RUN_ITEM_STREAM_EVENT: handle_run_item_event,
-        AGENT_UPDATED_STREAM_EVENT: handle_agent_updated_event,
-    }
+from core.session import TokenAwareSQLiteSession
+from infrastructure.ipc import IPCManager
+from infrastructure.logger import logger
+from integrations.event_handlers import CallTracker, build_event_handlers
+from integrations.mcp_servers import setup_mcp_servers
+from integrations.sdk_token_tracker import connect_session, disconnect_session, patch_sdk_for_auto_tracking
+from models.event_models import UserInput
+from models.sdk_models import StreamingEvent
+from tools import AGENT_TOOLS
 
 
 async def handle_electron_ipc(event: StreamingEvent, tracker: CallTracker) -> str | None:
     """Convert Agent/Runner events to Electron IPC format using a typed registry."""
-
-    handlers = _build_event_handlers(tracker)
+    handlers = build_event_handlers(tracker)
     handler = handlers.get(event.type)
     if handler:
-        return handler(event)
+        result: str | None = handler(event)
+        return result
     return None
 
 
@@ -491,21 +211,8 @@ async def main() -> None:
     # Set up MCP servers
     mcp_servers = await setup_mcp_servers()
 
-    # Patch native tools to add delays (must be done before passing to Agent)
-    patched_tools = patch_native_tools(AGENT_TOOLS)
-
     # Create agent with tools and MCP servers
-    agent = Agent(
-        name="Chat Juicer",
-        model=deployment,
-        instructions=SYSTEM_INSTRUCTIONS,
-        tools=patched_tools,  # Use patched function tools
-        mcp_servers=mcp_servers,
-    )
-
-    # Log startup
-    logger.info(f"Chat Juicer starting - Deployment: {deployment}")
-    logger.info(f"Agent configured with {len(patched_tools)} tools and {len(mcp_servers)} MCP servers")
+    agent = create_agent(deployment, SYSTEM_INSTRUCTIONS, AGENT_TOOLS, mcp_servers)
 
     print("Connected to Azure OpenAI")
     print(f"Using deployment: {deployment}")

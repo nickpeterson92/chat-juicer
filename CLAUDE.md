@@ -17,17 +17,32 @@ chat-juicer/
 │   └── logger.js     # Centralized structured logging with IPC forwarding
 ├── ui/               # Frontend assets
 │   └── index.html    # Main chat UI with markdown rendering
-├── src/              # Python backend (Agent/Runner pattern)
-│   ├── main.py       # Agent/Runner implementation with MCP support
-│   ├── session.py    # TokenAwareSQLiteSession with auto-summarization (20% threshold)
-│   ├── functions.py  # Document generation and file tools (async)
-│   ├── models.py     # Pydantic models for runtime validation
-│   ├── sdk_models.py # Protocol typing for SDK integration
-│   ├── tool_patch.py # Tool call delay patches (now disabled with 0.0s delays)
-│   ├── logger.py     # Enterprise JSON logging with rotation and session correlation
-│   ├── utils.py      # Token management with LRU caching
-│   ├── constants.py  # Configuration with Pydantic Settings validation
-│   ├── sdk_token_tracker.py # SDK-level universal token tracking via monkey-patching
+├── src/              # Python backend (modular architecture)
+│   ├── main.py       # Application entry point and async event loop management
+│   ├── core/         # Core business logic
+│   │   ├── agent.py       # Agent/Runner implementation with MCP support
+│   │   ├── session.py     # TokenAwareSQLiteSession with auto-summarization (20% threshold)
+│   │   └── constants.py   # Configuration with Pydantic Settings validation
+│   ├── models/       # Data models and type definitions
+│   │   ├── api_models.py   # Pydantic models for API responses
+│   │   ├── event_models.py # Event and message models for IPC
+│   │   └── sdk_models.py   # Protocol typing for SDK integration
+│   ├── tools/        # Function calling tools
+│   │   ├── document_generation.py # Document generation from templates
+│   │   ├── file_operations.py     # File reading and directory listing
+│   │   ├── text_editing.py        # Text, regex, and insert editing operations
+│   │   └── registry.py            # Tool registration and discovery
+│   ├── integrations/ # External integrations
+│   │   ├── mcp_servers.py        # MCP server setup and management
+│   │   ├── event_handlers.py     # Streaming event handlers
+│   │   ├── sdk_token_tracker.py  # SDK-level universal token tracking via monkey-patching
+│   │   └── tool_patch.py         # Tool call delay patches (disabled: 0.0s delays)
+│   ├── infrastructure/ # Infrastructure and utilities
+│   │   ├── logger.py            # Enterprise JSON logging with rotation and session correlation
+│   │   ├── ipc.py               # IPC manager with pre-cached templates
+│   │   ├── utils.py             # Token management with LRU caching
+│   │   ├── file_utils.py        # File system utility functions
+│   │   └── document_processor.py # Document processing utilities
 │   └── requirements.txt  # Python dependencies
 ├── sources/          # Source documents for processing
 ├── output/           # Generated documentation output
@@ -72,13 +87,21 @@ agent = Agent(
 ```
 
 ### Function Architecture
-Available functions (all async):
-1. **list_directory**: List directory contents with metadata (size, modified time, file count)
-2. **read_file**: Read files with automatic format conversion via markitdown
-3. **generate_document**: Generate docs from templates with placeholder replacement
-4. **text_edit**: Find and replace exact text in documents
-5. **regex_edit**: Pattern-based editing using regular expressions
-6. **insert_text**: Add new content before or after existing text
+All functions are implemented as async operations organized by module:
+
+**File Operations** (`tools/file_operations.py`):
+- **list_directory**: List directory contents with metadata (size, modified time, file count)
+- **read_file**: Read files with automatic format conversion via markitdown
+
+**Document Generation** (`tools/document_generation.py`):
+- **generate_document**: Generate docs from templates with placeholder replacement
+
+**Text Editing** (`tools/text_editing.py`):
+- **text_edit**: Find and replace exact text in documents
+- **regex_edit**: Pattern-based editing using regular expressions
+- **insert_text**: Add new content before or after existing text
+
+All tools registered in `tools/registry.py` for automatic discovery by Agent/Runner framework.
 
 ### Document Generation System
 - Process multiple source formats using markitdown (PDF, Word, Excel, HTML, CSV, JSON, images)
@@ -89,7 +112,47 @@ Available functions (all async):
 
 ## Essential Commands
 
-### Setup
+### Quick Start
+
+```bash
+# First time setup (recommended)
+make setup              # Automated installation and configuration
+# Edit src/.env with your Azure OpenAI credentials
+
+# Run the application
+make run                # Production mode
+make dev                # Development mode with DevTools
+
+# Get help
+make help               # Show all available commands
+make health             # Check system configuration
+```
+
+### Setup Commands
+
+**Automated Setup (Recommended)**
+```bash
+make setup              # Complete first-time setup
+                        # - Checks prerequisites
+                        # - Installs all dependencies
+                        # - Creates .juicer venv
+                        # - Installs MCP server
+                        # - Creates .env from template
+```
+
+**Manual Installation**
+```bash
+# Install all dependencies
+make install            # Node + Python + MCP
+
+# Or install individually:
+make install-node       # npm install
+make install-python     # pip install into .juicer venv
+make install-mcp        # Install Sequential Thinking MCP server
+                        # (may need: sudo make install-mcp)
+```
+
+**Traditional Commands (still supported)**
 ```bash
 # Install Node dependencies
 npm install
@@ -108,25 +171,76 @@ cp .env.example .env
 
 ### Running the Application
 
-#### Electron App (Primary)
+**Using Makefile (Recommended)**
 ```bash
-npm start
-# Or for development mode with DevTools:
-npm run dev
+make run                # Production mode (npm start)
+make dev                # Development mode with DevTools (npm run dev)
+make backend-only       # Python backend only for testing
 ```
 
-#### Python Backend Only (Testing)
+**Traditional Commands**
 ```bash
-python src/main.py
+npm start               # Production mode
+npm run dev             # Development mode with DevTools
+python src/main.py      # Python backend only
 ```
 
-### Validation
+### Development & Quality
+
+```bash
+make test               # Syntax validation and compilation
+make validate           # Validate Python code syntax
+make lint               # Run ruff linter with auto-fix
+make format             # Format code with black
+make typecheck          # Run mypy type checking
+make precommit          # Run all pre-commit hooks
+make quality            # Run format + lint + typecheck (all checks)
+make install-dev        # Install dev dependencies (linters, formatters, pre-commit)
+make precommit-install  # Install pre-commit git hooks
+```
+
+**Traditional Commands**
 ```bash
 # Syntax check
 python -m py_compile src/main.py
 
 # Check all Python files
 python -m compileall src/
+```
+
+### Logs & Monitoring
+
+```bash
+make logs               # Show conversation logs (tail -f, requires jq)
+make logs-errors        # Show error logs (tail -f, requires jq)
+make logs-all           # Show recent logs from both files
+```
+
+**Traditional Commands**
+```bash
+tail -f logs/conversations.jsonl | jq '.'
+tail -f logs/errors.jsonl | jq '.'
+```
+
+### Maintenance
+
+```bash
+make clean              # Clean temporary files and logs
+make clean-venv         # Remove .juicer virtual environment
+make clean-all          # Deep clean (logs + venv + node_modules)
+make reset              # Complete reset (clean-all + remove .env)
+```
+
+### Diagnostics
+
+```bash
+make health             # Check system health and configuration
+                        # - Verifies Node.js, Python, npm, pip
+                        # - Checks .env configuration
+                        # - Validates dependencies
+                        # - Confirms MCP server installation
+
+make status             # Alias for health check
 ```
 
 ## Critical Implementation Details
@@ -173,17 +287,68 @@ The Agent/Runner pattern provides structured events:
 - SDK-level automatic token tracking for all tool calls (native, MCP, future agents)
 - Minimal client state - session handles all conversation management
 
+## Troubleshooting
+
+### Quick Diagnosis
+
+```bash
+make health             # Check system health and configuration
+make logs-errors        # View error logs in real-time
+make test               # Validate Python syntax
+```
+
+### Common Issues
+
+1. **Setup failures**
+   - Run `make health` to identify missing dependencies
+   - Check Python version: `python3 --version` (need 3.9+)
+   - Check Node version: `node --version` (need 16+)
+   - Verify virtual environment: `ls -la .juicer/`
+
+2. **"API key not found" error**
+   - Verify `src/.env` exists and is configured
+   - Check `make health` output for environment status
+   - Ensure no placeholder values remain in .env
+
+3. **MCP server not working**
+   - Check installation: `which server-sequential-thinking`
+   - Reinstall: `make install-mcp` or `sudo make install-mcp`
+   - Verify global packages: `npm list -g --depth=0`
+
+4. **Python import errors**
+   - Ensure using .juicer venv: `make install-python`
+   - Check dependencies: `.juicer/bin/pip list`
+   - Reinstall: `make clean-venv && make install-python`
+
+5. **Build or validation errors**
+   - Run `make test` for detailed syntax validation
+   - Check `make logs-errors` for runtime issues
+   - Verify all files compile: `python -m compileall src/`
+
+### Clean Install Workflow
+
+If experiencing persistent issues:
+
+```bash
+make reset              # Complete reset (removes .env)
+make setup              # Fresh automated installation
+# Edit src/.env with credentials
+make health             # Verify configuration
+make test               # Validate syntax
+make run                # Start application
+```
+
 ## Common Development Tasks
 
 ### Adding New Functions
-1. Define function in `TOOLS` array in `src/functions.py`
-2. Implement the function returning JSON string
-3. Register in `FUNCTION_REGISTRY` dict
+1. Create function implementation in appropriate `tools/*.py` module
+2. Define tool schema following Agent/Runner pattern
+3. Register in `tools/registry.py` using `FUNCTION_REGISTRY` dict
 4. Function automatically available to Agent (including MCP tools)
 
 ### Adding New MCP Servers
 ```python
-# In setup_mcp_servers() function
+# In integrations/mcp_servers.py setup_mcp_servers() function
 new_server = MCPServerStdio(
     params={
         "command": "npx",
@@ -195,7 +360,7 @@ servers.append(new_server)
 ```
 
 ### Customizing Sequential Thinking
-The Sequential Thinking server is configured in `setup_mcp_servers()` and can be extended with additional MCP servers for:
+The Sequential Thinking server is configured in `integrations/mcp_servers.py` and can be extended with additional MCP servers for:
 - File system operations
 - GitHub integration
 - Database access

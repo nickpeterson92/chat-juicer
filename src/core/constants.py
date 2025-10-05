@@ -99,7 +99,7 @@ DOCUMENT_SUMMARIZATION_THRESHOLD = (
 )
 # Model Token Limits
 # Using INPUT limits since that's what we're tracking for summarization
-MODEL_TOKEN_LIMITS = {
+MODEL_TOKEN_LIMITS: dict[str, int] = {
     # GPT-5 models
     "gpt-5": 272000,
     "gpt-5-mini": 272000,
@@ -256,7 +256,7 @@ For complex problems, the Sequential Thinking tool helps:
 # ============================================================================
 
 
-class Settings(BaseSettings):  # type: ignore[misc]
+class Settings(BaseSettings):
     """Environment settings with validation.
 
     Loads from environment variables and .env file.
@@ -264,8 +264,8 @@ class Settings(BaseSettings):  # type: ignore[misc]
     """
 
     # Required Azure OpenAI settings
-    azure_openai_api_key: str = Field(description="Azure OpenAI API key for authentication")
-    azure_openai_endpoint: HttpUrl = Field(description="Azure OpenAI endpoint URL")
+    azure_openai_api_key: str = Field(..., description="Azure OpenAI API key for authentication")
+    azure_openai_endpoint: HttpUrl = Field(..., description="Azure OpenAI endpoint URL")
     azure_openai_deployment: str = Field(default="gpt-5-mini", description="Azure OpenAI deployment name")
 
     # Optional debug setting
@@ -307,5 +307,6 @@ def get_settings() -> Settings:
 
     Uses LRU cache to ensure we only load and validate settings once.
     This function will raise validation errors at startup if config is invalid.
+    Pydantic will load from environment variables automatically.
     """
-    return Settings()
+    return Settings()  # type: ignore[call-arg]  # Pydantic loads from env vars

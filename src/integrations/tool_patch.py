@@ -11,8 +11,8 @@ from typing import Any
 from agents.mcp.server import _MCPServerWithClientSession
 from agents.tool import FunctionTool
 
-from constants import MCP_TOOL_DELAY, NATIVE_TOOL_DELAY
-from logger import logger
+from core.constants import MCP_TOOL_DELAY, NATIVE_TOOL_DELAY
+from infrastructure.logger import logger
 
 # Store the original MCP method before patching
 _original_mcp_call_tool = _MCPServerWithClientSession.call_tool
@@ -64,8 +64,8 @@ def apply_tool_patch() -> None:
     else:
         logger.info("MCP tool call mitigation patch disabled (MCP_TOOL_DELAY=0)")
 
-    # Patch MCP server tools using setattr to avoid mypy error
-    _MCPServerWithClientSession.call_tool = patched_mcp_call_tool
+    # Patch MCP server tools - monkey-patching for tool delays
+    _MCPServerWithClientSession.call_tool = patched_mcp_call_tool  # type: ignore[method-assign]
 
 
 def patch_native_tools(tools: list[Any]) -> list[Any]:

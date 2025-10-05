@@ -70,6 +70,7 @@ ignore = [
     "PLR0913",  # Too many arguments
     "PLR0912",  # Too many branches
     "PLR0915",  # Too many statements
+    "PLC0415",  # Import not at top-level (needed for lazy loading)
     "C901",     # Complex structure
     "D",        # Documentation (separate concern)
     # "ANN",      # Annotations now enforced!
@@ -113,7 +114,7 @@ force-single-line = false
 # Import sections order
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 # Define first-party packages (your local modules)
-known-first-party = ["constants", "logger", "utils", "functions", "models", "sdk_models", "main", "tool_patch", "session", "sdk_token_tracker"]
+known-first-party = ["core", "infrastructure", "integrations", "models", "tools"]
 
 [tool.ruff.lint.mccabe]
 # Maximum complexity
@@ -191,6 +192,14 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "markitdown.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "pythonjsonlogger.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "mcp.*"
 ignore_missing_imports = true
 
 [tool.black]

@@ -30,14 +30,18 @@ repos:
       - id: mypy
         # Uses configuration from pyproject.toml automatically
         files: ^src/.*\.py$
+        # Exclude files that import from agents module (SDK doesn't expose proper types)
+        exclude: ^src/(core/(agent|session)|main|integrations/(sdk_token_tracker|mcp_servers|tool_patch)|tools/registry)\.py$
         additional_dependencies:
           - types-requests
           - types-aiofiles
           - python-dotenv
+          - pydantic
+          - pydantic-settings
           - openai
           - tiktoken
-          - agents
           - markitdown
+          - python-json-logger
 
   # General file checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
