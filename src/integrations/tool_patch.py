@@ -64,8 +64,8 @@ def apply_tool_patch() -> None:
     else:
         logger.info("MCP tool call mitigation patch disabled (MCP_TOOL_DELAY=0)")
 
-    # Patch MCP server tools using setattr to avoid mypy error
-    _MCPServerWithClientSession.call_tool = patched_mcp_call_tool
+    # Patch MCP server tools - monkey-patching for tool delays
+    _MCPServerWithClientSession.call_tool = patched_mcp_call_tool  # type: ignore[method-assign]
 
 
 def patch_native_tools(tools: list[Any]) -> list[Any]:

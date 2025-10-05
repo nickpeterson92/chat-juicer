@@ -35,7 +35,7 @@ from models.sdk_models import (
 try:
     from agents import Runner
 except ImportError:
-    Runner = None
+    Runner = None  # type: ignore[assignment,misc]
 
 if TYPE_CHECKING:
     from session import TokenAwareSQLiteSession  # pyright: ignore[reportMissingImports]
@@ -201,7 +201,7 @@ def patch_sdk_for_auto_tracking() -> bool:
     try:
         # Ensure Runner is available for patching
         if Runner is None:  # pragma: no cover
-            logger.warning("SDK Runner not available; skipping token tracking patch")
+            logger.warning("SDK Runner not available; skipping token tracking patch")  # type: ignore[unreachable]
             return False
 
         # Check if we can patch RunResultStreaming
@@ -217,13 +217,13 @@ def patch_sdk_for_auto_tracking() -> bool:
                 # Patch the stream_events method of the result
                 if hasattr(result, "stream_events"):
                     original_stream = result.stream_events
-                    # Use setattr to avoid mypy method-assign error
-                    result.stream_events = create_tracking_stream_wrapper(original_stream)
+                    # Monkey-patch for token tracking
+                    result.stream_events = create_tracking_stream_wrapper(original_stream)  # type: ignore[method-assign]
 
                 return result
 
-            # Apply the patch using setattr to avoid mypy error
-            Runner.run_streamed = patched_run_streamed
+            # Apply SDK monkey-patch for token tracking
+            Runner.run_streamed = patched_run_streamed  # type: ignore[method-assign]
             logger.info("SDK patched for automatic token tracking at Runner.run_streamed level")
             return True
 

@@ -28,7 +28,7 @@ def initialize_tools() -> tuple[list[Any], dict[str, Callable[..., str] | Callab
         Tuple of (AGENT_TOOLS list, FUNCTION_REGISTRY dict)
     """
     try:
-        from agents import function_tool
+        from agents import function_tool  # - Lazy import for Agent/Runner pattern
 
         # Wrap existing functions as Agent tools
         list_directory_tool = function_tool(list_directory)

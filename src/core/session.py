@@ -191,7 +191,7 @@ class MessageNormalizer:
         return messages
 
 
-class TokenAwareSQLiteSession(SQLiteSession):  # type: ignore[misc]
+class TokenAwareSQLiteSession(SQLiteSession):
     """Extends SQLiteSession with automatic token-based summarization."""
 
     def __init__(
@@ -211,8 +211,8 @@ class TokenAwareSQLiteSession(SQLiteSession):  # type: ignore[misc]
             model: Model name for token counting
             threshold: Trigger summarization at this fraction of token limit (0.8 = 80%)
         """
-        # Initialize parent SQLiteSession
-        super().__init__(session_id, db_path)
+        # Initialize parent SQLiteSession - use ":memory:" as default instead of None
+        super().__init__(session_id, db_path if db_path is not None else ":memory:")
 
         self.agent = agent
         self.model = model

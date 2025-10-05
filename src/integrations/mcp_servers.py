@@ -32,7 +32,7 @@ async def setup_mcp_servers() -> list[Any]:
                 "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
             }
         )
-        await seq_thinking.__aenter__()
+        await seq_thinking.__aenter__()  # type: ignore[no-untyped-call]
         servers.append(seq_thinking)
         logger.info("Sequential Thinking MCP server initialized")
     except Exception as e:

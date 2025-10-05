@@ -36,7 +36,7 @@ def _get_async_client() -> Any:
     _client_initialized = True  # Mark as attempted even if it fails
 
     try:
-        from openai import AsyncOpenAI
+        from openai import AsyncOpenAI  # - Lazy import for optional dependency
 
         try:
             settings = get_settings()
@@ -74,20 +74,22 @@ async def summarize_content(content: str, file_name: str = "document", model: st
         deployment = settings.azure_openai_deployment
 
         # Create concise summarization prompt
-        prompt = f"""Create a concise but technically complete summary of the following document ({file_name}).
+        prompt = f"""Create a CONCISE but TECHNICALLY COMPLETE summary of the following document ({file_name}).
 
-Prioritize:
+PRIORITIZE:
 - Core technical concepts and architectural decisions
 - Critical relationships between components, systems, or entities
 - Key implementation approaches and design patterns
 - Important constraints, requirements, or limitations
 
-Omit:
+AVOID:
 - Verbose explanations and redundant content
 - Minor details that don't affect technical understanding
 - Excessive examples (keep only the most illustrative ones)
 
 Keep the summary information-dense while preserving technical accuracy.
+
+CRITICAL: The summary MUST be less than 4000 tokens or you will FAIL!
 
 Document content:
 {content}"""
@@ -96,7 +98,7 @@ Document content:
         response = await client.chat.completions.create(
             model=deployment,
             messages=[
-                {"role": "system", "content": "You are a helpful assistant that creates concise document summaries."},
+                {"role": "system", "content": "You are a helpful assistant that creates CONCISE document summaries."},
                 {"role": "user", "content": prompt},
             ],
             max_completion_tokens=4000,  # Allow room for detailed summaries

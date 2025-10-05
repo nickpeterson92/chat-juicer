@@ -70,6 +70,7 @@ ignore = [
     "PLR0913",  # Too many arguments
     "PLR0912",  # Too many branches
     "PLR0915",  # Too many statements
+    "PLC0415",  # Import not at top-level (needed for lazy loading)
     "C901",     # Complex structure
     "D",        # Documentation (separate concern)
     # "ANN",      # Annotations now enforced!
@@ -191,6 +192,14 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "markitdown.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "pythonjsonlogger.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "mcp.*"
 ignore_missing_imports = true
 
 [tool.black]
