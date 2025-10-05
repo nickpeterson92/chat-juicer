@@ -7,7 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.constants import get_settings
+from core.constants import DOCUMENT_SUMMARIZATION_THRESHOLD, get_settings
+from core.prompts import DOCUMENT_SUMMARIZATION_PROMPT
 from utils.logger import logger
 from utils.token_utils import count_tokens
 
@@ -73,26 +74,10 @@ async def summarize_content(content: str, file_name: str = "document", model: st
         settings = get_settings()
         deployment = settings.azure_openai_deployment
 
-        # Create concise summarization prompt
-        prompt = f"""Create a CONCISE but TECHNICALLY COMPLETE summary of the following document ({file_name}).
-
-PRIORITIZE:
-- Core technical concepts and architectural decisions
-- Critical relationships between components, systems, or entities
-- Key implementation approaches and design patterns
-- Important constraints, requirements, or limitations
-
-AVOID:
-- Verbose explanations and redundant content
-- Minor details that don't affect technical understanding
-- Excessive examples (keep only the most illustrative ones)
-
-Keep the summary information-dense while preserving technical accuracy.
-
-CRITICAL: The summary MUST be less than 4000 tokens or you will FAIL!
-
-Document content:
-{content}"""
+        # Create concise summarization prompt using template from prompts.py
+        prompt = DOCUMENT_SUMMARIZATION_PROMPT.format(
+            file_name=file_name, tokens=DOCUMENT_SUMMARIZATION_THRESHOLD, content=content
+        )
 
         # Make async API call - no temperature parameter for reasoning models
         response = await client.chat.completions.create(
@@ -101,7 +86,7 @@ Document content:
                 {"role": "system", "content": "You are a helpful assistant that creates CONCISE document summaries."},
                 {"role": "user", "content": prompt},
             ],
-            max_completion_tokens=4000,  # Allow room for detailed summaries
+            max_completion_tokens=DOCUMENT_SUMMARIZATION_THRESHOLD,  # Set max completion tokens to the threshold
         )
 
         # Log response metadata for debugging
@@ -110,13 +95,10 @@ Document content:
 
         summarized = response.choices[0].message.content
 
-        # Handle length cutoff - partial summaries are still useful
+        # Handle length cutoff - always use original when hitting token limit
         if finish_reason == "length":
-            logger.warning(f"Summary for {file_name} hit token limit (finish_reason=length), using partial summary")
-            # If we got partial content, use it; otherwise return original
-            if not summarized or not summarized.strip():
-                logger.error(f"Length cutoff resulted in empty content for {file_name}, using original")
-                return content
+            logger.warning(f"Summary for {file_name} hit token limit (finish_reason=length), using original content")
+            return content
         elif not summarized or not summarized.strip():
             # Other finish reasons with empty content
             logger.error(

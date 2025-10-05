@@ -21,9 +21,9 @@ from core.constants import (
     CONVERSATION_SUMMARIZATION_THRESHOLD,
     MESSAGE_OUTPUT_ITEM,
     RUN_ITEM_STREAM_EVENT,
-    SYSTEM_INSTRUCTIONS,
     get_settings,
 )
+from core.prompts import SYSTEM_INSTRUCTIONS
 from core.session import TokenAwareSQLiteSession
 from integrations.event_handlers import CallTracker, build_event_handlers
 from integrations.mcp_servers import setup_mcp_servers

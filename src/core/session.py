@@ -16,6 +16,7 @@ from agents import Runner, SQLiteSession
 from openai import AsyncOpenAI
 
 from core.constants import MODEL_TOKEN_LIMITS, get_settings
+from core.prompts import CONVERSATION_SUMMARIZATION_PROMPT
 from models.event_models import FunctionEventMessage
 from utils.logger import logger
 from utils.token_utils import count_tokens
@@ -546,16 +547,8 @@ class TokenAwareSQLiteSession(SQLiteSession):
 
         client = AsyncOpenAI(api_key=api_key, base_url=endpoint)
 
-        # System prompt with summarization instructions
-        system_prompt = (
-            "You are a helpful assistant that summarizes conversations concisely. "
-            "Provide a summary that captures:\n"
-            "1. Main user requests and goals\n"
-            "2. Key tools/functions used and their purposes (e.g., files read, documents generated)\n"
-            "3. Important findings or results from tool usage\n"
-            "4. Current task state and any pending next steps\n"
-            "5. Any errors or issues encountered"
-        )
+        # System prompt with summarization instructions from prompts.py
+        system_prompt = CONVERSATION_SUMMARIZATION_PROMPT
 
         # Build messages using the new normalizer
         normalizer = MessageNormalizer()
