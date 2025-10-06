@@ -1,4 +1,4 @@
-.PHONY: help setup install install-node install-python install-mcp install-dev run dev clean test lint format typecheck precommit precommit-install quality validate logs health
+.PHONY: help setup install install-node install-python install-mcp install-dev run dev clean test lint format typecheck precommit precommit-install quality validate docs docs-clean docs-serve logs health
 
 # Default target
 .DEFAULT_GOAL := help
@@ -133,6 +133,29 @@ quality: format lint typecheck ## Run all quality checks (format, lint, typechec
 
 validate: test ## Validate Python code syntax
 	@echo "$(GREEN)✓ Validation complete$(NC)"
+
+##@ Documentation
+
+docs: ## Generate API documentation with Sphinx
+	@echo "$(BLUE)Generating API documentation...$(NC)"
+	@if [ -f ".juicer/bin/sphinx-build" ]; then \
+		.juicer/bin/sphinx-build -b html docs docs/_build/html; \
+		echo "$(GREEN)✓ Documentation generated at docs/_build/html/index.html$(NC)"; \
+	else \
+		echo "$(YELLOW)⚠ Sphinx not installed in .juicer venv$(NC)"; \
+		echo "$(BLUE)Run: make install-dev$(NC)"; \
+		exit 1; \
+	fi
+
+docs-clean: ## Clean generated documentation
+	@echo "$(BLUE)Cleaning documentation...$(NC)"
+	@rm -rf docs/_build
+	@echo "$(GREEN)✓ Documentation cleaned$(NC)"
+
+docs-serve: docs ## Generate and serve documentation locally
+	@echo "$(BLUE)Serving documentation at http://localhost:8000$(NC)"
+	@echo "$(YELLOW)Press Ctrl+C to stop$(NC)"
+	@cd docs/_build/html && python3 -m http.server 8000
 
 ##@ Logs & Monitoring
 

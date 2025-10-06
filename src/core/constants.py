@@ -11,28 +11,50 @@ from functools import lru_cache
 from pydantic import Field, HttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# File size limits
+# ============================================================================
+# File Operations Configuration
+# ============================================================================
+
+#: Maximum number of backup versions to keep for generated files.
+#: When create_backup=True in generate_document(), old versions are saved as
+#: .backup, .backup1, .backup2, etc. up to this limit.
 MAX_BACKUP_VERSIONS = 10
 
-# Token optimization thresholds
-TOKEN_OPTIMIZATION_THRESHOLD = 1000  # Only optimize content > 1000 tokens
-MAX_SEPARATOR_LENGTH = 20  # Truncate separators to this length
+# ============================================================================
+# Logging Configuration
+# ============================================================================
 
-# Logging configuration
-LOG_MAX_SIZE = 10 * 1024 * 1024  # 10MB
+#: Maximum size in bytes for log files before rotation (10MB).
+#: When a log file reaches this size, it's rotated to .log.1, .log.2, etc.
+LOG_MAX_SIZE = 10 * 1024 * 1024
+
+#: Number of conversation log backups to retain during rotation.
+#: Maintains the last 5 conversation log files (~50MB total).
 LOG_BACKUP_COUNT_CONVERSATIONS = 5
-LOG_BACKUP_COUNT_ERRORS = 3
-LOG_PREVIEW_LENGTH = 50  # Characters for preview in logs
 
-# File processing
+#: Number of error log backups to retain during rotation.
+#: Maintains the last 3 error log files (~30MB total).
+LOG_BACKUP_COUNT_ERRORS = 3
+
+#: Maximum characters to show in log previews for user input/response.
+#: Keeps log files concise while preserving enough context for debugging.
+LOG_PREVIEW_LENGTH = 50
+
+# ============================================================================
+# File Processing Configuration
+# ============================================================================
+
+#: File extensions that can be converted to markdown using markitdown.
+#: The read_file() tool automatically converts these formats to text/markdown
+#: for processing by the agent. Requires markitdown[all] for full support.
 CONVERTIBLE_EXTENSIONS = {
     # Microsoft Office formats
     ".xlsx",
-    ".xls",  # Excel
+    ".xls",  # Excel spreadsheets
     ".docx",
-    ".doc",  # Word
+    ".doc",  # Word documents
     ".pptx",
-    ".ppt",  # PowerPoint
+    ".ppt",  # PowerPoint presentations
     # Document formats
     ".pdf",  # PDF documents
     ".rtf",  # Rich Text Format
@@ -48,7 +70,7 @@ CONVERTIBLE_EXTENSIONS = {
     ".mht",  # MHTML archives
     # Code/Notebook formats
     ".ipynb",  # Jupyter notebooks
-    # Image formats (if LLM client configured)
+    # Image formats (if LLM client configured in markitdown)
     ".jpg",
     ".jpeg",  # JPEG images
     ".png",  # PNG images
@@ -59,55 +81,138 @@ CONVERTIBLE_EXTENSIONS = {
     ".webp",  # WebP images
 }
 
-TEMPLATE_EXTENSIONS = [".md", ".txt", ".template", ""]
+# ============================================================================
+# System Configuration
+# ============================================================================
 
-# System limits
+#: Length of generated session IDs (hex characters).
+#: Session IDs are used for log correlation and session tracking.
+#: 8 hex chars = 4 bytes = 4.3 billion unique IDs.
 SESSION_ID_LENGTH = 8
 
+# ============================================================================
 # Agent/Runner Event Types
+# ============================================================================
+
+#: Top-level streaming event type for run items (messages, tools, reasoning).
+#: Used to identify Agent/Runner streaming events in the event loop.
 RUN_ITEM_STREAM_EVENT = "run_item_stream_event"
+
+#: Top-level streaming event type for agent state changes.
+#: Fired when agent configuration or state is updated during execution.
 AGENT_UPDATED_STREAM_EVENT = "agent_updated_stream_event"
 
-# Item Types for streaming events
+# ============================================================================
+# Run Item Types (for streaming events)
+# ============================================================================
+
+#: Item type for AI-generated text responses.
+#: Contains content[] array with text/output_text items.
 MESSAGE_OUTPUT_ITEM = "message_output_item"
+
+#: Item type for function/tool call detection.
+#: Contains tool name, arguments, and call_id for tracking.
 TOOL_CALL_ITEM = "tool_call_item"
+
+#: Item type for Sequential Thinking reasoning steps.
+#: Contains structured reasoning with revision/branching capabilities.
 REASONING_ITEM = "reasoning_item"
+
+#: Item type for function/tool execution results.
+#: Contains output from tool execution and associated call_id.
 TOOL_CALL_OUTPUT_ITEM = "tool_call_output_item"
+
+#: Item type for agent-to-agent handoff calls (future feature).
+#: For multi-agent workflows with agent delegation.
 HANDOFF_CALL_ITEM = "handoff_call_item"
+
+#: Item type for agent handoff results (future feature).
+#: Contains results from delegated agent execution.
 HANDOFF_OUTPUT_ITEM = "handoff_output_item"
 
-# SDK Token Tracking source labels
+# ============================================================================
+# SDK Token Tracking Source Labels
+# ============================================================================
+
+#: Token source label for native function call inputs.
+#: Tracks tokens consumed when calling tools/functions.
 TOKEN_SOURCE_TOOL_CALL = "tool_call"
+
+#: Token source label for function output/results.
+#: Tracks tokens in function return values.
 TOKEN_SOURCE_TOOL_OUTPUT = "tool_output"
+
+#: Token source label for function execution errors.
+#: Tracks tokens in error messages and stack traces.
 TOKEN_SOURCE_TOOL_ERROR = "tool_error"
+
+#: Token source label for Sequential Thinking reasoning steps.
+#: Tracks tokens consumed during MCP reasoning operations.
 TOKEN_SOURCE_REASONING = "reasoning"
+
+#: Token source label for agent handoffs (future feature).
+#: Tracks tokens for inter-agent communication.
 TOKEN_SOURCE_HANDOFF = "handoff"
+
+#: Token source label for unclassified token usage.
+#: Fallback for unexpected or unrecognized sources.
 TOKEN_SOURCE_UNKNOWN = "unknown"
 
+# ============================================================================
 # MCP Server Configuration
-# (Tool call delay patches removed - no longer needed with client-side sessions)
+# ============================================================================
+# Note: Tool call delay patches removed - no longer needed with client-side sessions
 
-# Token Management Configuration
-CONVERSATION_SUMMARIZATION_THRESHOLD = 0.2  # Trigger conversation summarization at configured % of model's token limit
-KEEP_LAST_N_MESSAGES = 2  # Keep last N messages when summarizing (1 user-assistant pair)
-DOCUMENT_SUMMARIZATION_THRESHOLD = (
-    7000  # Amount of tokens to trigger document summarization during read_file operations.
-)
-# Model Token Limits
-# Using INPUT limits since that's what we're tracking for summarization
+# ============================================================================
+# Session Summarization Configuration
+# ============================================================================
+
+#: Trigger conversation summarization at this fraction of model's token limit.
+#: Example: 0.2 × GPT-5's 272k tokens = 54,400 token trigger point.
+#: When total_tokens exceeds this threshold, TokenAwareSQLiteSession automatically
+#: summarizes the conversation and resets the context.
+CONVERSATION_SUMMARIZATION_THRESHOLD = 0.2
+
+#: Number of recent user messages to keep when summarizing conversations.
+#: Keeps the last N complete user-assistant exchanges unsummarized.
+#: Value of 2 = last 2 user messages + their assistant responses preserved.
+#: Tool calls between exchanges are included in the summary, not kept.
+#: Used as default parameter in TokenAwareSQLiteSession.summarize_with_agent()
+KEEP_LAST_N_MESSAGES = 2
+
+#: Token count threshold for document summarization during read_file().
+#: Documents exceeding this token count are automatically summarized to
+#: fit within context windows while preserving technical accuracy.
+#: Set to 7000 to allow ~3k tokens for summary + metadata.
+DOCUMENT_SUMMARIZATION_THRESHOLD = 7000
+
+# ============================================================================
+# Model Token Limits (Input Context Windows)
+# ============================================================================
+
+#: Model-specific input token limits for conversation tracking.
+#: These are INPUT limits (not output) since we track conversation context,
+#: not generation tokens. Used by TokenAwareSQLiteSession for auto-summarization.
+#:
+#: Format: {"model-name": input_token_limit}
+#:
+#: Notes:
+#: - Values are approximate and may change with model updates
+#: - Conservative limits preferred to avoid context overflow
+#: - Azure model names (gpt-35-turbo) included for compatibility
 MODEL_TOKEN_LIMITS: dict[str, int] = {
-    # GPT-5 models
+    # GPT-5 models (272k input context)
     "gpt-5": 272000,
     "gpt-5-mini": 272000,
     "gpt-5-nano": 272000,
-    # GPT-4 models
+    # GPT-4 models (128k input context)
     "gpt-4o": 128000,
     "gpt-4o-mini": 128000,
     "gpt-4": 128000,
     "gpt-4-turbo": 128000,
-    # GPT-3.5 models
+    # GPT-3.5 models (16k input, conservative 15.3k limit)
     "gpt-3.5-turbo": 15360,
-    "gpt-35-turbo": 15360,  # Azure naming
+    "gpt-35-turbo": 15360,  # Azure naming convention
 }
 
 # ============================================================================

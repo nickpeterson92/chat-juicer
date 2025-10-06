@@ -15,7 +15,7 @@ from typing import Any, ClassVar
 from agents import Runner, SQLiteSession
 from openai import AsyncOpenAI
 
-from core.constants import MODEL_TOKEN_LIMITS, get_settings
+from core.constants import KEEP_LAST_N_MESSAGES, MODEL_TOKEN_LIMITS, get_settings
 from core.prompts import CONVERSATION_SUMMARIZATION_PROMPT
 from models.event_models import FunctionEventMessage
 from utils.logger import logger
@@ -377,11 +377,12 @@ class TokenAwareSQLiteSession(SQLiteSession):
             )
         return should_trigger
 
-    async def summarize_with_agent(self, keep_recent: int = 2) -> str:
+    async def summarize_with_agent(self, keep_recent: int = KEEP_LAST_N_MESSAGES) -> str:
         """Summarize conversation using the agent and update session.
 
         Args:
             keep_recent: Number of recent USER messages to keep unsummarized
+                (default from KEEP_LAST_N_MESSAGES constant)
 
         Returns:
             The summary text

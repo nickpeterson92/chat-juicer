@@ -49,3 +49,6 @@ None-shm
 sources/
 output/
 src/.mypy_cache/
+
+# Documentation build
+docs/_build/

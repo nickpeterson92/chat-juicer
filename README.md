@@ -278,6 +278,14 @@ make precommit          # Run all pre-commit hooks
 make quality            # Run format + lint + typecheck (all quality checks)
 ```
 
+#### Documentation
+
+```bash
+make docs               # Generate API documentation with Sphinx
+make docs-clean         # Clean generated documentation
+make docs-serve         # Generate and serve docs at http://localhost:8000
+```
+
 #### Logs & Monitoring
 
 ```bash
