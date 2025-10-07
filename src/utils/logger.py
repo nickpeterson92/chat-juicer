@@ -89,7 +89,7 @@ def setup_logging(name: str = "chat-juicer", debug: bool | None = None) -> loggi
     console_handler.setLevel(logging.DEBUG if debug else logging.INFO)
 
     # Simple format for console
-    console_format = "%(asctime)s [%(levelname)8s] %(name)s - %(message)s"
+    console_format = "%(asctime)s [%(levelname)s] %(name)s - %(message)s"
     console_handler.setFormatter(
         logging.Formatter(
             console_format,
