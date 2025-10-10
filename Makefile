@@ -13,7 +13,7 @@ NC := \033[0m
 
 setup: ## Complete first-time setup (run this first!)
 	@echo "$(BLUE)Running complete setup...$(NC)"
-	@./setup.sh
+	@node scripts/setup.js
 
 install: install-node install-python install-mcp ## Install all dependencies
 	@echo "$(GREEN)✓ All dependencies installed$(NC)"

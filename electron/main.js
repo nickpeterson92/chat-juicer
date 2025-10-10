@@ -246,7 +246,8 @@ async function stopPythonBot() {
         logger.warn("Graceful shutdown timed out, force killing Python process");
 
         if (platformConfig.isWindows()) {
-          spawn("taskkill", ["/pid", pythonProcessPID.toString(), "/f"]);
+          // Windows: Kill process tree with /T flag
+          spawn("taskkill", ["/pid", pythonProcessPID.toString(), "/f", "/t"]);
         } else {
           // Kill entire process group on Unix
           try {
