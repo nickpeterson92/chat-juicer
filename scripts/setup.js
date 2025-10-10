@@ -117,6 +117,25 @@ async function checkPrerequisites() {
 }
 
 /**
+ * Install Node.js dependencies
+ */
+async function installNodeDependencies() {
+  printHeader("Installing Node.js Dependencies");
+
+  try {
+    execSync("npm install", {
+      stdio: "inherit",
+      cwd: process.cwd(),
+    });
+    printSuccess("Node.js dependencies installed");
+    return true;
+  } catch (error) {
+    printError(`Failed to install Node.js dependencies: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
  * Setup Python environment
  */
 async function setupPythonEnvironment() {
@@ -270,6 +289,7 @@ async function main() {
 
   try {
     await checkPrerequisites();
+    await installNodeDependencies();
     await setupPythonEnvironment();
     await installMCPServer();
     await setupEnvironment();

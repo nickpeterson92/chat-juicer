@@ -4,12 +4,11 @@
   "description": "Electron wrapper for Chat Juicer Azure OpenAI bot",
   "main": "electron/main.js",
   "scripts": {
-    "postinstall": "node scripts/setup.js",
     "prestart": "node scripts/validate.js",
     "start": "node scripts/launch.js",
     "dev": "node scripts/launch.js --dev",
     "inspect": "node scripts/launch.js --inspect",
-    "setup": "node scripts/setup.js",
+    "setup": "npm install && node scripts/setup.js",
     "lint": "biome check electron/*.js scripts/*.js",
     "lint:fix": "biome check electron/*.js scripts/*.js --write",
     "format": "biome format electron/*.js scripts/*.js --write"
