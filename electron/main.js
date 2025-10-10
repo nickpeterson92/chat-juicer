@@ -2,6 +2,8 @@ const { app, BrowserWindow, ipcMain } = require("electron");
 const { spawn } = require("node:child_process");
 const path = require("node:path");
 const Logger = require("./logger");
+const PythonManager = require("../scripts/python-manager");
+const platformConfig = require("../scripts/platform-config");
 
 // Constants
 const RESTART_DELAY = 2000; // 2 seconds
@@ -12,6 +14,9 @@ const SIGTERM_DELAY = 500; // 500ms
 
 // Initialize logger for main process
 const logger = new Logger("main");
+
+// Initialize Python manager
+const pythonManager = new PythonManager(path.join(__dirname, ".."));
 
 let mainWindow;
 let pythonProcess;
@@ -61,7 +66,7 @@ function createWindow() {
   });
 }
 
-function startPythonBot() {
+async function startPythonBot() {
   // Prevent multiple instances
   if (pythonProcess && !pythonProcess.killed) {
     logger.warn("Python process already running, skipping start");
@@ -69,26 +74,28 @@ function startPythonBot() {
   }
 
   logger.info("Starting Python bot process");
+  logger.info("Platform:", platformConfig.getPlatformName());
 
   try {
-    // Spawn Python process with detached flag for better cleanup
-    // Use virtual environment Python to ensure dependencies are available
-    const venvPython = path.join(__dirname, "..", ".juicer", "bin", "python3");
-    pythonProcess = spawn(venvPython, [path.join(__dirname, "..", "src", "main.py")], {
-      env: { ...process.env, PYTHONUNBUFFERED: "1" }, // Ensures real-time output
+    // Use PythonManager to find Python (cross-platform)
+    const pythonPath = await pythonManager.findPython();
+    logger.info("Found Python:", pythonPath);
+
+    const spawnOptions = platformConfig.getSpawnOptions({
       stdio: ["pipe", "pipe", "inherit"], // [stdin, stdout, stderr -> terminal]
-      detached: process.platform !== "win32", // Detached on Unix for process group management
     });
 
+    pythonProcess = spawn(pythonPath, [path.join(__dirname, "..", "src", "main.py")], spawnOptions);
+
     pythonProcessPID = pythonProcess.pid;
-    logger.logPythonProcess("started", { pid: pythonProcessPID });
+    logger.logPythonProcess("started", { pid: pythonProcessPID, path: pythonPath });
 
     // Start health monitoring
     startHealthCheck();
   } catch (error) {
     logger.error("Failed to start Python process", { error: error.message });
     if (mainWindow) {
-      mainWindow.webContents.send("bot-error", "Failed to start Python process");
+      mainWindow.webContents.send("bot-error", "Failed to start Python process: " + error.message);
     }
     return;
   }
@@ -238,7 +245,7 @@ async function stopPythonBot() {
       if (pythonProcess && !pythonProcess.killed) {
         logger.warn("Graceful shutdown timed out, force killing Python process");
 
-        if (process.platform === "win32") {
+        if (platformConfig.isWindows()) {
           spawn("taskkill", ["/pid", pythonProcessPID.toString(), "/f"]);
         } else {
           // Kill entire process group on Unix
@@ -272,7 +279,7 @@ async function stopPythonBot() {
       // Then send SIGTERM
       setTimeout(() => {
         if (pythonProcess && !pythonProcess.killed) {
-          if (process.platform === "win32") {
+          if (platformConfig.isWindows()) {
             pythonProcess.kill();
           } else {
             // Kill process group on Unix to prevent zombies
