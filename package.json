@@ -4,12 +4,14 @@
   "description": "Electron wrapper for Chat Juicer Azure OpenAI bot",
   "main": "electron/main.js",
   "scripts": {
-    "start": "unset ELECTRON_RUN_AS_NODE && electron .",
-    "dev": "electron . --dev",
-    "inspect": "electron . --inspect",
-    "lint": "biome check electron/*.js",
-    "lint:fix": "biome check electron/*.js --write",
-    "format": "biome format electron/*.js --write"
+    "prestart": "node scripts/validate.js",
+    "start": "node scripts/launch.js",
+    "dev": "node scripts/launch.js --dev",
+    "inspect": "node scripts/launch.js --inspect",
+    "setup": "npm install && node scripts/setup.js",
+    "lint": "biome check electron/*.js scripts/*.js",
+    "lint:fix": "biome check electron/*.js scripts/*.js --write",
+    "format": "biome format electron/*.js scripts/*.js --write"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.3",

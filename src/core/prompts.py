@@ -137,7 +137,11 @@ For complex problems, the Sequential Thinking tool helps:
 - Break down problems into manageable steps
 - Revise understanding as you progress
 - Generate and verify hypotheses
-- Maintain context across reasoning steps"""
+- Maintain context across reasoning steps
+- You should use the Sequential Thinking tool for complex problems
+- Problems are considered to be complex if they are not completely solvable in a single step
+- If you care about solving the user's problem accurately, then you should use the Sequential Thinking tool
+- If the user's complex problem is not solved accurately, they will be VERY UPSET!"""
 
 
 # Document Summarization Prompt (use .format(file_name=..., content=...) to inject values)

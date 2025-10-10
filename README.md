@@ -22,6 +22,20 @@ An Electron + Python desktop application for Azure OpenAI chat interactions usin
 
 ## Quick Start
 
+### All Platforms (Recommended)
+
+```bash
+# First time setup
+npm run setup           # Install everything and configure
+# Edit src/.env with your Azure OpenAI credentials
+
+# Run the application
+npm start               # Production mode
+npm run dev             # Development mode with DevTools
+```
+
+### macOS/Linux (Optional - Using Makefile)
+
 ```bash
 # First time setup
 make setup              # Install everything and configure
@@ -35,6 +49,8 @@ make dev                # Development mode with DevTools
 make help               # Show all available commands
 make health             # Check system configuration
 ```
+
+**Note**: On Windows, Makefile commands require Git Bash or WSL. The npm scripts work on all platforms natively.
 
 ## Features
 
@@ -101,7 +117,10 @@ The easiest way to get started is using the automated setup:
 git clone https://github.com/yourusername/chat-juicer.git
 cd chat-juicer
 
-# Run automated setup
+# Run automated setup (works on all platforms)
+npm run setup
+
+# Or on macOS/Linux with make installed:
 make setup
 ```
 
@@ -112,9 +131,9 @@ This will:
 - Install Python dependencies into the venv
 - Install MCP server globally
 - Create `.env` from template
-- Prompt you to configure Azure OpenAI credentials
 
-After running `make setup`, edit `src/.env` with your credentials and run `make run` to start.
+After running setup, edit `src/.env` with your Azure OpenAI credentials, then:
+- Run `npm start` (or `make run`) to start the application
 
 ### Manual Setup
 
@@ -167,9 +186,22 @@ If you prefer manual installation or encounter issues:
 
 ## Usage
 
-### Makefile Commands
+### npm Scripts (All Platforms)
 
-Chat Juicer includes a comprehensive Makefile for streamlined development. Run `make help` or `make` to see all available commands.
+The primary interface that works on Windows, macOS, and Linux:
+
+```bash
+npm run setup           # First-time setup
+npm start               # Run the application
+npm run dev             # Development mode with DevTools
+npm run inspect         # Debug mode with Node.js inspector
+```
+
+### Makefile Commands (macOS/Linux)
+
+Chat Juicer includes a comprehensive Makefile for convenience on Unix systems. Windows users should use npm scripts or install Git Bash/WSL.
+
+Run `make help` or `make` to see all available commands.
 
 #### Setup Commands
 
