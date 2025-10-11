@@ -10,6 +10,14 @@ import os
 import sys
 import uuid
 
+# Force UTF-8 encoding for stdout/stdin on all platforms (especially Windows)
+# This must be done before any print() calls
+if sys.stdout.encoding != "utf-8":
+    import io
+
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8", errors="replace")
+
 from typing import Any
 
 from agents import set_default_openai_client, set_tracing_disabled
