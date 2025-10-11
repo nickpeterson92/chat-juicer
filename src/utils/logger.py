@@ -108,6 +108,7 @@ def setup_logging(name: str = "chat-juicer", debug: bool | None = None) -> loggi
         log_dir / "conversations.jsonl",
         maxBytes=LOG_MAX_SIZE,
         backupCount=LOG_BACKUP_COUNT_CONVERSATIONS,
+        encoding="utf-8",
     )
     conv_handler.setLevel(logging.INFO)
     conv_handler.addFilter(ConversationFilter())
@@ -126,6 +127,7 @@ def setup_logging(name: str = "chat-juicer", debug: bool | None = None) -> loggi
         log_dir / "errors.jsonl",
         maxBytes=LOG_MAX_SIZE,
         backupCount=LOG_BACKUP_COUNT_ERRORS,
+        encoding="utf-8",
     )
     error_handler.setLevel(logging.ERROR)
     error_handler.addFilter(ErrorFilter())

@@ -102,7 +102,7 @@ async function startPythonBot() {
 
   // Handle Python stdout (bot responses)
   pythonProcess.stdout.on("data", (data) => {
-    const output = data.toString();
+    const output = data.toString("utf-8");
     logger.trace("Python stdout received", { length: output.length });
 
     if (mainWindow) {
