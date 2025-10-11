@@ -5,7 +5,7 @@
 ## Story 1: Mapping Document
 
 **As a** integration developer
-**I want** to create a detailed mapping document for the [SOURCE_SYSTEM] to [TARGET_SYSTEM] integration
+**I want** to create a detailed mapping document for the [SOURCE_SYSTEM] [ENTITY] to [TARGET_SYSTEM] [ENTITY] integration
 **So that** all stakeholders understand the data transformation requirements and field-level mappings
 
 ### Acceptance Criteria
@@ -16,7 +16,7 @@
 - [ ] Required vs optional fields identified
 - [ ] Default values and null handling rules documented
 - [ ] Business rules and conditional logic captured
-- [ ] Mapping document reviewed and approved by [BUSINESS_OWNER]
+- [ ] Mapping document reviewed and approved by [DATA_AND_INTEGRATION_PRODUCT_OWNER]
 
 ### Definition of Done
 - Mapping document stored in [DOCUMENT_REPOSITORY]
@@ -28,7 +28,7 @@
 ## Story 2: Design Document
 
 **As a** integration architect
-**I want** to create a technical design document for the [SOURCE_SYSTEM] to [TARGET_SYSTEM] integration
+**I want** to create a technical design document for the [SOURCE_SYSTEM] [ENTITY] to [TARGET_SYSTEM] [ENTITY] integration
 **So that** the development team has a clear blueprint for implementation
 
 ### Acceptance Criteria
@@ -53,7 +53,7 @@
 ## Story 3: Integration Build and Unit Testing
 
 **As a** integration developer
-**I want** to build and unit test the [SOURCE_SYSTEM] to [TARGET_SYSTEM] integration
+**I want** to build and unit test the [SOURCE_SYSTEM] [ENTITY] to [TARGET_SYSTEM] [ENTITY] integration
 **So that** individual components work correctly in isolation
 
 ### Acceptance Criteria
@@ -67,7 +67,7 @@
 - [ ] Unit testing completed for error handling scenarios
 - [ ] Mock data created for unit testing
 - [ ] Code follows team coding standards and conventions
-- [ ] Code reviewed by [PEER_REVIEWER]
+- [ ] Code reviewed by [INTEGRATION_QA]
 - [ ] All unit tests passing
 - [ ] Configuration externalized for different environments
 
@@ -119,15 +119,16 @@
 
 ## Placeholders to Customize Per Integration
 
-| Placeholder | Example Values |
-|-------------|----------------|
+| Placeholder | Example Values (not exhaustive) |
+|-------------|----------------------------------|
 | `[SOURCE_SYSTEM]` | Salesforce, SAP, Internal CRM, Oracle |
+| `[ENTITY]` | Customer, Order, Product, Invoice |
 | `[TARGET_SYSTEM]` | Data Warehouse, Marketing Platform, ERP |
-| `[BUSINESS_OWNER]` | Stakeholder name/role |
+| `[DATA_AND_INTEGRATION_PRODUCT_OWNER]` | Data Product Owner, Integration Manager |
+| `[DOCUMENT_REPOSITORY]` | Confluence, SharePoint, Google Drive |
 | `[TECH_LEAD]` | Technical lead reviewer |
 | `[ARCHITECT]` | Architecture reviewer |
-| `[PEER_REVIEWER]` | Code reviewer name |
-| `[PRODUCT_OWNER]` | Product owner for sign-off |
+| `[INTEGRATION_QA]` | Integration QA engineer/reviewer |
+| `[PRODUCT_OWNER]` | Product owner for E2E testing sign-off |
 | `[QA_LEAD]` | QA lead for sign-off |
-| `[DOCUMENT_REPOSITORY]` | Confluence, SharePoint, Google Drive |
-| `[X]%` | Code coverage target (e.g., 80%, 90%) |
+| `[BUSINESS_OWNER]` | Business stakeholder name/role |
