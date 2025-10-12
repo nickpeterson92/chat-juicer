@@ -9,6 +9,9 @@ src/.env
 *.log
 logs/*.jsonl
 
+# Persistent data
+data/
+
 # Source Documents
 deliverables/*
 

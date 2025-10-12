@@ -8,6 +8,7 @@ All models use Pydantic v2 for automatic validation and JSON serialization.
 Modules:
     api_models: Response models for tool function outputs
     event_models: Models for IPC event messages between Electron and Python
+    session_models: Session management and command models with runtime validation
     sdk_models: Protocol typing for OpenAI SDK integration (type checking only)
 
 Key Components:
@@ -34,6 +35,18 @@ Event Models (event_models.py):
     - Real-time UI updates during tool execution
     - Token count display in frontend
     - Error handling and recovery
+
+Session Models (session_models.py):
+    Session management models with Pydantic validation:
+    - SessionMetadata: Session metadata with runtime validation
+    - SessionCommand: Type-safe session commands (new/switch/delete/list)
+    - ContentItem: Message content type definitions for MessageNormalizer
+
+    Features:
+    - Runtime validation (session_id format, timestamps, message counts)
+    - Type-safe command dispatch with discriminated unions
+    - Automatic JSON serialization via model_dump()
+    - Field constraints (min/max length, non-negative counts)
 
 SDK Models (sdk_models.py):
     Protocol-based typing for OpenAI SDK structures:

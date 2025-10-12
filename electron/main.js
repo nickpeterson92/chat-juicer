@@ -95,7 +95,7 @@ async function startPythonBot() {
   } catch (error) {
     logger.error("Failed to start Python process", { error: error.message });
     if (mainWindow) {
-      mainWindow.webContents.send("bot-error", "Failed to start Python process: " + error.message);
+      mainWindow.webContents.send("bot-error", `Failed to start Python process: ${error.message}`);
     }
     return;
   }
@@ -151,7 +151,7 @@ app.whenReady().then(() => {
   logger.info("Electron app ready, initializing...");
 
   // IPC handler for renderer logging
-  ipcMain.on("renderer-log", (event, { level, message, data }) => {
+  ipcMain.on("renderer-log", (_event, { level, message, data }) => {
     const rendererLogger = new Logger("renderer");
     if (data) {
       rendererLogger[level](message, data);
@@ -172,6 +172,63 @@ app.whenReady().then(() => {
     } else {
       logger.error("Python process is not running");
       event.reply("bot-error", "Python process is not running");
+    }
+  });
+
+  // IPC handler for session commands
+  ipcMain.handle("session-command", async (_event, { command, data }) => {
+    logger.info("Session command received", { command });
+
+    if (!pythonProcess || pythonProcess.killed) {
+      logger.error("Python process not running for session command");
+      return { error: "Backend not available" };
+    }
+
+    try {
+      // Send command to Python in expected format
+      const dataJson = JSON.stringify(data || {});
+      const sessionCommand = `__SESSION__${command}__${dataJson}__
+`;
+      pythonProcess.stdin.write(sessionCommand);
+      logger.debug("Sent session command to Python", { command, dataJson });
+
+      // Wait for response (with timeout)
+      return new Promise((resolve) => {
+        const timeout = setTimeout(() => {
+          logger.warn("Session command timed out", { command });
+          resolve({ error: "Command timed out" });
+        }, 5000);
+
+        // Listen for response from Python
+        const responseHandler = (data) => {
+          const output = data.toString("utf-8");
+
+          // Look for session_response in the output
+          const jsonStart = output.indexOf("__JSON__");
+          if (jsonStart !== -1) {
+            const jsonEnd = output.indexOf("__JSON__", jsonStart + 8);
+            if (jsonEnd !== -1) {
+              try {
+                const jsonStr = output.substring(jsonStart + 8, jsonEnd);
+                const message = JSON.parse(jsonStr);
+
+                if (message.type === "session_response") {
+                  clearTimeout(timeout);
+                  pythonProcess.stdout.removeListener("data", responseHandler);
+                  resolve(message.data);
+                }
+              } catch (e) {
+                logger.error("Failed to parse session response", { error: e.message });
+              }
+            }
+          }
+        };
+
+        pythonProcess.stdout.on("data", responseHandler);
+      });
+    } catch (error) {
+      logger.error("Session command error", { error: error.message });
+      return { error: error.message };
     }
   });
 

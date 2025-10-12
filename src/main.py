@@ -8,7 +8,6 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
-import uuid
 
 # Force UTF-8 encoding for stdout/stdin on all platforms (especially Windows)
 # This must be done before any print() calls
@@ -18,6 +17,7 @@ if sys.stdout.encoding != "utf-8":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8", errors="replace")
 
+from datetime import datetime
 from typing import Any
 
 from agents import set_default_openai_client, set_tracing_disabled
@@ -33,14 +33,198 @@ from core.constants import (
 )
 from core.prompts import SYSTEM_INSTRUCTIONS
 from core.session import TokenAwareSQLiteSession
+from core.session_manager import SessionManager
 from integrations.event_handlers import CallTracker, build_event_handlers
 from integrations.mcp_servers import setup_mcp_servers
 from integrations.sdk_token_tracker import connect_session, disconnect_session, patch_sdk_for_auto_tracking
 from models.event_models import UserInput
 from models.sdk_models import StreamingEvent
+from models.session_models import (
+    CreateSessionCommand,
+    DeleteSessionCommand,
+    ListSessionsCommand,
+    SwitchSessionCommand,
+    parse_session_command,
+)
 from tools import AGENT_TOOLS
 from utils.ipc import IPCManager
 from utils.logger import logger
+
+# Global session manager and current session
+session_manager: SessionManager | None = None
+current_session: TokenAwareSQLiteSession | None = None
+agent_instance: Any | None = None
+deployment_name: str = ""
+
+
+def _session_error(message: str) -> dict[str, str]:
+    """Create standardized session error response.
+
+    Args:
+        message: Error message describing the issue
+
+    Returns:
+        Dictionary with error key for IPC response
+    """
+    return {"error": message}
+
+
+async def create_new_session(title: str | None = None) -> dict[str, Any]:
+    """Create a new session and switch to it.
+
+    Args:
+        title: Title for the new session (defaults to datetime format)
+
+    Returns:
+        Session metadata dictionary
+    """
+    # Access global variables (read session_manager, write via switch_to_session)
+
+    if not session_manager:
+        return _session_error("Session manager not initialized")
+
+    # Create new session metadata (title defaults to datetime in create_session)
+    session_meta = session_manager.create_session(title)
+
+    # Switch to the new session
+    await switch_to_session(session_meta.session_id)
+
+    result: dict[str, Any] = session_meta.model_dump()
+    return result
+
+
+async def switch_to_session(session_id: str) -> dict[str, Any]:
+    """Switch to a different session.
+
+    Args:
+        session_id: ID of session to switch to
+
+    Returns:
+        Session info with conversation history
+    """
+    global current_session  # noqa: PLW0603
+
+    if not session_manager:
+        return _session_error("Session manager not initialized")
+
+    session_meta = session_manager.get_session(session_id)
+    if not session_meta:
+        return _session_error(f"Session {session_id} not found")
+
+    # Disconnect old session from token tracker
+    if current_session:
+        disconnect_session()
+
+    # Create new session object with persistent storage
+    current_session = TokenAwareSQLiteSession(
+        session_id=session_id,
+        db_path="data/chat_history.db",
+        agent=agent_instance,
+        model=deployment_name,
+        threshold=CONVERSATION_SUMMARIZATION_THRESHOLD,
+    )
+
+    # Restore token counts from stored items
+    items = await current_session.get_items()
+    if items:
+        current_session.total_tokens = current_session._calculate_total_tokens(items)
+        logger.info(f"Restored session {session_id}: {len(items)} items, {current_session.total_tokens} tokens")
+
+    # Connect new session to token tracker
+    connect_session(current_session)
+
+    # Update metadata
+
+    session_manager.set_current_session(session_id)
+    session_manager.update_session(session_id, last_used=datetime.now().isoformat(), message_count=len(items))
+
+    # Return session info with history
+    return {
+        "session": session_meta.model_dump(),
+        "message_count": len(items),
+        "tokens": current_session.total_tokens,
+        "messages": items,
+    }
+
+
+async def list_all_sessions() -> dict[str, Any]:
+    """List all available sessions.
+
+    Returns:
+        Dictionary with sessions list and current session ID
+    """
+    # Access global session_manager (read-only)
+
+    if not session_manager:
+        return _session_error("Session manager not initialized")
+
+    sessions = session_manager.list_sessions()
+    return {"sessions": [s.model_dump() for s in sessions], "current_session_id": session_manager.current_session_id}
+
+
+async def delete_session_by_id(session_id: str) -> dict[str, Any]:
+    """Delete a session.
+
+    Args:
+        session_id: ID of session to delete
+
+    Returns:
+        Success status
+    """
+    # Access global variables (read-only)
+
+    if not session_manager:
+        return _session_error("Session manager not initialized")
+
+    # Don't allow deleting the current session
+    if current_session and current_session.session_id == session_id:
+        return _session_error("Cannot delete active session")
+
+    success = session_manager.delete_session(session_id)
+    return {"success": success}
+
+
+async def handle_session_command(command: str, data: dict[str, Any]) -> dict[str, Any]:
+    """Handle session management commands from IPC with Pydantic validation.
+
+    Args:
+        command: Command type (new, switch, list, delete)
+        data: Command data
+
+    Returns:
+        Command result
+    """
+    result: dict[str, Any]
+
+    try:
+        # Add command type to data if not present
+        if "command" not in data:
+            data["command"] = command
+
+        # Parse and validate command using Pydantic
+        cmd = parse_session_command(data)
+
+        # Type-safe dispatch based on command type
+        if isinstance(cmd, CreateSessionCommand):
+            result = await create_new_session(cmd.title)
+        elif isinstance(cmd, SwitchSessionCommand):
+            result = await switch_to_session(cmd.session_id)
+        elif isinstance(cmd, ListSessionsCommand):
+            result = await list_all_sessions()
+        elif isinstance(cmd, DeleteSessionCommand):
+            result = await delete_session_by_id(cmd.session_id)
+        else:
+            result = _session_error(f"Unknown command type: {type(cmd)}")
+
+    except ValueError as e:
+        # Pydantic validation errors or value errors
+        logger.error(f"Validation error in session command {command}: {e}", exc_info=True)
+        result = _session_error(f"Invalid command: {e}")
+    except Exception as e:
+        logger.error(f"Error handling session command {command}: {e}", exc_info=True)
+        result = _session_error(str(e))
+
+    return result
 
 
 async def handle_electron_ipc(event: StreamingEvent, tracker: CallTracker) -> str | None:
@@ -227,19 +411,38 @@ async def main() -> None:
     if mcp_servers:
         print("MCP Servers: Sequential Thinking enabled")
 
-    # Create token-aware session built on SDK's SQLiteSession
-    # Using in-memory database for session persistence during app lifetime
-    session = TokenAwareSQLiteSession(
-        session_id=f"chat_{uuid.uuid4().hex[:8]}",  # Unique session per app run
-        db_path=None,  # In-memory database (use "chat_history.db" for persistence)
+    # Initialize global state for session management
+    global session_manager, current_session, agent_instance, deployment_name  # noqa: PLW0603
+    agent_instance = agent
+    deployment_name = deployment
+
+    # Initialize session manager
+    session_manager = SessionManager(metadata_path="data/sessions.json")
+    logger.info("Session manager initialized")
+
+    # Always create fresh session on startup
+    session_meta = session_manager.create_session()
+    logger.info(f"Started new session: {session_meta.session_id} - {session_meta.title}")
+
+    # Create token-aware session with persistent storage
+    current_session = TokenAwareSQLiteSession(
+        session_id=session_meta.session_id,
+        db_path="data/chat_history.db",  # Persistent file-based storage
         agent=agent,
         model=deployment,
         threshold=CONVERSATION_SUMMARIZATION_THRESHOLD,
     )
-    logger.info(f"Session created with id: {session.session_id}")
+
+    # Restore token counts from stored items
+    items = await current_session.get_items()
+    if items:
+        current_session.total_tokens = current_session._calculate_total_tokens(items)
+        logger.info(f"Restored session with {len(items)} items, {current_session.total_tokens} tokens")
+
+    logger.info(f"Session created with id: {current_session.session_id}")
 
     # Connect session to SDK token tracker for automatic tracking
-    connect_session(session)
+    connect_session(current_session)
 
     # Main chat loop
     # Session manages all conversation state internally
@@ -247,6 +450,24 @@ async def main() -> None:
         try:
             # Get user input (synchronously from stdin)
             raw_input = await asyncio.get_event_loop().run_in_executor(None, input)
+
+            # Check for session management commands
+            if IPCManager.is_session_command(raw_input):
+                try:
+                    parsed = IPCManager.parse_session_command(raw_input)
+                    if parsed:
+                        command, data = parsed
+                        logger.info(f"Processing session command: {command}")
+                        result = await handle_session_command(command, data)
+                        logger.info(f"Session command result keys: {result.keys()}")
+                        IPCManager.send_session_response(result)
+                        logger.info(f"Session response sent for command: {command}")
+                    else:
+                        IPCManager.send_session_response(_session_error("Invalid session command format"))
+                except Exception as e:
+                    logger.error(f"Error handling session command: {e}", exc_info=True)
+                    IPCManager.send_session_response(_session_error(str(e)))
+                continue
 
             # Validate user input with Pydantic
             try:
@@ -266,7 +487,16 @@ async def main() -> None:
             logger.info(f"User: {user_input}", extra={"file_message": file_msg})
 
             # Process user input through session (handles summarization automatically)
-            await process_user_input(session, user_input)
+            await process_user_input(current_session, user_input)
+
+            # Update session metadata after each message
+            if session_manager and current_session:
+                from datetime import datetime
+
+                items = await current_session.get_items()
+                session_manager.update_session(
+                    current_session.session_id, last_used=datetime.now().isoformat(), message_count=len(items)
+                )
 
         except KeyboardInterrupt:
             logger.info("Keyboard interrupt received")

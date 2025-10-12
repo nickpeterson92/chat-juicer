@@ -29,25 +29,25 @@ function colorize(text, color) {
 }
 
 function printHeader(text) {
-  console.log("\n" + colorize("═".repeat(60), "blue"));
+  console.log(`\n${colorize("═".repeat(60), "blue")}`);
   console.log(colorize(`  ${text}`, "blue"));
-  console.log(colorize("═".repeat(60), "blue") + "\n");
+  console.log(`${colorize("═".repeat(60), "blue")}\n`);
 }
 
 function printSuccess(text) {
-  console.log(colorize("✓", "green") + " " + text);
+  console.log(`${colorize("✓", "green")} ${text}`);
 }
 
 function printError(text) {
-  console.log(colorize("✗", "red") + " " + text);
+  console.log(`${colorize("✗", "red")} ${text}`);
 }
 
 function printWarning(text) {
-  console.log(colorize("⚠", "yellow") + " " + text);
+  console.log(`${colorize("⚠", "yellow")} ${text}`);
 }
 
 function printInfo(text) {
-  console.log(colorize("ℹ", "blue") + " " + text);
+  console.log(`${colorize("ℹ", "blue")} ${text}`);
 }
 
 /**
@@ -58,7 +58,7 @@ function commandExists(command) {
     const which = platformConfig.isWindows() ? "where" : "which";
     execSync(`${which} ${command}`, { stdio: "ignore" });
     return true;
-  } catch (error) {
+  } catch (_error) {
     return false;
   }
 }
@@ -74,7 +74,7 @@ function getVersion(command) {
     })
       .trim()
       .split("\n")[0];
-  } catch (error) {
+  } catch (_error) {
     return "Unknown";
   }
 }
@@ -166,7 +166,7 @@ async function installMCPServer() {
       execSync(`npm list -g ${mcpPackage}`, { stdio: "ignore" });
       printSuccess(`MCP server already installed`);
       return true;
-    } catch (error) {
+    } catch (_error) {
       // Not installed, proceed with installation
     }
 
@@ -178,13 +178,13 @@ async function installMCPServer() {
 
     printSuccess("MCP server installed");
     return true;
-  } catch (error) {
+  } catch (_error) {
     printWarning("Failed to install MCP server globally");
     printInfo("You may need elevated permissions. Try:");
     if (platformConfig.isWindows()) {
-      printInfo("  Run as Administrator: npm install -g " + mcpPackage);
+      printInfo(`  Run as Administrator: npm install -g ${mcpPackage}`);
     } else {
-      printInfo("  sudo npm install -g " + mcpPackage);
+      printInfo(`  sudo npm install -g ${mcpPackage}`);
     }
     // Don't fail setup for this
     return false;
@@ -269,7 +269,7 @@ async function validateSetup() {
         stdio: "ignore",
       });
       printSuccess("Python backend syntax valid");
-    } catch (error) {
+    } catch (_error) {
       printError("Python syntax check failed");
     }
   }

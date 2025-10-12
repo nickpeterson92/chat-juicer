@@ -813,3 +813,99 @@ body.tools-collapsed .tools-toggle-wrapper {
 .function-call-card.old-card {
   display: none;
 }
+
+/* Session Management Controls */
+.session-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 6px;
+  border-radius: 24px;
+}
+
+.session-selector {
+  background: rgba(255, 255, 255, 0.95);
+  color: #667eea;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 200px;
+  max-width: 300px;
+}
+
+.session-selector:hover {
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.session-selector:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
+}
+
+[data-theme="dark"] .session-selector {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+}
+
+[data-theme="dark"] .session-selector:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.new-session-btn {
+  background: white;
+  color: #667eea;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.new-session-btn:hover {
+  background: #f0f0f0;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="dark"] .new-session-btn {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+[data-theme="dark"] .new-session-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.delete-session-btn {
+  background: rgba(239, 68, 68, 0.9);
+  color: white;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.delete-session-btn:hover {
+  background: rgba(239, 68, 68, 1);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+}
+
+.delete-session-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

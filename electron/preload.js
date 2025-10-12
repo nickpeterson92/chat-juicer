@@ -37,4 +37,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   log: (level, message, data) => {
     ipcRenderer.send("renderer-log", { level, message, data });
   },
+
+  // Session management
+  sessionCommand: async (command, data) => {
+    return await ipcRenderer.invoke("session-command", { command, data });
+  },
 });

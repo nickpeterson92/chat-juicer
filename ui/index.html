@@ -11,6 +11,15 @@
     <div class="header">
       <h1>🧃 Chat Juicer</h1>
       <div style="display: flex; gap: 12px; align-items: center;">
+        <!-- Session Management -->
+        <div class="session-controls">
+          <select class="session-selector" id="session-selector" title="Select conversation">
+            <option value="">Loading sessions...</option>
+          </select>
+          <button class="new-session-btn" id="new-session-btn" title="New conversation">+ New</button>
+          <button class="delete-session-btn" id="delete-session-btn" title="Delete current conversation">🗑️</button>
+        </div>
+
         <button class="theme-toggle" id="theme-toggle" title="Toggle dark mode">
           <span class="theme-toggle-icon" id="theme-icon">🌙</span>
           <span id="theme-text">Dark</span>
@@ -82,6 +91,6 @@
     </button>
   </div>
 
-  <script src="../electron/renderer.js"></script>
+  <script type="module" src="../electron/renderer/index.js"></script>
 </body>
 </html>

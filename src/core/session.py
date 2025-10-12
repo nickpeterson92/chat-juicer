@@ -18,6 +18,7 @@ from openai import AsyncOpenAI
 from core.constants import KEEP_LAST_N_MESSAGES, MODEL_TOKEN_LIMITS, get_settings
 from core.prompts import CONVERSATION_SUMMARIZATION_PROMPT
 from models.event_models import FunctionEventMessage
+from models.session_models import ContentItem
 from utils.logger import logger
 from utils.token_utils import count_tokens
 
@@ -37,7 +38,7 @@ class MessageNormalizer:
             "reasoning": self._handle_reasoning,
         }
 
-    def normalize_content(self, content: Any) -> str:
+    def normalize_content(self, content: str | list[ContentItem] | ContentItem) -> str:
         """Normalize Agent/Runner content to OpenAI format.
 
         Args:
@@ -55,7 +56,7 @@ class MessageNormalizer:
         # Handle other types by converting to string
         return str(content) if content else ""
 
-    def _normalize_content_list(self, content_list: list[Any]) -> str:
+    def _normalize_content_list(self, content_list: list[ContentItem]) -> str:
         """Normalize a list of content items.
 
         Args:

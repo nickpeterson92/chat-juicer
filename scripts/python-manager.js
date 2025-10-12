@@ -37,7 +37,7 @@ class PythonManager {
           this.cachedPythonPath = pythonPath;
           return pythonPath;
         }
-      } catch (error) {}
+      } catch (_error) {}
     }
 
     throw new Error(
@@ -73,7 +73,7 @@ class PythonManager {
         if (pythonPath && (await this.validatePython(pythonPath))) {
           return pythonPath;
         }
-      } catch (error) {}
+      } catch (_error) {}
     }
 
     return null;
@@ -93,7 +93,7 @@ class PythonManager {
       // On Windows, 'where' returns multiple paths, take the first
       const pythonPath = result.split("\n")[0].trim();
       return existsSync(pythonPath) ? pythonPath : null;
-    } catch (error) {
+    } catch (_error) {
       return null;
     }
   }
@@ -111,13 +111,13 @@ class PythonManager {
       // Check version is Python 3.9+
       const match = version.match(/Python (\d+)\.(\d+)/);
       if (match) {
-        const major = parseInt(match[1]);
-        const minor = parseInt(match[2]);
+        const major = parseInt(match[1], 10);
+        const minor = parseInt(match[2], 10);
         return major === 3 && minor >= 9;
       }
 
       return false;
-    } catch (error) {
+    } catch (_error) {
       return false;
     }
   }
@@ -203,7 +203,7 @@ class PythonManager {
         encoding: "utf-8",
         stdio: ["pipe", "pipe", "ignore"],
       }).trim();
-    } catch (error) {
+    } catch (_error) {
       return "Unknown";
     }
   }
@@ -218,7 +218,7 @@ class PythonManager {
         encoding: "utf-8",
         stdio: ["pipe", "pipe", "ignore"],
       }).trim();
-    } catch (error) {
+    } catch (_error) {
       return "Unknown";
     }
   }
@@ -264,7 +264,7 @@ class PythonManager {
         stdio: "ignore",
       });
       console.log("✓ Python dependencies installed");
-    } catch (error) {
+    } catch (_error) {
       console.log("Installing dependencies...");
       await this.installDependencies();
     }

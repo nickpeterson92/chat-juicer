@@ -292,10 +292,19 @@ chat-juicer/
 ├── electron/          # Electron main process and utilities
 │   ├── main.js       # Electron main process, IPC handlers, health monitoring
 │   ├── preload.js    # Preload script for secure context-isolated IPC
-│   ├── renderer.js   # Renderer with BoundedMap memory management and AppState pub/sub
-│   └── logger.js     # Centralized structured logging with IPC forwarding
-├── ui/               # Frontend assets
-│   └── index.html    # Main chat UI with markdown rendering
+│   ├── logger.js     # Centralized structured logging with IPC forwarding
+│   └── renderer/     # Modular renderer process (ES6 modules)
+│       ├── index.js              # Main entry point
+│       ├── config/constants.js   # Configuration constants
+│       ├── core/state.js         # BoundedMap and AppState
+│       ├── ui/
+│       │   ├── chat-ui.js        # Message rendering
+│       │   └── function-card-ui.js # Function card visualization
+│       ├── handlers/message-handlers.js # Event handler registry
+│       └── services/session-service.js  # Session management
+├── ui/               # Frontend static assets
+│   ├── index.html    # Main chat UI with markdown rendering
+│   └── styles.css    # Global styles
 ├── src/              # Python backend (modular architecture)
 │   ├── main.py       # Application entry point
 │   ├── core/         # Core business logic
@@ -370,10 +379,19 @@ chat-juicer/
 
 ### Electron Frontend (`electron/`)
 
+**Main Process**
 - **main.js**: Main process with health monitoring (5-min intervals), auto-recovery, graceful shutdown
 - **preload.js**: Secure context-isolated bridge between main and renderer processes
-- **renderer.js**: UI state management with BoundedMap for memory safety and AppState pub/sub
 - **logger.js**: Centralized logging with IPC forwarding from renderer to main process
+
+**Renderer Process** (`electron/renderer/`) - Modular ES6 architecture
+- **index.js**: Main entry point orchestrating all renderer modules
+- **config/constants.js**: Centralized configuration values (timeouts, limits, delimiters)
+- **core/state.js**: State management with BoundedMap for memory safety and AppState pub/sub
+- **ui/chat-ui.js**: Message rendering and chat interface operations
+- **ui/function-card-ui.js**: Function call card visualization and management
+- **handlers/message-handlers.js**: Handler registry pattern for streaming event processing
+- **services/session-service.js**: Session CRUD operations with consistent error handling
 
 ## Function Calling
 

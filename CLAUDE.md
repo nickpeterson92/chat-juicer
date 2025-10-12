@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+⚠️ CRITICAL ⚠️ - Open your heart, your mind and your third eye. Take a deep breath and focus. You've got this!
+
 ## Project Overview
 
 Chat Juicer is a production-grade Electron + Python desktop application that provides a chat interface for Azure OpenAI using the **Agent/Runner pattern** with native **MCP (Model Context Protocol) server support**. The application features advanced reasoning capabilities through Sequential Thinking, sophisticated document generation, enterprise-grade logging, and comprehensive type safety.
@@ -13,10 +15,19 @@ chat-juicer/
 ├── electron/          # Electron main process and utilities
 │   ├── main.js       # Electron main process, IPC handlers, health monitoring (5-min intervals)
 │   ├── preload.js    # Preload script for secure context-isolated IPC
-│   ├── renderer.js   # Renderer with BoundedMap memory management and AppState pub/sub
-│   └── logger.js     # Centralized structured logging with IPC forwarding
-├── ui/               # Frontend assets
-│   └── index.html    # Main chat UI with markdown rendering
+│   ├── logger.js     # Centralized structured logging with IPC forwarding
+│   └── renderer/     # Modular renderer process (ES6 modules)
+│       ├── index.js              # Main entry point orchestrating all modules
+│       ├── config/constants.js   # Centralized configuration (timeouts, limits, delimiters)
+│       ├── core/state.js         # BoundedMap memory management and AppState pub/sub
+│       ├── ui/
+│       │   ├── chat-ui.js        # Message rendering and chat interface
+│       │   └── function-card-ui.js # Function call card visualization
+│       ├── handlers/message-handlers.js # Handler registry for streaming events
+│       └── services/session-service.js  # Session CRUD with consistent error handling
+├── ui/               # Frontend static assets
+│   ├── index.html    # Main chat UI (loads renderer/index.js as ES6 module)
+│   └── styles.css    # Global styles
 ├── src/              # Python backend (modular architecture)
 │   ├── main.py       # Application entry point and async event loop management
 │   ├── core/         # Core business logic
@@ -73,6 +84,45 @@ The application integrates the Sequential Thinking MCP server:
 - Provides structured reasoning with revision capabilities
 - Enables branching and hypothesis testing
 - Maintains context across multiple reasoning steps
+
+### Frontend Architecture (Modular ES6)
+The renderer process uses a modular architecture for maintainability:
+
+**Entry Point** (`renderer/index.js`):
+- Orchestrates all modules via ES6 imports
+- DOM element management and event listener coordination
+- Main bot output processing loop with JSON protocol parsing
+- Session management UI coordination
+
+**Configuration** (`renderer/config/constants.js`):
+- Centralized constants (MAX_MESSAGES, timeouts, JSON_DELIMITER, etc.)
+- Single source of truth for configuration values
+
+**Core State** (`renderer/core/state.js`):
+- `BoundedMap`: Memory-efficient Map with automatic eviction at size limit
+- `AppState`: Pub/sub state management with connection state machine
+- Structured state organization (connection, message, functions, ui)
+
+**UI Modules**:
+- `ui/chat-ui.js`: Message rendering (addMessage, streaming messages, clear chat)
+- `ui/function-card-ui.js`: Function call visualization cards with status updates
+
+**Event Handling** (`handlers/message-handlers.js`):
+- Handler registry pattern replacing monolithic switch statement
+- 14+ specialized handler functions for different message types
+- Isolated, testable handlers (10-30 lines each)
+- Main `processMessage()` router with error handling
+
+**Services** (`services/session-service.js`):
+- Session CRUD operations (load, create, switch, delete)
+- Consistent error handling and result objects
+- DRY patterns for session management
+
+**Benefits**:
+- Modular structure enables easier testing and maintenance
+- Handler registry allows adding new message types without modifying routing logic
+- Clear separation of concerns (state, UI, services, handlers)
+- ES6 modules with explicit imports/exports
 
 ### Agent Configuration
 ```python
