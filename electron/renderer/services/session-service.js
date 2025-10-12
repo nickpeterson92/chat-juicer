@@ -106,8 +106,11 @@ export async function switchSession(api, elements, appState, sessionId) {
       appState.functions.argumentsBuffer.clear();
 
       // Display historical messages
-      if (response.messages && Array.isArray(response.messages)) {
-        for (const msg of response.messages) {
+      // Prefer full_history (Layer 2 - complete history) over messages (Layer 1 - may be summarized when token limit reached)
+      const messagesToDisplay = response.full_history || response.messages || [];
+
+      if (Array.isArray(messagesToDisplay) && messagesToDisplay.length > 0) {
+        for (const msg of messagesToDisplay) {
           const role = msg.role || "assistant";
           let content = msg.content;
 

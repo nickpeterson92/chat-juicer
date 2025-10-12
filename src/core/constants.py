@@ -187,6 +187,25 @@ KEEP_LAST_N_MESSAGES = 2
 DOCUMENT_SUMMARIZATION_THRESHOLD = 7000
 
 # ============================================================================
+# Storage Configuration
+# ============================================================================
+
+#: Database file path for session storage and full history.
+#: Both TokenAwareSQLiteSession (Layer 1) and FullHistoryStore (Layer 2)
+#: use this shared database with separate table structures.
+CHAT_HISTORY_DB_PATH = "data/chat_history.db"
+
+#: Table prefix for full conversation history storage (Layer 2).
+#: Used by FullHistoryStore to maintain complete user-visible history.
+#: Table naming: {FULL_HISTORY_TABLE_PREFIX}{session_id}
+FULL_HISTORY_TABLE_PREFIX = "full_history_"
+
+#: Table prefix for LLM context storage (Layer 1).
+#: Used by TokenAwareSQLiteSession for token-optimized AI context.
+#: Table naming: {SESSION_TABLE_PREFIX}{session_id}
+SESSION_TABLE_PREFIX = "session_"
+
+# ============================================================================
 # Model Token Limits (Input Context Windows)
 # ============================================================================
 #

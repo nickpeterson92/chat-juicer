@@ -6,9 +6,55 @@ Provides Pydantic models for session metadata and commands with runtime validati
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, Field, field_validator
+
+# Protocol for Layer 2 persistence (full history storage)
+
+
+class FullHistoryProtocol(Protocol):
+    """Protocol for full history storage implementations (Layer 2 persistence).
+
+    Layer 2 stores complete user-visible conversation history that is never
+    trimmed or summarized, separate from the token-optimized LLM context.
+    """
+
+    def save_message(self, session_id: str, message: dict[str, Any]) -> bool:
+        """Save a message to full history storage.
+
+        Args:
+            session_id: Session identifier
+            message: Message dict with 'role' and 'content' keys
+
+        Returns:
+            True if saved successfully, False otherwise
+        """
+        ...
+
+    def get_messages(self, session_id: str, limit: int | None = None, offset: int = 0) -> list[dict[str, Any]]:
+        """Retrieve messages from full history storage.
+
+        Args:
+            session_id: Session identifier
+            limit: Maximum number of messages to return (None for all)
+            offset: Number of messages to skip (for pagination)
+
+        Returns:
+            List of message dicts
+        """
+        ...
+
+    def clear_session(self, session_id: str) -> bool:
+        """Clear all messages for a session.
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            True if cleared successfully, False otherwise
+        """
+        ...
 
 
 class SessionMetadata(BaseModel):
@@ -216,6 +262,7 @@ __all__ = [
     "CreateSessionCommand",
     "DeleteSessionCommand",
     "FileContent",
+    "FullHistoryProtocol",
     "ImageContent",
     "ListSessionsCommand",
     "OutputTextContent",

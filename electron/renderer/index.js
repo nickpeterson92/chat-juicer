@@ -327,26 +327,32 @@ async function handleDeleteSession() {
     return;
   }
 
-  // If trying to delete the current active session, switch to another first
-  if (sessionIdToDelete === sessionState.currentSessionId) {
-    const otherSession = sessionState.sessions.find((s) => s.session_id !== sessionIdToDelete);
-
-    if (otherSession) {
-      window.electronAPI.log("info", "Switching away from session before delete", {
-        from: sessionIdToDelete,
-        to: otherSession.session_id,
-      });
-      await handleSwitchSession(otherSession.session_id);
-    } else {
-      window.electronAPI.log("info", "Creating new session before deleting last one");
-      await handleCreateNewSession();
-    }
+  // Delete the session (backend handles current session gracefully)
+  let result;
+  try {
+    result = await deleteSession(window.electronAPI, elements, sessionIdToDelete);
+  } catch (error) {
+    window.electronAPI.log("error", "Failed to delete session", { error: error.message });
+    addMessage(elements.chatContainer, "Failed to delete session. Please try again.", "system");
+    return;
   }
 
-  // Now delete the session
-  const result = await deleteSession(window.electronAPI, elements, sessionIdToDelete);
-
   if (result.success) {
+    // If we deleted the current session, switch to another or create new
+    if (sessionIdToDelete === sessionState.currentSessionId) {
+      const otherSession = sessionState.sessions.find((s) => s.session_id !== sessionIdToDelete);
+
+      if (otherSession) {
+        window.electronAPI.log("info", "Switching to another session after deleting current", {
+          to: otherSession.session_id,
+        });
+        await handleSwitchSession(otherSession.session_id);
+      } else {
+        window.electronAPI.log("info", "Creating new session after deleting last one");
+        await handleCreateNewSession();
+      }
+    }
+
     await loadSessions(window.electronAPI, updateSessionSelector);
     addMessage(elements.chatContainer, `Deleted conversation: ${title}`, "system");
   }

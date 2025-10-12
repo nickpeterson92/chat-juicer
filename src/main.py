@@ -26,11 +26,13 @@ from openai import APIConnectionError, APIStatusError, AsyncOpenAI, RateLimitErr
 
 from core.agent import create_agent
 from core.constants import (
+    CHAT_HISTORY_DB_PATH,
     CONVERSATION_SUMMARIZATION_THRESHOLD,
     MESSAGE_OUTPUT_ITEM,
     RUN_ITEM_STREAM_EVENT,
     get_settings,
 )
+from core.full_history import FullHistoryStore
 from core.prompts import SYSTEM_INSTRUCTIONS
 from core.session import TokenAwareSQLiteSession
 from core.session_manager import SessionManager
@@ -56,6 +58,7 @@ session_manager: SessionManager | None = None
 current_session: TokenAwareSQLiteSession | None = None
 agent_instance: Any | None = None
 deployment_name: str = ""
+full_history_store: Any | None = None  # Layered persistence for complete conversation history
 
 
 def _session_error(message: str) -> dict[str, str]:
@@ -101,7 +104,7 @@ async def switch_to_session(session_id: str) -> dict[str, Any]:
         session_id: ID of session to switch to
 
     Returns:
-        Session info with conversation history
+        Session info with conversation history (both layers)
     """
     global current_session  # noqa: PLW0603
 
@@ -116,35 +119,44 @@ async def switch_to_session(session_id: str) -> dict[str, Any]:
     if current_session:
         disconnect_session()
 
-    # Create new session object with persistent storage
+    # Create new session object with persistent storage and full history
     current_session = TokenAwareSQLiteSession(
         session_id=session_id,
-        db_path="data/chat_history.db",
+        db_path=CHAT_HISTORY_DB_PATH,
         agent=agent_instance,
         model=deployment_name,
         threshold=CONVERSATION_SUMMARIZATION_THRESHOLD,
+        full_history_store=full_history_store,
     )
 
-    # Restore token counts from stored items
+    # Restore token counts from stored items (Layer 1 - LLM context)
     items = await current_session.get_items()
     if items:
         current_session.total_tokens = current_session._calculate_total_tokens(items)
         logger.info(f"Restored session {session_id}: {len(items)} items, {current_session.total_tokens} tokens")
 
+    # Get full history for UI display (Layer 2)
+    full_messages = []
+    message_count = len(items)  # Default to Layer 1 count
+    if full_history_store:
+        full_messages = full_history_store.get_messages(session_id)
+        message_count = len(full_messages)  # Use Layer 2 count for accurate metadata
+        logger.info(f"Loaded {len(full_messages)} messages from full_history for session {session_id}")
+
     # Connect new session to token tracker
     connect_session(current_session)
 
-    # Update metadata
-
+    # Update metadata with accurate message count from full_history
     session_manager.set_current_session(session_id)
-    session_manager.update_session(session_id, last_used=datetime.now().isoformat(), message_count=len(items))
+    session_manager.update_session(session_id, last_used=datetime.now().isoformat(), message_count=message_count)
 
-    # Return session info with history
+    # Return session info with both layers
     return {
         "session": session_meta.model_dump(),
-        "message_count": len(items),
+        "message_count": message_count,
         "tokens": current_session.total_tokens,
-        "messages": items,
+        "messages": items,  # Layer 1: LLM context (trimmed after summarization)
+        "full_history": full_messages,  # Layer 2: Complete history for UI display
     }
 
 
@@ -164,7 +176,10 @@ async def list_all_sessions() -> dict[str, Any]:
 
 
 async def delete_session_by_id(session_id: str) -> dict[str, Any]:
-    """Delete a session.
+    """Delete a session and clean up all persistence layers.
+
+    If deleting the current session, it will be disconnected from token tracking
+    before deletion. The caller should switch to another session afterward.
 
     Args:
         session_id: ID of session to delete
@@ -172,17 +187,43 @@ async def delete_session_by_id(session_id: str) -> dict[str, Any]:
     Returns:
         Success status
     """
-    # Access global variables (read-only)
+    # Access global variables
+    global current_session  # noqa: PLW0603
 
     if not session_manager:
         return _session_error("Session manager not initialized")
 
-    # Don't allow deleting the current session
+    # If deleting current session, disconnect from token tracker
     if current_session and current_session.session_id == session_id:
-        return _session_error("Cannot delete active session")
+        disconnect_session()
+        current_session = None
+        logger.info(f"Disconnected current session before deletion: {session_id}")
 
-    success = session_manager.delete_session(session_id)
-    return {"success": success}
+    # Delete Layer 2 (full history) first
+    layer2_success = True
+    if full_history_store:
+        layer2_success = full_history_store.clear_session(session_id)
+        if layer2_success:
+            logger.info(f"Cleared full_history (Layer 2) for session {session_id}")
+        # Continue with deletion - Layer 2 is best-effort
+
+    # Delete Layer 1 (LLM context) via session abstraction
+    temp_session = TokenAwareSQLiteSession(
+        session_id=session_id, db_path=CHAT_HISTORY_DB_PATH, agent=None, model="gpt-5-mini"
+    )
+    layer1_success = await temp_session.delete_storage()
+    if layer1_success:
+        logger.info(f"Cleared LLM context (Layer 1) for session {session_id}")
+
+    # Delete metadata (sessions.json)
+    metadata_success = session_manager.delete_session(session_id)
+
+    # Return comprehensive status
+    return {
+        "success": metadata_success,  # Overall success based on metadata deletion
+        "layer1_cleaned": layer1_success,
+        "layer2_cleaned": layer2_success,
+    }
 
 
 async def summarize_current_session() -> dict[str, Any]:
@@ -448,9 +489,13 @@ async def main() -> None:
         print("MCP Servers: Sequential Thinking enabled")
 
     # Initialize global state for session management
-    global session_manager, current_session, agent_instance, deployment_name  # noqa: PLW0603
+    global session_manager, current_session, agent_instance, deployment_name, full_history_store  # noqa: PLW0603
     agent_instance = agent
     deployment_name = deployment
+
+    # Initialize full history store for layered persistence
+    full_history_store = FullHistoryStore(db_path=CHAT_HISTORY_DB_PATH)
+    logger.info("Full history store initialized")
 
     # Initialize session manager
     session_manager = SessionManager(metadata_path="data/sessions.json")
@@ -460,13 +505,14 @@ async def main() -> None:
     session_meta = session_manager.create_session()
     logger.info(f"Started new session: {session_meta.session_id} - {session_meta.title}")
 
-    # Create token-aware session with persistent storage
+    # Create token-aware session with persistent storage and full history
     current_session = TokenAwareSQLiteSession(
         session_id=session_meta.session_id,
-        db_path="data/chat_history.db",  # Persistent file-based storage
+        db_path=CHAT_HISTORY_DB_PATH,  # Persistent file-based storage
         agent=agent,
         model=deployment,
         threshold=CONVERSATION_SUMMARIZATION_THRESHOLD,
+        full_history_store=full_history_store,
     )
 
     # Restore token counts from stored items

@@ -9,16 +9,17 @@ import asyncio
 import json
 import uuid
 
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, ClassVar
 
 from agents import Runner, SQLiteSession
 from openai import AsyncOpenAI
 
-from core.constants import KEEP_LAST_N_MESSAGES, MODEL_TOKEN_LIMITS, get_settings
+from core.constants import CHAT_HISTORY_DB_PATH, KEEP_LAST_N_MESSAGES, MODEL_TOKEN_LIMITS, get_settings
 from core.prompts import CONVERSATION_SUMMARIZATION_PROMPT
 from models.event_models import FunctionEventMessage
-from models.session_models import ContentItem
+from models.session_models import ContentItem, FullHistoryProtocol
 from utils.logger import logger
 from utils.token_utils import count_tokens
 
@@ -199,26 +200,29 @@ class TokenAwareSQLiteSession(SQLiteSession):
     def __init__(
         self,
         session_id: str,
-        db_path: str | Path | None = None,
+        db_path: str | Path | None = CHAT_HISTORY_DB_PATH,
         agent: Any = None,
         model: str = "gpt-5-mini",
         threshold: float = 0.8,
+        full_history_store: FullHistoryProtocol | None = None,
     ):
         """Initialize token-aware session built on SQLiteSession.
 
         Args:
             session_id: Unique identifier for the session
-            db_path: Path to SQLite database (None for in-memory)
+            db_path: Path to SQLite database (default from constants, None for in-memory)
             agent: The Agent instance for summarization
             model: Model name for token counting
             threshold: Trigger summarization at this fraction of token limit (0.8 = 80%)
+            full_history_store: Optional FullHistoryStore for Layer 2 complete conversation history
         """
-        # Initialize parent SQLiteSession - use ":memory:" as default instead of None
+        # Initialize parent SQLiteSession - use ":memory:" if explicitly None
         super().__init__(session_id, db_path if db_path is not None else ":memory:")
 
         self.agent = agent
         self.model = model
         self.threshold = threshold
+        self.full_history_store = full_history_store
 
         # Get token limit for model
         self.max_tokens = self._get_model_limit()
@@ -232,11 +236,32 @@ class TokenAwareSQLiteSession(SQLiteSession):
         # Async lock to prevent concurrent summarizations
         self._summarization_lock = asyncio.Lock()
 
+        # Context flag to skip full_history save during summarization repopulation
+        self._skip_full_history = False
+
         logger.info(
             f"TokenAwareSQLiteSession initialized: session_id={session_id}, "
             f"model={model}, max_tokens={self.max_tokens}, "
-            f"trigger_at={self.trigger_tokens}"
+            f"trigger_at={self.trigger_tokens}, "
+            f"full_history_enabled={full_history_store is not None}"
         )
+
+    @contextmanager
+    def _skip_full_history_context(self):
+        """Context manager for safely skipping full history saves during repopulation.
+
+        This ensures the flag is properly reset even if an exception occurs,
+        preventing the flag from getting stuck in the wrong state.
+
+        Yields:
+            None
+        """
+        old_value = self._skip_full_history
+        self._skip_full_history = True
+        try:
+            yield
+        finally:
+            self._skip_full_history = old_value
 
     def _get_model_limit(self) -> int:
         """Get token limit for the current model."""
@@ -307,6 +332,64 @@ class TokenAwareSQLiteSession(SQLiteSession):
             Total token count
         """
         return self._calculate_total_tokens(items)
+
+    async def add_items(self, items: Any) -> None:
+        """Override add_items to save to both Layer 1 (LLM context) and Layer 2 (full history).
+
+        Layer 1 (SQLiteSession): Token-optimized LLM context, may be summarized
+        Layer 2 (FullHistoryStore): Complete user-visible history, never trimmed
+
+        Args:
+            items: List of conversation items to add
+        """
+        # Save to Layer 1 (LLM context) - parent SQLiteSession
+        await super().add_items(items)
+
+        # Save to Layer 2 (full history) - only if not repopulating during summarization
+        # Note: save_message handles its own errors (best-effort Layer 2)
+        if not self._skip_full_history and self.full_history_store:
+            for item in items:
+                self.full_history_store.save_message(self.session_id, item)
+
+    async def delete_storage(self) -> bool:
+        """Delete all Layer 1 (LLM context) storage for this session.
+
+        This method encapsulates the SQL table deletion logic that should not
+        be exposed to higher-level code. Use only when permanently deleting a session.
+
+        Note: This only deletes Layer 1 storage. Layer 2 (full_history_store)
+        should be cleaned separately via full_history_store.clear_session().
+
+        Returns:
+            True if deletion succeeded, False otherwise
+        """
+        try:
+            import sqlite3
+
+            from core.constants import SESSION_TABLE_PREFIX
+            from utils.validation import sanitize_session_id
+
+            # Validate session_id for SQL safety
+            safe_id = sanitize_session_id(self.session_id)
+            table_name = f"{SESSION_TABLE_PREFIX}{safe_id}"
+
+            # Get db_path from parent SQLiteSession
+            db_path = self.db_path if self.db_path != ":memory:" else None
+
+            if not db_path:
+                logger.info(f"Session {self.session_id} uses in-memory storage, nothing to delete")
+                return True
+
+            with sqlite3.connect(db_path) as conn:
+                conn.execute(f"DROP TABLE IF EXISTS {table_name}")
+                conn.commit()
+
+            logger.info(f"Deleted Layer 1 storage for session {self.session_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to delete Layer 1 storage for session {self.session_id}: {e}", exc_info=True)
+            return False
 
     def _collect_recent_exchanges(self, items: list[dict[str, Any]], keep_recent: int) -> list[dict[str, Any]]:
         """Collect the most recent complete user-assistant exchanges.
@@ -586,42 +669,46 @@ class TokenAwareSQLiteSession(SQLiteSession):
         # Clear session and add summary + recent messages
         await self.clear_session()
 
-        # Add summary as a system message
-        await self.add_items([{"role": "system", "content": f"Previous conversation summary:\n{summary_text}"}])
+        # Use context manager to safely skip full_history saves during repopulation
+        with self._skip_full_history_context():
+            # Add summary as a system message
+            await self.add_items([{"role": "system", "content": f"Previous conversation summary:\n{summary_text}"}])
 
-        # Re-add recent messages without IDs to break reasoning references
-        # CRITICAL: The SDK maintains message->reasoning links via IDs in its SQLite database.
-        # When we try to keep messages without their associated reasoning items, the API rejects
-        # requests with "required reasoning item" errors. By removing IDs, we force the SDK to
-        # create fresh items without any internal references to reasoning items.
-        # See: Manual summarization bug fix (2025-10-11)
-        if recent_items:
-            cleaned_items = []
-            for item in recent_items:
-                role = item.get("role")
-                content = item.get("content")
+            # Re-add recent messages without IDs to break reasoning references
+            # CRITICAL: The SDK maintains message->reasoning links via IDs in its SQLite database.
+            # When we try to keep messages without their associated reasoning items, the API rejects
+            # requests with "required reasoning item" errors. By removing IDs, we force the SDK to
+            # create fresh items without any internal references to reasoning items.
+            # See: Manual summarization bug fix (2025-10-11)
+            if recent_items:
+                cleaned_items = []
+                for item in recent_items:
+                    role = item.get("role")
+                    content = item.get("content")
 
-                # Defensive: Skip items with missing essential fields
-                if not role or not content:
-                    logger.warning(
-                        f"Skipping invalid item during summarization: role={role}, has_content={bool(content)}"
-                    )
-                    continue
+                    # Defensive: Skip items with missing essential fields
+                    if not role or not content:
+                        logger.warning(
+                            f"Skipping invalid item during summarization: role={role}, has_content={bool(content)}"
+                        )
+                        continue
 
-                # Create new dict with only essential fields (no id, status, type)
-                cleaned_item = {
-                    "role": role,
-                    "content": content,
-                }
-                cleaned_items.append(cleaned_item)
+                    # Create new dict with only essential fields (no id, status, type)
+                    cleaned_item = {
+                        "role": role,
+                        "content": content,
+                    }
+                    cleaned_items.append(cleaned_item)
 
-            # Defensive: Ensure we have items to add
-            if not cleaned_items:
-                logger.error("No valid items to re-add after cleaning - session may be corrupted")
-                raise ValueError("All recent items were invalid after cleaning")
+                # Defensive: Ensure we have items to add
+                if not cleaned_items:
+                    logger.error("No valid items to re-add after cleaning - session may be corrupted")
+                    raise ValueError("All recent items were invalid after cleaning")
 
-            logger.info(f"Re-adding {len(cleaned_items)} items without IDs to break reasoning references")
-            await self.add_items(cleaned_items)  # type: ignore[arg-type]
+                logger.info(f"Re-adding {len(cleaned_items)} items without IDs to break reasoning references")
+                await self.add_items(cleaned_items)
+
+        # Context manager automatically re-enables dual-save for future messages
 
         # Update token count
         old_tokens = self.total_tokens
