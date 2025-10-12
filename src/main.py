@@ -228,6 +228,15 @@ async def handle_session_command(command: str, data: dict[str, Any]) -> dict[str
     """
     result: dict[str, Any]
 
+    # Command dispatch registry mapping command types to handlers
+    command_handlers: dict[type, Any] = {
+        CreateSessionCommand: lambda cmd: create_new_session(cmd.title),
+        SwitchSessionCommand: lambda cmd: switch_to_session(cmd.session_id),
+        ListSessionsCommand: lambda _: list_all_sessions(),
+        DeleteSessionCommand: lambda cmd: delete_session_by_id(cmd.session_id),
+        SummarizeSessionCommand: lambda _: summarize_current_session(),
+    }
+
     try:
         # Add command type to data if not present
         if "command" not in data:
@@ -236,17 +245,10 @@ async def handle_session_command(command: str, data: dict[str, Any]) -> dict[str
         # Parse and validate command using Pydantic
         cmd = parse_session_command(data)
 
-        # Type-safe dispatch based on command type
-        if isinstance(cmd, CreateSessionCommand):
-            result = await create_new_session(cmd.title)
-        elif isinstance(cmd, SwitchSessionCommand):
-            result = await switch_to_session(cmd.session_id)
-        elif isinstance(cmd, ListSessionsCommand):
-            result = await list_all_sessions()
-        elif isinstance(cmd, DeleteSessionCommand):
-            result = await delete_session_by_id(cmd.session_id)
-        elif isinstance(cmd, SummarizeSessionCommand):
-            result = await summarize_current_session()
+        # Get handler from registry
+        handler = command_handlers.get(type(cmd))
+        if handler:
+            result = await handler(cmd)
         else:
             result = _session_error(f"Unknown command type: {type(cmd)}")
 
