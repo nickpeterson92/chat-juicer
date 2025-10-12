@@ -57,8 +57,10 @@ make health             # Check system configuration
 - 🖥️ **Desktop Application**: Production-grade Electron app with health monitoring and auto-recovery
 - 🤖 **Agent/Runner Pattern**: Native OpenAI Agents SDK with automatic tool orchestration
 - 🧠 **Sequential Thinking**: MCP server for advanced multi-step reasoning and problem decomposition
-- 💾 **Smart Session Management**: TokenAwareSQLiteSession with auto-summarization at 20% threshold
-- 🔄 **Streaming Responses**: Real-time AI response streaming with structured event handling
+- 💾 **Two-Layer Session Persistence**: Layered architecture separating LLM context from UI display
+- 🔄 **Multi-Session Support**: Create, switch, and manage multiple conversation sessions
+- 📊 **Smart Session Management**: TokenAwareSQLiteSession with auto-summarization at 20% threshold
+- ⚡ **Streaming Responses**: Real-time AI response streaming with structured event handling
 - 🛠️ **Function Calling**: Async native tools and MCP server integration
 - 📝 **Structured Logging**: Enterprise-grade JSON logging with rotation and session correlation
 - 🔐 **Azure OpenAI Integration**: Secure connection to Azure OpenAI services
@@ -71,9 +73,11 @@ make health             # Check system configuration
 
 ## Architecture
 
-Chat Juicer uses OpenAI's **Agent/Runner pattern** which provides:
+Chat Juicer uses OpenAI's **Agent/Runner pattern** with a **two-layer persistence architecture**:
 - **Native MCP Server Integration**: Direct support for Model Context Protocol servers
 - **Automatic Tool Orchestration**: Framework handles function calling automatically
+- **Layered Persistence**: Separates LLM context (Layer 1) from UI display (Layer 2)
+- **Multi-Session Management**: Create, switch, and manage multiple conversation sessions
 - **Token-Aware Sessions**: SQLite-based session management with automatic summarization
 - **Full Async Architecture**: Consistent async/await for Agent/Runner, MCP servers, and all functions
 - **Streaming Events**: Structured event handling for real-time responses
@@ -83,7 +87,9 @@ Chat Juicer uses OpenAI's **Agent/Runner pattern** which provides:
 ### Key Architectural Components:
 - **Backend**: Python with async functions, Pydantic models, type safety (mypy strict=true)
 - **Frontend**: Electron with memory-bounded state management and health monitoring
+- **Persistence**: Two-layer SQLite architecture (LLM context + UI display)
 - **Session**: TokenAwareSQLiteSession with 20% threshold auto-summarization
+- **Session Manager**: Multi-session lifecycle management with metadata persistence
 - **Logging**: Enterprise JSON logging with rotation and session correlation
 - **Type System**: Protocols for SDK integration, Pydantic for validation, TypedDict for data
 
@@ -262,6 +268,19 @@ make logs-errors        # Show error logs (tail -f, requires jq)
 make logs-all           # Show recent logs from both files
 ```
 
+#### Database Exploration
+
+```bash
+make db-explore         # Show database exploration help
+make db-sessions        # List all sessions in database
+make db-compare         # Compare Layer 1 vs Layer 2 for current session
+make db-layer1          # Show Layer 1 (LLM context) for current session
+make db-layer2          # Show Layer 2 (UI display) for current session
+make db-tools           # Show all tool calls for current session
+make db-types           # Show SDK item type distribution
+make db-shell           # Start interactive SQLite shell
+```
+
 #### Maintenance
 
 ```bash
@@ -334,12 +353,18 @@ chat-juicer/
 ├── sources/          # Source documents for processing
 ├── output/           # Generated documentation output
 ├── templates/        # Document templates with {{placeholders}}
+├── data/             # Persistent data storage
+│   ├── chat_history.db       # SQLite database (Layer 1 & Layer 2)
+│   └── sessions.json         # Session metadata (title, timestamps, counts)
 ├── logs/             # Log files (gitignored)
 │   ├── conversations.jsonl  # Structured conversation logs with token metadata
 │   └── errors.jsonl  # Error and debugging logs
+├── scripts/          # Utility scripts
+│   └── explore-db.sh         # Database exploration tool
 └── docs/             # Documentation
-    ├── agent-runner-migration-analysis.md  # Migration documentation
-    └── token-streaming-implementation.md   # Token streaming details
+    ├── agent-runner-migration-analysis.md    # Migration documentation
+    ├── token-streaming-implementation.md     # Token streaming details
+    └── layered-persistence-architecture.md   # Persistence architecture guide
 ```
 
 ## Key Components
@@ -348,7 +373,9 @@ chat-juicer/
 
 **Core Business Logic** (`core/`)
 - **agent.py**: Agent/Runner implementation with MCP server integration and streaming event handling
-- **session.py**: TokenAwareSQLiteSession class with automatic summarization at 20% token threshold
+- **session.py**: TokenAwareSQLiteSession with automatic summarization and layered persistence (Layer 1)
+- **full_history.py**: FullHistoryStore for complete UI-facing conversation history (Layer 2)
+- **session_manager.py**: Session lifecycle management with metadata persistence (sessions.json)
 - **constants.py**: Centralized configuration with Pydantic Settings validation
 
 **Data Models** (`models/`)
@@ -544,15 +571,106 @@ make health             # Verify all dependencies and config
 
 ## Features in Detail
 
-### Session Management & Summarization
-The application features advanced session management:
-- **TokenAwareSQLiteSession**: Extends SDK's SQLiteSession with automatic summarization
-- **Smart Triggers**: Summarizes at 20% of model's token limit (configurable via CONVERSATION_SUMMARIZATION_THRESHOLD)
+### Session Management & Persistence
+
+The application features advanced session management with **two-layer persistence architecture**:
+
+#### Layered Persistence Architecture
+
+**Layer 1 (LLM Context - SQLiteSession)**
+- Complete SDK state including tool calls, reasoning items, and internal structures
+- Optimized for Agent/Runner framework consumption
+- Stored in `data/chat_history.db` (agent_messages table)
+- May be summarized when token limit approaches
+- Essential for maintaining proper model context with all execution details
+
+**Layer 2 (UI Display - FullHistoryStore)**
+- User-facing conversation history (user/assistant/system messages only)
+- Filtered to exclude SDK internal items (tool_call_item, reasoning_item, etc.)
+- Stored in session-specific tables (full_history_chat_[SESSION_ID])
+- Never summarized - complete conversation history preserved
+- Optimized for UI rendering and session switching
+
+#### Session Features
+
+- **Multi-Session Support**: Create, switch, and manage multiple conversation sessions
+- **Persistent Storage**: Both layers survive application restarts
+- **Token-Aware Summarization**: Automatically summarizes Layer 1 at 20% of model limit
 - **Model-Aware Limits**: GPT-5 (272k), GPT-4o (128k), GPT-4 (128k), GPT-3.5-turbo (15.3k)
-- **Context Preservation**: Keeps last 2 user messages unsummarized
-- **Seamless Experience**: Transparent summarization without user interruption
-- **Tool Token Tracking**: Accumulates tokens from tool calls separately
-- **In-Memory Database**: Fast session storage during app lifetime
+- **Context Preservation**: Keeps last 2 user-assistant exchanges unsummarized
+- **Seamless Switching**: Fast session switching with reduced payload size
+- **Tool Token Tracking**: Accumulates tokens from all tool calls (native, MCP, agents)
+
+#### Session Commands
+
+The application includes IPC-based session management:
+- **Create**: Start new conversation sessions with automatic titles
+- **Switch**: Change active session and restore full conversation history
+- **List**: View all available sessions with metadata
+- **Delete**: Remove sessions and clean up both persistence layers
+- **Summarize**: Manually trigger conversation summarization
+
+#### Database Exploration
+
+Explore your session data with the built-in database tools:
+```bash
+make db-compare         # Compare Layer 1 vs Layer 2 item counts
+make db-layer1          # View complete LLM context (includes SDK internals)
+make db-layer2          # View user-facing conversation history
+make db-tools           # Inspect all tool calls in session
+make db-types           # Analyze SDK item type distribution
+```
+
+The layered architecture ensures:
+- ✅ Model has complete context including tool execution details
+- ✅ UI displays clean, user-focused conversation history
+- ✅ Session switching remains fast without buffer overflow
+- ✅ Conversation history preserved even after summarization
+
+#### Database Schema
+
+**Layer 1 Tables (SDK Managed)**
+```sql
+-- Session metadata
+agent_sessions (session_id TEXT PRIMARY KEY, created_at TIMESTAMP)
+
+-- All SDK items (JSON blob with role, type, content, etc.)
+agent_messages (
+    id INTEGER PRIMARY KEY,
+    session_id TEXT,
+    message_data TEXT,  -- JSON: {role, type, content, tool_calls, reasoning, etc.}
+    created_at TIMESTAMP
+)
+```
+
+**Layer 2 Tables (Application Managed)**
+```sql
+-- One table per session: full_history_chat_[SESSION_ID]
+CREATE TABLE full_history_chat_[SESSION_ID] (
+    id INTEGER PRIMARY KEY,
+    role TEXT NOT NULL,        -- user, assistant, system, tool
+    content TEXT NOT NULL,     -- Clean message content
+    metadata TEXT,             -- Optional JSON metadata
+    created_at TIMESTAMP
+)
+```
+
+**Metadata File**
+```json
+// data/sessions.json
+{
+  "current_session_id": "chat_abc123",
+  "sessions": {
+    "chat_abc123": {
+      "session_id": "chat_abc123",
+      "title": "Conversation 2025-10-12 07:32 AM",
+      "created_at": "2025-10-12T07:32:51.738400",
+      "last_used": "2025-10-12T07:41:08.806529",
+      "message_count": 24
+    }
+  }
+}
+```
 
 ### Rate Limiting & Error Handling
 The application includes robust error handling:
