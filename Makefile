@@ -1,4 +1,4 @@
-.PHONY: help setup install install-node install-python install-mcp install-dev run dev clean test lint format typecheck precommit precommit-install quality validate docs docs-clean docs-serve logs health
+.PHONY: help setup install install-node install-python install-mcp install-dev run dev clean test lint format typecheck precommit precommit-install quality validate docs docs-clean docs-serve logs logs-errors logs-all db-explore db-sessions db-compare db-layer1 db-layer2 db-tools db-types db-shell health status backend-only clean-venv clean-all reset
 
 # Default target
 .DEFAULT_GOAL := help
@@ -172,6 +172,32 @@ logs-all: ## Show all recent logs
 	@tail -20 logs/conversations.jsonl 2>/dev/null || echo "No conversation logs yet"
 	@echo "\n$(BLUE)Recent error logs:$(NC)"
 	@tail -20 logs/errors.jsonl 2>/dev/null || echo "No error logs yet"
+
+##@ Database Exploration
+
+db-explore: ## Explore SQLite database (shows help)
+	@./scripts/explore-db.sh
+
+db-sessions: ## List all sessions in database
+	@./scripts/explore-db.sh sessions
+
+db-compare: ## Compare Layer 1 vs Layer 2 for current session
+	@./scripts/explore-db.sh compare
+
+db-layer1: ## Show Layer 1 (LLM context) for current session
+	@./scripts/explore-db.sh layer1
+
+db-layer2: ## Show Layer 2 (UI display) for current session
+	@./scripts/explore-db.sh layer2
+
+db-tools: ## Show all tool calls for current session
+	@./scripts/explore-db.sh tools
+
+db-types: ## Show SDK item type distribution
+	@./scripts/explore-db.sh types
+
+db-shell: ## Start interactive SQLite shell
+	@./scripts/explore-db.sh interactive
 
 ##@ Maintenance
 

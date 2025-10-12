@@ -162,12 +162,13 @@ async def switch_to_session(session_id: str) -> dict[str, Any]:
         session_id, last_used=datetime.now().isoformat(), message_count=message_count
     )
 
-    # Return session info with both layers
+    # Return session info (only include full_history for UI, not raw messages)
+    # Frontend only needs Layer 2 (full_history) for display
+    # Layer 1 (messages) includes SDK internals and can be huge (causing pipe buffer overflow)
     return {
         "session": session_meta.model_dump(),
         "message_count": message_count,
         "tokens": _app_state.current_session.total_tokens,
-        "messages": items,  # Layer 1: LLM context (trimmed after summarization)
         "full_history": full_messages,  # Layer 2: Complete history for UI display
     }
 

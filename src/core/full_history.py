@@ -96,10 +96,14 @@ class FullHistoryStore:
             role = message.get("role", "")
             content = message.get("content", "")
 
-            # Skip invalid messages
+            # Skip invalid messages (SDK internal items filtered at add_items level)
             if not role or not content:
-                logger.warning(
-                    f"Skipping invalid message for session {session_id}: role={role}, has_content={bool(content)}"
+                # This should rarely happen now that we filter at add_items()
+                # Log at debug level since it's expected for SDK internal structures
+                item_type = message.get("type", "unknown")
+                logger.debug(
+                    f"Skipping non-chat message for session {session_id}: "
+                    f"role={role}, has_content={bool(content)}, type={item_type}"
                 )
                 return False
 

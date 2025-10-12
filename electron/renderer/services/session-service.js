@@ -105,9 +105,9 @@ export async function switchSession(api, elements, appState, sessionId) {
       appState.functions.activeCalls.clear();
       appState.functions.argumentsBuffer.clear();
 
-      // Display historical messages
-      // Prefer full_history (Layer 2 - complete history) over messages (Layer 1 - may be summarized when token limit reached)
-      const messagesToDisplay = response.full_history || response.messages || [];
+      // Display historical messages from Layer 2 (full_history)
+      // Backend now only sends full_history to avoid pipe buffer overflow
+      const messagesToDisplay = response.full_history || [];
 
       if (Array.isArray(messagesToDisplay) && messagesToDisplay.length > 0) {
         for (const msg of messagesToDisplay) {

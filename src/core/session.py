@@ -348,9 +348,13 @@ class TokenAwareSQLiteSession(SQLiteSession):
 
         # Save to Layer 2 (full history) - only if not repopulating during summarization
         # Note: save_message handles its own errors (best-effort Layer 2)
+        # Filter out SDK internal items (tool_call_item, reasoning_item, etc.) - only save chat messages
         if not self._skip_full_history and self.full_history_store:
             for item in items:
-                self.full_history_store.save_message(self.session_id, item)
+                # Only save items with a 'role' field (user/assistant/system/tool messages)
+                # Skip SDK internal items with 'type' field (tool_call_item, reasoning_item, etc.)
+                if item.get("role"):
+                    self.full_history_store.save_message(self.session_id, item)
 
     async def delete_storage(self) -> bool:
         """Delete all Layer 1 (LLM context) storage for this session.
