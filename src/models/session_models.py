@@ -65,6 +65,7 @@ class SessionMetadata(BaseModel):
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     last_used: str = Field(default_factory=lambda: datetime.now().isoformat())
     message_count: int = Field(default=0, ge=0, description="Non-negative message count")
+    accumulated_tool_tokens: int = Field(default=0, ge=0, description="Accumulated tool tokens for this session")
 
     @field_validator("session_id")
     @classmethod
@@ -89,7 +90,7 @@ class SessionMetadata(BaseModel):
         json_str: str = self.model_dump_json(exclude_none=True, indent=indent)
         return json_str
 
-    model_config = {"frozen": False}  # Allow updates via SessionManager
+    model_config = {"frozen": False}  # Allow updates via SessionManager  # Allow updates via SessionManager
 
 
 # Session Command Models

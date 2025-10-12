@@ -140,9 +140,13 @@ async def switch_to_session(session_id: str) -> dict[str, Any]:
     # Restore token counts from stored items (Layer 1 - LLM context)
     items = await _app_state.current_session.get_items()
     if items:
-        _app_state.current_session.total_tokens = _app_state.current_session._calculate_total_tokens(items)
+        items_tokens = _app_state.current_session._calculate_total_tokens(items)
+        # Restore accumulated tool tokens from session metadata
+        _app_state.current_session.accumulated_tool_tokens = session_meta.accumulated_tool_tokens
+        _app_state.current_session.total_tokens = items_tokens + session_meta.accumulated_tool_tokens
         logger.info(
-            f"Restored session {session_id}: {len(items)} items, {_app_state.current_session.total_tokens} tokens"
+            f"Restored session {session_id}: {len(items)} items, {items_tokens} conversation tokens, "
+            f"{session_meta.accumulated_tool_tokens} tool tokens, {_app_state.current_session.total_tokens} total tokens"
         )
 
     # Get full history for UI display (Layer 2)
@@ -159,7 +163,10 @@ async def switch_to_session(session_id: str) -> dict[str, Any]:
     # Update metadata with accurate message count from full_history
     _app_state.session_manager.set_current_session(session_id)
     _app_state.session_manager.update_session(
-        session_id, last_used=datetime.now().isoformat(), message_count=message_count
+        session_id,
+        last_used=datetime.now().isoformat(),
+        message_count=message_count,
+        accumulated_tool_tokens=_app_state.current_session.accumulated_tool_tokens,
     )
 
     # Return session info (only include full_history for UI, not raw messages)
@@ -588,6 +595,7 @@ async def main() -> None:
                     _app_state.current_session.session_id,
                     last_used=datetime.now().isoformat(),
                     message_count=len(items),
+                    accumulated_tool_tokens=_app_state.current_session.accumulated_tool_tokens,
                 )
 
         except KeyboardInterrupt:

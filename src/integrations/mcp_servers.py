@@ -34,4 +34,18 @@ async def setup_mcp_servers() -> list[Any]:
     except Exception as e:
         logger.warning(f"Sequential Thinking server not available: {e}")
 
+    # Fetch Server - HTTP/web content retrieval (Python-based)
+    try:
+        fetch_server = MCPServerStdio(
+            params={
+                "command": ".juicer/bin/python3",
+                "args": ["-m", "mcp_server_fetch"],
+            }
+        )
+        await fetch_server.__aenter__()  # type: ignore[no-untyped-call]
+        servers.append(fetch_server)
+        logger.info("Fetch MCP server initialized")
+    except Exception as e:
+        logger.warning(f"Fetch server not available: {e}")
+
     return servers

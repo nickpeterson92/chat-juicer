@@ -147,6 +147,7 @@ class SessionManager:
         title: str | None = None,
         last_used: str | None = None,
         message_count: int | None = None,
+        accumulated_tool_tokens: int | None = None,
     ) -> bool:
         """Update session metadata.
 
@@ -155,6 +156,7 @@ class SessionManager:
             title: New title (optional)
             last_used: New last_used timestamp (optional)
             message_count: New message count (optional)
+            accumulated_tool_tokens: Accumulated tool tokens (optional)
 
         Returns:
             True if updated, False if not found
@@ -170,6 +172,8 @@ class SessionManager:
             session.last_used = last_used
         if message_count is not None:
             session.message_count = message_count
+        if accumulated_tool_tokens is not None:
+            session.accumulated_tool_tokens = accumulated_tool_tokens
 
         self._save_metadata()
         return True

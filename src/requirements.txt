@@ -25,3 +25,6 @@ aiofiles>=23.0.0  # Async file operations for non-blocking I/O
 # Data Validation (REQUIRED for runtime type safety)
 pydantic>=2.5.0  # Runtime data validation with type hints
 pydantic-settings>=2.0.0  # Settings management with environment variables
+
+# MCP Servers (REQUIRED for web fetching capabilities)
+mcp-server-fetch>=2025.4.0  # MCP server for HTTP/web content retrieval
