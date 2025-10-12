@@ -18,6 +18,7 @@ import {
   deleteSession,
   loadSessions,
   sessionState,
+  summarizeCurrentSession,
   switchSession,
 } from "./services/session-service.js";
 import { addMessage } from "./ui/chat-ui.js";
@@ -46,6 +47,7 @@ function initializeElements() {
   elements.themeText = document.getElementById("theme-text");
   elements.sessionSelector = document.getElementById("session-selector");
   elements.newSessionBtn = document.getElementById("new-session-btn");
+  elements.summarizeSessionBtn = document.getElementById("summarize-session-btn");
   elements.deleteSessionBtn = document.getElementById("delete-session-btn");
 
   // Make elements globally available for state.handleConnectionChange
@@ -350,6 +352,24 @@ async function handleDeleteSession() {
   }
 }
 
+async function handleSummarizeSession() {
+  if (!elements.summarizeSessionBtn) return;
+
+  // Disable button during operation
+  elements.summarizeSessionBtn.disabled = true;
+
+  try {
+    const _result = await summarizeCurrentSession(window.electronAPI, elements);
+    // Result messages are already handled by the service function
+  } catch (error) {
+    window.electronAPI.log("error", "Unexpected error during summarization", { error: error.message });
+    addMessage(elements.chatContainer, "An unexpected error occurred.", "error");
+  } finally {
+    // Re-enable button after operation completes
+    elements.summarizeSessionBtn.disabled = false;
+  }
+}
+
 // ====================
 // Theme Management
 // ====================
@@ -445,6 +465,10 @@ function initializeEventListeners() {
 
   if (elements.newSessionBtn) {
     addManagedEventListener(elements.newSessionBtn, "click", handleCreateNewSession);
+  }
+
+  if (elements.summarizeSessionBtn) {
+    addManagedEventListener(elements.summarizeSessionBtn, "click", handleSummarizeSession);
   }
 
   if (elements.deleteSessionBtn) {

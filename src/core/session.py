@@ -352,8 +352,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
         recent_exchanges = exchanges[-keep_recent:] if exchanges else []
         logger.info(f"Found {len(exchanges)} total exchanges, keeping last {len(recent_exchanges)}")
 
-        # Only include the user and assistant messages, not tool calls/results
-        # This prevents massive tool chains from being considered "recent"
+        # Only include user and assistant messages (exclude reasoning/tool items)
         result = [
             items[i]
             for start_idx, end_idx in recent_exchanges
@@ -378,12 +377,13 @@ class TokenAwareSQLiteSession(SQLiteSession):
             )
         return should_trigger
 
-    async def summarize_with_agent(self, keep_recent: int = KEEP_LAST_N_MESSAGES) -> str:
+    async def summarize_with_agent(self, keep_recent: int = KEEP_LAST_N_MESSAGES, force: bool = False) -> str:
         """Summarize conversation using the agent and update session.
 
         Args:
             keep_recent: Number of recent USER messages to keep unsummarized
                 (default from KEEP_LAST_N_MESSAGES constant)
+            force: If True, bypass threshold check for manual summarization
 
         Returns:
             The summary text
@@ -398,22 +398,26 @@ class TokenAwareSQLiteSession(SQLiteSession):
 
         async with self._summarization_lock:
             # Perform all validation checks
-            summary_text = await self._perform_summarization(keep_recent)
+            summary_text = await self._perform_summarization(keep_recent, force)
             return summary_text
 
-    async def _perform_summarization(self, keep_recent: int) -> str:
+    async def _perform_summarization(self, keep_recent: int, force: bool = False) -> str:
         """Internal method to perform summarization with reduced complexity.
 
         Args:
             keep_recent: Number of recent USER messages to keep unsummarized
+            force: If True, bypass threshold check for manual summarization
 
         Returns:
             The summary text or empty string if summarization not needed/failed
         """
-        # Re-check tokens in case another summarization just finished
-        if self.total_tokens <= self.trigger_tokens:
+        # Re-check tokens in case another summarization just finished (unless forced)
+        if not force and self.total_tokens <= self.trigger_tokens:
             logger.info("Token count now below threshold after lock acquisition, skipping")
             return ""
+
+        if force:
+            logger.info(f"Manual summarization forced (current: {self.total_tokens}/{self.trigger_tokens} tokens)")
 
         items = await self.get_items()
 
@@ -585,9 +589,39 @@ class TokenAwareSQLiteSession(SQLiteSession):
         # Add summary as a system message
         await self.add_items([{"role": "system", "content": f"Previous conversation summary:\n{summary_text}"}])
 
-        # Re-add recent messages (now guaranteed to have complete tool chains)
+        # Re-add recent messages without IDs to break reasoning references
+        # CRITICAL: The SDK maintains message->reasoning links via IDs in its SQLite database.
+        # When we try to keep messages without their associated reasoning items, the API rejects
+        # requests with "required reasoning item" errors. By removing IDs, we force the SDK to
+        # create fresh items without any internal references to reasoning items.
+        # See: Manual summarization bug fix (2025-10-11)
         if recent_items:
-            await self.add_items(recent_items)
+            cleaned_items = []
+            for item in recent_items:
+                role = item.get("role")
+                content = item.get("content")
+
+                # Defensive: Skip items with missing essential fields
+                if not role or not content:
+                    logger.warning(
+                        f"Skipping invalid item during summarization: role={role}, has_content={bool(content)}"
+                    )
+                    continue
+
+                # Create new dict with only essential fields (no id, status, type)
+                cleaned_item = {
+                    "role": role,
+                    "content": content,
+                }
+                cleaned_items.append(cleaned_item)
+
+            # Defensive: Ensure we have items to add
+            if not cleaned_items:
+                logger.error("No valid items to re-add after cleaning - session may be corrupted")
+                raise ValueError("All recent items were invalid after cleaning")
+
+            logger.info(f"Re-adding {len(cleaned_items)} items without IDs to break reasoning references")
+            await self.add_items(cleaned_items)  # type: ignore[arg-type]
 
         # Update token count
         old_tokens = self.total_tokens

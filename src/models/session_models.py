@@ -112,8 +112,21 @@ class ListSessionsCommand(BaseModel):
         return json_str
 
 
+class SummarizeSessionCommand(BaseModel):
+    """Command to manually trigger session summarization."""
+
+    command: Literal["summarize"] = "summarize"
+
+    def to_json(self) -> str:
+        """Convert to JSON for IPC."""
+        json_str: str = self.model_dump_json(exclude_none=True)
+        return json_str
+
+
 # Union type for all session commands
-SessionCommand = CreateSessionCommand | SwitchSessionCommand | DeleteSessionCommand | ListSessionsCommand
+SessionCommand = (
+    CreateSessionCommand | SwitchSessionCommand | DeleteSessionCommand | ListSessionsCommand | SummarizeSessionCommand
+)
 
 
 def parse_session_command(data: dict[str, Any]) -> SessionCommand:
@@ -138,6 +151,8 @@ def parse_session_command(data: dict[str, Any]) -> SessionCommand:
         return DeleteSessionCommand.model_validate(data)
     elif command_type == "list":
         return ListSessionsCommand.model_validate(data)
+    elif command_type == "summarize":
+        return SummarizeSessionCommand.model_validate(data)
     else:
         raise ValueError(f"Unknown command type: {command_type}")
 
@@ -207,6 +222,7 @@ __all__ = [
     "RefusalContent",
     "SessionCommand",
     "SessionMetadata",
+    "SummarizeSessionCommand",
     "SwitchSessionCommand",
     "TextContent",
     "parse_session_command",

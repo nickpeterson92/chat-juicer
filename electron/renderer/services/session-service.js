@@ -188,3 +188,30 @@ export async function deleteSession(api, elements, sessionId) {
     return { success: false, error: e.message };
   }
 }
+
+/**
+ * Manually trigger conversation summarization
+ * @param {Object} api - Electron API
+ * @param {Object} elements - DOM elements
+ * @returns {Promise<Object>} Result with success/error
+ */
+export async function summarizeCurrentSession(api, elements) {
+  try {
+    const response = await api.sessionCommand("summarize", {});
+
+    if (response?.success) {
+      addMessage(elements.chatContainer, response.message || "Conversation summarized successfully", "system");
+      window.electronAPI.log("info", "Session summarized", response);
+      return { success: true, data: response };
+    } else if (response?.error) {
+      addMessage(elements.chatContainer, response.error, "error");
+      return { success: false, error: response.error };
+    } else {
+      return { success: false, error: "Unexpected response format" };
+    }
+  } catch (e) {
+    window.electronAPI.log("error", "Failed to summarize session", { error: e.message });
+    addMessage(elements.chatContainer, "Failed to summarize conversation.", "error");
+    return { success: false, error: e.message };
+  }
+}

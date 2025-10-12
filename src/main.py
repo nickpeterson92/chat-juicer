@@ -43,6 +43,7 @@ from models.session_models import (
     CreateSessionCommand,
     DeleteSessionCommand,
     ListSessionsCommand,
+    SummarizeSessionCommand,
     SwitchSessionCommand,
     parse_session_command,
 )
@@ -184,6 +185,37 @@ async def delete_session_by_id(session_id: str) -> dict[str, Any]:
     return {"success": success}
 
 
+async def summarize_current_session() -> dict[str, Any]:
+    """Manually trigger summarization for current session.
+
+    Returns:
+        Success status with summary info
+    """
+    # Access global variables (read-only)
+
+    if not current_session:
+        return _session_error("No active session")
+
+    if not current_session.agent:
+        return _session_error("Agent not available for summarization")
+
+    items = await current_session.get_items()
+    if len(items) < 3:
+        return _session_error("Not enough messages to summarize (need at least 3)")
+
+    # Trigger manual summarization with force=True to bypass threshold check
+    summary = await current_session.summarize_with_agent(force=True)
+
+    if summary:
+        return {
+            "success": True,
+            "message": "Conversation summarized successfully",
+            "tokens": current_session.total_tokens,
+        }
+    else:
+        return _session_error("Summarization failed or not needed")
+
+
 async def handle_session_command(command: str, data: dict[str, Any]) -> dict[str, Any]:
     """Handle session management commands from IPC with Pydantic validation.
 
@@ -213,6 +245,8 @@ async def handle_session_command(command: str, data: dict[str, Any]) -> dict[str
             result = await list_all_sessions()
         elif isinstance(cmd, DeleteSessionCommand):
             result = await delete_session_by_id(cmd.session_id)
+        elif isinstance(cmd, SummarizeSessionCommand):
+            result = await summarize_current_session()
         else:
             result = _session_error(f"Unknown command type: {type(cmd)}")
 

@@ -193,11 +193,13 @@ app.whenReady().then(() => {
       logger.debug("Sent session command to Python", { command, dataJson });
 
       // Wait for response (with timeout)
+      // Summarization needs longer timeout since it calls LLM (network delays, large conversations)
+      const timeoutMs = command === "summarize" ? 30000 : 5000;
       return new Promise((resolve) => {
         const timeout = setTimeout(() => {
           logger.warn("Session command timed out", { command });
           resolve({ error: "Command timed out" });
-        }, 5000);
+        }, timeoutMs);
 
         // Listen for response from Python
         const responseHandler = (data) => {
