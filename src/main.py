@@ -17,6 +17,7 @@ if sys.stdout.encoding != "utf-8":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8", errors="replace")
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -53,12 +54,23 @@ from tools import AGENT_TOOLS
 from utils.ipc import IPCManager
 from utils.logger import logger
 
-# Global session manager and current session
-session_manager: SessionManager | None = None
-current_session: TokenAwareSQLiteSession | None = None
-agent_instance: Any | None = None
-deployment_name: str = ""
-full_history_store: Any | None = None  # Layered persistence for complete conversation history
+
+@dataclass
+class AppState:
+    """Application state container - single source of truth for app-wide state.
+
+    Replaces module-level globals with explicit state management.
+    """
+
+    session_manager: SessionManager | None = None
+    current_session: TokenAwareSQLiteSession | None = None
+    agent: Any | None = None
+    deployment: str = ""
+    full_history_store: FullHistoryStore | None = None
+
+
+# Module-level application state instance
+_app_state = AppState()
 
 
 def _session_error(message: str) -> dict[str, str]:
@@ -82,13 +94,11 @@ async def create_new_session(title: str | None = None) -> dict[str, Any]:
     Returns:
         Session metadata dictionary
     """
-    # Access global variables (read session_manager, write via switch_to_session)
-
-    if not session_manager:
+    if not _app_state.session_manager:
         return _session_error("Session manager not initialized")
 
     # Create new session metadata (title defaults to datetime in create_session)
-    session_meta = session_manager.create_session(title)
+    session_meta = _app_state.session_manager.create_session(title)
 
     # Switch to the new session
     await switch_to_session(session_meta.session_id)
@@ -106,55 +116,57 @@ async def switch_to_session(session_id: str) -> dict[str, Any]:
     Returns:
         Session info with conversation history (both layers)
     """
-    global current_session  # noqa: PLW0603
-
-    if not session_manager:
+    if not _app_state.session_manager:
         return _session_error("Session manager not initialized")
 
-    session_meta = session_manager.get_session(session_id)
+    session_meta = _app_state.session_manager.get_session(session_id)
     if not session_meta:
         return _session_error(f"Session {session_id} not found")
 
     # Disconnect old session from token tracker
-    if current_session:
+    if _app_state.current_session:
         disconnect_session()
 
     # Create new session object with persistent storage and full history
-    current_session = TokenAwareSQLiteSession(
+    _app_state.current_session = TokenAwareSQLiteSession(
         session_id=session_id,
         db_path=CHAT_HISTORY_DB_PATH,
-        agent=agent_instance,
-        model=deployment_name,
+        agent=_app_state.agent,
+        model=_app_state.deployment,
         threshold=CONVERSATION_SUMMARIZATION_THRESHOLD,
-        full_history_store=full_history_store,
+        full_history_store=_app_state.full_history_store,
     )
 
     # Restore token counts from stored items (Layer 1 - LLM context)
-    items = await current_session.get_items()
+    items = await _app_state.current_session.get_items()
     if items:
-        current_session.total_tokens = current_session._calculate_total_tokens(items)
-        logger.info(f"Restored session {session_id}: {len(items)} items, {current_session.total_tokens} tokens")
+        _app_state.current_session.total_tokens = _app_state.current_session._calculate_total_tokens(items)
+        logger.info(
+            f"Restored session {session_id}: {len(items)} items, {_app_state.current_session.total_tokens} tokens"
+        )
 
     # Get full history for UI display (Layer 2)
     full_messages = []
     message_count = len(items)  # Default to Layer 1 count
-    if full_history_store:
-        full_messages = full_history_store.get_messages(session_id)
+    if _app_state.full_history_store:
+        full_messages = _app_state.full_history_store.get_messages(session_id)
         message_count = len(full_messages)  # Use Layer 2 count for accurate metadata
         logger.info(f"Loaded {len(full_messages)} messages from full_history for session {session_id}")
 
     # Connect new session to token tracker
-    connect_session(current_session)
+    connect_session(_app_state.current_session)
 
     # Update metadata with accurate message count from full_history
-    session_manager.set_current_session(session_id)
-    session_manager.update_session(session_id, last_used=datetime.now().isoformat(), message_count=message_count)
+    _app_state.session_manager.set_current_session(session_id)
+    _app_state.session_manager.update_session(
+        session_id, last_used=datetime.now().isoformat(), message_count=message_count
+    )
 
     # Return session info with both layers
     return {
         "session": session_meta.model_dump(),
         "message_count": message_count,
-        "tokens": current_session.total_tokens,
+        "tokens": _app_state.current_session.total_tokens,
         "messages": items,  # Layer 1: LLM context (trimmed after summarization)
         "full_history": full_messages,  # Layer 2: Complete history for UI display
     }
@@ -166,13 +178,14 @@ async def list_all_sessions() -> dict[str, Any]:
     Returns:
         Dictionary with sessions list and current session ID
     """
-    # Access global session_manager (read-only)
-
-    if not session_manager:
+    if not _app_state.session_manager:
         return _session_error("Session manager not initialized")
 
-    sessions = session_manager.list_sessions()
-    return {"sessions": [s.model_dump() for s in sessions], "current_session_id": session_manager.current_session_id}
+    sessions = _app_state.session_manager.list_sessions()
+    return {
+        "sessions": [s.model_dump() for s in sessions],
+        "current_session_id": _app_state.session_manager.current_session_id,
+    }
 
 
 async def delete_session_by_id(session_id: str) -> dict[str, Any]:
@@ -187,22 +200,19 @@ async def delete_session_by_id(session_id: str) -> dict[str, Any]:
     Returns:
         Success status
     """
-    # Access global variables
-    global current_session  # noqa: PLW0603
-
-    if not session_manager:
+    if not _app_state.session_manager:
         return _session_error("Session manager not initialized")
 
     # If deleting current session, disconnect from token tracker
-    if current_session and current_session.session_id == session_id:
+    if _app_state.current_session and _app_state.current_session.session_id == session_id:
         disconnect_session()
-        current_session = None
+        _app_state.current_session = None
         logger.info(f"Disconnected current session before deletion: {session_id}")
 
     # Delete Layer 2 (full history) first
     layer2_success = True
-    if full_history_store:
-        layer2_success = full_history_store.clear_session(session_id)
+    if _app_state.full_history_store:
+        layer2_success = _app_state.full_history_store.clear_session(session_id)
         if layer2_success:
             logger.info(f"Cleared full_history (Layer 2) for session {session_id}")
         # Continue with deletion - Layer 2 is best-effort
@@ -216,7 +226,7 @@ async def delete_session_by_id(session_id: str) -> dict[str, Any]:
         logger.info(f"Cleared LLM context (Layer 1) for session {session_id}")
 
     # Delete metadata (sessions.json)
-    metadata_success = session_manager.delete_session(session_id)
+    metadata_success = _app_state.session_manager.delete_session(session_id)
 
     # Return comprehensive status
     return {
@@ -232,26 +242,24 @@ async def summarize_current_session() -> dict[str, Any]:
     Returns:
         Success status with summary info
     """
-    # Access global variables (read-only)
-
-    if not current_session:
+    if not _app_state.current_session:
         return _session_error("No active session")
 
-    if not current_session.agent:
+    if not _app_state.current_session.agent:
         return _session_error("Agent not available for summarization")
 
-    items = await current_session.get_items()
+    items = await _app_state.current_session.get_items()
     if len(items) < 3:
         return _session_error("Not enough messages to summarize (need at least 3)")
 
     # Trigger manual summarization with force=True to bypass threshold check
-    summary = await current_session.summarize_with_agent(force=True)
+    summary = await _app_state.current_session.summarize_with_agent(force=True)
 
     if summary:
         return {
             "success": True,
             "message": "Conversation summarized successfully",
-            "tokens": current_session.total_tokens,
+            "tokens": _app_state.current_session.total_tokens,
         }
     else:
         return _session_error("Summarization failed or not needed")
@@ -488,43 +496,42 @@ async def main() -> None:
     if mcp_servers:
         print("MCP Servers: Sequential Thinking enabled")
 
-    # Initialize global state for session management
-    global session_manager, current_session, agent_instance, deployment_name, full_history_store  # noqa: PLW0603
-    agent_instance = agent
-    deployment_name = deployment
+    # Initialize application state for session management
+    _app_state.agent = agent
+    _app_state.deployment = deployment
 
     # Initialize full history store for layered persistence
-    full_history_store = FullHistoryStore(db_path=CHAT_HISTORY_DB_PATH)
+    _app_state.full_history_store = FullHistoryStore(db_path=CHAT_HISTORY_DB_PATH)
     logger.info("Full history store initialized")
 
     # Initialize session manager
-    session_manager = SessionManager(metadata_path="data/sessions.json")
+    _app_state.session_manager = SessionManager(metadata_path="data/sessions.json")
     logger.info("Session manager initialized")
 
     # Always create fresh session on startup
-    session_meta = session_manager.create_session()
+    session_meta = _app_state.session_manager.create_session()
     logger.info(f"Started new session: {session_meta.session_id} - {session_meta.title}")
 
     # Create token-aware session with persistent storage and full history
-    current_session = TokenAwareSQLiteSession(
+    _app_state.current_session = TokenAwareSQLiteSession(
         session_id=session_meta.session_id,
         db_path=CHAT_HISTORY_DB_PATH,  # Persistent file-based storage
         agent=agent,
         model=deployment,
         threshold=CONVERSATION_SUMMARIZATION_THRESHOLD,
-        full_history_store=full_history_store,
+        full_history_store=_app_state.full_history_store,
     )
 
     # Restore token counts from stored items
-    items = await current_session.get_items()
+    items = await _app_state.current_session.get_items()
     if items:
-        current_session.total_tokens = current_session._calculate_total_tokens(items)
-        logger.info(f"Restored session with {len(items)} items, {current_session.total_tokens} tokens")
+        _app_state.current_session.total_tokens = _app_state.current_session._calculate_total_tokens(items)
+        logger.info(f"Restored session with {len(items)} items, {_app_state.current_session.total_tokens} tokens")
 
-    logger.info(f"Session created with id: {current_session.session_id}")
+    logger.info(f"Session created with id: {_app_state.current_session.session_id}")
 
     # Connect session to SDK token tracker for automatic tracking
-    connect_session(current_session)
+    connect_session(_app_state.current_session)
 
     # Main chat loop
     # Session manages all conversation state internally
@@ -569,15 +576,17 @@ async def main() -> None:
             logger.info(f"User: {user_input}", extra={"file_message": file_msg})
 
             # Process user input through session (handles summarization automatically)
-            await process_user_input(current_session, user_input)
+            await process_user_input(_app_state.current_session, user_input)
 
             # Update session metadata after each message
-            if session_manager and current_session:
+            if _app_state.session_manager and _app_state.current_session:
                 from datetime import datetime
 
-                items = await current_session.get_items()
-                session_manager.update_session(
-                    current_session.session_id, last_used=datetime.now().isoformat(), message_count=len(items)
+                items = await _app_state.current_session.get_items()
+                _app_state.session_manager.update_session(
+                    _app_state.current_session.session_id,
+                    last_used=datetime.now().isoformat(),
+                    message_count=len(items),
                 )
 
         except KeyboardInterrupt:

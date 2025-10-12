@@ -9,6 +9,7 @@ import asyncio
 import json
 import uuid
 
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, ClassVar
@@ -247,7 +248,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
         )
 
     @contextmanager
-    def _skip_full_history_context(self):
+    def _skip_full_history_context(self) -> Generator[None, None, None]:
         """Context manager for safely skipping full history saves during repopulation.
 
         This ensures the flag is properly reset even if an exception occurs,
