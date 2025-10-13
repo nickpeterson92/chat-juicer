@@ -206,6 +206,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
         model: str = "gpt-5-mini",
         threshold: float = 0.8,
         full_history_store: FullHistoryProtocol | None = None,
+        session_manager: Any = None,
     ):
         """Initialize token-aware session built on SQLiteSession.
 
@@ -216,6 +217,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
             model: Model name for token counting
             threshold: Trigger summarization at this fraction of token limit (0.8 = 80%)
             full_history_store: Optional FullHistoryStore for Layer 2 complete conversation history
+            session_manager: Optional SessionManager for metadata updates after summarization
         """
         # Initialize parent SQLiteSession - use ":memory:" if explicitly None
         super().__init__(session_id, db_path if db_path is not None else ":memory:")
@@ -224,6 +226,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
         self.model = model
         self.threshold = threshold
         self.full_history_store = full_history_store
+        self.session_manager = session_manager
 
         # Get token limit for model
         self.max_tokens = self._get_model_limit()
@@ -720,6 +723,16 @@ class TokenAwareSQLiteSession(SQLiteSession):
         self.total_tokens = summary_tokens + recent_tokens
         # Reset accumulated tool tokens since they're now part of the summary
         self.accumulated_tool_tokens = 0
+
+        # Update session metadata to persist token reset across session switches
+        if self.session_manager:
+            self.session_manager.update_session(
+                self.session_id,
+                accumulated_tool_tokens=self.accumulated_tool_tokens,
+            )
+            logger.info(
+                f"Updated session metadata after summarization: accumulated_tool_tokens={self.accumulated_tool_tokens}"
+            )
 
         logger.info(
             f"Session tokens reset: {old_tokens} → {self.total_tokens} "

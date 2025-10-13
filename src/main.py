@@ -135,6 +135,7 @@ async def switch_to_session(session_id: str) -> dict[str, Any]:
         model=_app_state.deployment,
         threshold=CONVERSATION_SUMMARIZATION_THRESHOLD,
         full_history_store=_app_state.full_history_store,
+        session_manager=_app_state.session_manager,
     )
 
     # Restore token counts from stored items (Layer 1 - LLM context)
@@ -528,6 +529,7 @@ async def main() -> None:
         model=deployment,
         threshold=CONVERSATION_SUMMARIZATION_THRESHOLD,
         full_history_store=_app_state.full_history_store,
+        session_manager=_app_state.session_manager,
     )
 
     # Restore token counts from stored items

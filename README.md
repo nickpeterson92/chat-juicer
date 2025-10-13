@@ -57,6 +57,7 @@ make health             # Check system configuration
 - 🖥️ **Desktop Application**: Production-grade Electron app with health monitoring and auto-recovery
 - 🤖 **Agent/Runner Pattern**: Native OpenAI Agents SDK with automatic tool orchestration
 - 🧠 **Sequential Thinking**: MCP server for advanced multi-step reasoning and problem decomposition
+- 🌐 **Web Content Retrieval**: Fetch MCP server for HTTP/HTTPS web content fetching
 - 💾 **Two-Layer Session Persistence**: Layered architecture separating LLM context from UI display
 - 🔄 **Multi-Session Support**: Create, switch, and manage multiple conversation sessions
 - 📊 **Smart Session Management**: TokenAwareSQLiteSession with auto-summarization at 20% threshold
@@ -433,7 +434,8 @@ The application supports both native functions and MCP server tools:
 - **insert_text**: Add new content before or after existing text
 
 ### MCP Server Integration
-- **Sequential Thinking**: Advanced multi-step reasoning with revision capabilities and hypothesis testing
+- **Sequential Thinking** (Node.js): Advanced multi-step reasoning with revision capabilities and hypothesis testing
+- **Fetch Server** (Python): HTTP/HTTPS web content retrieval with automatic format handling and parameter support
 - Extensible to add more MCP servers (filesystem, GitHub, databases, etc.)
 
 ### Features

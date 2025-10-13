@@ -72,6 +72,7 @@ The application uses OpenAI's Agent/Runner pattern which provides:
 
 - **Native MCP Server Integration**: Direct support for Model Context Protocol servers
 - **Sequential Thinking**: Advanced reasoning capabilities for complex problem-solving
+- **Web Content Retrieval**: HTTP/HTTPS fetching via Fetch MCP server
 - **Automatic Tool Orchestration**: Framework handles function calling automatically
 - **Full Async Architecture**: Consistent async/await for Agent/Runner, MCP servers, and all functions
 - **Streaming Events**: Structured event handling for real-time responses
@@ -79,11 +80,19 @@ The application uses OpenAI's Agent/Runner pattern which provides:
 - **Type Safety**: Full mypy strict compliance with Pydantic runtime validation
 
 ### MCP Server Integration
-The application integrates the Sequential Thinking MCP server:
+The application integrates two MCP servers for enhanced capabilities:
+
+**Sequential Thinking Server** (Node.js):
 - Breaks down complex problems into manageable steps
 - Provides structured reasoning with revision capabilities
 - Enables branching and hypothesis testing
 - Maintains context across multiple reasoning steps
+
+**Fetch Server** (Python):
+- HTTP/HTTPS web content retrieval
+- Automatic content format handling
+- Supports GET/POST requests with headers and parameters
+- Integrated into `.juicer` venv for seamless operation
 
 ### Frontend Architecture (Modular ES6)
 The renderer process uses a modular architecture for maintainability:
