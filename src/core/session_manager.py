@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from core.constants import SESSION_ID_LENGTH
+from core.constants import DEFAULT_SESSION_METADATA_PATH, SESSION_ID_LENGTH
 from models.session_models import SessionMetadata
 from utils.logger import logger
 
@@ -19,7 +19,7 @@ from utils.logger import logger
 class SessionManager:
     """Manages session metadata and lifecycle."""
 
-    def __init__(self, metadata_path: str | Path = "data/sessions.json"):
+    def __init__(self, metadata_path: str | Path = DEFAULT_SESSION_METADATA_PATH):
         """Initialize session manager.
 
         Args:

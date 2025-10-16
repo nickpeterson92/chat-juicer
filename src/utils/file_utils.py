@@ -6,14 +6,14 @@ Provides safe, validated file and directory operations with async support.
 from __future__ import annotations
 
 import inspect
-import json
 
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 import aiofiles
 
 from models.api_models import TextEditResponse
+from utils.json_utils import json_pretty
 
 
 def validate_file_path(
@@ -152,13 +152,14 @@ def json_response(success: bool = True, error: str | None = None, **kwargs: Any)
         JSON string with consistent structure
     """
     if error:
-        return json.dumps({"success": False, "error": error}, indent=2)
+        return cast(str, json_pretty({"success": False, "error": error}))
 
     # Always include success status and wrap other fields in data
     response: dict[str, Any] = {"success": success}
     if kwargs:
         response["data"] = kwargs
-    return json.dumps(response, indent=2)
+    result: str = json_pretty(response)
+    return result
 
 
 async def file_operation(

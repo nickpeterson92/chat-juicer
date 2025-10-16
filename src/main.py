@@ -18,17 +18,19 @@ if sys.stdout.encoding != "utf-8":
     sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8", errors="replace")
 
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any
 
 from agents import set_default_openai_client, set_tracing_disabled
 from dotenv import load_dotenv
-from openai import APIConnectionError, APIStatusError, AsyncOpenAI, RateLimitError
+from openai import APIConnectionError, APIStatusError, RateLimitError
 
 from core.agent import create_agent
 from core.constants import (
     CHAT_HISTORY_DB_PATH,
     CONVERSATION_SUMMARIZATION_THRESHOLD,
+    DEFAULT_SESSION_METADATA_PATH,
+    LOG_PREVIEW_LENGTH,
+    MAX_CONVERSATION_TURNS,
     MESSAGE_OUTPUT_ITEM,
     RUN_ITEM_STREAM_EVENT,
     get_settings,
@@ -36,21 +38,15 @@ from core.constants import (
 from core.full_history import FullHistoryStore
 from core.prompts import SYSTEM_INSTRUCTIONS
 from core.session import TokenAwareSQLiteSession
+from core.session_commands import handle_session_command
 from core.session_manager import SessionManager
 from integrations.event_handlers import CallTracker, build_event_handlers
 from integrations.mcp_servers import setup_mcp_servers
 from integrations.sdk_token_tracker import connect_session, disconnect_session, patch_sdk_for_auto_tracking
 from models.event_models import UserInput
 from models.sdk_models import StreamingEvent
-from models.session_models import (
-    CreateSessionCommand,
-    DeleteSessionCommand,
-    ListSessionsCommand,
-    SummarizeSessionCommand,
-    SwitchSessionCommand,
-    parse_session_command,
-)
 from tools import AGENT_TOOLS
+from utils.client_factory import create_http_client, create_openai_client
 from utils.ipc import IPCManager
 from utils.logger import logger
 
@@ -72,253 +68,7 @@ class AppState:
 # Module-level application state instance
 _app_state = AppState()
 
-
-def _session_error(message: str) -> dict[str, str]:
-    """Create standardized session error response.
-
-    Args:
-        message: Error message describing the issue
-
-    Returns:
-        Dictionary with error key for IPC response
-    """
-    return {"error": message}
-
-
-async def create_new_session(title: str | None = None) -> dict[str, Any]:
-    """Create a new session and switch to it.
-
-    Args:
-        title: Title for the new session (defaults to datetime format)
-
-    Returns:
-        Session metadata dictionary
-    """
-    if not _app_state.session_manager:
-        return _session_error("Session manager not initialized")
-
-    # Create new session metadata (title defaults to datetime in create_session)
-    session_meta = _app_state.session_manager.create_session(title)
-
-    # Switch to the new session
-    await switch_to_session(session_meta.session_id)
-
-    result: dict[str, Any] = session_meta.model_dump()
-    return result
-
-
-async def switch_to_session(session_id: str) -> dict[str, Any]:
-    """Switch to a different session.
-
-    Args:
-        session_id: ID of session to switch to
-
-    Returns:
-        Session info with conversation history (both layers)
-    """
-    if not _app_state.session_manager:
-        return _session_error("Session manager not initialized")
-
-    session_meta = _app_state.session_manager.get_session(session_id)
-    if not session_meta:
-        return _session_error(f"Session {session_id} not found")
-
-    # Disconnect old session from token tracker
-    if _app_state.current_session:
-        disconnect_session()
-
-    # Create new session object with persistent storage and full history
-    _app_state.current_session = TokenAwareSQLiteSession(
-        session_id=session_id,
-        db_path=CHAT_HISTORY_DB_PATH,
-        agent=_app_state.agent,
-        model=_app_state.deployment,
-        threshold=CONVERSATION_SUMMARIZATION_THRESHOLD,
-        full_history_store=_app_state.full_history_store,
-        session_manager=_app_state.session_manager,
-    )
-
-    # Restore token counts from stored items (Layer 1 - LLM context)
-    items = await _app_state.current_session.get_items()
-    if items:
-        items_tokens = _app_state.current_session._calculate_total_tokens(items)
-        # Restore accumulated tool tokens from session metadata
-        _app_state.current_session.accumulated_tool_tokens = session_meta.accumulated_tool_tokens
-        _app_state.current_session.total_tokens = items_tokens + session_meta.accumulated_tool_tokens
-        logger.info(
-            f"Restored session {session_id}: {len(items)} items, {items_tokens} conversation tokens, "
-            f"{session_meta.accumulated_tool_tokens} tool tokens, {_app_state.current_session.total_tokens} total tokens"
-        )
-
-    # Get full history for UI display (Layer 2)
-    full_messages = []
-    message_count = len(items)  # Default to Layer 1 count
-    if _app_state.full_history_store:
-        full_messages = _app_state.full_history_store.get_messages(session_id)
-        message_count = len(full_messages)  # Use Layer 2 count for accurate metadata
-        logger.info(f"Loaded {len(full_messages)} messages from full_history for session {session_id}")
-
-    # Connect new session to token tracker
-    connect_session(_app_state.current_session)
-
-    # Update metadata with accurate message count from full_history
-    _app_state.session_manager.set_current_session(session_id)
-    _app_state.session_manager.update_session(
-        session_id,
-        last_used=datetime.now().isoformat(),
-        message_count=message_count,
-        accumulated_tool_tokens=_app_state.current_session.accumulated_tool_tokens,
-    )
-
-    # Return session info (only include full_history for UI, not raw messages)
-    # Frontend only needs Layer 2 (full_history) for display
-    # Layer 1 (messages) includes SDK internals and can be huge (causing pipe buffer overflow)
-    return {
-        "session": session_meta.model_dump(),
-        "message_count": message_count,
-        "tokens": _app_state.current_session.total_tokens,
-        "full_history": full_messages,  # Layer 2: Complete history for UI display
-    }
-
-
-async def list_all_sessions() -> dict[str, Any]:
-    """List all available sessions.
-
-    Returns:
-        Dictionary with sessions list and current session ID
-    """
-    if not _app_state.session_manager:
-        return _session_error("Session manager not initialized")
-
-    sessions = _app_state.session_manager.list_sessions()
-    return {
-        "sessions": [s.model_dump() for s in sessions],
-        "current_session_id": _app_state.session_manager.current_session_id,
-    }
-
-
-async def delete_session_by_id(session_id: str) -> dict[str, Any]:
-    """Delete a session and clean up all persistence layers.
-
-    If deleting the current session, it will be disconnected from token tracking
-    before deletion. The caller should switch to another session afterward.
-
-    Args:
-        session_id: ID of session to delete
-
-    Returns:
-        Success status
-    """
-    if not _app_state.session_manager:
-        return _session_error("Session manager not initialized")
-
-    # If deleting current session, disconnect from token tracker
-    if _app_state.current_session and _app_state.current_session.session_id == session_id:
-        disconnect_session()
-        _app_state.current_session = None
-        logger.info(f"Disconnected current session before deletion: {session_id}")
-
-    # Delete Layer 2 (full history) first
-    layer2_success = True
-    if _app_state.full_history_store:
-        layer2_success = _app_state.full_history_store.clear_session(session_id)
-        if layer2_success:
-            logger.info(f"Cleared full_history (Layer 2) for session {session_id}")
-        # Continue with deletion - Layer 2 is best-effort
-
-    # Delete Layer 1 (LLM context) via session abstraction
-    temp_session = TokenAwareSQLiteSession(
-        session_id=session_id, db_path=CHAT_HISTORY_DB_PATH, agent=None, model="gpt-5-mini"
-    )
-    layer1_success = await temp_session.delete_storage()
-    if layer1_success:
-        logger.info(f"Cleared LLM context (Layer 1) for session {session_id}")
-
-    # Delete metadata (sessions.json)
-    metadata_success = _app_state.session_manager.delete_session(session_id)
-
-    # Return comprehensive status
-    return {
-        "success": metadata_success,  # Overall success based on metadata deletion
-        "layer1_cleaned": layer1_success,
-        "layer2_cleaned": layer2_success,
-    }
-
-
-async def summarize_current_session() -> dict[str, Any]:
-    """Manually trigger summarization for current session.
-
-    Returns:
-        Success status with summary info
-    """
-    if not _app_state.current_session:
-        return _session_error("No active session")
-
-    if not _app_state.current_session.agent:
-        return _session_error("Agent not available for summarization")
-
-    items = await _app_state.current_session.get_items()
-    if len(items) < 3:
-        return _session_error("Not enough messages to summarize (need at least 3)")
-
-    # Trigger manual summarization with force=True to bypass threshold check
-    summary = await _app_state.current_session.summarize_with_agent(force=True)
-
-    if summary:
-        return {
-            "success": True,
-            "message": "Conversation summarized successfully",
-            "tokens": _app_state.current_session.total_tokens,
-        }
-    else:
-        return _session_error("Summarization failed or not needed")
-
-
-async def handle_session_command(command: str, data: dict[str, Any]) -> dict[str, Any]:
-    """Handle session management commands from IPC with Pydantic validation.
-
-    Args:
-        command: Command type (new, switch, list, delete)
-        data: Command data
-
-    Returns:
-        Command result
-    """
-    result: dict[str, Any]
-
-    # Command dispatch registry mapping command types to handlers
-    command_handlers: dict[type, Any] = {
-        CreateSessionCommand: lambda cmd: create_new_session(cmd.title),
-        SwitchSessionCommand: lambda cmd: switch_to_session(cmd.session_id),
-        ListSessionsCommand: lambda _: list_all_sessions(),
-        DeleteSessionCommand: lambda cmd: delete_session_by_id(cmd.session_id),
-        SummarizeSessionCommand: lambda _: summarize_current_session(),
-    }
-
-    try:
-        # Add command type to data if not present
-        if "command" not in data:
-            data["command"] = command
-
-        # Parse and validate command using Pydantic
-        cmd = parse_session_command(data)
-
-        # Get handler from registry
-        handler = command_handlers.get(type(cmd))
-        if handler:
-            result = await handler(cmd)
-        else:
-            result = _session_error(f"Unknown command type: {type(cmd)}")
-
-    except ValueError as e:
-        # Pydantic validation errors or value errors
-        logger.error(f"Validation error in session command {command}: {e}", exc_info=True)
-        result = _session_error(f"Invalid command: {e}")
-    except Exception as e:
-        logger.error(f"Error handling session command {command}: {e}", exc_info=True)
-        result = _session_error(str(e))
-
-    return result
+# Note: Session command handlers moved to core/session_commands.py for better modularity
 
 
 async def handle_electron_ipc(event: StreamingEvent, tracker: CallTracker) -> str | None:
@@ -394,7 +144,7 @@ async def process_user_input(session: Any, user_input: str) -> None:
     try:
         # Use the new session's convenience method that handles auto-summarization
         # This returns a RunResultStreaming object
-        result = await session.run_with_auto_summary(session.agent, user_input, max_turns=50)
+        result = await session.run_with_auto_summary(session.agent, user_input, max_turns=MAX_CONVERSATION_TURNS)
 
         # Stream the events (SDK tracker handles token counting automatically)
         async for event in result.stream_events():
@@ -426,7 +176,7 @@ async def process_user_input(session: Any, user_input: str) -> None:
 
     # Log response
     if response_text:
-        file_msg = f"AI: {response_text[:100]}{'...' if len(response_text) > 100 else ''}"
+        file_msg = f"AI: {response_text[:LOG_PREVIEW_LENGTH]}{'...' if len(response_text) > LOG_PREVIEW_LENGTH else ''}"
         logger.info(f"AI: {response_text}", extra={"file_message": file_msg})
 
     # SDK token tracker handles all token updates automatically
@@ -465,24 +215,50 @@ async def main() -> None:
     try:
         settings = get_settings()
 
-        # Use validated settings
-        api_key = settings.azure_openai_api_key
-        endpoint = settings.azure_endpoint_str
-        deployment = settings.azure_openai_deployment
+        # Configure client based on API provider
+        if settings.api_provider == "azure":
+            # Azure OpenAI configuration
+            api_key = settings.azure_openai_api_key
+            endpoint = settings.azure_endpoint_str
+            deployment = settings.azure_openai_deployment
 
-        logger.info(f"Settings loaded successfully for deployment: {deployment}")
+            logger.info(f"Settings loaded successfully for Azure deployment: {deployment}")
+
+            http_client = create_http_client(enable_logging=settings.http_request_logging)
+            if http_client:
+                logger.info("HTTP request/response logging enabled")
+            client = create_openai_client(api_key, base_url=endpoint, http_client=http_client)
+
+        elif settings.api_provider == "openai":
+            # Base OpenAI configuration
+            api_key = settings.openai_api_key
+            deployment = settings.openai_model
+
+            logger.info(f"Settings loaded successfully for OpenAI model: {deployment}")
+
+            http_client = create_http_client(enable_logging=settings.http_request_logging)
+            if http_client:
+                logger.info("HTTP request/response logging enabled")
+            client = create_openai_client(api_key, http_client=http_client)
+
+        else:
+            raise ValueError(f"Unknown API provider: {settings.api_provider}")
+
     except Exception as e:
         print(f"Error: Configuration validation failed: {e}")
         print("Please check your .env file has required variables:")
-        print("  AZURE_OPENAI_API_KEY")
-        print("  AZURE_OPENAI_ENDPOINT")
+        if hasattr(settings, "api_provider") and settings.api_provider == "openai":
+            print("  API_PROVIDER=openai")
+            print("  OPENAI_API_KEY")
+            print("  OPENAI_MODEL")
+        else:
+            print("  API_PROVIDER=azure (default)")
+            print("  AZURE_OPENAI_API_KEY")
+            print("  AZURE_OPENAI_ENDPOINT")
+            print("  AZURE_OPENAI_DEPLOYMENT")
         sys.exit(1)
 
-    # Create Azure OpenAI client and set as default for Agent/Runner
-    client = AsyncOpenAI(
-        api_key=api_key,
-        base_url=endpoint,
-    )
+    # Set as default client for Agent/Runner
     set_default_openai_client(client)
 
     # Disable tracing to avoid 401 errors with Azure
@@ -500,8 +276,14 @@ async def main() -> None:
     # Create agent with tools and MCP servers
     agent = create_agent(deployment, SYSTEM_INSTRUCTIONS, AGENT_TOOLS, mcp_servers)
 
-    print("Connected to Azure OpenAI")
-    print(f"Using deployment: {deployment}")
+    # Display connection info based on provider
+    if settings.api_provider == "azure":
+        print("Connected to Azure OpenAI")
+        print(f"Using deployment: {deployment}")
+    else:
+        print("Connected to OpenAI")
+        print(f"Using model: {deployment}")
+
     if mcp_servers:
         print("MCP Servers: Sequential Thinking enabled")
 
@@ -514,7 +296,7 @@ async def main() -> None:
     logger.info("Full history store initialized")
 
     # Initialize session manager
-    _app_state.session_manager = SessionManager(metadata_path="data/sessions.json")
+    _app_state.session_manager = SessionManager(metadata_path=DEFAULT_SESSION_METADATA_PATH)
     logger.info("Session manager initialized")
 
     # Always create fresh session on startup
@@ -557,15 +339,15 @@ async def main() -> None:
                     if parsed:
                         command, data = parsed
                         logger.info(f"Processing session command: {command}")
-                        result = await handle_session_command(command, data)
+                        result = await handle_session_command(_app_state, command, data)
                         logger.info(f"Session command result keys: {result.keys()}")
                         IPCManager.send_session_response(result)
                         logger.info(f"Session response sent for command: {command}")
                     else:
-                        IPCManager.send_session_response(_session_error("Invalid session command format"))
+                        IPCManager.send_session_response({"error": "Invalid session command format"})
                 except Exception as e:
                     logger.error(f"Error handling session command: {e}", exc_info=True)
-                    IPCManager.send_session_response(_session_error(str(e)))
+                    IPCManager.send_session_response({"error": str(e)})
                 continue
 
             # Validate user input with Pydantic
@@ -582,7 +364,7 @@ async def main() -> None:
                 break
 
             # Log user input
-            file_msg = f"User: {user_input[:100]}{'...' if len(user_input) > 100 else ''}"
+            file_msg = f"User: {user_input[:LOG_PREVIEW_LENGTH]}{'...' if len(user_input) > LOG_PREVIEW_LENGTH else ''}"
             logger.info(f"User: {user_input}", extra={"file_message": file_msg})
 
             # Process user input through session (handles summarization automatically)

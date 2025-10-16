@@ -1,7 +1,7 @@
 # Chat Juicer Requirements
 
 # Core AI Libraries (REQUIRED)
-openai-agents>=0.1.0  # Provides agents module for Responses API support
+openai-agents>=0.3.3  # Provides agents module for Responses API support
 openai>=1.0.0  # Azure OpenAI client library
 
 # Configuration (REQUIRED)

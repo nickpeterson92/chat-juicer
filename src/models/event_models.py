@@ -9,11 +9,17 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from core.constants import (
+    MSG_TYPE_ERROR,
+    MSG_TYPE_FUNCTION_COMPLETED,
+    MSG_TYPE_FUNCTION_DETECTED,
+)
+
 
 class ErrorNotification(BaseModel):
     """Error notification to frontend - used in send_error()."""
 
-    type: Literal["error"] = "error"
+    type: Literal["error"] = MSG_TYPE_ERROR
     message: str
     code: str | None = None  # e.g., "rate_limit", "api_error"
     details: dict[str, Any] | None = None
@@ -22,7 +28,7 @@ class ErrorNotification(BaseModel):
 class ToolCallNotification(BaseModel):
     """Tool call notification used in handle_tool_call()."""
 
-    type: str = Field(default="function_detected")  # Backward compatibility
+    type: str = Field(default=MSG_TYPE_FUNCTION_DETECTED)
     name: str
     arguments: str | dict[str, Any]  # Can be JSON string or dict
     call_id: str | None = None
@@ -31,7 +37,7 @@ class ToolCallNotification(BaseModel):
 class ToolResultNotification(BaseModel):
     """Tool result notification used in handle_tool_output()."""
 
-    type: str = Field(default="function_completed")  # Backward compatibility
+    type: str = Field(default=MSG_TYPE_FUNCTION_COMPLETED)
     name: str
     result: str | dict[str, Any]  # Tool response (JSON string or dict)
     call_id: str | None = None

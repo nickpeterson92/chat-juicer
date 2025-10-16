@@ -7,6 +7,8 @@ from typing import Any
 
 import tiktoken
 
+from core.constants import TOKEN_CACHE_SIZE
+
 # Cache for tiktoken encoders to avoid recreation
 _encoder_cache = {}
 
@@ -23,9 +25,9 @@ def _get_encoder(model: str) -> Any:
     return _encoder_cache[model]
 
 
-@lru_cache(maxsize=128)
+@lru_cache(maxsize=TOKEN_CACHE_SIZE)
 def _count_tokens_cached(text: str, model: str) -> int:
-    """Cached token counting - caches last 128 unique text/model pairs."""
+    """Cached token counting - caches last N unique text/model pairs based on TOKEN_CACHE_SIZE."""
     encoding = _get_encoder(model)
     return len(encoding.encode(text))
 

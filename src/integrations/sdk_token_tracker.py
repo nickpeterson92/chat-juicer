@@ -5,8 +5,6 @@ Provides universal token tracking that works with any tools, MCP servers, and fu
 
 from __future__ import annotations
 
-import json
-
 from functools import wraps
 from typing import TYPE_CHECKING, Any
 
@@ -28,6 +26,7 @@ from models.sdk_models import (
     RawToolCallLike,
     RunItemStreamEvent,
 )
+from utils.json_utils import json_safe
 from utils.logger import logger
 from utils.token_utils import count_tokens
 
@@ -86,7 +85,7 @@ class SDKTokenTracker:
         if content is None or content == "":
             return 0
 
-        content_str = json.dumps(content) if isinstance(content, (dict, list)) else str(content)
+        content_str = json_safe(content) if isinstance(content, (dict, list)) else str(content)
 
         # Count tokens
         result = count_tokens(content_str)

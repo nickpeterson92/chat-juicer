@@ -6,7 +6,6 @@ Extends the SDK's session management with automatic token-based summarization.
 from __future__ import annotations
 
 import asyncio
-import json
 import uuid
 
 from collections.abc import Generator
@@ -15,12 +14,22 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from agents import Runner, SQLiteSession
-from openai import AsyncOpenAI
 
-from core.constants import CHAT_HISTORY_DB_PATH, KEEP_LAST_N_MESSAGES, MODEL_TOKEN_LIMITS, get_settings
-from core.prompts import CONVERSATION_SUMMARIZATION_PROMPT
+from core.constants import (
+    CHAT_HISTORY_DB_PATH,
+    DEFAULT_MODEL,
+    KEEP_LAST_N_MESSAGES,
+    MESSAGE_STRUCTURE_TOKEN_OVERHEAD,
+    MIN_MESSAGES_FOR_SUMMARIZATION,
+    MODEL_TOKEN_LIMITS,
+    SUMMARY_MAX_COMPLETION_TOKENS,
+    get_settings,
+)
+from core.prompts import CONVERSATION_SUMMARIZATION_PROMPT, SUMMARY_REQUEST_PROMPT
 from models.event_models import FunctionEventMessage
 from models.session_models import ContentItem, FullHistoryProtocol
+from utils.client_factory import create_openai_client
+from utils.json_utils import json_compact
 from utils.logger import logger
 from utils.token_utils import count_tokens
 
@@ -185,12 +194,7 @@ class MessageNormalizer:
                 messages.append(normalized_msg)
 
         # Add the summary request
-        messages.append(
-            {
-                "role": "user",
-                "content": "Please summarize the above conversation and NOTHING else. Do NOT ask any follow up questions. A summary is the ONLY thing I need from you.",
-            }
-        )
+        messages.append({"role": "user", "content": SUMMARY_REQUEST_PROMPT})
 
         return messages
 
@@ -203,7 +207,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
         session_id: str,
         db_path: str | Path | None = CHAT_HISTORY_DB_PATH,
         agent: Any = None,
-        model: str = "gpt-5-mini",
+        model: str = DEFAULT_MODEL,
         threshold: float = 0.8,
         full_history_store: FullHistoryProtocol | None = None,
         session_manager: Any = None,
@@ -322,7 +326,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
                         total += self._count_tokens(str(tool_call["function"]["arguments"]))
 
             # Add small overhead for role and message structure
-            total += 10
+            total += MESSAGE_STRUCTURE_TOKEN_OVERHEAD
 
         return total
 
@@ -531,8 +535,8 @@ class TokenAwareSQLiteSession(SQLiteSession):
 
         logger.info(f"Summarization check: {len(items)} total items - Roles: {role_counts}, Types: {item_types}")
 
-        if len(items) < 3:  # Need at least a few messages to summarize
-            logger.warning("Not enough items to summarize (< 3)")
+        if len(items) < MIN_MESSAGES_FOR_SUMMARIZATION:
+            logger.warning(f"Not enough items to summarize (< {MIN_MESSAGES_FOR_SUMMARIZATION})")
             return ""
 
         # Prepare items for summarization (returns call_id and recent_items)
@@ -600,12 +604,12 @@ class TokenAwareSQLiteSession(SQLiteSession):
         """
         # Emit summarization start event for UI
         call_id = f"sum_{uuid.uuid4().hex[:8]}"
-        msg = json.dumps(
+        msg = json_compact(
             {
                 "type": "function_detected",
                 "name": "summarize_conversation",
                 "call_id": call_id,
-                "arguments": json.dumps(
+                "arguments": json_compact(
                     {
                         "messages_count": len(items),
                         "tokens_before": self.total_tokens,
@@ -636,13 +640,13 @@ class TokenAwareSQLiteSession(SQLiteSession):
         # Use the responses API (same as Agent/Runner uses internally)
         # This handles complex content structures seamlessly
 
-        # Create client using validated settings
+        # Create client using validated settings and centralized factory
         settings = get_settings()
         api_key = settings.azure_openai_api_key
         endpoint = settings.azure_endpoint_str
         deployment = settings.azure_openai_deployment
 
-        client = AsyncOpenAI(api_key=api_key, base_url=endpoint)
+        client = create_openai_client(api_key=api_key, base_url=endpoint)
 
         # System prompt with summarization instructions from prompts.py
         system_prompt = CONVERSATION_SUMMARIZATION_PROMPT
@@ -655,7 +659,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
         response = await client.chat.completions.create(
             model=deployment,
             messages=messages,
-            max_completion_tokens=3000,
+            max_completion_tokens=SUMMARY_MAX_COMPLETION_TOKENS,
         )
 
         return response.choices[0].message.content or ""

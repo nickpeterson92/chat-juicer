@@ -5,11 +5,8 @@ Handles all streaming event types from OpenAI Agent/Runner pattern.
 
 from __future__ import annotations
 
-import json
-
 from collections import deque
 from dataclasses import dataclass, field
-from functools import partial
 from typing import Callable, cast
 
 from core.constants import (
@@ -17,6 +14,12 @@ from core.constants import (
     HANDOFF_CALL_ITEM,
     HANDOFF_OUTPUT_ITEM,
     MESSAGE_OUTPUT_ITEM,
+    MSG_TYPE_AGENT_UPDATED,
+    MSG_TYPE_ASSISTANT_DELTA,
+    MSG_TYPE_FUNCTION_COMPLETED,
+    MSG_TYPE_FUNCTION_DETECTED,
+    MSG_TYPE_HANDOFF_COMPLETED,
+    MSG_TYPE_HANDOFF_STARTED,
     REASONING_ITEM,
     RUN_ITEM_STREAM_EVENT,
     TOOL_CALL_ITEM,
@@ -41,8 +44,8 @@ from models.sdk_models import (
     StreamingEvent,
 )
 
-# Pre-create partial JSON builders for common patterns
-_json_builder = partial(json.dumps, separators=(",", ":"))  # Compact JSON
+# Import centralized JSON utilities
+from utils.json_utils import json_compact as _json_builder
 
 
 @dataclass
@@ -72,7 +75,7 @@ def handle_message_output(item: RunItem) -> str | None:
             else:
                 text = getattr(content_item, "text", "")
             if text:
-                msg = AssistantMessage(type="assistant_delta", content=text)
+                msg = AssistantMessage(type=MSG_TYPE_ASSISTANT_DELTA, content=text)
                 return msg.to_json()  # type: ignore[no-any-return]
     return None
 
@@ -103,12 +106,12 @@ def handle_tool_call(item: RunItem, tracker: CallTracker) -> str | None:
 
     # Use Pydantic model for validation
     tool_msg = ToolCallNotification(
-        type="function_detected",  # Keep existing type for backward compatibility
+        type=MSG_TYPE_FUNCTION_DETECTED,
         name=tool_name,
         arguments=arguments,
         call_id=call_id if call_id else None,
     )
-    return _json_builder(tool_msg.model_dump(exclude_none=True))
+    return cast(str, _json_builder(tool_msg.model_dump(exclude_none=True)))
 
 
 def handle_reasoning(item: RunItem) -> str | None:
@@ -122,7 +125,7 @@ def handle_reasoning(item: RunItem) -> str | None:
             else:
                 text = getattr(content_item, "text", "")
             if text:
-                msg = AssistantMessage(type="assistant_delta", content=f"[Thinking] {text}")
+                msg = AssistantMessage(type=MSG_TYPE_ASSISTANT_DELTA, content=f"[Thinking] {text}")
                 return msg.to_json()  # type: ignore[no-any-return]
     return None
 
@@ -154,13 +157,13 @@ def handle_tool_output(item: RunItem, tracker: CallTracker) -> str | None:
 
     # Use Pydantic model for validation
     result_msg = ToolResultNotification(
-        type="function_completed",  # Keep existing type for backward compatibility
+        type=MSG_TYPE_FUNCTION_COMPLETED,
         name=tool_name,
         result=output_str,
         call_id=call_id if call_id else None,
         success=success,
     )
-    return _json_builder(result_msg.model_dump(exclude_none=True))
+    return cast(str, _json_builder(result_msg.model_dump(exclude_none=True)))
 
 
 def handle_handoff_call(item: RunItem) -> str | None:
@@ -171,7 +174,7 @@ def handle_handoff_call(item: RunItem) -> str | None:
     else:
         target_agent = "unknown"
 
-    msg = HandoffMessage(type="handoff_started", target_agent=target_agent)
+    msg = HandoffMessage(type=MSG_TYPE_HANDOFF_STARTED, target_agent=target_agent)
     return msg.to_json()  # type: ignore[no-any-return]
 
 
@@ -187,7 +190,7 @@ def handle_handoff_output(item: RunItem) -> str | None:
     output = getattr(item, "output", "")
     output_str = str(output) if output else ""
 
-    msg = HandoffMessage(type="handoff_completed", source_agent=source_agent, result=output_str)
+    msg = HandoffMessage(type=MSG_TYPE_HANDOFF_COMPLETED, source_agent=source_agent, result=output_str)
     return msg.to_json()  # type: ignore[no-any-return]
 
 
@@ -220,7 +223,7 @@ def build_event_handlers(tracker: CallTracker) -> dict[str, EventHandler]:
         if getattr(event, "type", None) != AGENT_UPDATED_STREAM_EVENT:
             return None
         aue = cast(AgentUpdatedStreamEvent, event)
-        msg = AgentUpdateMessage(type="agent_updated", name=aue.new_agent.name)
+        msg = AgentUpdateMessage(type=MSG_TYPE_AGENT_UPDATED, name=aue.new_agent.name)
         return msg.to_json()  # type: ignore[no-any-return]
 
     return {

@@ -175,3 +175,10 @@ CONVERSATION_SUMMARIZATION_PROMPT = """You are a helpful assistant that summariz
 3. **Important findings or results** from tool usage
 4. **Current task state** and any pending next steps
 5. **Any errors or issues** encountered"""
+
+
+# Summary Request Prompt - appended to conversation history when requesting summary
+SUMMARY_REQUEST_PROMPT = (
+    "Please summarize the above conversation and NOTHING else. "
+    "Do NOT ask any follow up questions. A summary is the ONLY thing I need from you."
+)

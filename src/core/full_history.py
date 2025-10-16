@@ -6,7 +6,6 @@ This ensures users never lose conversation history when summarization occurs.
 
 from __future__ import annotations
 
-import contextlib
 import json
 import sqlite3
 
@@ -14,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from core.constants import CHAT_HISTORY_DB_PATH, FULL_HISTORY_TABLE_PREFIX
+from utils.json_utils import json_safe
 from utils.logger import logger
 from utils.validation import sanitize_session_id
 
@@ -109,11 +109,11 @@ class FullHistoryStore:
 
             # Handle complex content structures (arrays, dicts)
             if not isinstance(content, str):
-                content = json.dumps(content, default=str)
+                content = json_safe(content)
 
             # Store other fields as metadata JSON
             metadata = {k: v for k, v in message.items() if k not in ["role", "content"]}
-            metadata_json = json.dumps(metadata, default=str) if metadata else None
+            metadata_json = json_safe(metadata) if metadata else None
 
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute(
@@ -175,9 +175,16 @@ class FullHistoryStore:
                 for row in rows:
                     role, content, metadata_json = row
 
-                    # Parse content if it's JSON
-                    with contextlib.suppress(json.JSONDecodeError, TypeError):
+                    # Parse content if it's JSON (best-effort)
+                    try:
                         content = json.loads(content)
+                    except (json.JSONDecodeError, TypeError):
+                        # Content is plain string (not JSON) - this is normal
+                        # Only log if content looks like it should be JSON but failed to parse
+                        if content and content.strip().startswith(("[", "{")):
+                            logger.warning(
+                                f"Failed to parse JSON-like content for session {session_id}: {content[:100]}..."
+                            )
 
                     # Build message dict
                     message: dict[str, Any] = {"role": role, "content": content}

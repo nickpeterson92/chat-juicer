@@ -7,6 +7,7 @@ Includes Pydantic validation for environment variables.
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Any
 
 from pydantic import Field, HttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -159,13 +160,86 @@ TOKEN_SOURCE_HANDOFF = "handoff"
 TOKEN_SOURCE_UNKNOWN = "unknown"
 
 # ============================================================================
+# IPC Message Type Constants
+# ============================================================================
+
+#: Message type for assistant response start signal.
+#: Signals to frontend that assistant is beginning to respond.
+MSG_TYPE_ASSISTANT_START = "assistant_start"
+
+#: Message type for assistant response end signal.
+#: Signals to frontend that assistant has completed the response.
+MSG_TYPE_ASSISTANT_END = "assistant_end"
+
+#: Message type for incremental assistant content delta.
+#: Contains streaming text chunks as assistant generates response.
+MSG_TYPE_ASSISTANT_DELTA = "assistant_delta"
+
+#: Message type for function/tool call detection notification.
+#: Sent when agent decides to call a function before execution.
+MSG_TYPE_FUNCTION_DETECTED = "function_detected"
+
+#: Message type for function/tool execution completion notification.
+#: Sent after function completes with success/failure status and result.
+MSG_TYPE_FUNCTION_COMPLETED = "function_completed"
+
+#: Message type for error notifications to frontend.
+#: Contains error message, optional code, and details for user display.
+MSG_TYPE_ERROR = "error"
+
+#: Message type for session management responses.
+#: Contains success/error data for session commands (new, switch, delete).
+MSG_TYPE_SESSION_RESPONSE = "session_response"
+
+#: Message type for agent configuration update notifications.
+#: Sent when agent state or configuration changes during execution.
+MSG_TYPE_AGENT_UPDATED = "agent_updated"
+
+#: Message type for multi-agent handoff initiation.
+#: Signals that control is being transferred to another agent.
+MSG_TYPE_HANDOFF_STARTED = "handoff_started"
+
+#: Message type for multi-agent handoff completion.
+#: Contains results from delegated agent execution.
+MSG_TYPE_HANDOFF_COMPLETED = "handoff_completed"
+
+# ============================================================================
 # MCP Server Configuration
 # ============================================================================
 # Note: Tool call delay patches removed - no longer needed with client-side sessions
 
 # ============================================================================
+# Error Messages
+# ============================================================================
+
+#: Error message when session manager is not initialized.
+ERROR_SESSION_MANAGER_NOT_INITIALIZED = "Session manager not initialized"
+
+#: Error message when no active session exists.
+ERROR_NO_ACTIVE_SESSION = "No active session"
+
+#: Error message when agent is not available for summarization.
+ERROR_AGENT_NOT_AVAILABLE = "Agent not available for summarization"
+
+#: Error message template when session is not found (use .format(session_id=...)).
+ERROR_SESSION_NOT_FOUND = "Session {session_id} not found"
+
+#: Error message when not enough messages exist for summarization.
+ERROR_INSUFFICIENT_MESSAGES = "Not enough messages to summarize (need at least 3)"
+
+#: Error message when summarization returns empty result.
+ERROR_EMPTY_SUMMARY = "Summarization failed: empty summary returned"
+
+#: Error message when all items are recent and nothing to summarize.
+ERROR_NOTHING_TO_SUMMARIZE = "All items are recent - nothing to summarize"
+
+# ============================================================================
 # Session Summarization Configuration
 # ============================================================================
+
+#: Prefix for auto-generated summarization call IDs.
+#: Used to create unique identifiers for summarization operations in the format "sum_<8-char-hex>".
+SUMMARY_CALL_ID_PREFIX = "sum_"
 
 #: Trigger conversation summarization at this fraction of model's token limit.
 #: Example: 0.2 × GPT-5's 272k tokens = 54,400 token trigger point.
@@ -184,11 +258,61 @@ KEEP_LAST_N_MESSAGES = 2
 #: Documents exceeding this token count are automatically summarized to
 #: fit within context windows while preserving technical accuracy.
 #: Set to 7000 to allow ~3k tokens for summary + metadata.
+#: Rationale: Based on typical document sizes and the need to preserve
+#: technical detail while keeping summaries under 3k tokens for efficiency.
 DOCUMENT_SUMMARIZATION_THRESHOLD = 7000
+
+#: Per-message token overhead for message structure (role, metadata, formatting).
+#: Added to each message token count during conversation token calculation.
+#: Rationale: OpenAI API adds ~4 tokens for role field, ~3 for formatting,
+#: ~3 for message delimiters. 10 tokens provides safety margin for variations.
+MESSAGE_STRUCTURE_TOKEN_OVERHEAD = 10
+
+#: Minimum number of messages required before summarization can be triggered.
+#: Prevents summarization of very short conversations (need at least 3 items).
+#: Rationale: Need at least user→assistant→user pattern to have meaningful
+#: conversation context worth summarizing. Below this, the summary would be
+#: longer than the conversation itself.
+MIN_MESSAGES_FOR_SUMMARIZATION = 3
+
+#: Maximum completion tokens allowed for conversation summary generation.
+#: Controls summary length to balance detail with token efficiency.
+#: Rationale: 3000 tokens allows comprehensive summaries (~2000 words) while
+#: staying well below typical context windows. Prevents runaway token usage
+#: during auto-summarization while preserving conversation context.
+SUMMARY_MAX_COMPLETION_TOKENS = 3000
+
+# ============================================================================
+# Agent/Runner Configuration
+# ============================================================================
+
+#: Default model name for fallback scenarios and temporary sessions.
+#: Used when agent model is not specified or during session cleanup operations.
+DEFAULT_MODEL = "gpt-5-mini"
+
+#: Maximum number of conversation turns (user+assistant exchanges) per run.
+#: Prevents infinite loops and controls maximum conversation length per execution.
+MAX_CONVERSATION_TURNS = 50
+
+# ============================================================================
+# Token Counting Configuration
+# ============================================================================
+
+#: LRU cache size for token counting operations.
+#: Caches the last N unique (text, model) pairs to avoid repeated tokenization.
+#: 128 entries provides good hit rate for typical conversation patterns.
+#: Rationale: Power of 2 for efficient hashing, balances memory (~50KB) with
+#: cache hit rate. Typical conversations reuse ~20-40 unique text chunks
+#: (messages, function args, results), so 128 provides 3-6x headroom.
+TOKEN_CACHE_SIZE = 128
 
 # ============================================================================
 # Storage Configuration
 # ============================================================================
+
+#: Default path for session metadata storage (sessions.json).
+#: Used by SessionManager to persist session information across app restarts.
+DEFAULT_SESSION_METADATA_PATH = "data/sessions.json"
 
 #: Database file path for session storage and full history.
 #: Both TokenAwareSQLiteSession (Layer 1) and FullHistoryStore (Layer 2)
@@ -249,15 +373,26 @@ class Settings(BaseSettings):
 
     Loads from environment variables and .env file.
     Validates at startup to fail fast on configuration errors.
+    Supports both Azure OpenAI and base OpenAI API providers.
     """
 
-    # Required Azure OpenAI settings
-    azure_openai_api_key: str = Field(..., description="Azure OpenAI API key for authentication")
-    azure_openai_endpoint: HttpUrl = Field(..., description="Azure OpenAI endpoint URL")
+    # API provider selection
+    api_provider: str = Field(default="azure", description="API provider: 'azure' or 'openai'")
+
+    # Azure OpenAI settings (required if provider=azure)
+    azure_openai_api_key: str | None = Field(default=None, description="Azure OpenAI API key for authentication")
+    azure_openai_endpoint: HttpUrl | None = Field(default=None, description="Azure OpenAI endpoint URL")
     azure_openai_deployment: str = Field(default="gpt-5-mini", description="Azure OpenAI deployment name")
+
+    # Base OpenAI settings (required if provider=openai)
+    openai_api_key: str | None = Field(default=None, description="OpenAI API key for authentication")
+    openai_model: str = Field(default="gpt-4-turbo", description="OpenAI model name")
 
     # Optional debug setting
     debug: bool = Field(default=False, description="Enable debug logging")
+
+    # HTTP request/response logging (for debugging Azure OpenAI issues)
+    http_request_logging: bool = Field(default=False, description="Enable HTTP request/response logging")
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -266,10 +401,20 @@ class Settings(BaseSettings):
         extra="ignore",  # Ignore extra environment variables
     )
 
+    @field_validator("api_provider")
+    @classmethod
+    def validate_provider(cls, v: str) -> str:
+        """Validate API provider selection."""
+        if v not in ["azure", "openai"]:
+            raise ValueError("api_provider must be 'azure' or 'openai'")
+        return v.lower()
+
     @field_validator("azure_openai_endpoint")
     @classmethod
-    def ensure_endpoint_format(cls, v: HttpUrl) -> HttpUrl:
+    def ensure_endpoint_format(cls, v: HttpUrl | None) -> HttpUrl | None:
         """Ensure endpoint URL ends with trailing slash for OpenAI client."""
+        if v is None:
+            return None
         url_str = str(v)
         if not url_str.endswith("/"):
             return HttpUrl(url_str + "/")
@@ -277,15 +422,36 @@ class Settings(BaseSettings):
 
     @field_validator("azure_openai_api_key")
     @classmethod
-    def validate_api_key(cls, v: str) -> str:
-        """Basic validation of API key format."""
-        if not v or len(v) < 10:
-            raise ValueError("Invalid API key format")
+    def validate_azure_api_key(cls, v: str | None) -> str | None:
+        """Basic validation of Azure API key format."""
+        if v is not None and (not v or len(v) < 10):
+            raise ValueError("Invalid Azure API key format")
         return v
+
+    @field_validator("openai_api_key")
+    @classmethod
+    def validate_openai_api_key(cls, v: str | None) -> str | None:
+        """Basic validation of OpenAI API key format."""
+        if v is not None and (not v or len(v) < 10):
+            raise ValueError("Invalid OpenAI API key format")
+        return v
+
+    def model_post_init(self, __context: Any) -> None:
+        """Validate that required keys are present for selected provider."""
+        if self.api_provider == "azure":
+            if not self.azure_openai_api_key:
+                raise ValueError("azure_openai_api_key is required when api_provider='azure'")
+            if not self.azure_openai_endpoint:
+                raise ValueError("azure_openai_endpoint is required when api_provider='azure'")
+        elif self.api_provider == "openai":
+            if not self.openai_api_key:
+                raise ValueError("openai_api_key is required when api_provider='openai'")
 
     @property
     def azure_endpoint_str(self) -> str:
         """Get endpoint as string for OpenAI client."""
+        if self.azure_openai_endpoint is None:
+            return ""
         return str(self.azure_openai_endpoint)
 
 
@@ -297,4 +463,4 @@ def get_settings() -> Settings:
     This function will raise validation errors at startup if config is invalid.
     Pydantic will load from environment variables automatically.
     """
-    return Settings()  # type: ignore[call-arg]  # Pydantic loads from env vars
+    return Settings()

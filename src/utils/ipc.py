@@ -10,10 +10,16 @@ from __future__ import annotations
 
 import json
 
-from functools import partial
 from typing import Any, ClassVar
 
+from core.constants import (
+    MSG_TYPE_ASSISTANT_END,
+    MSG_TYPE_ASSISTANT_START,
+    MSG_TYPE_ERROR,
+    MSG_TYPE_SESSION_RESPONSE,
+)
 from models.event_models import AssistantMessage, ErrorNotification
+from utils.json_utils import json_compact
 
 
 class IPCManager:
@@ -44,14 +50,14 @@ class IPCManager:
 
     # Pre-create common JSON templates to avoid repeated serialization
     _TEMPLATES: ClassVar[dict[str, str]] = {
-        "assistant_start": AssistantMessage(type="assistant_start").to_json(),
-        "assistant_end": AssistantMessage(type="assistant_end").to_json(),
+        "assistant_start": AssistantMessage(type=MSG_TYPE_ASSISTANT_START).to_json(),
+        "assistant_end": AssistantMessage(type=MSG_TYPE_ASSISTANT_END).to_json(),
     }
 
     @staticmethod
     def send(message: dict[str, Any]) -> None:
         """Send a message to the Electron frontend via IPC."""
-        msg = _json_builder(message)
+        msg = json_compact(message)
         print(f"{IPCManager.DELIMITER}{msg}{IPCManager.DELIMITER}", flush=True)
 
     @staticmethod
@@ -63,7 +69,7 @@ class IPCManager:
     def send_error(message: str, code: str | None = None, details: dict[str, Any] | None = None) -> None:
         """Send an error message to the frontend with validation."""
         # Use Pydantic model for validation, but maintain backward compatibility
-        error_msg = ErrorNotification(type="error", message=message, code=code, details=details)
+        error_msg = ErrorNotification(type=MSG_TYPE_ERROR, message=message, code=code, details=details)
         # Convert to dict and send using existing method to maintain format
         IPCManager.send(error_msg.model_dump(exclude_none=True))
 
@@ -84,20 +90,19 @@ class IPCManager:
         Args:
             data: Response data dict (success/error info)
         """
-        import json
 
-        response = {"type": "session_response", "data": data}
+        response = {"type": MSG_TYPE_SESSION_RESPONSE, "data": data}
         try:
-            # Use default=str to handle non-serializable objects
-            msg = json.dumps(response, separators=(",", ":"), default=str)
+            # Use compact JSON for IPC efficiency
+            msg = json_compact(response)
             print(f"{IPCManager.DELIMITER}{msg}{IPCManager.DELIMITER}", flush=True)
         except (TypeError, ValueError) as e:
             # Log serialization error and send error response instead
             from utils.logger import logger
 
             logger.error(f"Failed to serialize session response: {e}", exc_info=True)
-            error_response = {"type": "session_response", "data": {"error": f"Serialization failed: {e}"}}
-            error_msg = json.dumps(error_response, separators=(",", ":"))
+            error_response = {"type": MSG_TYPE_SESSION_RESPONSE, "data": {"error": f"Serialization failed: {e}"}}
+            error_msg = json_compact(error_response)
             print(f"{IPCManager.DELIMITER}{error_msg}{IPCManager.DELIMITER}", flush=True)
 
     @staticmethod
@@ -141,7 +146,3 @@ class IPCManager:
             return (command, data)
         except json.JSONDecodeError:
             return None
-
-
-# Pre-create partial JSON builders for common patterns
-_json_builder = partial(json.dumps, separators=(",", ":"))  # Compact JSON
