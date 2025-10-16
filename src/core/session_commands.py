@@ -18,11 +18,10 @@ from core.constants import (
     ERROR_SESSION_MANAGER_NOT_INITIALIZED,
     ERROR_SESSION_NOT_FOUND,
 )
-from core.full_history import FullHistoryStore
 from core.session import TokenAwareSQLiteSession
-from core.session_manager import SessionManager
 from integrations.sdk_token_tracker import connect_session, disconnect_session
 from models.session_models import (
+    AppStateProtocol,
     CreateSessionCommand,
     DeleteSessionCommand,
     ListSessionsCommand,
@@ -31,16 +30,6 @@ from models.session_models import (
     parse_session_command,
 )
 from utils.logger import logger
-
-
-class AppStateProtocol:
-    """Protocol defining required AppState interface for session commands."""
-
-    session_manager: SessionManager | None
-    current_session: TokenAwareSQLiteSession | None
-    agent: Any | None
-    deployment: str
-    full_history_store: FullHistoryStore | None
 
 
 def _session_error(message: str) -> dict[str, str]:

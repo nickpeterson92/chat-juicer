@@ -6,9 +6,14 @@ Provides Pydantic models for session metadata and commands with runtime validati
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from pydantic import BaseModel, Field, field_validator
+
+if TYPE_CHECKING:
+    from core.full_history import FullHistoryStore
+    from core.session import TokenAwareSQLiteSession
+    from core.session_manager import SessionManager
 
 # Protocol for Layer 2 persistence (full history storage)
 
@@ -55,6 +60,19 @@ class FullHistoryProtocol(Protocol):
             True if cleared successfully, False otherwise
         """
         ...
+
+
+class AppStateProtocol(Protocol):
+    """Protocol defining required AppState interface for session commands.
+
+    Used for structural typing - any class with these attributes satisfies this protocol.
+    """
+
+    session_manager: SessionManager | None
+    current_session: TokenAwareSQLiteSession | None
+    agent: Any | None  # agents.Agent from external SDK (untyped, opaque object)
+    deployment: str
+    full_history_store: FullHistoryStore | None
 
 
 class SessionMetadata(BaseModel):
@@ -258,6 +276,7 @@ ContentItem = (
 
 
 __all__ = [
+    "AppStateProtocol",
     "AudioContent",
     "ContentItem",
     "CreateSessionCommand",

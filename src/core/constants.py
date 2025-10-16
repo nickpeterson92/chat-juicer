@@ -16,6 +16,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # File Operations Configuration
 # ============================================================================
 
+#: Maximum file size in bytes for read_file operations (100MB).
+#: Protects against accidentally reading huge files that could exhaust memory.
+#: Model cannot override this value to prevent low-limit failures.
+MAX_FILE_SIZE = 100 * 1024 * 1024
+
 #: Maximum number of backup versions to keep for generated files.
 #: When create_backup=True in generate_document(), old versions are saved as
 #: .backup, .backup1, .backup2, etc. up to this limit.

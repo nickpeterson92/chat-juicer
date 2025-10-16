@@ -26,6 +26,7 @@ from core.constants import (
     get_settings,
 )
 from core.prompts import CONVERSATION_SUMMARIZATION_PROMPT, SUMMARY_REQUEST_PROMPT
+from core.session_manager import SessionManager
 from models.event_models import FunctionEventMessage
 from models.session_models import ContentItem, FullHistoryProtocol
 from utils.client_factory import create_openai_client
@@ -206,11 +207,11 @@ class TokenAwareSQLiteSession(SQLiteSession):
         self,
         session_id: str,
         db_path: str | Path | None = CHAT_HISTORY_DB_PATH,
-        agent: Any = None,
+        agent: Any = None,  # agents.Agent from external SDK (untyped, opaque object)
         model: str = DEFAULT_MODEL,
         threshold: float = 0.8,
         full_history_store: FullHistoryProtocol | None = None,
-        session_manager: Any = None,
+        session_manager: SessionManager | None = None,
     ):
         """Initialize token-aware session built on SQLiteSession.
 

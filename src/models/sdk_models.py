@@ -1,13 +1,13 @@
 """
 Type definitions for SDK events and streaming items.
 
-Provides TypedDict and type aliases for better type safety
+Provides runtime-checkable Protocols for better type safety
 when handling Agent/Runner SDK events.
 """
 
 from __future__ import annotations
 
-from typing import Any, Literal, Protocol, TypedDict, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 # ============================================================================
 # SDK Streaming Event Protocols (Better than TypedDict for SDK objects)
@@ -28,7 +28,7 @@ class AgentUpdatedStreamEvent(Protocol):
 
     type: Literal["agent_updated_stream_event"]
     name: str
-    new_agent: AgentLike  # Minimal agent shape used at runtime
+    new_agent: Any  # Agent from external SDK (opaque object)
 
 
 # ============================================================================
@@ -43,13 +43,6 @@ class RunItem(Protocol):
     type: str
     raw_item: object | None
     output: object | None
-
-
-@runtime_checkable
-class AgentLike(Protocol):
-    """Minimal Agent interface used by the app at runtime."""
-
-    name: str
 
 
 # Narrow protocols for common raw item shapes used at runtime
@@ -112,25 +105,8 @@ class EventHandler(Protocol):
         ...
 
 
-# ============================================================================
-# Session Item Types (for TokenAwareSQLiteSession)
-# ============================================================================
-
-
-class SessionConversationItem(TypedDict, total=False):
-    """Type for conversation items stored in session."""
-
-    role: Literal["user", "assistant", "system", "tool", "unknown"]
-    content: str | list[Any] | dict[str, Any] | None
-    type: str | None
-    name: str | None
-    arguments: str | None
-    output: Any
-
-
 # Export all types
 __all__ = [
-    "AgentLike",
     "AgentUpdatedStreamEvent",
     "ContentLike",
     "EventHandler",
@@ -139,6 +115,5 @@ __all__ = [
     "RawToolCallLike",
     "RunItem",
     "RunItemStreamEvent",
-    "SessionConversationItem",
     "StreamingEvent",
 ]

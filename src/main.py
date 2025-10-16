@@ -60,7 +60,7 @@ class AppState:
 
     session_manager: SessionManager | None = None
     current_session: TokenAwareSQLiteSession | None = None
-    agent: Any | None = None
+    agent: Any | None = None  # agents.Agent from external SDK (untyped, opaque object)
     deployment: str = ""
     full_history_store: FullHistoryStore | None = None
 
@@ -81,7 +81,7 @@ async def handle_electron_ipc(event: StreamingEvent, tracker: CallTracker) -> st
     return None
 
 
-def handle_streaming_error(error: Any) -> None:
+def handle_streaming_error(error: Exception) -> None:
     """Handle streaming errors with appropriate user messages
 
     Args:
@@ -89,19 +89,19 @@ def handle_streaming_error(error: Any) -> None:
     """
 
     # Define error handlers for different exception types
-    def handle_rate_limit(e: Any) -> dict[str, str]:
+    def handle_rate_limit(e: RateLimitError) -> dict[str, str]:
         logger.error(f"Rate limit error during streaming: {e}")
         return {"type": "error", "message": "Rate limit reached. Please wait a moment and try your request again."}
 
-    def handle_connection_error(e: Any) -> dict[str, str]:
+    def handle_connection_error(e: APIConnectionError) -> dict[str, str]:
         logger.error(f"Connection error during streaming: {e}")
         return {"type": "error", "message": "Connection interrupted. Please try your request again."}
 
-    def handle_api_status(e: Any) -> dict[str, str]:
+    def handle_api_status(e: APIStatusError) -> dict[str, str]:
         logger.error(f"API status error during streaming: {e}")
         return {"type": "error", "message": f"API error (status {e.status_code}). Please try your request again."}
 
-    def handle_generic(e: Any) -> dict[str, str]:
+    def handle_generic(e: Exception) -> dict[str, str]:
         logger.error(f"Unexpected error during streaming: {e}")
         return {"type": "error", "message": "An error occurred. Please try your request again."}
 
@@ -123,7 +123,7 @@ def handle_streaming_error(error: Any) -> None:
     IPCManager.send_assistant_end()
 
 
-async def process_user_input(session: Any, user_input: str) -> None:
+async def process_user_input(session: TokenAwareSQLiteSession, user_input: str) -> None:
     """Process a single user input using token-aware SQLite session.
 
     Args:

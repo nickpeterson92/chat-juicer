@@ -92,17 +92,13 @@ TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "name": "read_file",
-        "description": "Read any file to view its contents. Automatically converts PDFs, Word docs, Excel sheets, and other formats to text. Use this before editing or analyzing documents. Read multiple files in parallel for efficiency.",
+        "description": "Read any file to view its contents. Automatically converts PDFs, Word docs, Excel sheets, and other formats to text. Use this before editing or analyzing documents. Read multiple files in parallel for efficiency. Protected with 100MB size limit.",
         "parameters": {
             "type": "object",
             "properties": {
                 "file_path": {
                     "type": "string",
                     "description": "Path to the file. Examples: 'document.txt', 'sources/report.pdf', 'data.xlsx'",
-                },
-                "max_size": {
-                    "type": "integer",
-                    "description": "Maximum file size in bytes to read. Unlimited by default.",
                 },
             },
             "required": ["file_path"],

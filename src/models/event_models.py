@@ -14,6 +14,7 @@ from core.constants import (
     MSG_TYPE_FUNCTION_COMPLETED,
     MSG_TYPE_FUNCTION_DETECTED,
 )
+from models.session_models import ContentItem
 
 
 class ErrorNotification(BaseModel):
@@ -103,7 +104,7 @@ class SessionItem(BaseModel):
     role: Literal["user", "assistant", "system", "tool", "unknown"] | None = Field(
         default="unknown", description="Role of the message sender"
     )
-    content: str | list[Any] | dict[str, Any] | None = Field(default=None, description="Content of the message")
+    content: str | list[ContentItem] | None = Field(default=None, description="Content of the message")
     type: str | None = Field(default=None, description="Type of the item (for SDK internal items)")
 
     @field_validator("content")
@@ -137,7 +138,7 @@ class FunctionOutputItem(BaseModel):
     """Model for function output items."""
 
     type: Literal["function_call_output"]
-    output: Any
+    output: str  # Tool output is always converted to string for display
     error: str | None = None
 
     def to_session_item(self) -> SessionItem:

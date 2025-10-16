@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from core.constants import CONVERTIBLE_EXTENSIONS, DOCUMENT_SUMMARIZATION_THRESHOLD
+from core.constants import CONVERTIBLE_EXTENSIONS, DOCUMENT_SUMMARIZATION_THRESHOLD, MAX_FILE_SIZE
 from models.api_models import DirectoryListResponse, FileInfo, FileReadResponse
 from utils.document_processor import get_markitdown_converter, summarize_content
 from utils.file_utils import read_file_content, validate_directory_path, validate_file_path
@@ -71,20 +71,20 @@ def list_directory(path: str = ".", show_hidden: bool = False) -> str:
         ).to_json()
 
 
-async def read_file(file_path: str, max_size: int | None = None) -> str:
+async def read_file(file_path: str) -> str:
     """
     Read a file's contents for documentation processing.
     Automatically converts non-markdown formats to markdown for token efficiency.
+    Protected with 100MB size limit.
 
     Args:
         file_path: Path to the file to read
-        max_size: Maximum file size in bytes (None = no limit)
 
     Returns:
         JSON string with file contents and metadata
     """
-    # Validate path with optional size check
-    target_file, error = validate_file_path(file_path, check_exists=True, max_size=max_size)
+    # Validate path with size check (100MB limit)
+    target_file, error = validate_file_path(file_path, check_exists=True, max_size=MAX_FILE_SIZE)
     if error:
         return FileReadResponse(success=False, file_path=file_path, error=error).to_json()  # type: ignore[no-any-return]
 
@@ -184,4 +184,4 @@ async def read_file(file_path: str, max_size: int | None = None) -> str:
         ).to_json()
 
     except Exception as e:
-        return FileReadResponse(success=False, file_path=file_path, error=f"Failed to read file: {e!s}").to_json()  # type: ignore[no-any-return]
+        return FileReadResponse(success=False, file_path=file_path, error=f"Failed to read file: {e!s}").to_json()  # type: ignore[no-any-return]  # type: ignore[no-any-return]
