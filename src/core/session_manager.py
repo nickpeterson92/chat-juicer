@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 from core.constants import DEFAULT_SESSION_METADATA_PATH, SESSION_ID_LENGTH
-from models.session_models import SessionMetadata
+from models.session_models import SessionMetadata, SessionUpdate
 from utils.logger import logger
 
 
@@ -141,39 +141,34 @@ class SessionManager:
         logger.info(f"Deleted session: {session_id}")
         return True
 
-    def update_session(
-        self,
-        session_id: str,
-        title: str | None = None,
-        last_used: str | None = None,
-        message_count: int | None = None,
-        accumulated_tool_tokens: int | None = None,
-    ) -> bool:
-        """Update session metadata.
+    def update_session(self, session_id: str, updates: SessionUpdate) -> bool:
+        """Update session metadata using SessionUpdate dataclass.
 
         Args:
             session_id: Session to update
-            title: New title (optional)
-            last_used: New last_used timestamp (optional)
-            message_count: New message count (optional)
-            accumulated_tool_tokens: Accumulated tool tokens (optional)
+            updates: SessionUpdate instance with fields to update
 
         Returns:
-            True if updated, False if not found
+            True if updated, False if not found or no updates provided
         """
+        if not updates.has_updates():
+            logger.debug(f"No updates provided for session: {session_id}")
+            return False
+
         session = self.sessions.get(session_id)
         if not session:
             logger.warning(f"Attempted to update non-existent session: {session_id}")
             return False
 
-        if title is not None:
-            session.title = title
-        if last_used is not None:
-            session.last_used = last_used
-        if message_count is not None:
-            session.message_count = message_count
-        if accumulated_tool_tokens is not None:
-            session.accumulated_tool_tokens = accumulated_tool_tokens
+        # Apply all non-None updates
+        if updates.title is not None:
+            session.title = updates.title
+        if updates.last_used is not None:
+            session.last_used = updates.last_used
+        if updates.message_count is not None:
+            session.message_count = updates.message_count
+        if updates.accumulated_tool_tokens is not None:
+            session.accumulated_tool_tokens = updates.accumulated_tool_tokens
 
         self._save_metadata()
         return True

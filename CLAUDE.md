@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to you (Claude) when working with code in this repository.
 
 ⚠️ CRITICAL ⚠️ - Open your heart, your mind and your third eye. Take a deep breath and focus. You've got this!
 
@@ -24,20 +24,26 @@ chat-juicer/
 │       │   ├── chat-ui.js        # Message rendering and chat interface
 │       │   └── function-card-ui.js # Function call card visualization
 │       ├── handlers/message-handlers.js # Handler registry for streaming events
-│       └── services/session-service.js  # Session CRUD with consistent error handling
+│       ├── services/session-service.js  # Session CRUD with consistent error handling
+│       └── utils/                # Renderer utilities (reserved)
 ├── ui/               # Frontend static assets
 │   ├── index.html    # Main chat UI (loads renderer/index.js as ES6 module)
 │   └── styles.css    # Global styles
 ├── src/              # Python backend (modular architecture)
 │   ├── main.py       # Application entry point and async event loop management
 │   ├── core/         # Core business logic
-│   │   ├── agent.py       # Agent/Runner implementation with MCP support
-│   │   ├── session.py     # TokenAwareSQLiteSession with auto-summarization (20% threshold)
-│   │   └── constants.py   # Configuration with Pydantic Settings validation
+│   │   ├── agent.py            # Agent/Runner implementation with MCP support
+│   │   ├── session.py          # TokenAwareSQLiteSession with auto-summarization (20% threshold - Layer 1)
+│   │   ├── full_history.py     # FullHistoryStore for complete UI-facing conversation history (Layer 2)
+│   │   ├── session_manager.py  # Multi-session lifecycle management with metadata persistence
+│   │   ├── session_commands.py # Session command handlers (create, switch, delete, list)
+│   │   ├── prompts.py          # System instruction prompts and templates
+│   │   └── constants.py        # Configuration with Pydantic Settings validation
 │   ├── models/       # Data models and type definitions
-│   │   ├── api_models.py   # Pydantic models for API responses
-│   │   ├── event_models.py # Event and message models for IPC
-│   │   └── sdk_models.py   # Protocol typing for SDK integration
+│   │   ├── api_models.py      # Pydantic models for API responses
+│   │   ├── event_models.py    # Event and message models for IPC
+│   │   ├── sdk_models.py      # Protocol typing for SDK integration
+│   │   └── session_models.py  # Session metadata and persistence models
 │   ├── tools/        # Function calling tools
 │   │   ├── document_generation.py # Document generation from templates
 │   │   ├── file_operations.py     # File reading and directory listing
@@ -47,22 +53,38 @@ chat-juicer/
 │   │   ├── mcp_servers.py        # MCP server setup and management
 │   │   ├── event_handlers.py     # Streaming event handlers
 │   │   └── sdk_token_tracker.py  # SDK-level universal token tracking via monkey-patching
-│   ├── utils/ # Utility modules
+│   ├── utils/        # Utility modules
 │   │   ├── logger.py            # Enterprise JSON logging with rotation and session correlation
 │   │   ├── ipc.py               # IPC manager with pre-cached templates
 │   │   ├── token_utils.py       # Token management with LRU caching
 │   │   ├── file_utils.py        # File system utility functions
-│   │   └── document_processor.py # Document processing utilities
+│   │   ├── document_processor.py # Document processing utilities
+│   │   ├── json_utils.py        # JSON parsing and formatting utilities
+│   │   ├── http_logger.py       # HTTP request logging middleware
+│   │   ├── client_factory.py    # Azure OpenAI client factory and configuration
+│   │   └── validation.py        # Input validation and sanitization
 │   └── requirements.txt  # Python dependencies
 ├── sources/          # Source documents for processing
 ├── output/           # Generated documentation output
 ├── templates/        # Document templates with {{placeholders}}
+├── data/             # Persistent data storage
+│   ├── chat_history.db       # SQLite database (Layer 1 & Layer 2)
+│   └── sessions.json         # Session metadata (title, timestamps, counts)
 ├── logs/             # Log files (gitignored)
 │   ├── conversations.jsonl  # Structured conversation logs with token metadata
 │   └── errors.jsonl  # Error and debugging logs
-└── docs/             # Documentation
-    ├── agent-runner-migration-analysis.md  # Migration documentation
-    └── token-streaming-implementation.md   # Token streaming details
+├── scripts/          # Utility scripts
+│   ├── explore-db.sh         # Database exploration tool
+│   ├── setup.js              # Automated setup script
+│   ├── launch.js             # Application launcher
+│   ├── validate.js           # Validation utilities
+│   ├── python-manager.js     # Python environment management
+│   └── platform-config.js    # Platform detection and configuration
+└── docs/             # Documentation (Sphinx)
+    ├── _build/       # Generated HTML documentation
+    ├── modules/      # Module documentation
+    ├── conf.py       # Sphinx configuration
+    └── index.rst     # Documentation index
 ```
 
 ## Key Architectural Concepts
@@ -189,63 +211,6 @@ All tools registered in `tools/registry.py` for automatic discovery by Agent/Run
 
 ## Essential Commands
 
-### Quick Start
-
-```bash
-# First time setup (recommended)
-make setup              # Automated installation and configuration
-# Edit src/.env with your Azure OpenAI credentials
-
-# Run the application
-make run                # Production mode
-make dev                # Development mode with DevTools
-
-# Get help
-make help               # Show all available commands
-make health             # Check system configuration
-```
-
-### Setup Commands
-
-**Automated Setup (Recommended)**
-```bash
-make setup              # Complete first-time setup
-                        # - Checks prerequisites
-                        # - Installs all dependencies
-                        # - Creates .juicer venv
-                        # - Installs MCP server
-                        # - Creates .env from template
-```
-
-**Manual Installation**
-```bash
-# Install all dependencies
-make install            # Node + Python + MCP
-
-# Or install individually:
-make install-node       # npm install
-make install-python     # pip install into .juicer venv
-make install-mcp        # Install Sequential Thinking MCP server
-                        # (may need: sudo make install-mcp)
-```
-
-**Traditional Commands (still supported)**
-```bash
-# Install Node dependencies
-npm install
-
-# Install Python dependencies
-cd src/
-pip install -r requirements.txt
-
-# Install MCP server globally
-npm install -g @modelcontextprotocol/server-sequential-thinking
-
-# Configure environment
-cp .env.example .env
-# Edit .env with Azure OpenAI credentials
-```
-
 ### Running the Application
 
 **Using Makefile (Recommended)**
@@ -253,13 +218,6 @@ cp .env.example .env
 make run                # Production mode (npm start)
 make dev                # Development mode with DevTools (npm run dev)
 make backend-only       # Python backend only for testing
-```
-
-**Traditional Commands**
-```bash
-npm start               # Production mode
-npm run dev             # Development mode with DevTools
-python src/main.py      # Python backend only
 ```
 
 ### Development & Quality
@@ -276,27 +234,12 @@ make install-dev        # Install dev dependencies (linters, formatters, pre-com
 make precommit-install  # Install pre-commit git hooks
 ```
 
-**Traditional Commands**
-```bash
-# Syntax check
-python -m py_compile src/main.py
-
-# Check all Python files
-python -m compileall src/
-```
-
 ### Logs & Monitoring
 
 ```bash
 make logs               # Show conversation logs (tail -f, requires jq)
 make logs-errors        # Show error logs (tail -f, requires jq)
 make logs-all           # Show recent logs from both files
-```
-
-**Traditional Commands**
-```bash
-tail -f logs/conversations.jsonl | jq '.'
-tail -f logs/errors.jsonl | jq '.'
 ```
 
 ### Maintenance
@@ -316,7 +259,6 @@ make health             # Check system health and configuration
                         # - Checks .env configuration
                         # - Validates dependencies
                         # - Confirms MCP server installation
-
 make status             # Alias for health check
 ```
 
@@ -339,7 +281,7 @@ Optional:
 
 #### Python Dependencies (src/requirements.txt)
 - `openai>=1.0.0` - Azure OpenAI client library (AsyncOpenAI)
-- `openai-agents>=0.2.0` - Agent/Runner framework with MCP support and SQLiteSession
+- `openai-agents>=0.3.3` - Agent/Runner framework with MCP support and SQLiteSession
 - `markitdown>=0.1.0` - Document conversion to markdown (install with [all] for full format support)
 - `tiktoken>=0.5.0` - Exact token counting for all models
 - `python-json-logger>=2.0.0` - Structured JSON logging with rotating file handlers
@@ -366,7 +308,7 @@ The Agent/Runner pattern provides structured events:
 - TokenAwareSQLiteSession manages conversation context with automatic summarization
 - Session tracks tokens and triggers summarization at 20% of model limit (e.g., 54,400 tokens for GPT-5's 272k limit)
 - Model-aware token limits: GPT-5 (272k), GPT-4o (128k), GPT-4 (128k), GPT-3.5-turbo (15.3k)
-- In-memory SQLite database for fast session storage during app lifetime
+- Persistent SQLite database for fast session storage
 - Accumulated tool tokens tracked separately from conversation tokens
 - SDK-level automatic token tracking for all tool calls (native, MCP, future agents)
 - Minimal client state - session handles all conversation management

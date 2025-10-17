@@ -28,7 +28,7 @@ from core.constants import (
 from core.prompts import CONVERSATION_SUMMARIZATION_PROMPT, SUMMARY_REQUEST_PROMPT
 from core.session_manager import SessionManager
 from models.event_models import FunctionEventMessage
-from models.session_models import ContentItem, FullHistoryProtocol
+from models.session_models import ContentItem, FullHistoryProtocol, SessionUpdate
 from utils.client_factory import create_openai_client
 from utils.json_utils import json_compact
 from utils.logger import logger
@@ -950,10 +950,8 @@ class TokenAwareSQLiteSession(SQLiteSession):
 
         # Update session metadata to persist token reset across session switches
         if self.session_manager:
-            self.session_manager.update_session(
-                self.session_id,
-                accumulated_tool_tokens=self.accumulated_tool_tokens,
-            )
+            updates = SessionUpdate(accumulated_tool_tokens=self.accumulated_tool_tokens)
+            self.session_manager.update_session(self.session_id, updates)
             logger.info(
                 f"Updated session metadata after summarization: accumulated_tool_tokens={self.accumulated_tool_tokens}"
             )

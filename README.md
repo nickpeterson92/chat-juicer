@@ -321,20 +321,26 @@ chat-juicer/
 │       │   ├── chat-ui.js        # Message rendering
 │       │   └── function-card-ui.js # Function card visualization
 │       ├── handlers/message-handlers.js # Event handler registry
-│       └── services/session-service.js  # Session management
+│       ├── services/session-service.js  # Session management
+│       └── utils/                # Renderer utilities (reserved)
 ├── ui/               # Frontend static assets
 │   ├── index.html    # Main chat UI with markdown rendering
 │   └── styles.css    # Global styles
 ├── src/              # Python backend (modular architecture)
 │   ├── main.py       # Application entry point
 │   ├── core/         # Core business logic
-│   │   ├── agent.py       # Agent/Runner implementation with MCP support
-│   │   ├── session.py     # TokenAwareSQLiteSession with auto-summarization
-│   │   └── constants.py   # Configuration with Pydantic Settings validation
+│   │   ├── agent.py            # Agent/Runner implementation with MCP support
+│   │   ├── session.py          # TokenAwareSQLiteSession with auto-summarization (Layer 1)
+│   │   ├── full_history.py     # FullHistoryStore for UI display (Layer 2)
+│   │   ├── session_manager.py  # Multi-session lifecycle management
+│   │   ├── session_commands.py # Session command handlers
+│   │   ├── prompts.py          # System instruction prompts
+│   │   └── constants.py        # Configuration with Pydantic Settings validation
 │   ├── models/       # Data models and type definitions
-│   │   ├── api_models.py   # Pydantic models for API responses
-│   │   ├── event_models.py # Event and message models
-│   │   └── sdk_models.py   # Protocol typing for SDK integration
+│   │   ├── api_models.py      # Pydantic models for API responses
+│   │   ├── event_models.py    # Event and message models
+│   │   ├── sdk_models.py      # Protocol typing for SDK integration
+│   │   └── session_models.py  # Session metadata models
 │   ├── tools/        # Function calling tools
 │   │   ├── document_generation.py # Document generation from templates
 │   │   ├── file_operations.py     # File reading and directory listing
@@ -344,12 +350,16 @@ chat-juicer/
 │   │   ├── mcp_servers.py        # MCP server setup and management
 │   │   ├── event_handlers.py     # Streaming event handlers
 │   │   └── sdk_token_tracker.py  # SDK-level universal token tracking
-│   ├── utils/ # Utility modules
+│   ├── utils/        # Utility modules
 │   │   ├── logger.py            # Enterprise JSON logging with rotation
 │   │   ├── ipc.py               # IPC manager with pre-cached templates
 │   │   ├── token_utils.py       # Token management with LRU caching
 │   │   ├── file_utils.py        # File utility functions
-│   │   └── document_processor.py # Document processing utilities
+│   │   ├── document_processor.py # Document processing utilities
+│   │   ├── json_utils.py        # JSON parsing and formatting
+│   │   ├── http_logger.py       # HTTP request logging
+│   │   ├── client_factory.py    # Azure OpenAI client factory
+│   │   └── validation.py        # Input validation utilities
 │   └── requirements.txt  # Python dependencies
 ├── sources/          # Source documents for processing
 ├── output/           # Generated documentation output
@@ -361,11 +371,17 @@ chat-juicer/
 │   ├── conversations.jsonl  # Structured conversation logs with token metadata
 │   └── errors.jsonl  # Error and debugging logs
 ├── scripts/          # Utility scripts
-│   └── explore-db.sh         # Database exploration tool
-└── docs/             # Documentation
-    ├── agent-runner-migration-analysis.md    # Migration documentation
-    ├── token-streaming-implementation.md     # Token streaming details
-    └── layered-persistence-architecture.md   # Persistence architecture guide
+│   ├── explore-db.sh         # Database exploration tool
+│   ├── setup.js              # Automated setup script
+│   ├── launch.js             # Application launcher
+│   ├── validate.js           # Validation utilities
+│   ├── python-manager.js     # Python environment management
+│   └── platform-config.js    # Platform detection
+└── docs/             # Documentation (Sphinx)
+    ├── _build/       # Generated HTML documentation
+    ├── modules/      # Module documentation
+    ├── conf.py       # Sphinx configuration
+    └── index.rst     # Documentation index
 ```
 
 ## Key Components

@@ -5,8 +5,8 @@ Defines all available tools and their metadata for the Agent/Runner framework.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable
-from typing import Any, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from tools.document_generation import generate_document
 from tools.file_operations import list_directory, read_file

@@ -25,6 +25,7 @@ from models.session_models import (
     CreateSessionCommand,
     DeleteSessionCommand,
     ListSessionsCommand,
+    SessionUpdate,
     SummarizeSessionCommand,
     SwitchSessionCommand,
     parse_session_command,
@@ -125,12 +126,12 @@ async def switch_to_session(app_state: AppStateProtocol, session_id: str) -> dic
 
     # Update metadata with accurate message count from full_history
     app_state.session_manager.set_current_session(session_id)
-    app_state.session_manager.update_session(
-        session_id,
+    updates = SessionUpdate(
         last_used=datetime.now().isoformat(),
         message_count=message_count,
         accumulated_tool_tokens=app_state.current_session.accumulated_tool_tokens,
     )
+    app_state.session_manager.update_session(session_id, updates)
 
     # Return session info (only include full_history for UI, not raw messages)
     # Frontend only needs Layer 2 (full_history) for display

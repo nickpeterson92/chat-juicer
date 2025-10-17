@@ -42,3 +42,35 @@ Document Processor
    :members:
    :undoc-members:
    :show-inheritance:
+
+JSON Utilities
+--------------
+
+.. automodule:: utils.json_utils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+HTTP Logger
+-----------
+
+.. automodule:: utils.http_logger
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Client Factory
+--------------
+
+.. automodule:: utils.client_factory
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Validation
+----------
+
+.. automodule:: utils.validation
+   :members:
+   :undoc-members:
+   :show-inheritance:

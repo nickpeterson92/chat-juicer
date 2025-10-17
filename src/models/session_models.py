@@ -5,6 +5,7 @@ Provides Pydantic models for session metadata and commands with runtime validati
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
@@ -108,7 +109,40 @@ class SessionMetadata(BaseModel):
         json_str: str = self.model_dump_json(exclude_none=True, indent=indent)
         return json_str
 
-    model_config = {"frozen": False}  # Allow updates via SessionManager  # Allow updates via SessionManager
+    model_config = {"frozen": False}  # Allow updates via SessionManager
+
+
+@dataclass
+class SessionUpdate:
+    """Data structure for session metadata updates.
+
+    Consolidates optional update parameters into a single cohesive structure
+    for cleaner method signatures and easier testing.
+
+    Example:
+        update = SessionUpdate(title="New Title", message_count=42)
+        session_manager.update_session("chat_123", update)
+    """
+
+    title: str | None = None
+    last_used: str | None = None
+    message_count: int | None = None
+    accumulated_tool_tokens: int | None = None
+
+    def has_updates(self) -> bool:
+        """Check if any fields are set for update.
+
+        Returns:
+            True if at least one field is non-None
+        """
+        return any(
+            [
+                self.title is not None,
+                self.last_used is not None,
+                self.message_count is not None,
+                self.accumulated_tool_tokens is not None,
+            ]
+        )
 
 
 # Session Command Models
@@ -289,6 +323,7 @@ __all__ = [
     "RefusalContent",
     "SessionCommand",
     "SessionMetadata",
+    "SessionUpdate",
     "SummarizeSessionCommand",
     "SwitchSessionCommand",
     "TextContent",

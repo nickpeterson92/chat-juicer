@@ -6,8 +6,9 @@ Handles all streaming event types from OpenAI Agent/Runner pattern.
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, cast
+from typing import cast
 
 from core.constants import (
     AGENT_UPDATED_STREAM_EVENT,

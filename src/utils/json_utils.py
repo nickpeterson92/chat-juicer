@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import json
 
+from collections.abc import Callable
 from functools import partial
-from typing import Any, Callable
+from typing import Any
 
 # Type-annotated partial functions for JSON serialization
 # Explicitly typed as Callable[..., str] to satisfy mypy strict mode

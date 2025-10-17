@@ -10,8 +10,9 @@ Contents
 
 .. toctree::
    :maxdepth: 2
-   :caption: Core Components:
+   :caption: API Reference:
 
+   modules/main
    modules/core
    modules/models
    modules/tools

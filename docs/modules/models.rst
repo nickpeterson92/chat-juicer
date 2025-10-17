@@ -26,3 +26,11 @@ SDK Models
    :members:
    :undoc-members:
    :show-inheritance:
+
+Session Models
+--------------
+
+.. automodule:: models.session_models
+   :members:
+   :undoc-members:
+   :show-inheritance:

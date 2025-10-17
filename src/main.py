@@ -9,7 +9,7 @@ import asyncio
 import os
 import sys
 
-# Force UTF-8 encoding for stdout/stdin on all platforms (especially Windows)
+# Force UTF-8 encoding for stdout/stdin on all platforms
 # This must be done before any print() calls
 if sys.stdout.encoding != "utf-8":
     import io
@@ -45,6 +45,7 @@ from integrations.mcp_servers import setup_mcp_servers
 from integrations.sdk_token_tracker import connect_session, disconnect_session, patch_sdk_for_auto_tracking
 from models.event_models import UserInput
 from models.sdk_models import StreamingEvent
+from models.session_models import SessionUpdate
 from tools import AGENT_TOOLS
 from utils.client_factory import create_http_client, create_openai_client
 from utils.ipc import IPCManager
@@ -67,8 +68,6 @@ class AppState:
 
 # Module-level application state instance
 _app_state = AppState()
-
-# Note: Session command handlers moved to core/session_commands.py for better modularity
 
 
 async def handle_electron_ipc(event: StreamingEvent, tracker: CallTracker) -> str | None:
@@ -375,12 +374,12 @@ async def main() -> None:
                 from datetime import datetime
 
                 items = await _app_state.current_session.get_items()
-                _app_state.session_manager.update_session(
-                    _app_state.current_session.session_id,
+                updates = SessionUpdate(
                     last_used=datetime.now().isoformat(),
                     message_count=len(items),
                     accumulated_tool_tokens=_app_state.current_session.accumulated_tool_tokens,
                 )
+                _app_state.session_manager.update_session(_app_state.current_session.session_id, updates)
 
         except KeyboardInterrupt:
             logger.info("Keyboard interrupt received")
