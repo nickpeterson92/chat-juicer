@@ -18,7 +18,7 @@ from core.constants import (
     ERROR_SESSION_MANAGER_NOT_INITIALIZED,
     ERROR_SESSION_NOT_FOUND,
 )
-from core.session import TokenAwareSQLiteSession
+from core.session import SessionBuilder
 from integrations.sdk_token_tracker import connect_session, disconnect_session
 from models.session_models import (
     AppStateProtocol,
@@ -88,15 +88,16 @@ async def switch_to_session(app_state: AppStateProtocol, session_id: str) -> dic
     if app_state.current_session:
         disconnect_session()
 
-    # Create new session object with persistent storage and full history
-    app_state.current_session = TokenAwareSQLiteSession(
-        session_id=session_id,
-        db_path=CHAT_HISTORY_DB_PATH,
-        agent=app_state.agent,
-        model=app_state.deployment,
-        threshold=CONVERSATION_SUMMARIZATION_THRESHOLD,
-        full_history_store=app_state.full_history_store,
-        session_manager=app_state.session_manager,
+    # Create new session object with persistent storage and full history (using Builder pattern)
+    app_state.current_session = (
+        SessionBuilder(session_id)
+        .with_persistent_storage(CHAT_HISTORY_DB_PATH)
+        .with_agent(app_state.agent)
+        .with_model(app_state.deployment)
+        .with_threshold(CONVERSATION_SUMMARIZATION_THRESHOLD)
+        .with_full_history(app_state.full_history_store)
+        .with_session_manager(app_state.session_manager)
+        .build()
     )
 
     # Restore token counts from stored items (Layer 1 - LLM context)
@@ -191,9 +192,9 @@ async def delete_session_by_id(app_state: AppStateProtocol, session_id: str) -> 
             logger.info(f"Cleared full_history (Layer 2) for session {session_id}")
         # Continue with deletion - Layer 2 is best-effort
 
-    # Delete Layer 1 (LLM context) via session abstraction
-    temp_session = TokenAwareSQLiteSession(
-        session_id=session_id, db_path=CHAT_HISTORY_DB_PATH, agent=None, model=DEFAULT_MODEL
+    # Delete Layer 1 (LLM context) via session abstraction (using Builder pattern)
+    temp_session = (
+        SessionBuilder(session_id).with_persistent_storage(CHAT_HISTORY_DB_PATH).with_model(DEFAULT_MODEL).build()
     )
     layer1_success = await temp_session.delete_storage()
     if layer1_success:
