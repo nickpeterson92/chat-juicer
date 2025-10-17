@@ -19,3 +19,6 @@ export const MESSAGE_BATCH_DELAY = 16; // One animation frame (60fps)
 // IPC protocol delimiters
 export const JSON_DELIMITER = "__JSON__";
 export const SESSION_PREFIX = "__SESSION__";
+
+// UI Messages
+export const DELETE_SESSION_CONFIRM_MESSAGE = "This will permanently remove the conversation history.";

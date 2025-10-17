@@ -4,13 +4,13 @@ const path = require("node:path");
 const Logger = require("./logger");
 const PythonManager = require("../scripts/python-manager");
 const platformConfig = require("../scripts/platform-config");
-
-// Constants
-const RESTART_DELAY = 2000; // 2 seconds
-const RESTART_CALLBACK_DELAY = 500; // 500ms
-const GRACEFUL_SHUTDOWN_TIMEOUT = 5000; // 5 seconds
-const HEALTH_CHECK_INTERVAL = 300000; // 5 minutes (reduced from 30s for performance)
-const SIGTERM_DELAY = 500; // 500ms
+const {
+  RESTART_DELAY,
+  RESTART_CALLBACK_DELAY,
+  GRACEFUL_SHUTDOWN_TIMEOUT,
+  HEALTH_CHECK_INTERVAL,
+  SIGTERM_DELAY,
+} = require("./config/main-constants");
 
 // Initialize logger for main process
 const logger = new Logger("main");
@@ -166,8 +166,7 @@ app.whenReady().then(() => {
     logger.logUserInteraction("chat-input", { messageLength: message.length });
 
     if (pythonProcess && !pythonProcess.killed) {
-      pythonProcess.stdin.write(`${message}
-`);
+      pythonProcess.stdin.write(`${message}\n`);
       logger.debug("Sent input to Python process");
     } else {
       logger.error("Python process is not running");
@@ -187,8 +186,7 @@ app.whenReady().then(() => {
     try {
       // Send command to Python in expected format
       const dataJson = JSON.stringify(data || {});
-      const sessionCommand = `__SESSION__${command}__${dataJson}__
-`;
+      const sessionCommand = `__SESSION__${command}__${dataJson}__\n`;
       pythonProcess.stdin.write(sessionCommand);
       logger.debug("Sent session command to Python", { command, dataJson });
 
@@ -306,7 +304,12 @@ async function stopPythonBot() {
 
         if (platformConfig.isWindows()) {
           // Windows: Kill process tree with /T flag
-          spawn("taskkill", ["/pid", pythonProcessPID.toString(), "/f", "/t"]);
+          if (pythonProcessPID && typeof pythonProcessPID === "number") {
+            spawn("taskkill", ["/pid", pythonProcessPID.toString(), "/f", "/t"]);
+          } else {
+            logger.error("Invalid PID for taskkill, using fallback method");
+            pythonProcess.kill("SIGKILL");
+          }
         } else {
           // Kill entire process group on Unix
           try {

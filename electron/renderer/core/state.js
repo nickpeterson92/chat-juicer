@@ -173,40 +173,10 @@ export class AppState {
     // Validate transition
     if (validTransitions[currentStatus]?.includes(status)) {
       this.setState("connection.status", status);
-      this.handleConnectionChange(status);
+      // Emit event for UI layer to handle DOM updates
+      this.notifyListeners("connection.status", status, currentStatus);
     } else {
       window.electronAPI.log("warn", `Invalid state transition: ${currentStatus} -> ${status}`);
-    }
-  }
-
-  // Handle connection state changes
-  handleConnectionChange(status) {
-    // Note: This method updates DOM elements directly
-    // In a future refactoring, this could be moved to a UI controller
-    const elements = window._chatJuicerElements || {};
-
-    switch (status) {
-      case "CONNECTED":
-        if (elements.statusIndicator) elements.statusIndicator.classList.remove("disconnected");
-        if (elements.statusText) elements.statusText.textContent = "Connected";
-        if (elements.userInput) elements.userInput.disabled = false;
-        if (elements.sendBtn) elements.sendBtn.disabled = false;
-        break;
-
-      case "DISCONNECTED":
-      case "ERROR":
-        if (elements.statusIndicator) elements.statusIndicator.classList.add("disconnected");
-        if (elements.statusText) elements.statusText.textContent = status === "ERROR" ? "Error" : "Disconnected";
-        if (elements.userInput) elements.userInput.disabled = true;
-        if (elements.sendBtn) elements.sendBtn.disabled = true;
-        break;
-
-      case "RECONNECTING":
-        if (elements.statusIndicator) elements.statusIndicator.classList.add("disconnected");
-        if (elements.statusText) elements.statusText.textContent = "Reconnecting...";
-        if (elements.userInput) elements.userInput.disabled = true;
-        if (elements.sendBtn) elements.sendBtn.disabled = true;
-        break;
     }
   }
 }

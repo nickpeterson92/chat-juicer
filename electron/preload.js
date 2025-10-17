@@ -42,4 +42,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   sessionCommand: async (command, data) => {
     return await ipcRenderer.invoke("session-command", { command, data });
   },
+
+  // Cleanup methods to prevent memory leaks
+  removeListener: (channel) => {
+    ipcRenderer.removeAllListeners(channel);
+  },
+
+  removeAllListeners: () => {
+    const channels = ["bot-output", "bot-error", "bot-disconnected", "bot-restarted"];
+    channels.forEach((channel) => {
+      ipcRenderer.removeAllListeners(channel);
+    });
+  },
 });

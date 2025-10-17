@@ -8,6 +8,15 @@ const path = require("node:path");
 const { app } = require("electron");
 const util = require("node:util");
 
+// Logger configuration constants
+const SESSION_ID_RADIX = 36; // Base-36 for compact session IDs
+const SESSION_ID_START = 2; // Skip "0." prefix from Math.random()
+const SESSION_ID_END = 10; // Total of 8 characters
+const MAX_LOG_SIZE_MB = 10; // Maximum log file size before rotation
+const LOG_FILE_RETENTION_COUNT = 5; // Number of rotated log files to keep
+const MAX_METRIC_ARRAY_SIZE = 100; // Maximum entries per metric
+const MAX_METRICS_SIZE = 1000; // Maximum total metrics tracked
+
 class Logger {
   constructor(component = "electron", options = {}) {
     this.component = component;
@@ -33,7 +42,7 @@ class Logger {
     // Performance tracking with size limits to prevent memory leaks
     this.metrics = new Map();
     this.timers = new Map();
-    this.maxMetricsSize = 1000; // Prevent unbounded growth
+    this.maxMetricsSize = MAX_METRICS_SIZE; // Prevent unbounded growth
 
     // Async write queue for non-blocking file I/O
     this.writeQueue = [];
@@ -56,7 +65,7 @@ class Logger {
   }
 
   generateSessionId() {
-    return Math.random().toString(36).substring(2, 10);
+    return Math.random().toString(SESSION_ID_RADIX).substring(SESSION_ID_START, SESSION_ID_END);
   }
 
   ensureLogDirectory() {
@@ -230,7 +239,7 @@ class Logger {
 
   // Setup log rotation
   setupLogRotation() {
-    const maxLogSize = 10 * 1024 * 1024; // 10MB
+    const maxLogSize = MAX_LOG_SIZE_MB * 1024 * 1024; // Convert MB to bytes
     const checkInterval = 60 * 60 * 1000; // Check every hour
 
     this.rotationInterval = setInterval(() => {
@@ -287,9 +296,9 @@ class Logger {
           .sort()
           .reverse();
 
-        // Keep only the 5 most recent
+        // Keep only the most recent rotated logs
         const deletions = [];
-        for (let i = 5; i < rotatedFiles.length; i++) {
+        for (let i = LOG_FILE_RETENTION_COUNT; i < rotatedFiles.length; i++) {
           deletions.push(fs.promises.unlink(path.join(this.logDir, rotatedFiles[i])).catch(() => {}));
         }
 
@@ -372,8 +381,8 @@ class Logger {
     const metricArray = this.metrics.get(name);
     metricArray.push({ value, timestamp: Date.now() });
 
-    // Prevent memory leak - keep only last 100 entries per metric
-    if (metricArray.length > 100) {
+    // Prevent memory leak - keep only recent entries per metric
+    if (metricArray.length > MAX_METRIC_ARRAY_SIZE) {
       metricArray.shift();
     }
 

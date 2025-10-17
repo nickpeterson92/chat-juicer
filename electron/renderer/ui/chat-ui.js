@@ -1,8 +1,13 @@
 /**
  * Chat UI components for message rendering and display
+ * Optimized with DOM caching and batched scroll updates
  */
 
 import { MAX_MESSAGES } from "../config/constants.js";
+import { scheduleScroll } from "../utils/scroll-utils.js";
+
+// Message cache for O(1) message management (replaces O(n) querySelectorAll)
+const messageCache = new Map();
 
 /**
  * Add a message to the chat container
@@ -14,6 +19,8 @@ import { MAX_MESSAGES } from "../config/constants.js";
 export function addMessage(chatContainer, content, type = "assistant") {
   const messageDiv = document.createElement("div");
   messageDiv.className = `message ${type}`;
+  const messageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  messageDiv.dataset.messageId = messageId;
 
   const contentDiv = document.createElement("div");
   contentDiv.className = "message-content";
@@ -22,18 +29,22 @@ export function addMessage(chatContainer, content, type = "assistant") {
   messageDiv.appendChild(contentDiv);
   chatContainer.appendChild(messageDiv);
 
-  // Limit message history to prevent memory issues
-  const messages = chatContainer.querySelectorAll(".message");
-  if (messages.length > MAX_MESSAGES) {
-    // Remove oldest messages, keeping recent ones
-    const toRemove = messages.length - MAX_MESSAGES;
-    for (let i = 0; i < toRemove; i++) {
-      messages[i].remove();
+  // Cache reference for O(1) access
+  messageCache.set(messageId, messageDiv);
+
+  // Limit message history using cache size (O(1) instead of O(n) querySelectorAll)
+  if (messageCache.size > MAX_MESSAGES) {
+    // Remove oldest message
+    const firstKey = messageCache.keys().next().value;
+    const oldMsg = messageCache.get(firstKey);
+    if (oldMsg) {
+      oldMsg.remove();
     }
+    messageCache.delete(firstKey);
   }
 
-  // Auto-scroll to bottom
-  chatContainer.scrollTop = chatContainer.scrollHeight;
+  // Batched scroll update (prevents layout thrashing during streaming)
+  scheduleScroll(chatContainer);
 
   return contentDiv;
 }
@@ -59,7 +70,9 @@ export function updateAssistantMessage(chatContainer, currentAssistantElement, c
   }
 
   currentAssistantElement.textContent = content;
-  chatContainer.scrollTop = chatContainer.scrollHeight;
+
+  // Batched scroll update
+  scheduleScroll(chatContainer);
 }
 
 /**
@@ -70,6 +83,8 @@ export function updateAssistantMessage(chatContainer, currentAssistantElement, c
 export function createStreamingAssistantMessage(chatContainer) {
   const messageDiv = document.createElement("div");
   messageDiv.className = "message assistant streaming";
+  const messageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  messageDiv.dataset.messageId = messageId;
 
   const contentDiv = document.createElement("div");
   contentDiv.className = "message-content";
@@ -87,8 +102,11 @@ export function createStreamingAssistantMessage(chatContainer) {
   messageDiv.appendChild(contentDiv);
   chatContainer.appendChild(messageDiv);
 
-  // Auto-scroll to bottom
-  chatContainer.scrollTop = chatContainer.scrollHeight;
+  // Cache reference
+  messageCache.set(messageId, messageDiv);
+
+  // Batched scroll update
+  scheduleScroll(chatContainer);
 
   return textSpan;
 }
@@ -114,4 +132,13 @@ export function completeStreamingMessage(chatContainer) {
  */
 export function clearChat(chatContainer) {
   chatContainer.innerHTML = "";
+  messageCache.clear(); // Critical: clear cache to prevent memory leaks
+}
+
+/**
+ * Clear the message cache
+ * Should be called on session switches and bot restarts
+ */
+export function clearMessageCache() {
+  messageCache.clear();
 }

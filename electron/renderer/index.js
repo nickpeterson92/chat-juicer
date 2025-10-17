@@ -6,6 +6,7 @@
 // Module imports
 import {
   CONNECTION_RESET_DELAY,
+  DELETE_SESSION_CONFIRM_MESSAGE,
   JSON_DELIMITER,
   MESSAGE_BATCH_DELAY,
   MESSAGE_BATCH_SIZE,
@@ -21,8 +22,9 @@ import {
   summarizeCurrentSession,
   switchSession,
 } from "./services/session-service.js";
-import { addMessage } from "./ui/chat-ui.js";
+import { addMessage, clearChat, clearMessageCache } from "./ui/chat-ui.js";
 import { clearFunctionCards } from "./ui/function-card-ui.js";
+import { clearParseCache } from "./utils/json-cache.js";
 
 // ====================
 // DOM Element Management
@@ -49,9 +51,6 @@ function initializeElements() {
   elements.newSessionBtn = document.getElementById("new-session-btn");
   elements.summarizeSessionBtn = document.getElementById("summarize-session-btn");
   elements.deleteSessionBtn = document.getElementById("delete-session-btn");
-
-  // Make elements globally available for state.handleConnectionChange
-  window._chatJuicerElements = elements;
 }
 
 // Initialize immediately since renderer.js loads at end of body
@@ -62,6 +61,41 @@ initializeElements();
 // ====================
 
 const appState = new AppState();
+
+// ====================
+// Connection Status UI Handler
+// ====================
+
+function updateConnectionUI(status) {
+  switch (status) {
+    case "CONNECTED":
+      if (elements.statusIndicator) elements.statusIndicator.classList.remove("disconnected");
+      if (elements.statusText) elements.statusText.textContent = "Connected";
+      if (elements.userInput) elements.userInput.disabled = false;
+      if (elements.sendBtn) elements.sendBtn.disabled = false;
+      break;
+
+    case "DISCONNECTED":
+    case "ERROR":
+      if (elements.statusIndicator) elements.statusIndicator.classList.add("disconnected");
+      if (elements.statusText) elements.statusText.textContent = status === "ERROR" ? "Error" : "Disconnected";
+      if (elements.userInput) elements.userInput.disabled = true;
+      if (elements.sendBtn) elements.sendBtn.disabled = true;
+      break;
+
+    case "RECONNECTING":
+      if (elements.statusIndicator) elements.statusIndicator.classList.add("disconnected");
+      if (elements.statusText) elements.statusText.textContent = "Reconnecting...";
+      if (elements.userInput) elements.userInput.disabled = true;
+      if (elements.sendBtn) elements.sendBtn.disabled = true;
+      break;
+  }
+}
+
+// Subscribe to connection status changes
+appState.subscribe("connection.status", (newStatus) => {
+  updateConnectionUI(newStatus);
+});
 
 // ====================
 // Event Listener Management
@@ -240,7 +274,7 @@ window.electronAPI.onBotDisconnected(() => {
 
 window.electronAPI.onBotRestarted(() => {
   // Clear UI
-  elements.chatContainer.innerHTML = "";
+  clearChat(elements.chatContainer);
   clearFunctionCards(elements.toolsContainer);
 
   // Clear timers
@@ -255,6 +289,10 @@ window.electronAPI.onBotRestarted(() => {
   appState.setState("connection.hasShownWelcome", false);
   appState.setState("message.currentAssistant", null);
   appState.setState("message.assistantBuffer", "");
+
+  // PERFORMANCE: Clear caches to prevent memory leaks
+  clearMessageCache();
+  clearParseCache();
 
   addMessage(elements.chatContainer, "Bot is restarting...", "system");
 
@@ -323,7 +361,7 @@ async function handleDeleteSession() {
   const sessionToDelete = sessionState.sessions.find((s) => s.session_id === sessionIdToDelete);
   const title = sessionToDelete?.title || "this conversation";
 
-  if (!confirm(`Delete ${title}?\n\nThis will permanently remove the conversation history.`)) {
+  if (!confirm(`Delete ${title}?\n\n${DELETE_SESSION_CONFIRM_MESSAGE}`)) {
     return;
   }
 

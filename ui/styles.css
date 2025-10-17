@@ -266,11 +266,15 @@ body.tools-collapsed .tools-toggle-wrapper {
   overflow-y: auto;
   padding: 20px;
   background: var(--chat-bg);
+  /* PERFORMANCE: Strict containment isolates reflow to this container */
+  contain: strict;
 }
 
 .message {
   margin-bottom: 16px;
   animation: slideIn 0.3s ease-out;
+  /* PERFORMANCE: Layout containment prevents message rendering from affecting siblings */
+  contain: layout style;
 }
 
 @keyframes slideIn {
@@ -599,6 +603,8 @@ body.tools-collapsed .tools-toggle-wrapper {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   color: var(--text-primary);
   transition: all 0.3s ease;
+  /* PERFORMANCE: Isolate function card rendering from other elements */
+  contain: layout style paint;
 }
 
 .function-call-card.executing {
