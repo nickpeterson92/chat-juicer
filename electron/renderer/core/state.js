@@ -173,8 +173,6 @@ export class AppState {
     // Validate transition
     if (validTransitions[currentStatus]?.includes(status)) {
       this.setState("connection.status", status);
-      // Emit event for UI layer to handle DOM updates
-      this.notifyListeners("connection.status", status, currentStatus);
     } else {
       window.electronAPI.log("warn", `Invalid state transition: ${currentStatus} -> ${status}`);
     }

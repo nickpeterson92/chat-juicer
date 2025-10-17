@@ -7,6 +7,7 @@
 import { addMessage, clearChat } from "../ui/chat-ui.js";
 import { clearFunctionCards } from "../ui/function-card-ui.js";
 import { clearParseCache } from "../utils/json-cache.js";
+import { processMermaidDiagrams, renderMarkdown } from "../utils/markdown-renderer.js";
 import { scheduleScroll } from "../utils/scroll-utils.js";
 
 /**
@@ -143,12 +144,18 @@ export async function switchSession(api, elements, appState, sessionId) {
             // Create message element directly instead of using addMessage
             const messageDiv = document.createElement("div");
             messageDiv.className = `message ${role}`;
-            const messageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            const messageId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
             messageDiv.dataset.messageId = messageId;
 
             const contentDiv = document.createElement("div");
             contentDiv.className = "message-content";
-            contentDiv.textContent = content;
+
+            // Render markdown for assistant messages, plain text for user messages
+            if (role === "assistant") {
+              contentDiv.innerHTML = renderMarkdown(content);
+            } else {
+              contentDiv.textContent = content;
+            }
 
             messageDiv.appendChild(contentDiv);
             fragment.appendChild(messageDiv);
@@ -157,6 +164,14 @@ export async function switchSession(api, elements, appState, sessionId) {
 
         // Single DOM append (N reflows → 1 reflow)
         elements.chatContainer.appendChild(fragment);
+
+        // Process Mermaid diagrams in all assistant messages
+        const assistantMessages = elements.chatContainer.querySelectorAll(".message.assistant .message-content");
+        for (const contentDiv of assistantMessages) {
+          processMermaidDiagrams(contentDiv).catch((err) =>
+            window.electronAPI.log("error", "Mermaid processing error", { error: err.message })
+          );
+        }
 
         // Batched scroll update
         scheduleScroll(elements.chatContainer);

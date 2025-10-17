@@ -115,10 +115,18 @@ class Logger {
 
   output(formatted, level) {
     if (this.destination === "console" || this.destination === "both") {
-      if (level === "ERROR") {
-        console.error(formatted);
-      } else {
-        console.log(formatted);
+      try {
+        if (level === "ERROR") {
+          console.error(formatted);
+        } else {
+          console.log(formatted);
+        }
+      } catch (err) {
+        // Ignore EPIPE errors (broken pipe when process is closing)
+        if (err.code !== "EPIPE") {
+          // Re-throw other errors
+          throw err;
+        }
       }
     }
 

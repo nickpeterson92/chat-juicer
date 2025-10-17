@@ -15,6 +15,7 @@ import {
   updateFunctionArguments,
   updateFunctionCallStatus,
 } from "../ui/function-card-ui.js";
+import { processMermaidDiagrams } from "../utils/markdown-renderer.js";
 
 /**
  * Handle assistant_start message
@@ -61,6 +62,9 @@ function handleAssistantDelta(message, context) {
 function handleAssistantEnd(_message, context) {
   const { appState, elements } = context;
 
+  // Get the current assistant message content before clearing state
+  const currentAssistantElement = appState.message.currentAssistant;
+
   // Message complete, remove streaming indicators
   completeStreamingMessage(elements.chatContainer);
   appState.setState("message.currentAssistant", null);
@@ -68,6 +72,14 @@ function handleAssistantEnd(_message, context) {
   // Ensure AI thinking indicator is hidden
   if (elements.aiThinking) {
     elements.aiThinking.classList.remove("active");
+  }
+
+  // Process Mermaid diagrams after streaming is complete
+  // Uses atomic innerHTML replacement to prevent race conditions
+  if (currentAssistantElement && document.body.contains(currentAssistantElement)) {
+    processMermaidDiagrams(currentAssistantElement).catch((err) =>
+      window.electronAPI.log("error", "Mermaid processing error", { error: err.message })
+    );
   }
 }
 

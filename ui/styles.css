@@ -950,3 +950,264 @@ body {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ============================================
+   Markdown Content Styling
+   ============================================ */
+
+/* Headers */
+.message-content h1,
+.message-content h2,
+.message-content h3,
+.message-content h4,
+.message-content h5,
+.message-content h6 {
+  margin: 0.35em 0 0.15em 0;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+
+.message-content h1 { font-size: 1.5em; }
+.message-content h2 { font-size: 1.3em; }
+.message-content h3 { font-size: 1.15em; }
+.message-content h4 { font-size: 1.05em; }
+.message-content h5 { font-size: 1em; }
+.message-content h6 { font-size: 0.95em; }
+
+/* Paragraphs */
+.message-content p {
+  margin: 0.15em 0;
+  line-height: 1.4;
+}
+
+/* Remove excess spacing from first/last elements (GitHub style) */
+.message-content > *:first-child {
+  margin-top: 0 !important;
+}
+
+.message-content > *:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* Reduce spacing between adjacent elements */
+.message-content h1 + p,
+.message-content h2 + p,
+.message-content h3 + p,
+.message-content h4 + p,
+.message-content h5 + p,
+.message-content h6 + p {
+  margin-top: 0.1em;
+}
+
+.message-content ul + p,
+.message-content ol + p,
+.message-content blockquote + p,
+.message-content pre + p {
+  margin-top: 0.2em;
+}
+
+/* Inline code */
+.message-content code {
+  background: rgba(0, 0, 0, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 0.9em;
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .message-content code {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Code blocks */
+.message-content pre {
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  padding: 10px;
+  overflow-x: auto;
+  margin: 0.3em 0;
+}
+
+[data-theme="dark"] .message-content pre {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.message-content pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+
+/* Lists */
+.message-content ul,
+.message-content ol {
+  margin: 0.2em 0;
+  padding-left: 1.5em;
+  line-height: 1.4;
+}
+
+.message-content li {
+  margin: 0.1em 0;
+}
+
+.message-content li > p {
+  margin: 0.2em 0;
+}
+
+/* Nested lists */
+.message-content ul ul,
+.message-content ol ol,
+.message-content ul ol,
+.message-content ol ul {
+  margin: 0.2em 0;
+}
+
+/* Blockquotes */
+.message-content blockquote {
+  border-left: 3px solid rgba(102, 126, 234, 0.5);
+  margin: 0.25em 0;
+  padding: 0.4em 0.8em;
+  background: rgba(0, 0, 0, 0.02);
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .message-content blockquote {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(139, 92, 246, 0.5);
+}
+
+/* Links */
+.message-content a {
+  color: #667eea;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.message-content a:hover {
+  border-bottom-color: #667eea;
+}
+
+[data-theme="dark"] .message-content a {
+  color: #a78bfa;
+}
+
+[data-theme="dark"] .message-content a:hover {
+  border-bottom-color: #a78bfa;
+}
+
+/* Tables */
+.message-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.3em 0;
+  font-size: 0.9em;
+}
+
+.message-content th,
+.message-content td {
+  border: 1px solid var(--border-color);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.message-content th {
+  background: rgba(102, 126, 234, 0.1);
+  font-weight: 600;
+}
+
+[data-theme="dark"] .message-content th {
+  background: rgba(139, 92, 246, 0.15);
+}
+
+/* Horizontal rule */
+.message-content hr {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 0.4em 0;
+}
+
+/* Emphasis */
+.message-content strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.message-content em {
+  font-style: italic;
+}
+
+/* Strikethrough */
+.message-content del {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+/* ============================================
+   Markdown Extensions Styling
+   ============================================ */
+
+/* Mermaid diagrams */
+.message-content .mermaid-wrapper {
+  margin: 0.5em 0;
+  padding: 1em;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  overflow-x: auto;
+  min-height: 100px;
+}
+
+[data-theme="dark"] .message-content .mermaid-wrapper {
+  background: #1e293b;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.message-content .mermaid-wrapper svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.message-content .mermaid-error {
+  color: #ef4444;
+  font-family: monospace;
+  font-size: 0.9em;
+}
+
+/* Math rendering (KaTeX) */
+.message-content .katex {
+  font-size: 1.05em;
+}
+
+.message-content .katex-display {
+  margin: 0.5em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.message-content .math-error {
+  color: #ef4444;
+  font-family: monospace;
+  font-size: 0.9em;
+  background: rgba(239, 68, 68, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Syntax highlighting tweaks for theme integration */
+.message-content .hljs {
+  background: rgba(0, 0, 0, 0.05) !important;
+  padding: 0 !important;
+}
+
+[data-theme="dark"] .message-content .hljs {
+  background: rgba(255, 255, 255, 0.05) !important;
+}

@@ -112,21 +112,11 @@ graph LR
     A --> B
 ```
 
-
-## Implementation Plan
-[Outline the implementation strategy. Include: 1) Development approach (agile, waterfall, etc.), 2) Team structure and roles, 3) Development environment setup, 4) Testing strategy, 5) Deployment approach, 6) Rollback procedures.]
-
-### Phase Breakdown
-[Break down the implementation into phases. For each phase provide: 1) Phase name and objectives, 2) Key deliverables, 3) Dependencies and prerequisites, 4) Estimated duration, 5) Success criteria. Format as numbered phases or a table.]
-
 ### Data Mappings
 [Define data transformation and mapping rules. Include: 1) Source to target field mappings, 2) Data type conversions, 3) Validation rules, 4) Default values and constants, 5) Complex transformation logic. Consider using tables for clarity.]
 
 ### Error Handling Strategy
 [Describe the error handling approach. Include: 1) Error classification and severity levels, 2) Logging and monitoring strategy, 3) Retry mechanisms and circuit breakers, 4) Error recovery procedures, 5) User notification approach, 6) Escalation procedures.]
-
-## Success Metrics
-[Define measurable success criteria. Include: 1) Key Performance Indicators (KPIs), 2) Service Level Objectives (SLOs), 3) Business metrics, 4) Technical metrics (latency, throughput, error rates), 5) User satisfaction metrics. Provide specific targets and measurement methods.]
 
 ## Technical Specifications
 [Provide detailed technical specifications. Include: 1) Hardware requirements, 2) Software dependencies and versions, 3) Network requirements, 4) Storage requirements, 5) Performance specifications, 6) Compliance and regulatory requirements.]
@@ -141,10 +131,7 @@ graph LR
 [Define data transformation logic. Include: 1) Business rules for data processing, 2) Calculation formulas, 3) Conditional logic and branching, 4) Data enrichment rules, 5) Aggregation and summarization logic. Use pseudocode or structured format for complex rules.]
 
 ## Risks and Mitigations
-[Identify risks and mitigation strategies. For each risk provide: 1) Risk description, 2) Probability (High/Medium/Low), 3) Impact (High/Medium/Low), 4) Mitigation strategy, 5) Contingency plan. Format as a table or structured list. Consider technical, business, and operational risks.]
-
-## Timeline
-[Provide a project timeline. Include: 1) Major milestones with dates, 2) Phase durations, 3) Dependencies between phases, 4) Critical path items, 5) Buffer time for risks. Consider using a Gantt chart format or milestone table with key dates and deliverables.]
+[Identify risks and mitigation strategies. For each risk provide: 1) Risk description, 2) Probability (High/Medium/Low), 3) Impact (High/Medium/Low), 4) Mitigation strategy, 5) Contingency plan. Format as a table.. Consider technical, business, and operational risks.]
 
 ---
 *Generated from template: design-doc.md*

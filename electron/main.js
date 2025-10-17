@@ -42,7 +42,12 @@ function createWindow() {
     icon: path.join(__dirname, "icon.png"), // Optional, you can add an icon later
   });
 
-  mainWindow.loadFile(path.join(__dirname, "..", "ui", "index.html"));
+  // Load from Vite dev server in development, built files in production
+  if (process.env.VITE_DEV_SERVER_URL) {
+    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+  } else {
+    mainWindow.loadFile(path.join(__dirname, "..", "dist", "renderer", "ui", "index.html"));
+  }
 
   // Open DevTools in development
   if (process.argv.includes("--dev")) {

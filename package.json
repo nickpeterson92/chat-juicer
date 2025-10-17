@@ -5,8 +5,10 @@
   "main": "electron/main.js",
   "scripts": {
     "prestart": "node scripts/validate.js",
-    "start": "node scripts/launch.js",
-    "dev": "node scripts/launch.js --dev",
+    "start": "npm run build && node scripts/launch.js",
+    "dev": "npm run dev:vite & node scripts/launch.js --dev",
+    "dev:vite": "vite",
+    "build": "vite build",
     "inspect": "node scripts/launch.js --inspect",
     "setup": "npm install && node scripts/setup.js",
     "lint": "biome check electron/*.js scripts/*.js",
@@ -15,8 +17,19 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.3",
-    "electron": "^38.1.2"
+    "electron": "^38.1.2",
+    "electron-vite": "^4.0.1",
+    "vite": "^7.1.10",
+    "vite-plugin-electron": "^0.29.0",
+    "vite-plugin-electron-renderer": "^0.14.6"
   },
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "dompurify": "^3.3.0",
+    "highlight.js": "^11.11.1",
+    "katex": "^0.16.25",
+    "marked": "^16.4.1",
+    "mermaid": "^11.12.0"
+  }
 }

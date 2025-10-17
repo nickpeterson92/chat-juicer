@@ -3,6 +3,10 @@
  * Modular architecture with ES6 modules
  */
 
+// Import CSS for Vite bundling
+import "highlight.js/styles/github-dark.css";
+import "katex/dist/katex.min.css";
+
 // Module imports
 import {
   CONNECTION_RESET_DELAY,
@@ -403,7 +407,7 @@ async function handleSummarizeSession() {
   elements.summarizeSessionBtn.disabled = true;
 
   try {
-    const _result = await summarizeCurrentSession(window.electronAPI, elements);
+    await summarizeCurrentSession(window.electronAPI, elements);
     // Result messages are already handled by the service function
   } catch (error) {
     window.electronAPI.log("error", "Unexpected error during summarization", { error: error.message });
@@ -572,18 +576,9 @@ function cleanup() {
   appState.setState("message.isTyping", false);
   appState.setState("connection.isInitial", true);
 
-  // Clear DOM
-  if (elements.chatContainer) {
-    while (elements.chatContainer.firstChild) {
-      elements.chatContainer.removeChild(elements.chatContainer.firstChild);
-    }
-  }
-
-  if (elements.toolsContainer) {
-    while (elements.toolsContainer.firstChild) {
-      elements.toolsContainer.removeChild(elements.toolsContainer.firstChild);
-    }
-  }
+  // Clear DOM using helper functions
+  clearChat(elements.chatContainer);
+  clearFunctionCards(elements.toolsContainer);
 
   // Remove event listeners
   eventListeners.forEach(({ element, event, handler, options }) => {

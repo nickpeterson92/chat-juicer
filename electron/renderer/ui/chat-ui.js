@@ -4,6 +4,7 @@
  */
 
 import { MAX_MESSAGES } from "../config/constants.js";
+import { processMermaidDiagrams, renderMarkdown } from "../utils/markdown-renderer.js";
 import { scheduleScroll } from "../utils/scroll-utils.js";
 
 // Message cache for O(1) message management (replaces O(n) querySelectorAll)
@@ -19,12 +20,24 @@ const messageCache = new Map();
 export function addMessage(chatContainer, content, type = "assistant") {
   const messageDiv = document.createElement("div");
   messageDiv.className = `message ${type}`;
-  const messageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const messageId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
   messageDiv.dataset.messageId = messageId;
 
   const contentDiv = document.createElement("div");
   contentDiv.className = "message-content";
-  contentDiv.textContent = content;
+
+  // Render markdown for assistant messages, plain text for others
+  if (type === "assistant") {
+    contentDiv.innerHTML = renderMarkdown(content);
+    // Process Mermaid diagrams asynchronously after DOM insertion
+    setTimeout(() => {
+      processMermaidDiagrams(contentDiv).catch((err) =>
+        window.electronAPI.log("error", "Mermaid processing error", { error: err.message })
+      );
+    }, 0);
+  } else {
+    contentDiv.textContent = content;
+  }
 
   messageDiv.appendChild(contentDiv);
   chatContainer.appendChild(messageDiv);
@@ -69,7 +82,11 @@ export function updateAssistantMessage(chatContainer, currentAssistantElement, c
     }
   }
 
-  currentAssistantElement.textContent = content;
+  // Render markdown during streaming
+  currentAssistantElement.innerHTML = renderMarkdown(content);
+
+  // DO NOT process Mermaid during streaming - it causes race conditions
+  // Mermaid will be processed after streaming completes in handleAssistantEnd
 
   // Batched scroll update
   scheduleScroll(chatContainer);
@@ -83,7 +100,7 @@ export function updateAssistantMessage(chatContainer, currentAssistantElement, c
 export function createStreamingAssistantMessage(chatContainer) {
   const messageDiv = document.createElement("div");
   messageDiv.className = "message assistant streaming";
-  const messageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const messageId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
   messageDiv.dataset.messageId = messageId;
 
   const contentDiv = document.createElement("div");
