@@ -27,8 +27,8 @@ exclude = [
     "output",
 ]
 
-# Python version target
-target-version = "py39"
+# Python version target (Python 3.10+ required for match statements)
+target-version = "py310"
 
 # Line length (matching Black's default)
 line-length = 120
@@ -204,7 +204,7 @@ ignore_missing_imports = true
 
 [tool.black]
 line-length = 120
-target-version = ['py39']
+target-version = ['py310']  # Python 3.10+ required for match statements
 include = '\.pyi?$'
 exclude = '''
 /(

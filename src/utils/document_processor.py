@@ -22,35 +22,43 @@ except ImportError:  # pragma: no cover - optional dependency
     MarkItDown = None  # type: ignore[misc,assignment]
     _markitdown_converter = None
 
-# Lazy initialization of OpenAI client for summarization
-_async_client: Any = None
-_client_initialized = False
 
+class _AsyncClientManager:
+    """Singleton manager for AsyncOpenAI client with lazy initialization.
 
-def _get_async_client() -> Any:
-    """Get or create the AsyncOpenAI client for summarization (lazy initialization)."""
-    global _async_client, _client_initialized  # noqa: PLW0603
+    Eliminates global variables while maintaining lazy initialization pattern.
+    """
 
-    if _client_initialized:
-        return _async_client
+    _instance: Any = None
+    _initialized: bool = False
 
-    _client_initialized = True  # Mark as attempted even if it fails
+    @classmethod
+    def get_client(cls) -> Any:
+        """Get or create the AsyncOpenAI client for summarization.
 
-    try:
-        from openai import AsyncOpenAI  # - Lazy import for optional dependency
+        Returns:
+            AsyncOpenAI client instance or None if initialization failed
+        """
+        if cls._initialized:
+            return cls._instance
+
+        cls._initialized = True  # Mark as attempted even if it fails
 
         try:
-            settings = get_settings()
-            _async_client = AsyncOpenAI(api_key=settings.azure_openai_api_key, base_url=settings.azure_endpoint_str)
-            logger.debug(
-                f"Initialized AsyncOpenAI client for summarization with deployment: {settings.azure_openai_deployment}"
-            )
-        except Exception as e:
-            logger.warning(f"Failed to initialize OpenAI client for summarization: {e}")
-    except ImportError as ie:
-        logger.warning(f"OpenAI library not available for summarization: {ie}")
+            from openai import AsyncOpenAI  # Lazy import for optional dependency
 
-    return _async_client
+            try:
+                settings = get_settings()
+                cls._instance = AsyncOpenAI(api_key=settings.azure_openai_api_key, base_url=settings.azure_endpoint_str)
+                logger.debug(
+                    f"Initialized AsyncOpenAI client for summarization with deployment: {settings.azure_openai_deployment}"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to initialize OpenAI client for summarization: {e}")
+        except ImportError as ie:
+            logger.warning(f"OpenAI library not available for summarization: {ie}")
+
+        return cls._instance
 
 
 async def summarize_content(content: str, file_name: str = "document", model: str = "gpt-5-mini") -> str:
@@ -65,7 +73,7 @@ async def summarize_content(content: str, file_name: str = "document", model: st
     Returns:
         Summarized content or original if summarization fails
     """
-    client = _get_async_client()
+    client = _AsyncClientManager.get_client()
     if not client:
         logger.warning("OpenAI client not available for summarization, returning original content")
         return content

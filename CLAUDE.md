@@ -140,9 +140,28 @@ agent = Agent(
     model=deployment,
     instructions=SYSTEM_INSTRUCTIONS,
     tools=TOOLS,
-    mcp_servers=[seq_thinking_server]
+    mcp_servers=[seq_thinking_server],
+    reasoning_effort="medium"  # Configurable via REASONING_EFFORT env var
 )
 ```
+
+### Reasoning Effort Configuration
+Chat Juicer supports configurable reasoning effort for reasoning models (GPT-5, O1, O3):
+
+- **Purpose**: Controls the computational intensity of reasoning operations
+- **Trade-offs**: Speed vs. thoroughness vs. cost (reasoning tokens are billed)
+- **Configuration**: Set `REASONING_EFFORT` in `.env` file
+- **Default**: `medium` (balanced for most use cases)
+
+**Reasoning Levels**:
+| Level | Speed | Cost | Reasoning Tokens | Use Case |
+|-------|-------|------|------------------|----------|
+| minimal | ⚡ Fastest | 💰 Cheapest | Fewest | Simple queries, quick responses |
+| low | ⚡ Fast | 💰 Low | Light | Moderate complexity |
+| medium | ⚙️ Balanced | 💰💰 Moderate | Balanced | Default, most tasks |
+| high | 🐢 Slower | 💰💰💰 Expensive | Maximum | Complex reasoning, critical analysis |
+
+**Token Impact**: Reasoning tokens appear separately in usage metrics as `output_tokens_details.reasoning_tokens`
 
 ### Function Architecture
 All functions are implemented as async operations organized by module:
@@ -308,6 +327,13 @@ Required:
 - `AZURE_OPENAI_API_KEY`: Your Azure OpenAI API key
 - `AZURE_OPENAI_ENDPOINT`: Format `https://resource.openai.azure.com/`
 - `AZURE_OPENAI_DEPLOYMENT`: Model deployment name (e.g., "gpt-5-mini")
+
+Optional:
+- `REASONING_EFFORT`: Control reasoning effort for reasoning models (`minimal`, `low`, `medium`, `high`)
+  - **minimal**: Fastest responses, fewest reasoning tokens (cheapest)
+  - **low**: Light reasoning
+  - **medium**: Balanced (default, recommended for most use cases)
+  - **high**: Maximum thoroughness, most reasoning tokens (most expensive)
 
 ### Dependencies
 

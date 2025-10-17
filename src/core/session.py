@@ -38,6 +38,8 @@ from utils.token_utils import count_tokens
 class MessageNormalizer:
     """Normalizes Agent/Runner messages for OpenAI chat.completions API."""
 
+    __slots__ = ("content_type_handlers",)
+
     # Valid content types for OpenAI chat.completions API
     VALID_CONTENT_TYPES: ClassVar[set[str]] = {"text", "image_url", "input_audio", "refusal", "audio", "file"}
 
@@ -100,22 +102,24 @@ class MessageNormalizer:
         """
         content_type = content_item.get("type", "")
 
-        # For invalid types (like "output_text"), extract the text
-        if content_type and content_type not in self.VALID_CONTENT_TYPES:
-            # Try to extract text content regardless of the type
-            if "text" in content_item:
+        # Use match statement for efficient pattern-based dispatch (Python 3.10+)
+        match content_type:
+            case "" if "text" in content_item:
+                # No type field, but has text
                 return str(content_item["text"])
-            elif "output" in content_item:
-                return str(content_item["output"])
-        elif content_type in self.VALID_CONTENT_TYPES:
-            # For valid types, preserve them if it's text
-            if content_type == "text" and "text" in content_item:
+            case "text" if "text" in content_item:
+                # Valid text type with text content
                 return str(content_item["text"])
-        elif "text" in content_item:
-            # No type field, but has text
-            return str(content_item["text"])
-
-        return None
+            case _ if content_type and content_type not in self.VALID_CONTENT_TYPES:
+                # Invalid type - try to extract text or output
+                if "text" in content_item:
+                    return str(content_item["text"])
+                elif "output" in content_item:
+                    return str(content_item["output"])
+                return None
+            case _:
+                # Valid non-text type or no extractable content
+                return None
 
     def normalize_item(self, item: Any) -> dict[str, Any] | None:
         """Normalize a single conversation item.
@@ -172,8 +176,15 @@ class MessageNormalizer:
         output = item.get("output", "")
         return {"role": "assistant", "content": f"[Tool result: {output}]"}
 
-    def _handle_reasoning(self, item: Any) -> dict[str, Any] | None:
-        """Handle reasoning type items - skip for summarization."""
+    def _handle_reasoning(self, _item: Any) -> dict[str, Any] | None:
+        """Handle reasoning type items - skip for summarization.
+
+        Args:
+            _item: Unused - reasoning items are always skipped
+
+        Returns:
+            None to indicate item should be skipped
+        """
         return None  # Skip reasoning items (usually empty)
 
     def create_summary_messages(self, items: list[Any], system_prompt: str) -> Any:
@@ -242,6 +253,9 @@ class TokenAwareSQLiteSession(SQLiteSession):
         # Track accumulated tool tokens separately (not stored in session items)
         self.accumulated_tool_tokens = 0
 
+        # Incremental token tracking cache - cache tokens by item ID to avoid recalculation
+        self._item_token_cache: dict[str, int] = {}
+
         # Async lock to prevent concurrent summarizations
         self._summarization_lock = asyncio.Lock()
 
@@ -294,40 +308,72 @@ class TokenAwareSQLiteSession(SQLiteSession):
         result = count_tokens(text, self.model)
         return int(result["exact_tokens"])  # Ensure return type is int
 
+    def _count_item_tokens(self, item: dict[str, Any]) -> int:
+        """Count tokens for a single item (extracted for caching).
+
+        Args:
+            item: Single conversation item
+
+        Returns:
+            Token count for this item
+        """
+        item_tokens = 0
+
+        # Handle different content types
+        content = item.get("content", "")
+
+        # Regular text content (user/assistant messages)
+        if isinstance(content, str):
+            item_tokens += self._count_tokens(content)
+
+        # Tool call results (stored as list of dicts or other formats)
+        elif isinstance(content, list):
+            # Tool results can be a list of content items
+            for content_item in content:
+                if isinstance(content_item, dict):
+                    # Tool result with output
+                    if "output" in content_item:
+                        item_tokens += self._count_tokens(str(content_item["output"]))
+                    # Tool result with text
+                    elif "text" in content_item:
+                        item_tokens += self._count_tokens(str(content_item["text"]))
+                elif isinstance(content_item, str):
+                    item_tokens += self._count_tokens(content_item)
+
+        # Handle tool_calls field if present
+        if item.get("tool_calls"):
+            # Count tokens for tool call arguments
+            for tool_call in item["tool_calls"]:
+                if isinstance(tool_call, dict) and "function" in tool_call and "arguments" in tool_call["function"]:
+                    item_tokens += self._count_tokens(str(tool_call["function"]["arguments"]))
+
+        # Add small overhead for role and message structure
+        item_tokens += MESSAGE_STRUCTURE_TOKEN_OVERHEAD
+
+        return item_tokens
+
     def _calculate_total_tokens(self, items: list[dict[str, Any]]) -> int:
-        """Calculate total tokens from conversation items including tool calls."""
+        """Calculate total tokens from conversation items with caching.
+
+        Uses item ID cache to avoid recalculating tokens for unchanged items.
+        Performance: O(n) first time, O(1) for cached items on subsequent calls.
+        """
         total = 0
         for item in items:
-            # Handle different content types
-            content = item.get("content", "")
+            # Try to use cached token count first
+            item_id = item.get("id")
 
-            # Regular text content (user/assistant messages)
-            if isinstance(content, str):
-                total += self._count_tokens(content)
+            if item_id and item_id in self._item_token_cache:
+                # Cache hit - use cached value
+                total += self._item_token_cache[item_id]
+            else:
+                # Cache miss - calculate and cache
+                item_tokens = self._count_item_tokens(item)
+                total += item_tokens
 
-            # Tool call results (stored as list of dicts or other formats)
-            elif isinstance(content, list):
-                # Tool results can be a list of content items
-                for content_item in content:
-                    if isinstance(content_item, dict):
-                        # Tool result with output
-                        if "output" in content_item:
-                            total += self._count_tokens(str(content_item["output"]))
-                        # Tool result with text
-                        elif "text" in content_item:
-                            total += self._count_tokens(str(content_item["text"]))
-                    elif isinstance(content_item, str):
-                        total += self._count_tokens(content_item)
-
-            # Handle tool_calls field if present
-            if item.get("tool_calls"):
-                # Count tokens for tool call arguments
-                for tool_call in item["tool_calls"]:
-                    if isinstance(tool_call, dict) and "function" in tool_call and "arguments" in tool_call["function"]:
-                        total += self._count_tokens(str(tool_call["function"]["arguments"]))
-
-            # Add small overhead for role and message structure
-            total += MESSAGE_STRUCTURE_TOKEN_OVERHEAD
+                # Cache for future use if item has ID
+                if item_id:
+                    self._item_token_cache[item_id] = item_tokens
 
         return total
 
@@ -407,7 +453,8 @@ class TokenAwareSQLiteSession(SQLiteSession):
     def _collect_recent_exchanges(self, items: list[dict[str, Any]], keep_recent: int) -> list[dict[str, Any]]:
         """Collect the most recent complete user-assistant exchanges.
 
-        Uses a single forward pass O(n) algorithm.
+        Optimized with reverse scan and early termination - stops when enough exchanges found.
+        Performance: O(k) where k is items needed, vs O(n) for all items.
 
         Args:
             items: List of conversation items
@@ -420,38 +467,48 @@ class TokenAwareSQLiteSession(SQLiteSession):
             logger.info(f"_collect_recent_exchanges: No items or keep_recent={keep_recent}")
             return []
 
-        # Find all complete exchanges in a single forward pass
-        exchanges = []
-        pending_user_idx = None
+        # Scan backwards to find recent exchanges with early exit
+        exchanges_found = 0
+        result_indices = []
+        pending_assistant_idx = None
 
-        for i, item in enumerate(items):
+        # Reverse iteration with early termination
+        for i in range(len(items) - 1, -1, -1):
+            item = items[i]
             role = item.get("role")
 
             # Skip tool results but NOT assistant messages with tool_calls
-            # In Agent/Runner, assistant messages often include tool_calls
             if role == "tool":
                 continue
 
-            if role == "user":
-                pending_user_idx = i  # Start of potential exchange
+            if role == "assistant":
+                pending_assistant_idx = i  # Potential end of exchange
 
-            elif role == "assistant" and pending_user_idx is not None:
-                # Complete exchange found! (includes assistant messages with tool_calls)
-                exchanges.append((pending_user_idx, i))
-                pending_user_idx = None
+            elif role == "user" and pending_assistant_idx is not None:
+                # Complete exchange found (user followed by assistant)
+                result_indices.append((i, pending_assistant_idx))
+                pending_assistant_idx = None
+                exchanges_found += 1
 
-        # Handle orphaned user message at the end
-        if pending_user_idx is not None:
-            exchanges.append((pending_user_idx, pending_user_idx))
+                # EARLY EXIT: Stop when we have enough exchanges
+                if exchanges_found >= keep_recent:
+                    logger.info(f"Early exit after scanning {len(items) - i} items (found {exchanges_found} exchanges)")
+                    break
 
-        # Take the last N exchanges and build result
-        recent_exchanges = exchanges[-keep_recent:] if exchanges else []
-        logger.info(f"Found {len(exchanges)} total exchanges, keeping last {len(recent_exchanges)}")
+        # Handle orphaned assistant message at the end (if we haven't exited early)
+        if pending_assistant_idx is not None and exchanges_found < keep_recent:
+            result_indices.append((pending_assistant_idx, pending_assistant_idx))
+            exchanges_found += 1
 
-        # Only include user and assistant messages (exclude reasoning/tool items)
+        # Reverse to restore chronological order
+        result_indices.reverse()
+
+        logger.info(f"Found {exchanges_found} exchanges, scanned from end")
+
+        # Extract items from stored indices (only user/assistant, skip tool/reasoning)
         result = [
             items[i]
-            for start_idx, end_idx in recent_exchanges
+            for start_idx, end_idx in result_indices
             for i in range(start_idx, end_idx + 1)
             if items[i].get("role") in ["user", "assistant"]
         ]
@@ -681,6 +738,10 @@ class TokenAwareSQLiteSession(SQLiteSession):
 
         # Clear session and add summary + recent messages
         await self.clear_session()
+
+        # Clear token cache since we're starting fresh
+        self._item_token_cache.clear()
+        logger.debug("Cleared item token cache after session summarization")
 
         # Use context manager to safely skip full_history saves during repopulation
         with self._skip_full_history_context():

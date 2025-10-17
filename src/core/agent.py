@@ -7,8 +7,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from agents import Agent
+from agents import Agent, ModelSettings
+from openai.types.shared import Reasoning
 
+from core.constants import REASONING_MODELS, get_settings
 from utils.logger import logger
 
 
@@ -24,14 +26,36 @@ def create_agent(deployment: str, instructions: str, tools: list[Any], mcp_serve
     Returns:
         Configured Agent instance
     """
-    # Create agent with tools and MCP servers
-    agent = Agent(
-        name="Chat Juicer",
-        model=deployment,
-        instructions=instructions,
-        tools=tools,
-        mcp_servers=mcp_servers,
-    )
+    # Get settings for reasoning effort configuration
+    settings = get_settings()
+
+    # Check if this is a reasoning model that supports reasoning_effort
+    is_reasoning_model = any(deployment.startswith(model) for model in REASONING_MODELS)
+
+    # Configure model settings with reasoning effort only for reasoning models
+    if is_reasoning_model:
+        model_settings = ModelSettings(reasoning=Reasoning(effort=settings.reasoning_effort))
+        logger.info(f"Reasoning model detected - reasoning_effort set to '{settings.reasoning_effort}'")
+        # Create agent with reasoning configuration
+        agent = Agent(
+            name="Chat Juicer",
+            model=deployment,
+            instructions=instructions,
+            tools=tools,
+            mcp_servers=mcp_servers,
+            model_settings=model_settings,
+        )
+    else:
+        logger.info("Non-reasoning model detected - reasoning_effort not applied")
+
+        # Create agent without model_settings
+        agent = Agent(
+            name="Chat Juicer",
+            model=deployment,
+            instructions=instructions,
+            tools=tools,
+            mcp_servers=mcp_servers,
+        )
 
     # Log agent configuration
     logger.info(f"Chat Juicer Agent created - Deployment: {deployment}")
