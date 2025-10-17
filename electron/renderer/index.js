@@ -486,8 +486,11 @@ function initializeEventListeners() {
   // Toggle tools panel
   if (elements.toggleToolsBtn) {
     addManagedEventListener(elements.toggleToolsBtn, "click", () => {
+      const wrapper = document.getElementById("tools-toggle-wrapper");
       elements.toolsPanel.classList.toggle("collapsed");
-      document.body.classList.toggle("tools-collapsed");
+      if (wrapper) {
+        wrapper.classList.toggle("panel-collapsed");
+      }
       elements.toggleToolsBtn.textContent = elements.toolsPanel.classList.contains("collapsed") ? "◀" : "▶";
       elements.toggleToolsBtn.title = elements.toolsPanel.classList.contains("collapsed")
         ? "Show function calls"

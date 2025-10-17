@@ -146,15 +146,15 @@ body {
 }
 
 .tools-toggle-wrapper {
-  position: fixed;
+  position: absolute;
   right: 420px;
   top: 50%;
   transform: translateY(-50%);
   z-index: 100;
-  transition: right 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: right 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-body.tools-collapsed .tools-toggle-wrapper {
+.tools-toggle-wrapper.panel-collapsed {
   right: 0;
 }
 
