@@ -592,9 +592,16 @@ if (elements.chatPanel) {
 
     for (const file of files) {
       try {
-        // Update progress text
+        // Update progress immediately when starting this file
+        const currentFileIndex = completed + 1;
+        const startPercentage = (completed / files.length) * 100;
+
         if (elements.progressText) {
-          elements.progressText.textContent = `Uploading ${file.name} (${completed + 1}/${files.length})`;
+          elements.progressText.textContent = `Uploading ${file.name} (${currentFileIndex}/${files.length})`;
+        }
+
+        if (elements.progressBar) {
+          elements.progressBar.style.width = `${startPercentage}%`;
         }
 
         window.electronAPI.log("info", "Processing file upload", {
@@ -615,7 +622,7 @@ if (elements.chatPanel) {
 
         completed++;
 
-        // Update progress bar
+        // Update progress bar to completed percentage
         if (elements.progressBar) {
           const percentage = (completed / files.length) * 100;
           elements.progressBar.style.width = `${percentage}%`;
@@ -637,7 +644,7 @@ if (elements.chatPanel) {
       } catch (error) {
         completed++;
 
-        // Update progress bar even on error
+        // Update progress bar to completed percentage even on error
         if (elements.progressBar) {
           const percentage = (completed / files.length) * 100;
           elements.progressBar.style.width = `${percentage}%`;
