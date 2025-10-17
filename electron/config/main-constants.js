@@ -12,10 +12,14 @@ const SIGTERM_DELAY = 500; // 500ms - delay before sending SIGTERM after quit co
 // Health monitoring
 const HEALTH_CHECK_INTERVAL = 300000; // 5 minutes - interval for process health checks (reduced from 30s for performance)
 
+// IPC operation timeouts
+const FILE_UPLOAD_TIMEOUT = 10000; // 10 seconds - timeout for file upload operations
+
 module.exports = {
   RESTART_DELAY,
   RESTART_CALLBACK_DELAY,
   GRACEFUL_SHUTDOWN_TIMEOUT,
   SIGTERM_DELAY,
   HEALTH_CHECK_INTERVAL,
+  FILE_UPLOAD_TIMEOUT,
 };

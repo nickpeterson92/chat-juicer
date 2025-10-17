@@ -43,6 +43,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return await ipcRenderer.invoke("session-command", { command, data });
   },
 
+  // File upload
+  uploadFile: async (fileData) => {
+    return await ipcRenderer.invoke("upload-file", fileData);
+  },
+
   // Cleanup methods to prevent memory leaks
   removeListener: (channel) => {
     ipcRenderer.removeAllListeners(channel);

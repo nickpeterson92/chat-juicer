@@ -196,6 +196,10 @@ MSG_TYPE_ERROR = "error"
 #: Contains success/error data for session commands (new, switch, delete).
 MSG_TYPE_SESSION_RESPONSE = "session_response"
 
+#: Message type for file upload responses.
+#: Contains success/error data for file upload operations to sources directory.
+MSG_TYPE_UPLOAD_RESPONSE = "upload_response"
+
 #: Message type for agent configuration update notifications.
 #: Sent when agent state or configuration changes during execution.
 MSG_TYPE_AGENT_UPDATED = "agent_updated"

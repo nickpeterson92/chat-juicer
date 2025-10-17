@@ -6,6 +6,7 @@ Using Agent/Runner pattern for native MCP integration
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import sys
 
@@ -48,6 +49,7 @@ from models.sdk_models import StreamingEvent
 from models.session_models import SessionUpdate
 from tools import AGENT_TOOLS
 from utils.client_factory import create_http_client, create_openai_client
+from utils.file_utils import save_uploaded_file
 from utils.ipc import IPCManager
 from utils.logger import logger
 
@@ -347,6 +349,31 @@ async def main() -> None:
                 except Exception as e:
                     logger.error(f"Error handling session command: {e}", exc_info=True)
                     IPCManager.send_session_response({"error": str(e)})
+                continue
+
+            # Handle file upload commands
+            if raw_input.startswith("__UPLOAD__"):
+                try:
+                    # Parse upload command: __UPLOAD__<json>__
+                    json_start = raw_input.index("__UPLOAD__") + len("__UPLOAD__")
+                    json_end = raw_input.index("__", json_start)
+                    upload_json = raw_input[json_start:json_end]
+                    upload_data = json.loads(upload_json)
+
+                    logger.info(f"Processing file upload: {upload_data.get('filename')}")
+
+                    # Process upload
+                    result = save_uploaded_file(filename=upload_data["filename"], data=upload_data["data"])
+
+                    # Send response back to Electron
+                    response_msg = {"type": "upload_response", "data": result}
+                    IPCManager.send(response_msg)
+                    logger.info(f"Upload response sent: {result.get('success')}")
+
+                except Exception as e:
+                    logger.error(f"Upload command error: {e}", exc_info=True)
+                    error_msg = {"type": "upload_response", "data": {"success": False, "error": str(e)}}
+                    IPCManager.send(error_msg)
                 continue
 
             # Validate user input with Pydantic

@@ -229,3 +229,56 @@ async def file_operation(
 
     # Single exit point
     return response
+
+
+def save_uploaded_file(filename: str, data: list[int], target_dir: str = "sources") -> dict[str, Any]:
+    """
+    Save uploaded file data to the sources directory.
+
+    Args:
+        filename: Name of the file to save
+        data: List of byte values (0-255)
+        target_dir: Target directory (default: "sources")
+
+    Returns:
+        Dictionary with success status and metadata
+    """
+    try:
+        # Validate target directory
+        cwd = Path.cwd()
+        sources_path = cwd / target_dir
+
+        # Create sources directory if it doesn't exist
+        sources_path.mkdir(parents=True, exist_ok=True)
+
+        # Validate filename (prevent directory traversal)
+        if "/" in filename or "\\" in filename or ".." in filename:
+            return {"success": False, "error": "Invalid filename: path separators not allowed"}
+
+        # Build target file path
+        target_file = sources_path / filename
+
+        # Check if file already exists and create backup
+        if target_file.exists():
+            backup_path = sources_path / f"{filename}.backup"
+            backup_path.write_bytes(target_file.read_bytes())
+
+        # Convert list of ints to bytes and write
+        byte_data = bytes(data)
+        target_file.write_bytes(byte_data)
+
+        # Get file info
+        file_size = target_file.stat().st_size
+
+        # Return relative path from cwd
+        relative_path = target_file.relative_to(cwd)
+
+        return {
+            "success": True,
+            "file_path": str(relative_path),
+            "size": file_size,
+            "message": f"Saved {filename} ({file_size:,} bytes)",
+        }
+
+    except Exception as e:
+        return {"success": False, "error": f"Failed to save file: {e!s}"}

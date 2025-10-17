@@ -11,6 +11,7 @@ export const MAX_MESSAGES = 100; // Limit chat history to prevent memory issues
 export const FUNCTION_CARD_CLEANUP_DELAY = 30000; // 30 seconds
 export const CONNECTION_RESET_DELAY = 1000; // 1 second
 export const OLD_CARD_THRESHOLD = 60000; // 1 minute
+export const UPLOAD_PROGRESS_HIDE_DELAY = 1000; // 1 second
 
 // Message batching performance
 export const MESSAGE_BATCH_SIZE = 10;

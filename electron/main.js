@@ -10,6 +10,7 @@ const {
   GRACEFUL_SHUTDOWN_TIMEOUT,
   HEALTH_CHECK_INTERVAL,
   SIGTERM_DELAY,
+  FILE_UPLOAD_TIMEOUT,
 } = require("./config/main-constants");
 
 // Initialize logger for main process
@@ -109,6 +110,12 @@ async function startPythonBot() {
   pythonProcess.stdout.on("data", (data) => {
     const output = data.toString("utf-8");
     logger.trace("Python stdout received", { length: output.length });
+
+    // Don't forward upload_response to renderer (handled by IPC handler)
+    if (output.includes('"type":"upload_response"')) {
+      logger.trace("Skipping upload_response forwarding to renderer");
+      return;
+    }
 
     if (mainWindow) {
       // Send to renderer process
@@ -234,6 +241,61 @@ app.whenReady().then(() => {
     } catch (error) {
       logger.error("Session command error", { error: error.message });
       return { error: error.message };
+    }
+  });
+
+  // IPC handler for file uploads
+  ipcMain.handle("upload-file", async (_event, { filename, data, size, type }) => {
+    logger.info("File upload requested", { filename, size, type });
+
+    if (!pythonProcess || pythonProcess.killed) {
+      logger.error("Python process not running for file upload");
+      return { success: false, error: "Backend not available" };
+    }
+
+    try {
+      // Send upload command to Python
+      const uploadData = { filename, data, size, type };
+      const dataJson = JSON.stringify(uploadData);
+      const uploadCommand = `__UPLOAD__${dataJson}__\n`;
+      pythonProcess.stdin.write(uploadCommand);
+      logger.debug("Sent upload command to Python", { filename, size });
+
+      // Wait for response with timeout
+      return new Promise((resolve) => {
+        const timeout = setTimeout(() => {
+          logger.warn("File upload timed out", { filename });
+          resolve({ success: false, error: "Upload timed out" });
+        }, FILE_UPLOAD_TIMEOUT);
+
+        const responseHandler = (data) => {
+          const output = data.toString("utf-8");
+
+          const jsonStart = output.indexOf("__JSON__");
+          if (jsonStart !== -1) {
+            const jsonEnd = output.indexOf("__JSON__", jsonStart + 8);
+            if (jsonEnd !== -1) {
+              try {
+                const jsonStr = output.substring(jsonStart + 8, jsonEnd);
+                const message = JSON.parse(jsonStr);
+
+                if (message.type === "upload_response") {
+                  clearTimeout(timeout);
+                  pythonProcess.stdout.removeListener("data", responseHandler);
+                  resolve(message.data);
+                }
+              } catch (e) {
+                logger.error("Failed to parse upload response", { error: e.message });
+              }
+            }
+          }
+        };
+
+        pythonProcess.stdout.on("data", responseHandler);
+      });
+    } catch (error) {
+      logger.error("File upload error", { error: error.message });
+      return { success: false, error: error.message };
     }
   });
 

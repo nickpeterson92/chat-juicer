@@ -44,9 +44,8 @@ from models.sdk_models import (
     RunItemStreamEvent,
     StreamingEvent,
 )
-
-# Import centralized JSON utilities
 from utils.json_utils import json_compact as _json_builder
+from utils.logger import logger
 
 
 @dataclass
@@ -142,6 +141,8 @@ def handle_tool_output(item: RunItem, tracker: CallTracker) -> str | None:
     if call_info:
         call_id = call_info["call_id"]
         tool_name = call_info.get("tool_name", "unknown")
+    else:
+        logger.info("Tool output received but no tracked call_id in queue")
 
     # Get output
     if hasattr(item, "output"):
@@ -164,6 +165,8 @@ def handle_tool_output(item: RunItem, tracker: CallTracker) -> str | None:
         call_id=call_id if call_id else None,
         success=success,
     )
+
+    logger.info(f"Function completed: {tool_name} (call_id: {call_id or 'none'}, success: {success})")
     return cast(str, _json_builder(result_msg.model_dump(exclude_none=True)))
 
 

@@ -475,7 +475,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
         Returns:
             Token count for this item
         """
-        item_tokens = 0
+        item_tokens: int = 0
 
         # Handle different content types
         content = item.get("content", "")

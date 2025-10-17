@@ -15,6 +15,7 @@ import {
   MESSAGE_BATCH_DELAY,
   MESSAGE_BATCH_SIZE,
   OLD_CARD_THRESHOLD,
+  UPLOAD_PROGRESS_HIDE_DELAY,
 } from "./config/constants.js";
 import { AppState } from "./core/state.js";
 import { processMessage } from "./handlers/message-handlers.js";
@@ -55,6 +56,11 @@ function initializeElements() {
   elements.newSessionBtn = document.getElementById("new-session-btn");
   elements.summarizeSessionBtn = document.getElementById("summarize-session-btn");
   elements.deleteSessionBtn = document.getElementById("delete-session-btn");
+  elements.fileDropZone = document.getElementById("file-drop-zone");
+  elements.chatPanel = document.querySelector(".chat-panel");
+  elements.uploadProgress = document.getElementById("file-upload-progress");
+  elements.progressBar = document.getElementById("progress-bar-fill");
+  elements.progressText = document.getElementById("progress-text");
 }
 
 // Initialize immediately since renderer.js loads at end of body
@@ -528,6 +534,147 @@ function initializeEventListeners() {
 }
 
 initializeEventListeners();
+
+// ====================
+// File Upload Handlers
+// ====================
+
+// Prevent default drag behavior on document
+["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
+  document.addEventListener(eventName, (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
+});
+
+// Show drop zone when dragging files over chat panel
+if (elements.chatPanel) {
+  elements.chatPanel.addEventListener("dragenter", (e) => {
+    if (e.dataTransfer && e.dataTransfer.types.includes("Files")) {
+      if (elements.fileDropZone) {
+        elements.fileDropZone.classList.add("active");
+      }
+    }
+  });
+}
+
+// Hide drop zone when dragging leaves the drop zone itself
+if (elements.fileDropZone) {
+  elements.fileDropZone.addEventListener("dragleave", (e) => {
+    if (e.target === elements.fileDropZone) {
+      elements.fileDropZone.classList.remove("active");
+    }
+  });
+}
+
+// Handle file drop
+if (elements.chatPanel) {
+  elements.chatPanel.addEventListener("drop", async (e) => {
+    // Hide drop zone
+    if (elements.fileDropZone) {
+      elements.fileDropZone.classList.remove("active");
+    }
+
+    const files = Array.from(e.dataTransfer.files);
+
+    if (files.length === 0) {
+      addMessage(elements.chatContainer, "No files detected in drop.", "error");
+      return;
+    }
+
+    // Show progress bar
+    if (elements.uploadProgress) {
+      elements.uploadProgress.classList.add("active");
+    }
+
+    let completed = 0;
+    const results = [];
+
+    for (const file of files) {
+      try {
+        // Update progress text
+        if (elements.progressText) {
+          elements.progressText.textContent = `Uploading ${file.name} (${completed + 1}/${files.length})`;
+        }
+
+        window.electronAPI.log("info", "Processing file upload", {
+          filename: file.name,
+          size: file.size,
+          type: file.type,
+        });
+
+        const buffer = await file.arrayBuffer();
+        const uint8Array = new Uint8Array(buffer);
+
+        const result = await window.electronAPI.uploadFile({
+          filename: file.name,
+          data: Array.from(uint8Array),
+          size: file.size,
+          type: file.type,
+        });
+
+        completed++;
+
+        // Update progress bar
+        if (elements.progressBar) {
+          const percentage = (completed / files.length) * 100;
+          elements.progressBar.style.width = `${percentage}%`;
+        }
+
+        results.push({ file: file.name, result });
+
+        if (result.success) {
+          window.electronAPI.log("info", "File uploaded successfully", {
+            filename: file.name,
+            path: result.file_path,
+          });
+        } else {
+          window.electronAPI.log("error", "File upload failed", {
+            filename: file.name,
+            error: result.error,
+          });
+        }
+      } catch (error) {
+        completed++;
+
+        // Update progress bar even on error
+        if (elements.progressBar) {
+          const percentage = (completed / files.length) * 100;
+          elements.progressBar.style.width = `${percentage}%`;
+        }
+
+        window.electronAPI.log("error", "File upload error", {
+          filename: file.name,
+          error: error.message,
+        });
+        results.push({ file: file.name, result: { success: false, error: error.message } });
+      }
+    }
+
+    // Hide progress bar after a short delay
+    setTimeout(() => {
+      if (elements.uploadProgress) {
+        elements.uploadProgress.classList.remove("active");
+      }
+      // Reset progress bar
+      if (elements.progressBar) {
+        elements.progressBar.style.width = "0%";
+      }
+    }, UPLOAD_PROGRESS_HIDE_DELAY);
+
+    // Show summary message
+    const successCount = results.filter((r) => r.result.success).length;
+    const failCount = results.length - successCount;
+
+    if (failCount === 0) {
+      addMessage(elements.chatContainer, `Uploaded ${successCount} file(s) to sources/`, "system");
+    } else if (successCount === 0) {
+      addMessage(elements.chatContainer, `Failed to upload ${failCount} file(s)`, "error");
+    } else {
+      addMessage(elements.chatContainer, `Uploaded ${successCount} file(s), ${failCount} failed`, "system");
+    }
+  });
+}
 
 // ====================
 // Window Load Handler
