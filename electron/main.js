@@ -1,7 +1,8 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, shell } = require("electron");
 const { spawn } = require("node:child_process");
 const path = require("node:path");
 const fs = require("node:fs/promises");
+const os = require("node:os");
 const Logger = require("./logger");
 const PythonManager = require("../scripts/python-manager");
 const platformConfig = require("../scripts/platform-config");
@@ -360,6 +361,64 @@ app.whenReady().then(() => {
       return { success: true };
     } catch (error) {
       logger.error("Failed to delete file", { dirPath, filename, error: error.message });
+      return { success: false, error: error.message };
+    }
+  });
+
+  // IPC handler for getting system username
+  ipcMain.handle("get-username", async () => {
+    try {
+      const userInfo = os.userInfo();
+      // Get username and extract first name (before any dot)
+      const username = userInfo.username;
+      const firstName = username.split(".")[0]; // Get everything before first dot
+      const capitalizedFirstName = firstName.charAt(0).toUpperCase() + firstName.slice(1);
+      logger.debug("Username requested", { raw: username, display: capitalizedFirstName });
+      return capitalizedFirstName;
+    } catch (error) {
+      logger.error("Failed to get username", { error: error.message });
+      return "User"; // Fallback
+    }
+  });
+
+  // IPC handler for opening files with system default application
+  ipcMain.handle("open-file", async (_event, { dirPath, filename }) => {
+    logger.info("File open requested", { dirPath, filename });
+
+    try {
+      // Construct absolute path relative to project root
+      const projectRoot = path.join(__dirname, "..");
+      const absolutePath = path.join(projectRoot, dirPath, filename);
+
+      // Security check: ensure path is within project directory
+      const normalizedPath = path.normalize(absolutePath);
+      const normalizedRoot = path.normalize(projectRoot);
+      if (!normalizedPath.startsWith(normalizedRoot)) {
+        logger.error("Security: Attempted to open file outside project", { path: normalizedPath });
+        return { success: false, error: "Invalid file path" };
+      }
+
+      // Check if file exists
+      try {
+        await fs.access(absolutePath);
+      } catch (_e) {
+        logger.error("File does not exist", { path: absolutePath });
+        return { success: false, error: "File not found" };
+      }
+
+      // Open file with system default application
+      const result = await shell.openPath(absolutePath);
+
+      if (result) {
+        // If result is a non-empty string, it's an error message
+        logger.error("Failed to open file", { path: absolutePath, error: result });
+        return { success: false, error: result };
+      }
+
+      logger.info("File opened successfully", { dirPath, filename });
+      return { success: true };
+    } catch (error) {
+      logger.error("Failed to open file", { dirPath, filename, error: error.message });
       return { success: false, error: error.message };
     }
   });

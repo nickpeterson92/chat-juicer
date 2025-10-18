@@ -222,9 +222,29 @@ class SummarizeSessionCommand(BaseModel):
         return json_str
 
 
+class ClearSessionCommand(BaseModel):
+    """Command to clear current session (lazy initialization pattern).
+
+    Clears the current session without creating a new one immediately.
+    Next user message will trigger fresh session creation via lazy initialization.
+    """
+
+    command: Literal["clear"] = "clear"
+
+    def to_json(self) -> str:
+        """Convert to JSON for IPC."""
+        json_str: str = self.model_dump_json(exclude_none=True)
+        return json_str
+
+
 # Union type for all session commands
 SessionCommand = (
-    CreateSessionCommand | SwitchSessionCommand | DeleteSessionCommand | ListSessionsCommand | SummarizeSessionCommand
+    CreateSessionCommand
+    | SwitchSessionCommand
+    | DeleteSessionCommand
+    | ListSessionsCommand
+    | SummarizeSessionCommand
+    | ClearSessionCommand
 )
 
 
@@ -252,6 +272,8 @@ def parse_session_command(data: dict[str, Any]) -> SessionCommand:
         return ListSessionsCommand.model_validate(data)
     elif command_type == "summarize":
         return SummarizeSessionCommand.model_validate(data)
+    elif command_type == "clear":
+        return ClearSessionCommand.model_validate(data)
     else:
         raise ValueError(f"Unknown command type: {command_type}")
 
@@ -312,6 +334,7 @@ ContentItem = (
 __all__ = [
     "AppStateProtocol",
     "AudioContent",
+    "ClearSessionCommand",
     "ContentItem",
     "CreateSessionCommand",
     "DeleteSessionCommand",

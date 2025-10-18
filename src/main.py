@@ -10,6 +10,8 @@ import json
 import os
 import sys
 
+from datetime import datetime
+
 # Force UTF-8 encoding for stdout/stdin on all platforms
 # This must be done before any print() calls
 if sys.stdout.encoding != "utf-8":
@@ -122,6 +124,56 @@ def handle_streaming_error(error: Exception) -> None:
 
     # Send assistant_end to properly close the stream
     IPCManager.send_assistant_end()
+
+
+async def ensure_session_exists(app_state: AppState) -> TokenAwareSQLiteSession:
+    """Ensure a session exists, creating one if needed (lazy initialization).
+
+    Args:
+        app_state: Application state container
+
+    Returns:
+        Active TokenAwareSQLiteSession instance
+    """
+    if app_state.current_session is not None:
+        return app_state.current_session
+
+    logger.info("No active session - creating new session on first message")
+
+    # Type guard: session_manager must exist
+    if app_state.session_manager is None:
+        raise RuntimeError("Session manager not initialized")
+
+    # Create new session metadata
+    session_meta = app_state.session_manager.create_session()
+    logger.info(f"Created new session: {session_meta.session_id} - {session_meta.title}")
+
+    # Create token-aware session with persistent storage and full history
+    app_state.current_session = TokenAwareSQLiteSession(
+        session_id=session_meta.session_id,
+        db_path=CHAT_HISTORY_DB_PATH,
+        agent=app_state.agent,
+        model=app_state.deployment,
+        threshold=CONVERSATION_SUMMARIZATION_THRESHOLD,
+        full_history_store=app_state.full_history_store,
+        session_manager=app_state.session_manager,
+    )
+
+    # Restore token counts from stored items (if any)
+    items = await app_state.current_session.get_items()
+    if items:
+        app_state.current_session.total_tokens = app_state.current_session._calculate_total_tokens(items)
+        logger.info(f"Restored session with {len(items)} items, {app_state.current_session.total_tokens} tokens")
+
+    logger.info(f"Session ready with id: {app_state.current_session.session_id}")
+
+    # Connect session to SDK token tracker for automatic tracking
+    connect_session(app_state.current_session)
+
+    # Send session creation event to frontend
+    IPCManager.send({"type": "session_created", "session_id": session_meta.session_id, "title": session_meta.title})
+
+    return app_state.current_session
 
 
 async def process_user_input(session: TokenAwareSQLiteSession, user_input: str) -> None:
@@ -300,31 +352,10 @@ async def main() -> None:
     _app_state.session_manager = SessionManager(metadata_path=DEFAULT_SESSION_METADATA_PATH)
     logger.info("Session manager initialized")
 
-    # Always create fresh session on startup
-    session_meta = _app_state.session_manager.create_session()
-    logger.info(f"Started new session: {session_meta.session_id} - {session_meta.title}")
-
-    # Create token-aware session with persistent storage and full history
-    _app_state.current_session = TokenAwareSQLiteSession(
-        session_id=session_meta.session_id,
-        db_path=CHAT_HISTORY_DB_PATH,  # Persistent file-based storage
-        agent=agent,
-        model=deployment,
-        threshold=CONVERSATION_SUMMARIZATION_THRESHOLD,
-        full_history_store=_app_state.full_history_store,
-        session_manager=_app_state.session_manager,
-    )
-
-    # Restore token counts from stored items
-    items = await _app_state.current_session.get_items()
-    if items:
-        _app_state.current_session.total_tokens = _app_state.current_session._calculate_total_tokens(items)
-        logger.info(f"Restored session with {len(items)} items, {_app_state.current_session.total_tokens} tokens")
-
-    logger.info(f"Session created with id: {_app_state.current_session.session_id}")
-
-    # Connect session to SDK token tracker for automatic tracking
-    connect_session(_app_state.current_session)
+    # LAZY INITIALIZATION: No session created on startup
+    # Session will be created on first user message or when switching to existing session
+    _app_state.current_session = None
+    logger.info("App initialized - session will be created on first message")
 
     # Main chat loop
     # Session manages all conversation state internally
@@ -393,20 +424,25 @@ async def main() -> None:
             file_msg = f"User: {user_input[:LOG_PREVIEW_LENGTH]}{'...' if len(user_input) > LOG_PREVIEW_LENGTH else ''}"
             logger.info(f"User: {user_input}", extra={"file_message": file_msg})
 
+            # Ensure session exists (lazy initialization on first message)
+            session = await ensure_session_exists(_app_state)
+
             # Process user input through session (handles summarization automatically)
-            await process_user_input(_app_state.current_session, user_input)
+            await process_user_input(session, user_input)
 
             # Update session metadata after each message
-            if _app_state.session_manager and _app_state.current_session:
-                from datetime import datetime
-
-                items = await _app_state.current_session.get_items()
-                updates = SessionUpdate(
-                    last_used=datetime.now().isoformat(),
-                    message_count=len(items),
-                    accumulated_tool_tokens=_app_state.current_session.accumulated_tool_tokens,
-                )
-                _app_state.session_manager.update_session(_app_state.current_session.session_id, updates)
+            # At this point, both session_manager and current_session are guaranteed to exist
+            # (ensure_session_exists would have raised otherwise)
+            # Using the session variable from ensure_session_exists for type safety
+            items = await session.get_items()
+            updates = SessionUpdate(
+                last_used=datetime.now().isoformat(),
+                message_count=len(items),
+                accumulated_tool_tokens=session.accumulated_tool_tokens,
+            )
+            # Type narrowing: we know session_manager exists from ensure_session_exists
+            if _app_state.session_manager is not None:
+                _app_state.session_manager.update_session(session.session_id, updates)
 
         except KeyboardInterrupt:
             logger.info("Keyboard interrupt received")

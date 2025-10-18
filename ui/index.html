@@ -49,6 +49,9 @@
 
     <!-- Main Content Area -->
     <div class="main-content">
+      <!-- Welcome Page (shown on startup) -->
+      <div id="welcome-page-container"></div>
+
       <!-- Minimal Header -->
       <div class="header">
         <!-- Sidebar Toggle (stays visible when collapsed) -->
@@ -135,8 +138,13 @@
         <!-- Files Panel (repurposed from tools panel) -->
         <div class="files-panel collapsed" id="files-panel">
           <div class="files-header">
-            <div class="files-title">
-              <span>📁 Source Files</span>
+            <div class="files-tabs">
+              <button class="files-tab active" id="tab-sources" data-directory="sources">
+                📁 Sources
+              </button>
+              <button class="files-tab" id="tab-output" data-directory="output">
+                📄 Output
+              </button>
             </div>
             <button class="refresh-files-btn" id="refresh-files-btn" title="Refresh file list">
               🔄

@@ -34,7 +34,7 @@ export function safeParse(jsonStr, defaultValue = null) {
     parseCache.set(jsonStr, result);
 
     return result;
-  } catch (e) {
+  } catch (_e) {
     return defaultValue;
   }
 }

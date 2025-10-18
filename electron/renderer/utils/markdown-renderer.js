@@ -139,7 +139,7 @@ renderer.code = (token) => {
     try {
       const highlighted = hljs.highlight(code, { language }).value;
       return `<pre><code class="hljs language-${language}">${highlighted}</code></pre>`;
-    } catch (err) {
+    } catch (_err) {
       // Fall through to plain code on error
     }
   }

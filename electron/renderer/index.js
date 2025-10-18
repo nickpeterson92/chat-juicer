@@ -47,7 +47,7 @@ import {
 import { AppState } from "./core/state.js";
 import { processMessage } from "./handlers/message-handlers.js";
 import {
-  createNewSession,
+  clearCurrentSession,
   deleteSession,
   loadSessions,
   sessionState,
@@ -56,6 +56,7 @@ import {
 } from "./services/session-service.js";
 import { addMessage, clearChat, clearMessageCache } from "./ui/chat-ui.js";
 import { clearFunctionCards } from "./ui/function-card-ui.js";
+import { getSuggestionPrompt, hideWelcomePage, showWelcomePage } from "./ui/welcome-page.js";
 import { clearParseCache } from "./utils/json-cache.js";
 
 // ====================
@@ -90,6 +91,7 @@ function initializeElements() {
   elements.uploadProgress = document.getElementById("file-upload-progress");
   elements.progressBar = document.getElementById("progress-bar-fill");
   elements.progressText = document.getElementById("progress-text");
+  elements.welcomePageContainer = document.getElementById("welcome-page-container");
 }
 
 // Initialize immediately since renderer.js loads at end of body
@@ -136,6 +138,16 @@ appState.subscribe("connection.status", (newStatus) => {
   updateConnectionUI(newStatus);
 });
 
+// Subscribe to model name changes and update welcome page if visible
+appState.subscribe("ui.modelName", (newModelName) => {
+  if (appState.ui.currentView === "welcome") {
+    const modelNameElement = document.getElementById("welcome-model-name");
+    if (modelNameElement && newModelName) {
+      modelNameElement.textContent = newModelName;
+    }
+  }
+});
+
 // ====================
 // Event Listener Management
 // ====================
@@ -174,6 +186,156 @@ function sendMessage() {
 
   // Send to main process
   window.electronAPI.sendUserInput(message);
+}
+
+// ====================
+// View Management (Welcome vs Chat)
+// ====================
+
+async function showWelcomeView() {
+  if (!elements.welcomePageContainer) return;
+
+  // Get system username
+  let userName = "User"; // Fallback
+  try {
+    userName = await window.electronAPI.getUsername();
+  } catch (error) {
+    window.electronAPI.log("error", "Failed to get username", { error: error.message });
+  }
+
+  // Get model name from state
+  const modelName = appState.ui.modelName || "Loading...";
+
+  // Show welcome page
+  showWelcomePage(elements.welcomePageContainer, userName, modelName);
+
+  // Update state
+  appState.setState("ui.currentView", "welcome");
+
+  // Add CSS class to container for view switching
+  document.body.classList.add("view-welcome");
+  document.body.classList.remove("view-chat");
+
+  // Attach welcome page event listeners after DOM is ready
+  setTimeout(() => {
+    attachWelcomePageListeners();
+  }, 0);
+}
+
+function showChatView() {
+  if (!elements.welcomePageContainer) return;
+
+  // Hide welcome page
+  hideWelcomePage(elements.welcomePageContainer);
+
+  // Update state
+  appState.setState("ui.currentView", "chat");
+
+  // Update CSS classes
+  document.body.classList.remove("view-welcome");
+  document.body.classList.add("view-chat");
+
+  // Focus chat input
+  if (elements.userInput) {
+    elements.userInput.focus();
+  }
+}
+
+function attachWelcomePageListeners() {
+  const welcomeInput = document.getElementById("welcome-input");
+  const welcomeSendBtn = document.getElementById("welcome-send-btn");
+  const suggestionPills = document.querySelectorAll(".suggestion-pill");
+  const welcomeContainer = elements.welcomePageContainer;
+
+  // File drag-and-drop handlers for welcome page
+  if (welcomeContainer) {
+    welcomeContainer.addEventListener("dragenter", (e) => {
+      if (e.dataTransfer?.types.includes("Files")) {
+        if (elements.fileDropZone) {
+          elements.fileDropZone.classList.add("active");
+        }
+      }
+    });
+
+    welcomeContainer.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    welcomeContainer.addEventListener("dragleave", (e) => {
+      // Only hide if leaving the welcome container entirely
+      if (e.target === welcomeContainer) {
+        if (elements.fileDropZone) {
+          elements.fileDropZone.classList.remove("active");
+        }
+      }
+    });
+
+    welcomeContainer.addEventListener("drop", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      handleFileDropWithSession(e, true);
+    });
+  }
+
+  // Handle welcome input send
+  const sendWelcomeMessage = () => {
+    if (!welcomeInput) return;
+
+    const message = welcomeInput.value.trim();
+    if (!message || appState.connection.status !== "CONNECTED") return;
+
+    // Transition to chat view
+    showChatView();
+
+    // Add user message to chat
+    addMessage(elements.chatContainer, message, "user");
+
+    // Reset assistant message state
+    appState.setState("message.currentAssistant", null);
+    appState.setState("message.assistantBuffer", "");
+
+    // Send to main process
+    window.electronAPI.sendUserInput(message);
+
+    // Refresh session list after short delay to show newly created session
+    // Backend creates session via lazy initialization when first message is sent
+    setTimeout(() => {
+      loadSessions(window.electronAPI, updateSessionsList);
+    }, 500);
+  };
+
+  // Send button click
+  if (welcomeSendBtn) {
+    welcomeSendBtn.addEventListener("click", sendWelcomeMessage);
+  }
+
+  // Enter key to send
+  if (welcomeInput) {
+    welcomeInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendWelcomeMessage();
+      }
+    });
+  }
+
+  // Suggestion pill clicks
+  suggestionPills.forEach((pill) => {
+    pill.addEventListener("click", () => {
+      const category = pill.dataset.category;
+      const prompt = getSuggestionPrompt(category);
+
+      if (prompt && welcomeInput) {
+        welcomeInput.value = prompt;
+        welcomeInput.focus();
+
+        // Auto-resize textarea
+        welcomeInput.style.height = "auto";
+        welcomeInput.style.height = `${Math.min(welcomeInput.scrollHeight, 200)}px`;
+      }
+    });
+  });
 }
 
 // ====================
@@ -268,10 +430,20 @@ window.electronAPI.onBotOutput((output) => {
       (line.includes("Welcome to Wishgate!") ||
         line.includes("Connected to") ||
         line.includes("Using deployment:") ||
+        line.includes("Using model:") ||
         line.includes("Type 'quit'") ||
         line.includes("====") ||
         line.includes("Enter your message"))
     ) {
+      // Capture model/deployment name
+      if (line.includes("Using deployment:")) {
+        const modelName = line.split("Using deployment:")[1].trim();
+        appState.setState("ui.modelName", modelName);
+      } else if (line.includes("Using model:")) {
+        const modelName = line.split("Using model:")[1].trim();
+        appState.setState("ui.modelName", modelName);
+      }
+
       appState.setState("connection.isInitial", false);
       appState.setState("connection.hasShownWelcome", true);
       continue;
@@ -357,13 +529,16 @@ function setConnectionStatus(connected) {
 // Source Files Management UI
 // ====================
 
-async function loadSourceFiles() {
+// Track active directory tab
+let activeFilesDirectory = "sources";
+
+async function loadFiles(directory = "sources") {
   if (!elements.filesContainer) return;
 
   elements.filesContainer.innerHTML = `<div class="files-loading">${MSG_LOADING_FILES}</div>`;
 
   try {
-    const result = await window.electronAPI.listDirectory("sources");
+    const result = await window.electronAPI.listDirectory(directory);
 
     if (!result.success) {
       elements.filesContainer.innerHTML = `<div class="files-error">${MSG_FILES_ERROR.replace("{error}", result.error)}</div>`;
@@ -404,7 +579,20 @@ async function loadSourceFiles() {
       deleteBtn.title = "Delete file";
       deleteBtn.onclick = (e) => {
         e.stopPropagation();
-        handleDeleteFile(file.name);
+        handleDeleteFile(file.name, activeFilesDirectory);
+      };
+
+      // Click handler to open file
+      fileItem.onclick = async () => {
+        try {
+          const result = await window.electronAPI.openFile(activeFilesDirectory, file.name);
+          if (!result.success) {
+            addMessage(elements.chatContainer, `Failed to open file: ${result.error}`, "error");
+          }
+        } catch (error) {
+          window.electronAPI.log("error", "Failed to open file", { filename: file.name, error: error.message });
+          addMessage(elements.chatContainer, `Error opening file: ${error.message}`, "error");
+        }
       };
 
       fileItem.appendChild(fileIcon);
@@ -431,7 +619,7 @@ function formatFileSize(bytes) {
   );
 }
 
-async function handleDeleteFile(filename) {
+async function handleDeleteFile(filename, directory = "sources") {
   if (!filename) {
     addMessage(elements.chatContainer, MSG_NO_FILE_SELECTED, "error");
     return;
@@ -442,12 +630,12 @@ async function handleDeleteFile(filename) {
   }
 
   try {
-    const result = await window.electronAPI.deleteFile("sources", filename);
+    const result = await window.electronAPI.deleteFile(directory, filename);
 
     if (result.success) {
       addMessage(elements.chatContainer, MSG_FILE_DELETED.replace("{filename}", filename), "system");
       // Refresh the files list
-      loadSourceFiles();
+      loadFiles(directory);
     } else {
       addMessage(
         elements.chatContainer,
@@ -533,15 +721,26 @@ function updateSessionsList() {
 }
 
 async function handleCreateNewSession() {
-  const result = await createNewSession(window.electronAPI, elements);
-  if (result.success) {
-    await loadSessions(window.electronAPI, updateSessionsList);
-  }
+  // Clear current session in backend (lazy initialization pattern)
+  await clearCurrentSession(window.electronAPI);
+
+  // Show welcome page (defers session creation until first message)
+  showWelcomeView();
+
+  // Clear chat for fresh start
+  clearChat(elements.chatContainer);
+  clearFunctionCards(elements.chatContainer);
+
+  // Update sessions list
+  await loadSessions(window.electronAPI, updateSessionsList);
 }
 
 async function handleSwitchSession(sessionId) {
   const result = await switchSession(window.electronAPI, elements, appState, sessionId);
   if (result.success) {
+    // Switch to chat view when loading existing session
+    showChatView();
+
     // Session list already updated by switchSession
     updateSessionsList();
   }
@@ -700,7 +899,25 @@ function initializeEventListeners() {
 
   // Refresh files button
   if (elements.refreshFilesBtn) {
-    addManagedEventListener(elements.refreshFilesBtn, "click", loadSourceFiles);
+    addManagedEventListener(elements.refreshFilesBtn, "click", () => loadFiles(activeFilesDirectory));
+  }
+
+  // File tabs switching
+  const filesTabs = document.querySelectorAll(".files-tab");
+  for (const tab of filesTabs) {
+    addManagedEventListener(tab, "click", () => {
+      const directory = tab.dataset.directory;
+
+      // Update active tab styling
+      for (const t of filesTabs) {
+        t.classList.remove("active");
+      }
+      tab.classList.add("active");
+
+      // Update active directory and load files
+      activeFilesDirectory = directory;
+      loadFiles(directory);
+    });
   }
 
   // Theme toggle
@@ -749,7 +966,7 @@ initializeEventListeners();
 // Show drop zone when dragging files over chat panel
 if (elements.chatPanel) {
   elements.chatPanel.addEventListener("dragenter", (e) => {
-    if (e.dataTransfer && e.dataTransfer.types.includes("Files")) {
+    if (e.dataTransfer?.types.includes("Files")) {
       if (elements.fileDropZone) {
         elements.fileDropZone.classList.add("active");
       }
@@ -888,17 +1105,39 @@ async function handleFileDrop(e) {
     );
   }
 
-  // Refresh the files panel after upload
-  loadSourceFiles();
+  // Refresh the files panel after upload (only if on sources tab)
+  if (activeFilesDirectory === "sources") {
+    loadFiles("sources");
+  }
+}
+
+/**
+ * Handle file drop upload with optional session creation
+ * @param {DragEvent} e - Drop event
+ * @param {boolean} fromWelcome - Whether upload is from welcome page
+ */
+async function handleFileDropWithSession(e, fromWelcome = false) {
+  // If from welcome page, transition to chat view first
+  if (fromWelcome && appState.ui.currentView === "welcome") {
+    showChatView();
+
+    // Refresh session list after short delay to show newly created session
+    setTimeout(() => {
+      loadSessions(window.electronAPI, updateSessionsList);
+    }, 500);
+  }
+
+  // Use existing upload handler
+  await handleFileDrop(e);
 }
 
 // Attach drop handler to both chat panel and drop zone
 if (elements.chatPanel) {
-  elements.chatPanel.addEventListener("drop", handleFileDrop);
+  elements.chatPanel.addEventListener("drop", (e) => handleFileDropWithSession(e, false));
 }
 
 if (elements.fileDropZone) {
-  elements.fileDropZone.addEventListener("drop", handleFileDrop);
+  elements.fileDropZone.addEventListener("drop", (e) => handleFileDropWithSession(e, false));
 }
 
 // ====================
@@ -913,7 +1152,6 @@ window.addEventListener("load", () => {
 
   if (elements.userInput) {
     elements.userInput.disabled = false;
-    elements.userInput.focus();
   }
   if (elements.sendBtn) {
     elements.sendBtn.disabled = false;
@@ -922,7 +1160,10 @@ window.addEventListener("load", () => {
   setConnectionStatus(true);
   initializeTheme();
   loadSessions(window.electronAPI, updateSessionsList);
-  loadSourceFiles();
+  loadFiles(activeFilesDirectory);
+
+  // Show welcome page on startup
+  showWelcomeView();
 });
 
 // ====================

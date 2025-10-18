@@ -58,6 +58,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return await ipcRenderer.invoke("delete-file", { dirPath, filename });
   },
 
+  // Open file with system default application
+  openFile: async (dirPath, filename) => {
+    return await ipcRenderer.invoke("open-file", { dirPath, filename });
+  },
+
+  // Get system username
+  getUsername: async () => {
+    return await ipcRenderer.invoke("get-username");
+  },
+
   // Cleanup methods to prevent memory leaks
   removeListener: (channel) => {
     ipcRenderer.removeAllListeners(channel);

@@ -74,6 +74,8 @@ export class AppState {
     this.ui = {
       theme: localStorage.getItem("theme") || "light",
       toolsPanelCollapsed: false,
+      currentView: "welcome", // "welcome" | "chat"
+      modelName: "Loading...", // Model/deployment name from backend
     };
 
     // State change listeners

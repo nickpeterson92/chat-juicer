@@ -244,6 +244,24 @@ function handleFunctionExecuted(message, context) {
 }
 
 /**
+ * Handle session_created message (when backend creates session on first message)
+ */
+function handleSessionCreated(message, context) {
+  const { appState } = context;
+
+  window.electronAPI.log("info", "Session created", {
+    session_id: message.session_id,
+    title: message.title,
+  });
+
+  // Transition from welcome view to chat view
+  if (appState.ui && appState.ui.currentView === "welcome") {
+    appState.setState("ui.currentView", "chat");
+    window.electronAPI.log("debug", "Transitioned from welcome to chat view");
+  }
+}
+
+/**
  * Message handler registry
  * Maps message types to their handler functions
  */
@@ -262,6 +280,7 @@ export const messageHandlers = {
   function_call_arguments_done: handleFunctionCallArgumentsDone,
   function_call_ready: handleFunctionCallReady,
   function_executed: handleFunctionExecuted,
+  session_created: handleSessionCreated,
   session_response: () => {}, // Handled by main process via IPC, no renderer action needed
   agent_updated: () => {}, // Agent state change event - informational only, no UI action needed
 };

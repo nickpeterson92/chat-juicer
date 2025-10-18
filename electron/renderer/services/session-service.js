@@ -259,3 +259,32 @@ export async function summarizeCurrentSession(api, elements) {
     return { success: false, error: e.message };
   }
 }
+
+/**
+ * Clear current session for lazy initialization pattern
+ *
+ * Clears the backend session state without creating a new session immediately.
+ * Used when clicking "New chat" - session will be created when user sends first message.
+ *
+ * @param {Object} api - Electron API
+ * @returns {Promise<Object>} Result with success/error
+ */
+export async function clearCurrentSession(api) {
+  try {
+    const response = await api.sessionCommand("clear", {});
+
+    if (response?.success) {
+      sessionState.currentSessionId = null;
+      window.electronAPI.log("info", "Session cleared for lazy initialization");
+      return { success: true, data: response };
+    } else if (response?.error) {
+      window.electronAPI.log("error", "Clear session failed", { error: response.error });
+      return { success: false, error: response.error };
+    } else {
+      return { success: false, error: "Unexpected response format" };
+    }
+  } catch (e) {
+    window.electronAPI.log("error", "Failed to clear session", { error: e.message });
+    return { success: false, error: e.message };
+  }
+}

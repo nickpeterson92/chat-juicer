@@ -22,6 +22,7 @@ from core.session import SessionBuilder
 from integrations.sdk_token_tracker import connect_session, disconnect_session
 from models.session_models import (
     AppStateProtocol,
+    ClearSessionCommand,
     CreateSessionCommand,
     DeleteSessionCommand,
     ListSessionsCommand,
@@ -244,6 +245,39 @@ async def summarize_current_session(app_state: AppStateProtocol) -> dict[str, An
         return _session_error("Summarization failed or not needed")
 
 
+async def clear_current_session(app_state: AppStateProtocol) -> dict[str, Any]:
+    """Clear current session for lazy initialization pattern.
+
+    Clears the current session without creating a new one immediately.
+    Next user message will trigger fresh session creation via lazy initialization.
+
+    This is used for "New chat" functionality where we want to show the welcome page
+    and defer session creation until the user sends their first message.
+
+    Args:
+        app_state: Application state containing current session
+
+    Returns:
+        Success status
+    """
+    # Disconnect from token tracker if there's an active session
+    if app_state.current_session:
+        disconnect_session()
+        logger.info(f"Clearing current session: {app_state.current_session.session_id}")
+        app_state.current_session = None
+
+    # Clear current session ID in session manager
+    if app_state.session_manager:
+        app_state.session_manager.current_session_id = None
+
+    logger.info("Current session cleared - next message will create new session")
+
+    return {
+        "success": True,
+        "message": "Session cleared successfully",
+    }
+
+
 async def handle_session_command(app_state: AppStateProtocol, command: str, data: dict[str, Any]) -> dict[str, Any]:
     """Handle session management commands from IPC with Pydantic validation.
 
@@ -264,6 +298,7 @@ async def handle_session_command(app_state: AppStateProtocol, command: str, data
         ListSessionsCommand: lambda _: list_all_sessions(app_state),
         DeleteSessionCommand: lambda cmd: delete_session_by_id(app_state, cmd.session_id),
         SummarizeSessionCommand: lambda _: summarize_current_session(app_state),
+        ClearSessionCommand: lambda _: clear_current_session(app_state),
     }
 
     try:
