@@ -69,12 +69,6 @@ export function createFunctionCallCard(
     headerDiv.appendChild(expandIndicator);
     cardDiv.appendChild(headerDiv);
 
-    // Add preview div for collapsed state
-    const previewDiv = document.createElement("div");
-    previewDiv.className = "function-preview";
-    previewDiv.textContent = `${functionName}()`;
-    cardDiv.appendChild(previewDiv);
-
     // Add click handler for expand/collapse
     cardDiv.addEventListener("click", () => toggleFunctionCard(cardDiv));
 
@@ -185,9 +179,6 @@ function flushStatusUpdates(activeCalls) {
       argsDiv.textContent = typeof parsedArgs === "string" ? parsedArgs : JSON.stringify(parsedArgs, null, 2);
 
       card.element.appendChild(argsDiv);
-
-      // Update preview
-      updateFunctionPreview(card.element, data.arguments);
     }
 
     // Add result if provided
@@ -196,9 +187,6 @@ function flushStatusUpdates(activeCalls) {
       resultDiv.className = "function-result";
       resultDiv.textContent = data.result;
       card.element.appendChild(resultDiv);
-
-      // Update preview with result summary
-      updateFunctionPreview(card.element, null, data.result);
     }
 
     // Add error if provided
@@ -207,43 +195,10 @@ function flushStatusUpdates(activeCalls) {
       resultDiv.className = "function-result";
       resultDiv.textContent = `Error: ${data.error}`;
       card.element.appendChild(resultDiv);
-
-      // Update preview with error
-      updateFunctionPreview(card.element, null, null, data.error);
     }
   }
 
   pendingUpdates.clear();
-}
-
-/**
- * Update function preview text for collapsed state
- * @param {HTMLElement} cardElement - Card element
- * @param {string} args - Arguments string
- * @param {string} result - Result string
- * @param {string} error - Error string
- */
-function updateFunctionPreview(cardElement, args = null, result = null, error = null) {
-  const previewDiv = cardElement.querySelector(".function-preview");
-  if (!previewDiv) return;
-
-  const functionName = cardElement.querySelector(".function-name")?.textContent || "function";
-
-  if (error) {
-    previewDiv.textContent = `❌ ${functionName}() → Error`;
-  } else if (result) {
-    const resultPreview = result.length > 50 ? `${result.substring(0, 50)}...` : result;
-    previewDiv.textContent = `✓ ${functionName}() → ${resultPreview}`;
-  } else if (args) {
-    try {
-      const parsed = safeParse(args, args);
-      const argsPreview = typeof parsed === "string" ? parsed : JSON.stringify(parsed);
-      const shortArgs = argsPreview.length > 40 ? `${argsPreview.substring(0, 40)}...` : argsPreview;
-      previewDiv.textContent = `${functionName}(${shortArgs})`;
-    } catch {
-      previewDiv.textContent = `${functionName}(...)`;
-    }
-  }
 }
 
 /**
@@ -281,14 +236,10 @@ export function updateFunctionArguments(activeCalls, argumentsBuffer, callId, de
     const parsedArgs = safeParse(argumentsBuffer.get(callId), argumentsBuffer.get(callId));
     argsDiv.textContent = typeof parsedArgs === "string" ? parsedArgs : JSON.stringify(parsedArgs, null, 2);
 
-    // Update preview
-    updateFunctionPreview(card.element, argumentsBuffer.get(callId));
-
     argumentsBuffer.delete(callId);
   } else {
     // Show partial arguments while streaming
     argsDiv.textContent = `${argumentsBuffer.get(callId)}...`;
-    updateFunctionPreview(card.element, argumentsBuffer.get(callId));
   }
 }
 

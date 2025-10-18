@@ -856,9 +856,9 @@ body {
   border: 1px solid rgba(0, 102, 204, 0.2);
   border-left: 3px solid rgba(0, 102, 204, 0.6);
   border-radius: 8px;
-  padding: 10px 14px;
-  margin: 8px 0;
-  font-size: 13px;
+  padding: 6px 10px;
+  margin: 6px 0;
+  font-size: 12px;
   animation: slideIn 0.3s ease-out;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -908,7 +908,7 @@ body {
 .function-header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 0;
 }
 
@@ -917,14 +917,14 @@ body {
 }
 
 .function-icon {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(0, 102, 204, 0.15);
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 11px;
   flex-shrink: 0;
 }
 
@@ -939,7 +939,7 @@ body {
 .function-name {
   font-weight: 600;
   flex: 1;
-  font-size: 13px;
+  font-size: 12px;
   letter-spacing: 0.2px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -953,13 +953,13 @@ body {
 }
 
 .function-status {
-  font-size: 11px;
+  font-size: 10px;
   opacity: 0.9;
   font-weight: 500;
   text-transform: lowercase;
   background: rgba(0, 102, 204, 0.15);
-  padding: 2px 6px;
-  border-radius: 8px;
+  padding: 2px 5px;
+  border-radius: 6px;
   flex-shrink: 0;
 }
 
@@ -993,24 +993,26 @@ body {
 }
 
 .function-arguments {
-  display: none; /* Hidden when collapsed */
+  display: block; /* Always visible to see passed parameters */
   background: rgba(0, 0, 0, 0.15);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin-top: 10px;
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-top: 6px;
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
-  font-size: 12px;
-  max-height: 120px;
+  font-size: 10px;
+  max-height: 40px; /* Compact in collapsed state */
   overflow-y: auto;
   word-break: break-all;
   color: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
-  line-height: 1.5;
+  line-height: 1.3;
 }
 
 .function-call-card.expanded .function-arguments {
-  display: block;
+  font-size: 12px;
+  max-height: 120px; /* More room when expanded */
+  line-height: 1.5;
 }
 
 .function-arguments.streaming {
@@ -1039,23 +1041,6 @@ body {
 
 .function-call-card.expanded .function-result {
   display: block;
-}
-
-/* Compact preview when collapsed */
-.function-preview {
-  display: block;
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  font-family: 'SF Mono', 'Monaco', monospace;
-  opacity: 0.8;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.function-call-card.expanded .function-preview {
-  display: none;
 }
 
 /* Override for default state (not executing/success/error) */
@@ -1117,13 +1102,13 @@ body {
 
 .files-container::-webkit-scrollbar-thumb,
 .chat-container::-webkit-scrollbar-thumb {
-  background: rgba(139, 92, 246, 0.3);
+  background: var(--border-color);
   border-radius: 4px;
 }
 
 .files-container::-webkit-scrollbar-thumb:hover,
 .chat-container::-webkit-scrollbar-thumb:hover {
-  background: rgba(139, 92, 246, 0.5);
+  background: var(--text-secondary);
 }
 
 /* Smooth animations */
