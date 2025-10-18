@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from agents import Agent, Runner
+
 from core.constants import DEFAULT_SESSION_METADATA_PATH, SESSION_ID_LENGTH
 from models.session_models import SessionMetadata, SessionUpdate
 from utils.logger import logger
@@ -204,22 +206,24 @@ class SessionManager:
     async def generate_session_title(  # noqa: PLR0911
         self, session_id: str, recent_messages: list[dict[str, Any]]
     ) -> bool:
-        """Generate and update session title using LLM based on conversation context.
+        """Generate and update session title using Agent/Runner pattern.
+
+        Uses Responses API for consistency with rest of application.
+        Appends a title generation request to conversation for clear meta-task context.
 
         Non-blocking operation that runs in background after trigger condition is met.
         Falls back to keeping existing title if generation fails.
 
         Args:
             session_id: Session to name
-            recent_messages: Recent conversation messages for context (typically 3-6 messages)
+            recent_messages: All conversation items (SDK filters and handles tool calls/results)
 
         Returns:
             True if title generated and updated successfully, False otherwise
         """
         try:
-            from core.constants import SESSION_TITLE_MAX_TOKENS, get_settings
+            from core.constants import get_settings
             from core.prompts import SESSION_TITLE_GENERATION_PROMPT
-            from utils.client_factory import create_openai_client
 
             session = self.sessions.get(session_id)
             if not session:
@@ -238,55 +242,36 @@ class SessionManager:
 
             logger.info(f"Generating title for session {session_id} from {len(recent_messages)} messages")
 
-            # Get settings and create client
+            # Get settings and deployment
             settings = get_settings()
-            api_key = settings.azure_openai_api_key
-            endpoint = settings.azure_endpoint_str
             deployment = settings.azure_openai_deployment
 
-            client = create_openai_client(api_key=api_key, base_url=endpoint)
-
-            # Build messages for title generation
-            messages = []
-
-            for msg in recent_messages:
-                role = msg.get("role", "")
-                if role not in ["user", "assistant"]:
-                    continue
-
-                # Extract text content from message
-                content = msg.get("content", "")
-
-                # Handle list content (SDK format)
-                if isinstance(content, list):
-                    text_parts = []
-                    for item in content:
-                        if isinstance(item, dict) and "text" in item:
-                            text_parts.append(str(item["text"]))
-                        elif isinstance(item, str):
-                            text_parts.append(item)
-                    content = " ".join(text_parts)
-                elif not isinstance(content, str):
-                    content = str(content)
-
-                if not content or not content.strip():
-                    continue
-
-                # Truncate very long messages to keep prompt concise
-                if len(content) > 500:
-                    content = content[:500] + "..."
-
-                messages.append({"role": role, "content": content})
-
-            # Add title generation request
-            messages.append({"role": "user", "content": SESSION_TITLE_GENERATION_PROMPT})
-
-            # Call LLM to generate title
-            response = await client.chat.completions.create(
-                model=deployment, messages=messages, max_completion_tokens=SESSION_TITLE_MAX_TOKENS, temperature=0.7
+            # Create a one-off title generation agent
+            title_agent = Agent(
+                name="TitleGenerator",
+                model=deployment,
+                instructions=SESSION_TITLE_GENERATION_PROMPT,
             )
 
-            generated_title = response.choices[0].message.content
+            # Append title generation request as final user message
+            title_request = {
+                "role": "user",
+                "content": (
+                    "Generate a concise 3-5 word title for the conversation above. "
+                    "Use title case, be specific about the main topic, no articles unless necessary, "
+                    "no punctuation at the end. Output ONLY the title with no explanation or quotes."
+                ),
+            }
+            messages_with_request = [*recent_messages, title_request]
+
+            # Pass messages with title request to Runner
+            result = await Runner.run(
+                title_agent,
+                input=messages_with_request,  # type: ignore[arg-type]
+                session=None,  # No session for title generation (one-shot operation)
+            )
+
+            generated_title = result.final_output or ""
             if not generated_title:
                 logger.warning("Title generation returned empty response")
                 return False
@@ -311,16 +296,21 @@ class SessionManager:
                 session.is_named = True
                 self._save_metadata()
 
-                # Send IPC notification to update frontend
+                # Send IPC notification to update frontend in real-time
+                # Use session_updated type (not filtered by main process)
                 from utils.ipc import IPCManager
 
-                result = {
+                response = {
                     "success": True,
                     "message": "Session titled",
+                    "session_id": session.session_id,
                     "session": session.model_dump(),
-                    "sessions": [s.model_dump() for s in self.list_sessions()],
                 }
-                IPCManager.send_session_response(result)
+
+                # Send directly (session_updated is not filtered like session_response)
+                logger.info(f"Sending session_updated IPC for title update: {session.title}")
+                IPCManager.send_session_updated(response)
+                logger.info("✓ Sent session update notification")
 
                 logger.info(f"Successfully updated session {session_id} with generated title")
                 return True

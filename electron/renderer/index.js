@@ -446,6 +446,9 @@ window.electronAPI.onBotOutput((output) => {
     try {
       const message = JSON.parse(jsonStr);
 
+      // DEBUGGING: Log ALL messages to console
+      console.log("📨 Message received:", message.type);
+
       window.electronAPI.log("debug", "Processing message type", { type: message.type });
 
       if (message.type === "assistant_delta") {
@@ -778,6 +781,23 @@ function updateSessionsList() {
 
     elements.sessionsList.appendChild(sessionItem);
   });
+
+  // Add "Load More" button if there are more sessions
+  if (sessionState.hasMoreSessions) {
+    const loadMoreBtn = document.createElement("button");
+    loadMoreBtn.className = "load-more-sessions-btn";
+    loadMoreBtn.textContent = sessionState.isLoadingSessions
+      ? "Loading..."
+      : `Load More (${sessionState.sessions.length}/${sessionState.totalSessions})`;
+    loadMoreBtn.disabled = sessionState.isLoadingSessions;
+
+    loadMoreBtn.onclick = async () => {
+      const { loadMoreSessions } = await import("./services/session-service.js");
+      await loadMoreSessions(window.electronAPI, updateSessionsList);
+    };
+
+    elements.sessionsList.appendChild(loadMoreBtn);
+  }
 }
 
 async function handleCreateNewSession() {
@@ -1135,6 +1155,20 @@ const handleSessionCreated = (e) => {
 
 // Listen for session creation events from backend
 window.addEventListener("session-created", handleSessionCreated);
+
+// Session update event handler (title generation, renames, etc.)
+const handleSessionUpdated = (e) => {
+  window.electronAPI.log("info", "Handling session-updated event", {
+    session_id: e.detail.session_id,
+    title: e.detail.title,
+  });
+
+  // Session state already updated by message handler - just refresh the UI
+  updateSessionsList();
+};
+
+// Listen for session update events from backend
+window.addEventListener("session-updated", handleSessionUpdated);
 
 // ====================
 // File Upload Handlers

@@ -202,9 +202,11 @@ class DeleteSessionCommand(BaseModel):
 
 
 class ListSessionsCommand(BaseModel):
-    """Command to list all sessions."""
+    """Command to list all sessions with optional pagination."""
 
     command: Literal["list"] = "list"
+    offset: int = 0  # Start index for pagination
+    limit: int | None = None  # Max sessions to return (None = all)
 
     def to_json(self) -> str:
         """Convert to JSON for IPC."""

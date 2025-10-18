@@ -198,6 +198,43 @@
     border-color: var(--color-input-focus);
   }
 
+  /* Load More Sessions button */
+  .load-more-sessions-btn {
+    width: 100%;
+    padding: 0.625rem 0.75rem;
+    margin-top: 0.5rem;
+    background-color: transparent;
+    border: 1px solid var(--color-border-color);
+    border-radius: 0.5rem;
+    color: var(--color-text-primary);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 150ms;
+    text-align: center;
+  }
+
+  .load-more-sessions-btn:hover:not(:disabled) {
+    background-color: var(--color-chat-bg);
+    border-color: var(--color-input-focus);
+    color: var(--color-input-focus);
+  }
+
+  [data-theme="dark"] .load-more-sessions-btn {
+    border-color: var(--color-dark-border-color);
+    color: var(--color-dark-text-primary);
+  }
+
+  [data-theme="dark"] .load-more-sessions-btn:hover:not(:disabled) {
+    background-color: var(--color-dark-chat-bg);
+    border-color: var(--color-input-focus);
+  }
+
+  .load-more-sessions-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
   /* Function call cards */
   .function-call-card {
     background-color: rgba(59, 130, 246, 0.05);

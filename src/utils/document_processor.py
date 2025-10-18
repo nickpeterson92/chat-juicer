@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from agents import Agent, Runner
+
 from core.constants import DOCUMENT_SUMMARIZATION_THRESHOLD, get_settings
 from core.prompts import DOCUMENT_SUMMARIZATION_PROMPT
 from utils.logger import logger
@@ -23,47 +25,9 @@ except ImportError:  # pragma: no cover - optional dependency
     _markitdown_converter = None
 
 
-class _AsyncClientManager:
-    """Singleton manager for AsyncOpenAI client with lazy initialization.
-
-    Eliminates global variables while maintaining lazy initialization pattern.
-    """
-
-    _instance: Any = None
-    _initialized: bool = False
-
-    @classmethod
-    def get_client(cls) -> Any:
-        """Get or create the AsyncOpenAI client for summarization.
-
-        Returns:
-            AsyncOpenAI client instance or None if initialization failed
-        """
-        if cls._initialized:
-            return cls._instance
-
-        cls._initialized = True  # Mark as attempted even if it fails
-
-        try:
-            from openai import AsyncOpenAI  # Lazy import for optional dependency
-
-            try:
-                settings = get_settings()
-                cls._instance = AsyncOpenAI(api_key=settings.azure_openai_api_key, base_url=settings.azure_endpoint_str)
-                logger.debug(
-                    f"Initialized AsyncOpenAI client for summarization with deployment: {settings.azure_openai_deployment}"
-                )
-            except Exception as e:
-                logger.warning(f"Failed to initialize OpenAI client for summarization: {e}")
-        except ImportError as ie:
-            logger.warning(f"OpenAI library not available for summarization: {ie}")
-
-        return cls._instance
-
-
 async def summarize_content(content: str, file_name: str = "document", model: str = "gpt-5-mini") -> str:
     """
-    Summarize large document content using Azure OpenAI.
+    Summarize large document content using Agent/Runner pattern.
 
     Args:
         content: The document content to summarize
@@ -73,11 +37,6 @@ async def summarize_content(content: str, file_name: str = "document", model: st
     Returns:
         Summarized content or original if summarization fails
     """
-    client = _AsyncClientManager.get_client()
-    if not client:
-        logger.warning("OpenAI client not available for summarization, returning original content")
-        return content
-
     try:
         settings = get_settings()
         deployment = settings.azure_openai_deployment
@@ -87,31 +46,26 @@ async def summarize_content(content: str, file_name: str = "document", model: st
             file_name=file_name, tokens=DOCUMENT_SUMMARIZATION_THRESHOLD, content=content
         )
 
-        # Make async API call - no temperature parameter for reasoning models
-        response = await client.chat.completions.create(
+        # Create a one-off document summarization agent
+        # Note: Agent uses Responses API by default
+        summary_agent = Agent(
+            name="DocumentSummarizer",
             model=deployment,
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant that creates CONCISE document summaries."},
-                {"role": "user", "content": prompt},
-            ],
-            max_completion_tokens=DOCUMENT_SUMMARIZATION_THRESHOLD,  # Set max completion tokens to the threshold
+            instructions="You are a helpful assistant that creates CONCISE document summaries.",
         )
 
-        # Log response metadata for debugging
-        finish_reason = response.choices[0].finish_reason if response.choices else "no_choices"
-        logger.debug(f"Summarization response: finish_reason={finish_reason}, model={response.model}")
+        # Use Agent/Runner pattern for consistency with rest of application
+        result = await Runner.run(
+            summary_agent,
+            input=prompt,
+            session=None,  # No session for document summarization (one-shot operation)
+        )
 
-        summarized = response.choices[0].message.content
+        summarized = result.final_output or ""
 
-        # Handle length cutoff - always use original when hitting token limit
-        if finish_reason == "length":
-            logger.warning(f"Summary for {file_name} hit token limit (finish_reason=length), using original content")
-            return content
-        elif not summarized or not summarized.strip():
-            # Other finish reasons with empty content
+        if not summarized or not summarized.strip():
             logger.error(
-                f"API returned empty/null summary for {file_name} - "
-                f"finish_reason={finish_reason}, "
+                f"Agent returned empty/null summary for {file_name} - "
                 f"deployment={deployment}, "
                 f"prompt_length={len(prompt)} chars"
             )

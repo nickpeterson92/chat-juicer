@@ -282,6 +282,47 @@ function handleSessionCreated(message, context) {
 }
 
 /**
+ * Handle session_response message (replies to session commands)
+ */
+function handleSessionResponse(message, context) {
+  // Session command responses are handled by main process IPC handlers
+  // This is just a placeholder for any edge cases
+  window.electronAPI.log("debug", "session_response received in renderer", message);
+}
+
+/**
+ * Handle session_updated message (spontaneous updates like title generation)
+ */
+function handleSessionUpdated(message, context) {
+  window.electronAPI.log("info", "session_updated received", message);
+
+  // Delta update: only update the specific session that changed
+  if (message.data && message.data.success && message.data.session) {
+    import("../services/session-service.js").then(({ sessionState }) => {
+      // Find and update the specific session (in-place for reactivity)
+      const session = sessionState.sessions.find((s) => s.session_id === message.data.session.session_id);
+
+      if (session) {
+        // Update existing session
+        Object.assign(session, message.data.session);
+      } else {
+        // New session - add to list
+        sessionState.sessions.push(message.data.session);
+        // Sort by last_used (most recent first)
+        sessionState.sessions.sort((a, b) => new Date(b.last_used) - new Date(a.last_used));
+      }
+
+      // Dispatch event to trigger UI update
+      window.dispatchEvent(
+        new CustomEvent("session-updated", {
+          detail: message.data,
+        })
+      );
+    });
+  }
+}
+
+/**
  * Message handler registry
  * Maps message types to their handler functions
  */
@@ -301,7 +342,8 @@ export const messageHandlers = {
   function_call_ready: handleFunctionCallReady,
   function_executed: handleFunctionExecuted,
   session_created: handleSessionCreated,
-  session_response: () => {}, // Handled by main process via IPC, no renderer action needed
+  session_response: handleSessionResponse,
+  session_updated: handleSessionUpdated,
   agent_updated: () => {}, // Agent state change event - informational only, no UI action needed
 };
 

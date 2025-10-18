@@ -17,6 +17,7 @@ from core.constants import (
     MSG_TYPE_ASSISTANT_START,
     MSG_TYPE_ERROR,
     MSG_TYPE_SESSION_RESPONSE,
+    MSG_TYPE_SESSION_UPDATED,
 )
 from models.event_models import AssistantMessage, ErrorNotification
 from utils.json_utils import json_compact
@@ -104,6 +105,27 @@ class IPCManager:
             error_response = {"type": MSG_TYPE_SESSION_RESPONSE, "data": {"error": f"Serialization failed: {e}"}}
             error_msg = json_compact(error_response)
             print(f"{IPCManager.DELIMITER}{error_msg}{IPCManager.DELIMITER}", flush=True)
+
+    @staticmethod
+    def send_session_updated(data: dict[str, Any]) -> None:
+        """Send a spontaneous session update notification (not filtered by main process).
+
+        Used for background operations like title generation that need to update the UI in real-time.
+
+        Args:
+            data: Session update data dict (success/error info, updated sessions list)
+        """
+
+        response = {"type": MSG_TYPE_SESSION_UPDATED, "data": data}
+        try:
+            # Use compact JSON for IPC efficiency
+            msg = json_compact(response)
+            print(f"{IPCManager.DELIMITER}{msg}{IPCManager.DELIMITER}", flush=True)
+        except (TypeError, ValueError) as e:
+            # Log serialization error
+            from utils.logger import logger
+
+            logger.error(f"Failed to serialize session update: {e}", exc_info=True)
 
     @staticmethod
     def is_session_command(raw_input: str) -> bool:

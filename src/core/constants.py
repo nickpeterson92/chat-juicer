@@ -196,6 +196,10 @@ MSG_TYPE_ERROR = "error"
 #: Contains success/error data for session commands (new, switch, delete).
 MSG_TYPE_SESSION_RESPONSE = "session_response"
 
+#: Message type for spontaneous session updates (title generation, etc.).
+#: Not filtered by main process, goes directly to renderer for real-time UI updates.
+MSG_TYPE_SESSION_UPDATED = "session_updated"
+
 #: Message type for file upload responses.
 #: Contains success/error data for file upload operations to sources directory.
 MSG_TYPE_UPLOAD_RESPONSE = "upload_response"

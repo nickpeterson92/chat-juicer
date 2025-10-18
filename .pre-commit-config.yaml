@@ -25,13 +25,13 @@ repos:
 
   # MyPy - Static type checker (uses pyproject.toml configuration)
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.8.0
+    rev: v1.13.0
     hooks:
       - id: mypy
         # Uses configuration from pyproject.toml automatically
         files: ^src/.*\.py$
         # Exclude files that import from agents module (SDK doesn't expose proper types)
-        exclude: ^src/(core/(agent|session)|main|integrations/(sdk_token_tracker|mcp_servers|tool_patch)|tools/registry)\.py$
+        exclude: ^src/(core/(agent|session|session_manager)|main|integrations/(sdk_token_tracker|mcp_servers|tool_patch)|tools/registry)\.py$
         additional_dependencies:
           - types-requests
           - types-aiofiles

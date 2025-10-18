@@ -115,6 +115,9 @@ function createMessageElement(msg) {
 export const sessionState = {
   currentSessionId: null,
   sessions: [],
+  totalSessions: 0,
+  hasMoreSessions: false,
+  isLoadingSessions: false,
 };
 
 /**
@@ -123,24 +126,56 @@ export const sessionState = {
  * @param {Function} onSuccess - Callback for successful load
  * @returns {Promise<Object>} Result with success/error
  */
-export async function loadSessions(api, onSuccess) {
+export async function loadSessions(api, onSuccess, offset = 0, limit = 50) {
   try {
-    const response = await api.sessionCommand("list", {});
+    sessionState.isLoadingSessions = true;
+
+    const response = await api.sessionCommand("list", { offset, limit });
+
     if (response?.sessions) {
-      sessionState.sessions = response.sessions;
+      // Append or replace sessions based on offset
+      if (offset === 0) {
+        sessionState.sessions = response.sessions;
+      } else {
+        sessionState.sessions.push(...response.sessions);
+      }
+
+      // Update pagination state
+      sessionState.totalSessions = response.total_count || response.sessions.length;
+      sessionState.hasMoreSessions = response.has_more || false;
+
       // Don't auto-select session on boot - let user choose
-      // sessionState.currentSessionId = response.current_session_id;
       sessionState.currentSessionId = null;
+
       if (onSuccess) {
         onSuccess(sessionState);
       }
+
       return { success: true, data: response };
     }
+
     return { success: false, error: "Invalid response format" };
   } catch (e) {
     window.electronAPI.log("error", "Failed to load sessions", { error: e.message });
     return { success: false, error: e.message };
+  } finally {
+    sessionState.isLoadingSessions = false;
   }
+}
+
+/**
+ * Load more sessions (pagination)
+ * @param {Object} api - Electron API
+ * @param {Function} onSuccess - Callback for successful load
+ * @returns {Promise<Object>} Result with success/error
+ */
+export async function loadMoreSessions(api, onSuccess) {
+  if (!sessionState.hasMoreSessions || sessionState.isLoadingSessions) {
+    return { success: false, error: "No more sessions or already loading" };
+  }
+
+  const nextOffset = sessionState.sessions.length;
+  return loadSessions(api, onSuccess, nextOffset, 50);
 }
 
 /**

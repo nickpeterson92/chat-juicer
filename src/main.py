@@ -476,11 +476,11 @@ async def main() -> None:
                             f"Naming trigger reached for session {session.session_id} "
                             f"({user_message_count} user messages) - starting background title generation"
                         )
-                        # Get recent messages for context (last 6 messages = ~3 exchanges)
-                        recent_messages = items[-6:] if len(items) >= 6 else items
+                        # Pass ALL items to Agent/Runner (SDK handles filtering)
+                        # This ensures tool calls/results have proper context
                         # Fire and forget - non-blocking background task
                         asyncio.create_task(  # noqa: RUF006
-                            _app_state.session_manager.generate_session_title(session.session_id, recent_messages)
+                            _app_state.session_manager.generate_session_title(session.session_id, items)
                         )
 
             # Send session creation event AFTER first message completes

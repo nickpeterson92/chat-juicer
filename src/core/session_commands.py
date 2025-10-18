@@ -243,22 +243,33 @@ async def load_more_messages(
     }
 
 
-async def list_all_sessions(app_state: AppStateProtocol) -> dict[str, Any]:
-    """List all available sessions.
+async def list_all_sessions(app_state: AppStateProtocol, offset: int = 0, limit: int | None = None) -> dict[str, Any]:
+    """List all available sessions with optional pagination.
 
     Args:
         app_state: Application state containing session manager
+        offset: Start index for pagination (default: 0)
+        limit: Maximum number of sessions to return (default: None = all)
 
     Returns:
-        Dictionary with sessions list and current session ID
+        Dictionary with paginated sessions list, current session ID, and total count
     """
     if not app_state.session_manager:
         return _session_error(ERROR_SESSION_MANAGER_NOT_INITIALIZED)
 
-    sessions = app_state.session_manager.list_sessions()
+    all_sessions = app_state.session_manager.list_sessions()
+    total_count = len(all_sessions)
+
+    # Apply pagination
+    paginated_sessions = all_sessions[offset : offset + limit] if limit is not None else all_sessions[offset:]
+
     return {
-        "sessions": [s.model_dump() for s in sessions],
+        "sessions": [s.model_dump() for s in paginated_sessions],
         "current_session_id": app_state.session_manager.current_session_id,
+        "total_count": total_count,
+        "offset": offset,
+        "limit": limit,
+        "has_more": (offset + len(paginated_sessions)) < total_count,
     }
 
 
@@ -411,8 +422,8 @@ async def rename_session(app_state: AppStateProtocol, session_id: str, title: st
     return {
         "success": True,
         "message": "Session renamed successfully",
+        "session_id": session_id,
         "session": session_meta.model_dump(),
-        "sessions": [s.model_dump() for s in app_state.session_manager.list_sessions()],
     }
 
 
@@ -433,7 +444,7 @@ async def handle_session_command(app_state: AppStateProtocol, command: str, data
     command_handlers: dict[type, Any] = {
         CreateSessionCommand: lambda cmd: create_new_session(app_state, cmd.title),
         SwitchSessionCommand: lambda cmd: switch_to_session(app_state, cmd.session_id),
-        ListSessionsCommand: lambda _: list_all_sessions(app_state),
+        ListSessionsCommand: lambda cmd: list_all_sessions(app_state, cmd.offset, cmd.limit),
         DeleteSessionCommand: lambda cmd: delete_session_by_id(app_state, cmd.session_id),
         SummarizeSessionCommand: lambda _: summarize_current_session(app_state),
         ClearSessionCommand: lambda _: clear_current_session(app_state),

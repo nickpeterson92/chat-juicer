@@ -178,26 +178,8 @@ CONVERSATION_SUMMARIZATION_PROMPT = """You are a helpful assistant that summariz
 
 **The summary** should include **all** the details necessary for someone to understand EVERYTHING about the above criteria."""
 
-# Summary Request Prompt (added as user message to trigger summarization)
-SUMMARY_REQUEST_PROMPT = (
-    "Please summarize the above conversation and NOTHING else. "
-    "Do NOT ask any follow up questions. A summary is the ONLY thing I need from you."
-)
 
 # Session Title Generation Prompt
-SESSION_TITLE_GENERATION_PROMPT = """Generate a concise 3-5 word title for this conversation.
-
-## Requirements:
-- Use title case (capitalize important words)
-- Be specific and descriptive
-- Focus on the main topic or task
-- No articles (a, an, the) unless necessary
-- No punctuation at the end
-
-## Examples:
-- "Authentication Bug Fixes"
-- "Database Migration Setup"
-- "React Component Design"
-- "API Rate Limit Implementation"
-
-Based on the conversation above, generate ONLY the title (no explanation, no quotes):"""
+SESSION_TITLE_GENERATION_PROMPT = (
+    """You are a helpful assistant that generates concise, descriptive titles for conversations."""
+)
