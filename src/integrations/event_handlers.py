@@ -42,7 +42,7 @@ from models.sdk_models import (
     RawToolCallLike,
     RunItem,
     RunItemStreamEvent,
-    StreamingEvent,
+    StreamEvent,
 )
 from utils.json_utils import json_compact as _json_builder
 from utils.logger import logger
@@ -204,7 +204,7 @@ def build_event_handlers(tracker: CallTracker) -> dict[str, EventHandler]:
     Uses closures to capture `tracker` while conforming to EventHandler.
     """
 
-    def handle_run_item_event(event: StreamingEvent) -> str | None:
+    def handle_run_item_event(event: StreamEvent) -> str | None:
         # Guard by event type, then cast for attribute access
         if getattr(event, "type", None) != RUN_ITEM_STREAM_EVENT:
             return None
@@ -223,7 +223,7 @@ def build_event_handlers(tracker: CallTracker) -> dict[str, EventHandler]:
         ih = item_handlers.get(item.type)
         return ih() if ih else None
 
-    def handle_agent_updated_event(event: StreamingEvent) -> str | None:
+    def handle_agent_updated_event(event: StreamEvent) -> str | None:
         if getattr(event, "type", None) != AGENT_UPDATED_STREAM_EVENT:
             return None
         aue = cast(AgentUpdatedStreamEvent, event)

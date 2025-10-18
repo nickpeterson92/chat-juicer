@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol
 from pydantic import BaseModel, Field, field_validator
 
 if TYPE_CHECKING:
+    from agents import Agent
+
     from core.full_history import FullHistoryStore
     from core.session import TokenAwareSQLiteSession
     from core.session_manager import SessionManager
@@ -71,7 +73,7 @@ class AppStateProtocol(Protocol):
 
     session_manager: SessionManager | None
     current_session: TokenAwareSQLiteSession | None
-    agent: Any | None  # agents.Agent from external SDK (untyped, opaque object)
+    agent: Agent | None
     deployment: str
     full_history_store: FullHistoryStore | None
 

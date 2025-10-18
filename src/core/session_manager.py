@@ -10,9 +10,9 @@ import uuid
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import cast
 
-from agents import Agent, Runner
+from agents import Agent, Runner, TResponseInputItem
 
 from core.constants import DEFAULT_SESSION_METADATA_PATH, SESSION_ID_LENGTH
 from models.session_models import SessionMetadata, SessionUpdate
@@ -204,7 +204,7 @@ class SessionManager:
         return None
 
     async def generate_session_title(  # noqa: PLR0911
-        self, session_id: str, recent_messages: list[dict[str, Any]]
+        self, session_id: str, recent_messages: list[TResponseInputItem]
     ) -> bool:
         """Generate and update session title using Agent/Runner pattern.
 
@@ -262,12 +262,13 @@ class SessionManager:
                     "no punctuation at the end. Output ONLY the title with no explanation or quotes."
                 ),
             }
-            messages_with_request = [*recent_messages, title_request]
+            # Cast to TResponseInputItem for type safety (runtime-compatible dict)
+            messages_with_request = [*recent_messages, cast(TResponseInputItem, title_request)]
 
             # Pass messages with title request to Runner
             result = await Runner.run(
                 title_agent,
-                input=messages_with_request,  # type: ignore[arg-type]
+                input=messages_with_request,
                 session=None,  # No session for title generation (one-shot operation)
             )
 

@@ -5,9 +5,12 @@ Handles document conversion, summarization, and content optimization.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
 
 from agents import Agent, Runner
+
+if TYPE_CHECKING:
+    from markitdown import MarkItDown
 
 from core.constants import DOCUMENT_SUMMARIZATION_THRESHOLD, get_settings
 from core.prompts import DOCUMENT_SUMMARIZATION_PROMPT
@@ -16,12 +19,11 @@ from utils.token_utils import count_tokens
 
 # Optional dependency: MarkItDown for document conversion
 try:
-    from markitdown import MarkItDown
+    from markitdown import MarkItDown as _MarkItDown
 
     # Create singleton converter instance with plugins enabled
-    _markitdown_converter: Any = MarkItDown(enable_plugins=True)
+    _markitdown_converter: _MarkItDown | None = _MarkItDown(enable_plugins=True)
 except ImportError:  # pragma: no cover - optional dependency
-    MarkItDown = None  # type: ignore[misc,assignment]
     _markitdown_converter = None
 
 
@@ -90,7 +92,7 @@ async def summarize_content(content: str, file_name: str = "document", model: st
         return content  # Return original on error
 
 
-def get_markitdown_converter() -> Any:
+def get_markitdown_converter() -> MarkItDown | None:
     """
     Get the MarkItDown converter instance.
 

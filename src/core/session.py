@@ -8,12 +8,12 @@ from __future__ import annotations
 import asyncio
 import uuid
 
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-from agents import Agent, Runner, SQLiteSession
+from agents import Agent, Runner, RunResultStreaming, SQLiteSession, TResponseInputItem
 
 from core.constants import (
     CHAT_HISTORY_DB_PATH,
@@ -76,7 +76,7 @@ class SessionBuilder:
         self._session_id = session_id
         # Set defaults matching TokenAwareSQLiteSession constructor
         self._db_path: str | Path | None = CHAT_HISTORY_DB_PATH
-        self._agent: Any = None
+        self._agent: Agent | None = None
         self._model: str = DEFAULT_MODEL
         self._threshold: float = 0.8
         self._full_history_store: FullHistoryProtocol | None = None
@@ -103,7 +103,7 @@ class SessionBuilder:
         self._db_path = None
         return self
 
-    def with_agent(self, agent: Any) -> SessionBuilder:
+    def with_agent(self, agent: Agent) -> SessionBuilder:
         """Configure agent for automatic summarization.
 
         Args:
@@ -198,7 +198,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
         self,
         session_id: str,
         db_path: str | Path | None = CHAT_HISTORY_DB_PATH,
-        agent: Any = None,  # agents.Agent from external SDK (untyped, opaque object)
+        agent: Agent | None = None,
         model: str = DEFAULT_MODEL,
         threshold: float = 0.8,
         full_history_store: FullHistoryProtocol | None = None,
@@ -332,7 +332,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
 
         return item_tokens
 
-    def _calculate_total_tokens(self, items: list[dict[str, Any]]) -> int:
+    def _calculate_total_tokens(self, items: Sequence[dict[str, Any] | TResponseInputItem]) -> int:
         """Calculate total tokens from conversation items with caching.
 
         Uses item ID cache to avoid recalculating tokens for unchanged items.
@@ -340,15 +340,18 @@ class TokenAwareSQLiteSession(SQLiteSession):
         """
         total = 0
         for item in items:
+            # Cast to dict for internal operations (runtime-compatible)
+            item_dict = cast(dict[str, Any], item)
+
             # Try to use cached token count first
-            item_id = item.get("id")
+            item_id = item_dict.get("id")
 
             if item_id and item_id in self._item_token_cache:
                 # Cache hit - use cached value
                 total += self._item_token_cache[item_id]
             else:
                 # Cache miss - calculate and cache
-                item_tokens = self._count_item_tokens(item)
+                item_tokens = self._count_item_tokens(item_dict)
                 total += item_tokens
 
                 # Cache for future use if item has ID
@@ -357,7 +360,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
 
         return total
 
-    def calculate_items_tokens(self, items: list[dict[str, Any]]) -> int:
+    def calculate_items_tokens(self, items: Sequence[dict[str, Any] | TResponseInputItem]) -> int:
         """Public method to calculate total tokens from conversation items.
 
         Args:
@@ -462,7 +465,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
             logger.error(f"Failed to delete Layer 1 storage for session {self.session_id}: {e}", exc_info=True)
             return False
 
-    def _collect_recent_exchanges(self, items: list[dict[str, Any]], keep_recent: int) -> list[dict[str, Any]]:
+    def _collect_recent_exchanges(self, items: list[TResponseInputItem], keep_recent: int) -> list[TResponseInputItem]:
         """Collect the most recent complete user-assistant exchanges.
 
         Optimized with reverse scan and early termination - stops when enough exchanges found.
@@ -662,7 +665,9 @@ class TokenAwareSQLiteSession(SQLiteSession):
         msg = event.to_json()
         print(f"__JSON__{msg}__JSON__", flush=True)
 
-    def _prepare_summary_items(self, items: list[Any], keep_recent: int) -> tuple[str, list[Any]]:
+    def _prepare_summary_items(
+        self, items: list[TResponseInputItem], keep_recent: int
+    ) -> tuple[str, list[TResponseInputItem]]:
         """Prepare recent items to keep after summarization.
 
         Args:
@@ -696,7 +701,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
 
         return call_id, recent_items
 
-    async def _generate_summary_text(self, items: list[Any]) -> str:
+    async def _generate_summary_text(self, items: list[TResponseInputItem]) -> str:
         """Generate summary text from conversation items using Agent/Runner.
 
         Uses the Responses API (via Agent/Runner) for consistency with the rest of the application.
@@ -732,7 +737,9 @@ class TokenAwareSQLiteSession(SQLiteSession):
 
         return result.final_output or ""
 
-    async def _update_session_with_summary(self, summary_text: str, recent_items: list[Any], call_id: str) -> None:
+    async def _update_session_with_summary(
+        self, summary_text: str, recent_items: list[TResponseInputItem], call_id: str
+    ) -> None:
         """Update session with summary and recent items.
 
         Args:
@@ -830,7 +837,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
             f"{recent_tokens} recent = {self.total_tokens} total"
         )
 
-    async def run_with_auto_summary(self, agent: Any, user_input: str, **kwargs: Any) -> Any:
+    async def run_with_auto_summary(self, agent: Agent, user_input: str, **kwargs: Any) -> RunResultStreaming:
         """Run agent with automatic summarization when needed.
 
         This is a convenience method that checks tokens before running

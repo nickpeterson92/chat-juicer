@@ -23,7 +23,7 @@ if sys.stdout.encoding != "utf-8":
 from dataclasses import dataclass
 from typing import Any
 
-from agents import set_default_openai_client, set_tracing_disabled
+from agents import Agent, set_default_openai_client, set_tracing_disabled
 from dotenv import load_dotenv
 from openai import APIConnectionError, APIStatusError, RateLimitError
 
@@ -47,7 +47,7 @@ from integrations.event_handlers import CallTracker, build_event_handlers
 from integrations.mcp_servers import setup_mcp_servers
 from integrations.sdk_token_tracker import connect_session, disconnect_session, patch_sdk_for_auto_tracking
 from models.event_models import UserInput
-from models.sdk_models import StreamingEvent
+from models.sdk_models import StreamEvent
 from models.session_models import SessionUpdate
 from tools import AGENT_TOOLS
 from utils.client_factory import create_http_client, create_openai_client
@@ -65,7 +65,7 @@ class AppState:
 
     session_manager: SessionManager | None = None
     current_session: TokenAwareSQLiteSession | None = None
-    agent: Any | None = None  # agents.Agent from external SDK (untyped, opaque object)
+    agent: Agent | None = None
     deployment: str = ""
     full_history_store: FullHistoryStore | None = None
 
@@ -74,7 +74,7 @@ class AppState:
 _app_state = AppState()
 
 
-async def handle_electron_ipc(event: StreamingEvent, tracker: CallTracker) -> str | None:
+async def handle_electron_ipc(event: StreamEvent, tracker: CallTracker) -> str | None:
     """Convert Agent/Runner events to Electron IPC format using a typed registry."""
     handlers = build_event_handlers(tracker)
     handler = handlers.get(event.type)
