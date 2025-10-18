@@ -5,6 +5,7 @@
 
 import {
   addMessage,
+  cancelPendingRender,
   completeStreamingMessage,
   createStreamingAssistantMessage,
   updateAssistantMessage,
@@ -74,12 +75,20 @@ function handleAssistantEnd(_message, context) {
     elements.aiThinking.classList.remove("active");
   }
 
+  // CRITICAL: Cancel any pending render callbacks to prevent race condition
+  // Pending requestIdleCallback could fire after Mermaid rendering and destroy SVGs
+  cancelPendingRender();
+
   // Process Mermaid diagrams after streaming is complete
   // Uses atomic innerHTML replacement to prevent race conditions
   if (currentAssistantElement && document.body.contains(currentAssistantElement)) {
-    processMermaidDiagrams(currentAssistantElement).catch((err) =>
-      window.electronAPI.log("error", "Mermaid processing error", { error: err.message })
-    );
+    // Navigate to parent .message-content div which contains all rendered markdown
+    const messageContentDiv = currentAssistantElement.closest(".message-content");
+    if (messageContentDiv) {
+      processMermaidDiagrams(messageContentDiv).catch((err) =>
+        window.electronAPI.log("error", "Mermaid processing error", { error: err.message })
+      );
+    }
   }
 }
 

@@ -111,18 +111,24 @@ export async function switchSession(api, elements, appState, sessionId) {
       // Backend now only sends full_history to avoid pipe buffer overflow
       const messagesToDisplay = response.full_history || [];
 
-      // OPTIMIZATION: Batch DOM updates with DocumentFragment (50-60% faster session switching)
+      // OPTIMIZATION: Lazy rendering - show recent messages first, defer historical messages
+      const INITIAL_RENDER_COUNT = 10; // First 10 messages visible immediately
+
       if (Array.isArray(messagesToDisplay) && messagesToDisplay.length > 0) {
         const fragment = document.createDocumentFragment();
 
-        for (const msg of messagesToDisplay) {
+        // Partition messages: historical (hidden) vs recent (visible)
+        const recentMessages = messagesToDisplay.slice(-INITIAL_RENDER_COUNT);
+        const historicalMessages = messagesToDisplay.slice(0, -INITIAL_RENDER_COUNT);
+
+        // Helper function to create message element
+        const createMessageElement = (msg) => {
           const role = msg.role || "assistant";
           let content = msg.content;
 
           // Handle complex content structures
           if (typeof content !== "string") {
             if (Array.isArray(content)) {
-              // Extract text from content array
               const textParts = content
                 .map((item) => {
                   if (typeof item === "string") return item;
@@ -139,7 +145,6 @@ export async function switchSession(api, elements, appState, sessionId) {
 
           // Only show user and assistant messages with actual content
           if ((role === "user" || role === "assistant") && content && content.trim()) {
-            // Create message element with proper Tailwind styling (matching chat-ui.js)
             const messageDiv = document.createElement("div");
             const baseClasses = "message mb-6 animate-slideIn [contain:layout_style]";
             const typeClasses = {
@@ -151,7 +156,6 @@ export async function switchSession(api, elements, appState, sessionId) {
             messageDiv.dataset.messageId = messageId;
 
             const contentDiv = document.createElement("div");
-            // Apply proper Tailwind classes based on message type (matching chat-ui.js)
             if (role === "user") {
               contentDiv.className =
                 "inline-block py-3 px-4 rounded-2xl max-w-[70%] break-words whitespace-pre-wrap leading-snug min-h-6 bg-user-gradient text-white";
@@ -162,29 +166,78 @@ export async function switchSession(api, elements, appState, sessionId) {
 
             // Render markdown for assistant messages, plain text for user messages
             if (role === "assistant") {
-              contentDiv.innerHTML = renderMarkdown(content, true); // isComplete = true for loaded sessions
+              contentDiv.innerHTML = renderMarkdown(content, true);
             } else {
               contentDiv.textContent = content;
             }
 
             messageDiv.appendChild(contentDiv);
-            fragment.appendChild(messageDiv);
+            return messageDiv;
           }
+          return null;
+        };
+
+        // Add placeholder for historical messages if any
+        let placeholder = null;
+        if (historicalMessages.length > 0) {
+          placeholder = document.createElement("div");
+          placeholder.className =
+            "historical-messages-placeholder text-center py-4 text-gray-500 dark:text-slate-400 text-sm";
+          placeholder.textContent = `Loading ${historicalMessages.length} earlier messages...`;
+          fragment.appendChild(placeholder);
         }
 
-        // Single DOM append (N reflows → 1 reflow)
+        // Render recent messages immediately
+        for (const msg of recentMessages) {
+          const messageDiv = createMessageElement(msg);
+          if (messageDiv) fragment.appendChild(messageDiv);
+        }
+
+        // Single DOM append (fast)
         elements.chatContainer.appendChild(fragment);
 
-        // Process Mermaid diagrams in all assistant messages
-        const assistantMessages = elements.chatContainer.querySelectorAll(".message.assistant .message-content");
-        for (const contentDiv of assistantMessages) {
-          processMermaidDiagrams(contentDiv).catch((err) =>
-            window.electronAPI.log("error", "Mermaid processing error", { error: err.message })
-          );
+        // Process Mermaid in recent messages immediately
+        const recentAssistantMessages = elements.chatContainer.querySelectorAll(
+          ".message.assistant:not([data-historical]) .message-content"
+        );
+        for (const contentDiv of recentAssistantMessages) {
+          processMermaidDiagrams(contentDiv).catch((err) => console.error("Mermaid processing error:", err));
         }
 
-        // Batched scroll update
+        // Scroll to bottom for recent messages
         scheduleScroll(elements.chatContainer);
+
+        // Lazy render historical messages in idle time
+        if (historicalMessages.length > 0) {
+          requestIdleCallback(
+            () => {
+              const historicalFragment = document.createDocumentFragment();
+
+              for (const msg of historicalMessages) {
+                const messageDiv = createMessageElement(msg);
+                if (messageDiv) {
+                  messageDiv.dataset.historical = "true";
+                  historicalFragment.appendChild(messageDiv);
+                }
+              }
+
+              // Replace placeholder
+              if (placeholder && placeholder.parentNode) {
+                placeholder.replaceWith(historicalFragment);
+              }
+
+              // Process Mermaid in historical messages
+              const historicalAssistantMessages = elements.chatContainer.querySelectorAll(
+                ".message.assistant[data-historical] .message-content"
+              );
+
+              for (const contentDiv of historicalAssistantMessages) {
+                processMermaidDiagrams(contentDiv).catch((err) => console.error("Mermaid processing error:", err));
+              }
+            },
+            { timeout: 1000 }
+          ); // Allow up to 1s for idle rendering
+        }
       }
 
       // Clear JSON parse cache on session switch (prevent stale data)

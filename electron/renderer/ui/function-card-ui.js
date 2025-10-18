@@ -251,6 +251,18 @@ export function updateFunctionArguments(activeCalls, argumentsBuffer, callId, de
  */
 export function scheduleFunctionCardCleanup(activeCalls, activeTimers, callId) {
   const timerId = setTimeout(() => {
+    const card = activeCalls.get(callId);
+
+    if (card?.element) {
+      // Remove from DOM with fade-out animation
+      card.element.style.transition = "opacity 0.3s ease-out";
+      card.element.style.opacity = "0";
+
+      setTimeout(() => {
+        card.element.remove(); // Actually remove from DOM
+      }, 300);
+    }
+
     activeCalls.delete(callId);
     activeTimers.delete(timerId);
   }, FUNCTION_CARD_CLEANUP_DELAY);

@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+@import "tailwindcss";
+
+@variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 /* Tailwind v4 Theme Configuration - Define all custom colors and tokens */
 @theme {
   /* Light theme colors */

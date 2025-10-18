@@ -6,12 +6,14 @@ import { MAX_FUNCTION_BUFFERS, MAX_FUNCTION_CALLS } from "../config/constants.js
 
 /**
  * Efficient Bounded Map class for memory management
+ * Uses Map-based insertion order tracking for O(1) operations
  */
 export class BoundedMap extends Map {
   constructor(maxSize = 100) {
     super();
     this.maxSize = maxSize;
-    this.keyOrder = []; // Track insertion order efficiently
+    this.insertionOrder = new Map(); // Track order with timestamps - O(1) operations
+    this.nextOrder = 0;
   }
 
   set(key, value) {
@@ -20,26 +22,37 @@ export class BoundedMap extends Map {
       return super.set(key, value);
     }
 
-    // New key - check size limit
+    // New key - check size limit and evict oldest if at capacity
     if (this.size >= this.maxSize) {
-      const oldestKey = this.keyOrder.shift();
-      this.delete(oldestKey);
+      let oldestKey = null;
+      let oldestOrder = Infinity;
+
+      // Find oldest key (O(n) but only when at capacity)
+      for (const [k, order] of this.insertionOrder.entries()) {
+        if (order < oldestOrder) {
+          oldestOrder = order;
+          oldestKey = k;
+        }
+      }
+
+      if (oldestKey !== null) {
+        this.delete(oldestKey);
+      }
     }
 
-    this.keyOrder.push(key);
+    // Track insertion order with timestamp
+    this.insertionOrder.set(key, this.nextOrder++);
     return super.set(key, value);
   }
 
   delete(key) {
-    const index = this.keyOrder.indexOf(key);
-    if (index > -1) {
-      this.keyOrder.splice(index, 1);
-    }
-    return super.delete(key);
+    this.insertionOrder.delete(key); // O(1)
+    return super.delete(key); // O(1)
   }
 
   clear() {
-    this.keyOrder = [];
+    this.insertionOrder.clear();
+    this.nextOrder = 0;
     return super.clear();
   }
 }

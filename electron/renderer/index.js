@@ -223,11 +223,21 @@ async function showWelcomeView() {
   }, 0);
 }
 
+function detachWelcomePageListeners() {
+  welcomePageListeners.forEach(({ element, event, handler }) => {
+    element?.removeEventListener(event, handler);
+  });
+  welcomePageListeners.length = 0;
+}
+
 function showChatView() {
   if (!elements.welcomePageContainer) return;
 
   // Hide welcome page
   hideWelcomePage(elements.welcomePageContainer);
+
+  // Clean up welcome page listeners to prevent memory leaks
+  detachWelcomePageListeners();
 
   // Update state
   appState.setState("ui.currentView", "chat");
@@ -242,6 +252,9 @@ function showChatView() {
   }
 }
 
+// Track welcome page listeners for cleanup
+const welcomePageListeners = [];
+
 function attachWelcomePageListeners() {
   const welcomeInput = document.getElementById("welcome-input");
   const welcomeSendBtn = document.getElementById("welcome-send-btn");
@@ -250,33 +263,41 @@ function attachWelcomePageListeners() {
 
   // File drag-and-drop handlers for welcome page
   if (welcomeContainer) {
-    welcomeContainer.addEventListener("dragenter", (e) => {
+    const dragenterHandler = (e) => {
       if (e.dataTransfer?.types.includes("Files")) {
         if (elements.fileDropZone) {
           elements.fileDropZone.classList.add("active");
         }
       }
-    });
+    };
+    welcomeContainer.addEventListener("dragenter", dragenterHandler);
+    welcomePageListeners.push({ element: welcomeContainer, event: "dragenter", handler: dragenterHandler });
 
-    welcomeContainer.addEventListener("dragover", (e) => {
+    const dragoverHandler = (e) => {
       e.preventDefault();
       e.stopPropagation();
-    });
+    };
+    welcomeContainer.addEventListener("dragover", dragoverHandler);
+    welcomePageListeners.push({ element: welcomeContainer, event: "dragover", handler: dragoverHandler });
 
-    welcomeContainer.addEventListener("dragleave", (e) => {
+    const dragleaveHandler = (e) => {
       // Only hide if leaving the welcome container entirely
       if (e.target === welcomeContainer) {
         if (elements.fileDropZone) {
           elements.fileDropZone.classList.remove("active");
         }
       }
-    });
+    };
+    welcomeContainer.addEventListener("dragleave", dragleaveHandler);
+    welcomePageListeners.push({ element: welcomeContainer, event: "dragleave", handler: dragleaveHandler });
 
-    welcomeContainer.addEventListener("drop", (e) => {
+    const dropHandler = (e) => {
       e.preventDefault();
       e.stopPropagation();
       handleFileDropWithSession(e, true);
-    });
+    };
+    welcomeContainer.addEventListener("drop", dropHandler);
+    welcomePageListeners.push({ element: welcomeContainer, event: "drop", handler: dropHandler });
   }
 
   // Handle welcome input send
@@ -309,21 +330,24 @@ function attachWelcomePageListeners() {
   // Send button click
   if (welcomeSendBtn) {
     welcomeSendBtn.addEventListener("click", sendWelcomeMessage);
+    welcomePageListeners.push({ element: welcomeSendBtn, event: "click", handler: sendWelcomeMessage });
   }
 
   // Enter key to send
   if (welcomeInput) {
-    welcomeInput.addEventListener("keypress", (e) => {
+    const keypressHandler = (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         sendWelcomeMessage();
       }
-    });
+    };
+    welcomeInput.addEventListener("keypress", keypressHandler);
+    welcomePageListeners.push({ element: welcomeInput, event: "keypress", handler: keypressHandler });
   }
 
   // Suggestion pill clicks
   suggestionPills.forEach((pill) => {
-    pill.addEventListener("click", () => {
+    const clickHandler = () => {
       const category = pill.dataset.category;
       const prompt = getSuggestionPrompt(category);
 
@@ -335,7 +359,9 @@ function attachWelcomePageListeners() {
         welcomeInput.style.height = "auto";
         welcomeInput.style.height = `${Math.min(welcomeInput.scrollHeight, 200)}px`;
       }
-    });
+    };
+    pill.addEventListener("click", clickHandler);
+    welcomePageListeners.push({ element: pill, event: "click", handler: clickHandler });
   });
 }
 
@@ -381,6 +407,18 @@ const messageBatch = {
 window.electronAPI.onBotOutput((output) => {
   // Add output to buffer
   jsonBuffer += output;
+
+  // Safety check: prevent unbounded buffer growth (10MB limit)
+  const MAX_JSON_BUFFER = 10 * 1024 * 1024;
+  if (jsonBuffer.length > MAX_JSON_BUFFER) {
+    window.electronAPI.log("error", "JSON buffer overflow detected", {
+      bufferSize: jsonBuffer.length,
+      maxSize: MAX_JSON_BUFFER,
+    });
+    jsonBuffer = ""; // Reset buffer
+    addMessage(elements.chatContainer, "Error: Message too large. Connection reset.", "error");
+    return;
+  }
 
   // Process all complete JSON messages in the buffer
   let startIndex = jsonBuffer.indexOf(JSON_DELIMITER);
