@@ -1,4 +1,4 @@
-# Development Dependencies for Chat Juicer
+# Development Dependencies for Wishgate
 # Install with: pip install -r requirements-dev.txt
 
 # Code Quality & Formatting

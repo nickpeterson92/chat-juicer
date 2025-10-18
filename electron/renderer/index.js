@@ -1,5 +1,5 @@
 /**
- * Chat Juicer Renderer - Main Entry Point
+ * Wishgate Renderer - Main Entry Point
  * Modular architecture with ES6 modules
  */
 
@@ -9,12 +9,39 @@ import "katex/dist/katex.min.css";
 
 // Module imports
 import {
+  BYTES_PER_KILOBYTE,
   CONNECTION_RESET_DELAY,
   DELETE_SESSION_CONFIRM_MESSAGE,
   JSON_DELIMITER,
   MESSAGE_BATCH_DELAY,
   MESSAGE_BATCH_SIZE,
+  MSG_BOT_DISCONNECTED,
+  MSG_BOT_RESTARTED,
+  MSG_BOT_RESTARTING,
+  MSG_BOT_SESSION_ENDED,
+  MSG_DELETE_FILE_CONFIRM,
+  MSG_DELETE_SESSION_CONFIRM,
+  MSG_FILE_DELETE_ERROR,
+  MSG_FILE_DELETE_FAILED,
+  MSG_FILE_DELETED,
+  MSG_FILE_UPLOAD_FAILED,
+  MSG_FILE_UPLOAD_PARTIAL,
+  MSG_FILE_UPLOADED,
+  MSG_FILES_ERROR,
+  MSG_FILES_LOAD_FAILED,
+  MSG_LOADING_FILES,
+  MSG_NO_FILE_SELECTED,
+  MSG_NO_FILES,
+  MSG_NO_FILES_DROPPED,
+  MSG_NO_SESSION_SELECTED,
+  MSG_NO_SESSIONS,
+  MSG_SESSION_DELETE_FAILED,
+  MSG_SESSION_DELETED,
+  MSG_SUMMARIZE_CURRENT_ONLY,
+  MSG_SUMMARIZE_ERROR,
+  MSG_UPLOADING_FILE,
   OLD_CARD_THRESHOLD,
+  SIZE_PRECISION_MULTIPLIER,
   UPLOAD_PROGRESS_HIDE_DELAY,
 } from "./config/constants.js";
 import { AppState } from "./core/state.js";
@@ -46,16 +73,18 @@ function initializeElements() {
   elements.statusText = document.getElementById("status-text");
   elements.typingIndicator = document.getElementById("typing-indicator");
   elements.aiThinking = document.getElementById("ai-thinking");
-  elements.toolsContainer = document.getElementById("tools-container");
-  elements.toolsPanel = document.getElementById("tools-panel");
-  elements.toggleToolsBtn = document.getElementById("toggle-tools-btn");
+  elements.filesPanel = document.getElementById("files-panel");
+  elements.filesContainer = document.getElementById("files-container");
+  elements.toggleFilesBtn = document.getElementById("toggle-files-btn");
+  elements.refreshFilesBtn = document.getElementById("refresh-files-btn");
   elements.themeToggle = document.getElementById("theme-toggle");
   elements.themeIcon = document.getElementById("theme-icon");
   elements.themeText = document.getElementById("theme-text");
-  elements.sessionSelector = document.getElementById("session-selector");
+  elements.sessionsList = document.getElementById("sessions-list");
   elements.newSessionBtn = document.getElementById("new-session-btn");
-  elements.summarizeSessionBtn = document.getElementById("summarize-session-btn");
-  elements.deleteSessionBtn = document.getElementById("delete-session-btn");
+  elements.sidebar = document.getElementById("sidebar");
+  elements.sidebarToggle = document.getElementById("sidebar-toggle");
+  elements.sidebarCloseBtn = document.getElementById("sidebar-close-btn");
   elements.fileDropZone = document.getElementById("file-drop-zone");
   elements.chatPanel = document.querySelector(".chat-panel");
   elements.uploadProgress = document.getElementById("file-upload-progress");
@@ -236,7 +265,7 @@ window.electronAPI.onBotOutput((output) => {
     // Skip the initial connection message from Python bot
     if (
       appState.connection.isInitial &&
-      (line.includes("Welcome to Chat Juicer!") ||
+      (line.includes("Welcome to Wishgate!") ||
         line.includes("Connected to") ||
         line.includes("Using deployment:") ||
         line.includes("Type 'quit'") ||
@@ -252,7 +281,7 @@ window.electronAPI.onBotOutput((output) => {
     if (line.includes("Goodbye!") || line.includes("An error occurred")) {
       setConnectionStatus(false);
       if (line.includes("Goodbye!")) {
-        addMessage(elements.chatContainer, 'Chat session ended. Click "Restart Bot" to start a new session.', "system");
+        addMessage(elements.chatContainer, MSG_BOT_SESSION_ENDED, "system");
       }
     }
   }
@@ -279,13 +308,13 @@ window.electronAPI.onBotDisconnected(() => {
   }
 
   setConnectionStatus(false);
-  addMessage(elements.chatContainer, 'Bot disconnected. Click "Restart Bot" to reconnect.', "system");
+  addMessage(elements.chatContainer, MSG_BOT_DISCONNECTED, "system");
 });
 
 window.electronAPI.onBotRestarted(() => {
   // Clear UI
   clearChat(elements.chatContainer);
-  clearFunctionCards(elements.toolsContainer);
+  clearFunctionCards(elements.chatContainer);
 
   // Clear timers
   for (const timerId of appState.functions.activeTimers) {
@@ -304,11 +333,11 @@ window.electronAPI.onBotRestarted(() => {
   clearMessageCache();
   clearParseCache();
 
-  addMessage(elements.chatContainer, "Bot is restarting...", "system");
+  addMessage(elements.chatContainer, MSG_BOT_RESTARTING, "system");
 
   setTimeout(() => {
     setConnectionStatus(true);
-    addMessage(elements.chatContainer, "Bot restarted successfully. Ready for new conversation.", "system");
+    addMessage(elements.chatContainer, MSG_BOT_RESTARTED, "system");
   }, CONNECTION_RESET_DELAY);
 });
 
@@ -325,53 +354,211 @@ function setConnectionStatus(connected) {
 }
 
 // ====================
+// Source Files Management UI
+// ====================
+
+async function loadSourceFiles() {
+  if (!elements.filesContainer) return;
+
+  elements.filesContainer.innerHTML = `<div class="files-loading">${MSG_LOADING_FILES}</div>`;
+
+  try {
+    const result = await window.electronAPI.listDirectory("sources");
+
+    if (!result.success) {
+      elements.filesContainer.innerHTML = `<div class="files-error">${MSG_FILES_ERROR.replace("{error}", result.error)}</div>`;
+      return;
+    }
+
+    const files = result.files || [];
+
+    if (files.length === 0) {
+      elements.filesContainer.innerHTML = `<div class="files-empty">${MSG_NO_FILES}</div>`;
+      return;
+    }
+
+    // Clear and populate with file items
+    elements.filesContainer.innerHTML = "";
+
+    files.forEach((file) => {
+      const fileItem = document.createElement("div");
+      fileItem.className = "file-item";
+
+      const fileIcon = document.createElement("span");
+      fileIcon.className = "file-icon";
+      fileIcon.textContent = "📄";
+
+      const fileName = document.createElement("span");
+      fileName.className = "file-name";
+      fileName.textContent = file.name;
+      fileName.title = file.name;
+
+      const fileSize = document.createElement("span");
+      fileSize.className = "file-size";
+      fileSize.textContent = formatFileSize(file.size || 0);
+
+      // Delete button
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "file-delete-btn";
+      deleteBtn.innerHTML = "🗑️";
+      deleteBtn.title = "Delete file";
+      deleteBtn.onclick = (e) => {
+        e.stopPropagation();
+        handleDeleteFile(file.name);
+      };
+
+      fileItem.appendChild(fileIcon);
+      fileItem.appendChild(fileName);
+      fileItem.appendChild(fileSize);
+      fileItem.appendChild(deleteBtn);
+
+      elements.filesContainer.appendChild(fileItem);
+    });
+  } catch (error) {
+    window.electronAPI.log("error", "Failed to load source files", { error: error.message });
+    elements.filesContainer.innerHTML = `<div class="files-error">${MSG_FILES_LOAD_FAILED}</div>`;
+  }
+}
+
+function formatFileSize(bytes) {
+  if (bytes === 0) return "0 B";
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(BYTES_PER_KILOBYTE));
+  return (
+    Math.round((bytes / BYTES_PER_KILOBYTE ** i) * SIZE_PRECISION_MULTIPLIER) / SIZE_PRECISION_MULTIPLIER +
+    " " +
+    sizes[i]
+  );
+}
+
+async function handleDeleteFile(filename) {
+  if (!filename) {
+    addMessage(elements.chatContainer, MSG_NO_FILE_SELECTED, "error");
+    return;
+  }
+
+  if (!confirm(MSG_DELETE_FILE_CONFIRM.replace("{filename}", filename))) {
+    return;
+  }
+
+  try {
+    const result = await window.electronAPI.deleteFile("sources", filename);
+
+    if (result.success) {
+      addMessage(elements.chatContainer, MSG_FILE_DELETED.replace("{filename}", filename), "system");
+      // Refresh the files list
+      loadSourceFiles();
+    } else {
+      addMessage(
+        elements.chatContainer,
+        MSG_FILE_DELETE_FAILED.replace("{filename}", filename).replace("{error}", result.error),
+        "error"
+      );
+    }
+  } catch (error) {
+    window.electronAPI.log("error", "Failed to delete file", { filename, error: error.message });
+    addMessage(elements.chatContainer, MSG_FILE_DELETE_ERROR.replace("{filename}", filename), "error");
+  }
+}
+
+// ====================
 // Session Management UI
 // ====================
 
-function updateSessionSelector() {
-  if (!elements.sessionSelector) return;
+function updateSessionsList() {
+  if (!elements.sessionsList) return;
 
-  elements.sessionSelector.innerHTML = "";
+  elements.sessionsList.innerHTML = "";
+
+  if (sessionState.sessions.length === 0) {
+    const emptyMsg = document.createElement("div");
+    emptyMsg.className = "sessions-loading";
+    emptyMsg.textContent = MSG_NO_SESSIONS;
+    elements.sessionsList.appendChild(emptyMsg);
+    return;
+  }
 
   sessionState.sessions.forEach((session) => {
-    const option = document.createElement("option");
-    option.value = session.session_id;
-    option.textContent = session.title || "Untitled Conversation";
+    const sessionItem = document.createElement("div");
+    sessionItem.className = "session-item";
+    sessionItem.dataset.sessionId = session.session_id;
 
     if (session.session_id === sessionState.currentSessionId) {
-      option.selected = true;
+      sessionItem.classList.add("active");
     }
 
-    elements.sessionSelector.appendChild(option);
+    // Session title
+    const sessionTitle = document.createElement("div");
+    sessionTitle.className = "session-title";
+    sessionTitle.textContent = session.title || "Untitled Conversation";
+    sessionItem.appendChild(sessionTitle);
+
+    // Session actions (summarize, delete)
+    const sessionActions = document.createElement("div");
+    sessionActions.className = "session-actions";
+
+    // Summarize button
+    const summarizeBtn = document.createElement("button");
+    summarizeBtn.className = "session-action-btn";
+    summarizeBtn.innerHTML = "📝";
+    summarizeBtn.title = "Summarize session";
+    summarizeBtn.onclick = (e) => {
+      e.stopPropagation();
+      handleSummarizeSession(session.session_id);
+    };
+    sessionActions.appendChild(summarizeBtn);
+
+    // Delete button
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "session-action-btn";
+    deleteBtn.innerHTML = "🗑️";
+    deleteBtn.title = "Delete session";
+    deleteBtn.onclick = (e) => {
+      e.stopPropagation();
+      handleDeleteSession(session.session_id);
+    };
+    sessionActions.appendChild(deleteBtn);
+
+    sessionItem.appendChild(sessionActions);
+
+    // Click handler for switching sessions
+    sessionItem.onclick = () => {
+      if (session.session_id !== sessionState.currentSessionId) {
+        handleSwitchSession(session.session_id);
+      }
+    };
+
+    elements.sessionsList.appendChild(sessionItem);
   });
 }
 
 async function handleCreateNewSession() {
   const result = await createNewSession(window.electronAPI, elements);
   if (result.success) {
-    await loadSessions(window.electronAPI, updateSessionSelector);
+    await loadSessions(window.electronAPI, updateSessionsList);
   }
 }
 
 async function handleSwitchSession(sessionId) {
   const result = await switchSession(window.electronAPI, elements, appState, sessionId);
   if (result.success) {
-    // Session selector already updated by switchSession
+    // Session list already updated by switchSession
+    updateSessionsList();
   }
 }
 
-async function handleDeleteSession() {
-  const sessionIdToDelete = elements.sessionSelector?.value;
-
+async function handleDeleteSession(sessionIdToDelete) {
   if (!sessionIdToDelete) {
-    addMessage(elements.chatContainer, "No session selected.", "error");
+    addMessage(elements.chatContainer, MSG_NO_SESSION_SELECTED, "error");
     return;
   }
 
   const sessionToDelete = sessionState.sessions.find((s) => s.session_id === sessionIdToDelete);
   const title = sessionToDelete?.title || "this conversation";
 
-  if (!confirm(`Delete ${title}?\n\n${DELETE_SESSION_CONFIRM_MESSAGE}`)) {
+  if (
+    !confirm(MSG_DELETE_SESSION_CONFIRM.replace("{title}", title).replace("{message}", DELETE_SESSION_CONFIRM_MESSAGE))
+  ) {
     return;
   }
 
@@ -381,7 +568,7 @@ async function handleDeleteSession() {
     result = await deleteSession(window.electronAPI, elements, sessionIdToDelete);
   } catch (error) {
     window.electronAPI.log("error", "Failed to delete session", { error: error.message });
-    addMessage(elements.chatContainer, "Failed to delete session. Please try again.", "system");
+    addMessage(elements.chatContainer, MSG_SESSION_DELETE_FAILED, "system");
     return;
   }
 
@@ -401,26 +588,29 @@ async function handleDeleteSession() {
       }
     }
 
-    await loadSessions(window.electronAPI, updateSessionSelector);
-    addMessage(elements.chatContainer, `Deleted conversation: ${title}`, "system");
+    await loadSessions(window.electronAPI, updateSessionsList);
+    addMessage(elements.chatContainer, MSG_SESSION_DELETED.replace("{title}", title), "system");
   }
 }
 
-async function handleSummarizeSession() {
-  if (!elements.summarizeSessionBtn) return;
+async function handleSummarizeSession(sessionId) {
+  if (!sessionId) {
+    addMessage(elements.chatContainer, MSG_NO_SESSION_SELECTED, "error");
+    return;
+  }
 
-  // Disable button during operation
-  elements.summarizeSessionBtn.disabled = true;
+  // If summarizing a different session, switch to it first
+  if (sessionId !== sessionState.currentSessionId) {
+    addMessage(elements.chatContainer, MSG_SUMMARIZE_CURRENT_ONLY, "system");
+    return;
+  }
 
   try {
     await summarizeCurrentSession(window.electronAPI, elements);
     // Result messages are already handled by the service function
   } catch (error) {
     window.electronAPI.log("error", "Unexpected error during summarization", { error: error.message });
-    addMessage(elements.chatContainer, "An unexpected error occurred.", "error");
-  } finally {
-    // Re-enable button after operation completes
-    elements.summarizeSessionBtn.disabled = false;
+    addMessage(elements.chatContainer, MSG_SUMMARIZE_ERROR, "error");
   }
 }
 
@@ -493,19 +683,24 @@ function initializeEventListeners() {
     });
   }
 
-  // Toggle tools panel
-  if (elements.toggleToolsBtn) {
-    addManagedEventListener(elements.toggleToolsBtn, "click", () => {
-      const wrapper = document.getElementById("tools-toggle-wrapper");
-      elements.toolsPanel.classList.toggle("collapsed");
+  // Toggle files panel
+  if (elements.toggleFilesBtn) {
+    addManagedEventListener(elements.toggleFilesBtn, "click", () => {
+      const wrapper = document.getElementById("files-toggle-wrapper");
+      elements.filesPanel.classList.toggle("collapsed");
       if (wrapper) {
         wrapper.classList.toggle("panel-collapsed");
       }
-      elements.toggleToolsBtn.textContent = elements.toolsPanel.classList.contains("collapsed") ? "◀" : "▶";
-      elements.toggleToolsBtn.title = elements.toolsPanel.classList.contains("collapsed")
-        ? "Show function calls"
-        : "Hide function calls";
+      elements.toggleFilesBtn.textContent = elements.filesPanel.classList.contains("collapsed") ? "◀" : "▶";
+      elements.toggleFilesBtn.title = elements.filesPanel.classList.contains("collapsed")
+        ? "Show source files"
+        : "Hide source files";
     });
+  }
+
+  // Refresh files button
+  if (elements.refreshFilesBtn) {
+    addManagedEventListener(elements.refreshFilesBtn, "click", loadSourceFiles);
   }
 
   // Theme toggle
@@ -513,23 +708,27 @@ function initializeEventListeners() {
     addManagedEventListener(elements.themeToggle, "click", toggleTheme);
   }
 
-  // Session management
-  if (elements.sessionSelector) {
-    addManagedEventListener(elements.sessionSelector, "change", (e) => {
-      handleSwitchSession(e.target.value);
+  // Sidebar toggle (open from collapsed state)
+  if (elements.sidebarToggle) {
+    addManagedEventListener(elements.sidebarToggle, "click", () => {
+      if (elements.sidebar) {
+        elements.sidebar.classList.remove("collapsed");
+      }
     });
   }
 
+  // Sidebar close (close from open state)
+  if (elements.sidebarCloseBtn) {
+    addManagedEventListener(elements.sidebarCloseBtn, "click", () => {
+      if (elements.sidebar) {
+        elements.sidebar.classList.add("collapsed");
+      }
+    });
+  }
+
+  // Session management
   if (elements.newSessionBtn) {
     addManagedEventListener(elements.newSessionBtn, "click", handleCreateNewSession);
-  }
-
-  if (elements.summarizeSessionBtn) {
-    addManagedEventListener(elements.summarizeSessionBtn, "click", handleSummarizeSession);
-  }
-
-  if (elements.deleteSessionBtn) {
-    addManagedEventListener(elements.deleteSessionBtn, "click", handleDeleteSession);
   }
 }
 
@@ -578,7 +777,7 @@ if (elements.chatPanel) {
     const files = Array.from(e.dataTransfer.files);
 
     if (files.length === 0) {
-      addMessage(elements.chatContainer, "No files detected in drop.", "error");
+      addMessage(elements.chatContainer, MSG_NO_FILES_DROPPED, "error");
       return;
     }
 
@@ -597,7 +796,9 @@ if (elements.chatPanel) {
         const startPercentage = (completed / files.length) * 100;
 
         if (elements.progressText) {
-          elements.progressText.textContent = `Uploading ${file.name} (${currentFileIndex}/${files.length})`;
+          elements.progressText.textContent = MSG_UPLOADING_FILE.replace("{filename}", file.name)
+            .replace("{current}", currentFileIndex)
+            .replace("{total}", files.length);
         }
 
         if (elements.progressBar) {
@@ -674,12 +875,19 @@ if (elements.chatPanel) {
     const failCount = results.length - successCount;
 
     if (failCount === 0) {
-      addMessage(elements.chatContainer, `Uploaded ${successCount} file(s) to sources/`, "system");
+      addMessage(elements.chatContainer, MSG_FILE_UPLOADED.replace("{count}", successCount), "system");
     } else if (successCount === 0) {
-      addMessage(elements.chatContainer, `Failed to upload ${failCount} file(s)`, "error");
+      addMessage(elements.chatContainer, MSG_FILE_UPLOAD_FAILED.replace("{count}", failCount), "error");
     } else {
-      addMessage(elements.chatContainer, `Uploaded ${successCount} file(s), ${failCount} failed`, "system");
+      addMessage(
+        elements.chatContainer,
+        MSG_FILE_UPLOAD_PARTIAL.replace("{success}", successCount).replace("{failed}", failCount),
+        "system"
+      );
     }
+
+    // Refresh the files panel after upload
+    loadSourceFiles();
   });
 }
 
@@ -703,7 +911,8 @@ window.addEventListener("load", () => {
 
   setConnectionStatus(true);
   initializeTheme();
-  loadSessions(window.electronAPI, updateSessionSelector);
+  loadSessions(window.electronAPI, updateSessionsList);
+  loadSourceFiles();
 });
 
 // ====================
@@ -732,7 +941,7 @@ function cleanup() {
 
   // Clear DOM using helper functions
   clearChat(elements.chatContainer);
-  clearFunctionCards(elements.toolsContainer);
+  clearFunctionCards(elements.chatContainer);
 
   // Remove event listeners
   eventListeners.forEach(({ element, event, handler, options }) => {

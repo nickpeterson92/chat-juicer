@@ -15,6 +15,9 @@ const HEALTH_CHECK_INTERVAL = 300000; // 5 minutes - interval for process health
 // IPC operation timeouts
 const FILE_UPLOAD_TIMEOUT = 10000; // 10 seconds - timeout for file upload operations
 
+// File system constants
+const HIDDEN_FILE_PREFIX = "."; // Prefix for hidden files/directories (Unix convention)
+
 module.exports = {
   RESTART_DELAY,
   RESTART_CALLBACK_DELAY,
@@ -22,4 +25,5 @@ module.exports = {
   SIGTERM_DELAY,
   HEALTH_CHECK_INTERVAL,
   FILE_UPLOAD_TIMEOUT,
+  HIDDEN_FILE_PREFIX,
 };

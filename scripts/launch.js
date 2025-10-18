@@ -3,7 +3,7 @@
 /**
  * Universal Launch Script
  *
- * Cross-platform launcher for Chat Juicer.
+ * Cross-platform launcher for Wishgate.
  * Handles platform-specific Electron startup.
  */
 
@@ -24,7 +24,7 @@ async function launch() {
   if (isDev) electronArgs.push("--dev");
   if (isInspect) electronArgs.push("--inspect");
 
-  console.log("Starting Chat Juicer...");
+  console.log("Starting Wishgate...");
   console.log("Platform:", platformConfig.getPlatformName());
   console.log("Mode:", isDev ? "Development" : "Production");
   console.log("");

@@ -16,7 +16,7 @@
         "Putting the 'Juice' in 'Chatbot'"
 ```
 
-# Chat Juicer
+# Wishgate
 
 An Electron + Python desktop application for Azure OpenAI chat interactions using the **Agent/Runner pattern** with native **MCP (Model Context Protocol) server support**, advanced **token-aware session management** with automatic summarization, and sophisticated document generation capabilities.
 
@@ -74,7 +74,7 @@ make health             # Check system configuration
 
 ## Architecture
 
-Chat Juicer uses OpenAI's **Agent/Runner pattern** with a **two-layer persistence architecture**:
+Wishgate uses OpenAI's **Agent/Runner pattern** with a **two-layer persistence architecture**:
 - **Native MCP Server Integration**: Direct support for Model Context Protocol servers
 - **Automatic Tool Orchestration**: Framework handles function calling automatically
 - **Layered Persistence**: Separates LLM context (Layer 1) from UI display (Layer 2)
@@ -121,8 +121,8 @@ The easiest way to get started is using the automated setup:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/chat-juicer.git
-cd chat-juicer
+git clone https://github.com/yourusername/wishgate.git
+cd wishgate
 
 # Run automated setup (works on all platforms)
 npm run setup
@@ -148,8 +148,8 @@ If you prefer manual installation or encounter issues:
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/chat-juicer.git
-   cd chat-juicer
+   git clone https://github.com/yourusername/wishgate.git
+   cd wishgate
    ```
 
 2. **Install Node dependencies**
@@ -206,7 +206,7 @@ npm run inspect         # Debug mode with Node.js inspector
 
 ### Makefile Commands (macOS/Linux)
 
-Chat Juicer includes a comprehensive Makefile for convenience on Unix systems. Windows users should use npm scripts or install Git Bash/WSL.
+Wishgate includes a comprehensive Makefile for convenience on Unix systems. Windows users should use npm scripts or install Git Bash/WSL.
 
 Run `make help` or `make` to see all available commands.
 
@@ -308,7 +308,7 @@ make help               # Show all available commands
 ## Project Structure
 
 ```
-chat-juicer/
+wishgate/
 ├── electron/          # Electron main process and utilities
 │   ├── main.js       # Electron main process, IPC handlers, health monitoring
 │   ├── preload.js    # Preload script for secure context-isolated IPC

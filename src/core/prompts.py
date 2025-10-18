@@ -1,5 +1,5 @@
 """
-System prompts and instructions for Chat Juicer.
+System prompts and instructions for Wishgate.
 Centralizes all prompt engineering for the Agent and tools.
 """
 

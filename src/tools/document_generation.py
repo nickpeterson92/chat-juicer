@@ -1,5 +1,5 @@
 """
-Document generation tools for Chat Juicer.
+Document generation tools for Wishgate.
 Handles creating and saving generated documentation.
 """
 

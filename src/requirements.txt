@@ -1,4 +1,4 @@
-# Chat Juicer Requirements
+# Wishgate Requirements
 
 # Core AI Libraries (REQUIRED)
 openai-agents>=0.3.3  # Provides agents module for Responses API support

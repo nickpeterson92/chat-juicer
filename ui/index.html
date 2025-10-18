@@ -3,108 +3,156 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chat Juicer</title>
+  <title>Wishgate</title>
   <!-- Styles will be bundled by Vite -->
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="container">
-    <div class="header">
-      <h1>🧃 Chat Juicer</h1>
-      <div style="display: flex; gap: 12px; align-items: center;">
-        <!-- Session Management -->
-        <div class="session-controls">
-          <select class="session-selector" id="session-selector" title="Select conversation">
-            <option value="">Loading sessions...</option>
-          </select>
-          <button class="new-session-btn" id="new-session-btn" title="New conversation">+ New</button>
-          <button class="summarize-session-btn" id="summarize-session-btn" title="Summarize conversation">📝 Summarize</button>
-          <button class="delete-session-btn" id="delete-session-btn" title="Delete current conversation">🗑️</button>
-        </div>
-
-        <button class="theme-toggle" id="theme-toggle" title="Toggle dark mode">
-          <span class="theme-toggle-icon" id="theme-icon">🌙</span>
-          <span id="theme-text">Dark</span>
+    <!-- Sidebar -->
+    <div class="sidebar collapsed" id="sidebar">
+      <!-- Sidebar Header -->
+      <div class="sidebar-header">
+        <span class="sidebar-header-text">Sessions</span>
+        <button class="sidebar-close-btn" id="sidebar-close-btn" title="Close sidebar">
+          <span>◀</span>
         </button>
-        <div class="status">
+      </div>
+
+      <!-- New Chat Button -->
+      <button class="new-chat-btn" id="new-session-btn" title="New conversation">
+        <span class="new-chat-icon">+</span>
+        <span class="new-chat-text">New chat</span>
+      </button>
+
+      <!-- Sessions List -->
+      <div class="sessions-list" id="sessions-list">
+        <div class="sessions-loading">Loading sessions...</div>
+      </div>
+
+      <!-- Sidebar Footer (Settings) -->
+      <div class="sidebar-footer">
+        <button class="sidebar-action" id="theme-toggle" title="Toggle dark mode">
+          <span class="action-icon" id="theme-icon">🌙</span>
+          <span class="action-text" id="theme-text">Dark mode</span>
+        </button>
+        <div class="sidebar-action status-display">
           <div class="status-indicator" id="status-indicator"></div>
-          <span id="status-text">Connected</span>
+          <span class="action-text" id="status-text">Connected</span>
         </div>
-        <button class="restart-button" id="restart-btn">Restart Bot</button>
+        <button class="sidebar-action" id="restart-btn" title="Restart bot">
+          <span class="action-icon">🔄</span>
+          <span class="action-text">Restart</span>
+        </button>
       </div>
     </div>
 
+    <!-- Main Content Area -->
     <div class="main-content">
-      <div class="chat-panel">
-        <!-- File upload drop zone -->
-        <div class="file-drop-zone" id="file-drop-zone">
-          <div class="drop-zone-content">
-            <span class="drop-zone-icon">📁</span>
-            <span class="drop-zone-text">Drop files here to upload to sources/</span>
+      <!-- Minimal Header -->
+      <div class="header">
+        <!-- Sidebar Toggle (stays visible when collapsed) -->
+        <div class="sidebar-toggle-wrapper" id="sidebar-toggle-wrapper">
+          <button class="sidebar-toggle" id="sidebar-toggle" title="Toggle sidebar">
+            <span class="sidebar-toggle-icon">☰</span>
+          </button>
+        </div>
+        <div class="header-branding">
+          <img src="wishgate-logo.png" alt="Wishgate" class="header-logo">
+          <h1>Wishgate</h1>
+        </div>
+      </div>
+
+      <!-- Content Wrapper (chat + tools side by side) -->
+      <div class="content-wrapper">
+        <div class="chat-panel">
+          <!-- File upload drop zone -->
+          <div class="file-drop-zone" id="file-drop-zone">
+            <div class="drop-zone-content">
+              <span class="drop-zone-icon">📁</span>
+              <span class="drop-zone-text">Drop files here to upload to sources/</span>
+            </div>
           </div>
-        </div>
 
-        <!-- File upload progress bar -->
-        <div class="file-upload-progress" id="file-upload-progress">
-          <div class="progress-bar-container">
-            <div class="progress-bar-fill" id="progress-bar-fill"></div>
+          <!-- File upload progress bar -->
+          <div class="file-upload-progress" id="file-upload-progress">
+            <div class="progress-bar-container">
+              <div class="progress-bar-fill" id="progress-bar-fill"></div>
+            </div>
+            <div class="progress-text" id="progress-text">Uploading files...</div>
           </div>
-          <div class="progress-text" id="progress-text">Uploading files...</div>
-        </div>
 
-        <div class="chat-container" id="chat-container">
-        </div>
+          <div class="chat-container" id="chat-container">
+          </div>
 
-        <!-- AI Thinking Indicator -->
-        <div class="ai-thinking" id="ai-thinking">
-          <div class="ai-thinking-content">
-            <div class="ai-thinking-dots">
+          <!-- AI Thinking Indicator -->
+          <div class="ai-thinking" id="ai-thinking">
+            <div class="ai-thinking-content">
+              <svg width="48" height="48" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" class="ai-thinking-smoke">
+                <defs>
+                  <filter id="smokeBlur">
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="2"/>
+                  </filter>
+                </defs>
+                <style>
+                  @keyframes puff1 { 0% { opacity: 0; transform: translateY(10px) scale(0.3); } 30% { opacity: 0.5; } 100% { opacity: 0; transform: translateY(-45px) scale(1.5); } }
+                  @keyframes puff2 { 0% { opacity: 0; transform: translateY(10px) scale(0.3); } 30% { opacity: 0.5; } 100% { opacity: 0; transform: translateY(-45px) scale(1.5); } }
+                  @keyframes puff3 { 0% { opacity: 0; transform: translateY(10px) scale(0.3); } 30% { opacity: 0.5; } 100% { opacity: 0; transform: translateY(-45px) scale(1.5); } }
+                  .puff-1 { animation: puff1 2.5s ease-out infinite; transform-origin: center; }
+                  .puff-2 { animation: puff2 2.5s ease-out infinite; animation-delay: 0.8s; transform-origin: center; }
+                  .puff-3 { animation: puff3 2.5s ease-out infinite; animation-delay: 1.6s; transform-origin: center; }
+                </style>
+                <ellipse class="puff-1" cx="32" cy="52" rx="8" ry="6" fill="#0066cc" filter="url(#smokeBlur)"/>
+                <ellipse class="puff-2" cx="30" cy="52" rx="8" ry="6" fill="#0066cc" filter="url(#smokeBlur)"/>
+                <ellipse class="puff-3" cx="34" cy="52" rx="8" ry="6" fill="#0066cc" filter="url(#smokeBlur)"/>
+              </svg>
+              <div class="ai-thinking-text">AI is thinking...</div>
+            </div>
+          </div>
+
+          <!-- Legacy typing indicator (kept for compatibility) -->
+          <div class="message assistant" style="display: none; padding: 0 20px 10px 20px;">
+            <div class="typing-indicator" id="typing-indicator">
               <span></span>
               <span></span>
               <span></span>
             </div>
-            <div class="ai-thinking-text">AI is thinking...</div>
+          </div>
+
+          <div class="input-container">
+            <div class="input-wrapper">
+              <input
+                type="text"
+                id="user-input"
+                placeholder="Type your message here..."
+                autocomplete="off"
+              />
+            </div>
+            <button class="send-button" id="send-btn">Send</button>
           </div>
         </div>
 
-        <!-- Legacy typing indicator (kept for compatibility) -->
-        <div class="message assistant" style="display: none; padding: 0 20px 10px 20px;">
-          <div class="typing-indicator" id="typing-indicator">
-            <span></span>
-            <span></span>
-            <span></span>
+        <!-- Files Panel (repurposed from tools panel) -->
+        <div class="files-panel collapsed" id="files-panel">
+          <div class="files-header">
+            <div class="files-title">
+              <span>📁 Source Files</span>
+            </div>
+            <button class="refresh-files-btn" id="refresh-files-btn" title="Refresh file list">
+              🔄
+            </button>
+          </div>
+          <div class="files-container" id="files-container">
+            <div class="files-loading">Loading files...</div>
           </div>
         </div>
 
-        <div class="input-container">
-      <div class="input-wrapper">
-        <input
-          type="text"
-          id="user-input"
-          placeholder="Type your message here..."
-          autocomplete="off"
-        />
-      </div>
-      <button class="send-button" id="send-btn">Send</button>
-    </div>
-      </div>
-
-      <div class="tools-panel" id="tools-panel">
-        <div class="tools-header">
-          <div class="tools-title">
-            <span>🔧 Function Calls</span>
-          </div>
+        <!-- Toggle button for files panel -->
+        <div class="files-toggle-wrapper panel-collapsed" id="files-toggle-wrapper">
+          <button class="toggle-files-btn" id="toggle-files-btn" title="Toggle files panel">
+            ▶
+          </button>
         </div>
-        <div class="tools-container" id="tools-container">
-          <!-- Function cards will appear here -->
-        </div>
-      </div>
-
-      <!-- Toggle button inside main-content -->
-      <div class="tools-toggle-wrapper" id="tools-toggle-wrapper">
-        <button class="toggle-tools-btn" id="toggle-tools-btn" title="Toggle tools panel">
-          ▶
-        </button>
       </div>
     </div>
   </div>

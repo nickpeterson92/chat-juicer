@@ -113,8 +113,9 @@ function handleFunctionDetected(message, context) {
   window.electronAPI.log("debug", "Function detected", message);
 
   createFunctionCallCard(
-    elements.toolsContainer,
+    elements.chatContainer,
     appState.functions.activeCalls,
+    appState,
     message.call_id,
     message.name,
     "preparing..."
@@ -170,7 +171,7 @@ function handleRateLimitHit(message, context) {
   window.electronAPI.log("info", "Rate limit hit", message);
   addMessage(
     elements.chatContainer,
-    `⏳ Rate limit reached. Waiting ${message.wait_time}s before retry (attempt ${message.retry_count})...`,
+    `Rate limit reached. Waiting ${message.wait_time}s before retry (attempt ${message.retry_count})...`,
     "system"
   );
 }
@@ -182,7 +183,7 @@ function handleRateLimitFailed(message, context) {
   const { elements } = context;
 
   window.electronAPI.log("error", "Rate limit failed", message);
-  addMessage(elements.chatContainer, `❌ ${message.message}. Please try again later.`, "error");
+  addMessage(elements.chatContainer, `${message.message}. Please try again later.`, "error");
 }
 
 /**

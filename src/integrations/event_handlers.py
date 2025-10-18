@@ -1,5 +1,5 @@
 """
-Event handler utilities for Chat Juicer Agent/Runner streaming.
+Event handler utilities for Wishgate Agent/Runner streaming.
 Handles all streaming event types from OpenAI Agent/Runner pattern.
 """
 

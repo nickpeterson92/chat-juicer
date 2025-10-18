@@ -41,11 +41,11 @@ install-mcp: ## Install MCP server globally
 ##@ Running the Application
 
 run: ## Start the application (production mode)
-	@echo "$(BLUE)Starting Chat Juicer...$(NC)"
+	@echo "$(BLUE)Starting Wishgate...$(NC)"
 	@npm start
 
 dev: ## Start in development mode (with DevTools)
-	@echo "$(BLUE)Starting Chat Juicer in development mode...$(NC)"
+	@echo "$(BLUE)Starting Wishgate in development mode...$(NC)"
 	@npm run dev
 
 backend-only: ## Run Python backend only (for testing)
@@ -248,7 +248,7 @@ status: health ## Alias for health check
 
 help: ## Show this help message
 	@echo "$(BLUE)╔══════════════════════════════════════════════════════════════╗$(NC)"
-	@echo "$(BLUE)║                     Chat Juicer Makefile                     ║$(NC)"
+	@echo "$(BLUE)║                     Wishgate Makefile                     ║$(NC)"
 	@echo "$(BLUE)╚══════════════════════════════════════════════════════════════╝$(NC)"
 	@echo ""
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\n  make $(YELLOW)<target>$(NC)\n\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  $(GREEN)%-18s$(NC) %s\n", $$1, $$2 } /^##@/ { printf "\n$(BLUE)%s$(NC)\n", substr($$0, 5) } ' $(MAKEFILE_LIST)

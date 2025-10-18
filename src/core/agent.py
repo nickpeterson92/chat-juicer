@@ -1,5 +1,5 @@
 """
-Agent setup and configuration for Chat Juicer.
+Agent setup and configuration for Wishgate.
 Creates and configures the Agent/Runner with tools and MCP servers.
 """
 
@@ -15,7 +15,7 @@ from utils.logger import logger
 
 
 def create_agent(deployment: str, instructions: str, tools: list[Any], mcp_servers: list[Any]) -> Agent:
-    """Create and configure Chat Juicer Agent with tools and MCP servers.
+    """Create and configure Wishgate Agent with tools and MCP servers.
 
     Args:
         deployment: Model deployment name
@@ -38,7 +38,7 @@ def create_agent(deployment: str, instructions: str, tools: list[Any], mcp_serve
         logger.info(f"Reasoning model detected - reasoning_effort set to '{settings.reasoning_effort}'")
         # Create agent with reasoning configuration
         agent = Agent(
-            name="Chat Juicer",
+            name="Wishgate",
             model=deployment,
             instructions=instructions,
             tools=tools,
@@ -50,7 +50,7 @@ def create_agent(deployment: str, instructions: str, tools: list[Any], mcp_serve
 
         # Create agent without model_settings
         agent = Agent(
-            name="Chat Juicer",
+            name="Wishgate",
             model=deployment,
             instructions=instructions,
             tools=tools,
@@ -58,7 +58,7 @@ def create_agent(deployment: str, instructions: str, tools: list[Any], mcp_serve
         )
 
     # Log agent configuration
-    logger.info(f"Chat Juicer Agent created - Deployment: {deployment}")
+    logger.info(f"Wishgate Agent created - Deployment: {deployment}")
     logger.info(f"Agent configured with {len(tools)} tools and {len(mcp_servers)} MCP servers")
 
     return agent

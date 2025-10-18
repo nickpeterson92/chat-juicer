@@ -1,5 +1,5 @@
 """
-File operation tools for Chat Juicer.
+File operation tools for Wishgate.
 Provides directory listing and file reading capabilities.
 """
 
@@ -184,4 +184,4 @@ async def read_file(file_path: str) -> str:
         ).to_json()
 
     except Exception as e:
-        return FileReadResponse(success=False, file_path=file_path, error=f"Failed to read file: {e!s}").to_json()  # type: ignore[no-any-return]  # type: ignore[no-any-return]
+        return FileReadResponse(success=False, file_path=file_path, error=f"Failed to read file: {e!s}").to_json()  # type: ignore[no-any-return]

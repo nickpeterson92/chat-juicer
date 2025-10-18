@@ -1,5 +1,5 @@
 #!/bin/bash
-# Database Exploration Helper for Chat Juicer
+# Database Exploration Helper for Wishgate
 # Usage: ./scripts/explore-db.sh [query-name]
 
 # Get the project root directory (parent of scripts/ if we're in scripts/, otherwise current dir)
@@ -167,7 +167,7 @@ case "$1" in
 
     *)
         echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
-        echo -e "${BLUE}Chat Juicer Database Explorer${NC}"
+        echo -e "${BLUE}Wishgate Database Explorer${NC}"
         echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
         echo ""
         echo "Usage: ./scripts/explore-db.sh [command] [session_id]"

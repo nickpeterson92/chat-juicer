@@ -6,12 +6,12 @@ This file provides guidance to you (Claude) when working with code in this repos
 
 ## Project Overview
 
-Chat Juicer is a production-grade Electron + Python desktop application that provides a chat interface for Azure OpenAI using the **Agent/Runner pattern** with native **MCP (Model Context Protocol) server support**. The application features advanced reasoning capabilities through Sequential Thinking, sophisticated document generation, enterprise-grade logging, and comprehensive type safety.
+Wishgate is a production-grade Electron + Python desktop application that provides a chat interface for Azure OpenAI using the **Agent/Runner pattern** with native **MCP (Model Context Protocol) server support**. The application features advanced reasoning capabilities through Sequential Thinking, sophisticated document generation, enterprise-grade logging, and comprehensive type safety.
 
 ## Current Architecture (Agent/Runner Pattern)
 
 ```
-chat-juicer/
+wishgate/
 ├── electron/          # Electron main process and utilities
 │   ├── main.js       # Electron main process, IPC handlers, health monitoring (5-min intervals)
 │   ├── preload.js    # Preload script for secure context-isolated IPC
@@ -158,7 +158,7 @@ The renderer process uses a modular architecture for maintainability:
 ### Agent Configuration
 ```python
 agent = Agent(
-    name="Chat Juicer",
+    name="Wishgate",
     model=deployment,
     instructions=SYSTEM_INSTRUCTIONS,
     tools=TOOLS,
@@ -168,7 +168,7 @@ agent = Agent(
 ```
 
 ### Reasoning Effort Configuration
-Chat Juicer supports configurable reasoning effort for reasoning models (GPT-5, O1, O3):
+Wishgate supports configurable reasoning effort for reasoning models (GPT-5, O1, O3):
 
 - **Purpose**: Controls the computational intensity of reasoning operations
 - **Trade-offs**: Speed vs. thoroughness vs. cost (reasoning tokens are billed)
@@ -434,7 +434,7 @@ The project has been fully migrated from the Responses API to Agent/Runner patte
 
 ## Summary
 
-Chat Juicer is a production-grade application leveraging the modern Agent/Runner pattern with native MCP server integration, providing:
+Wishgate is a production-grade application leveraging the modern Agent/Runner pattern with native MCP server integration, providing:
 
 Key strengths:
 - **Sequential Thinking**: Advanced reasoning capabilities with revision and hypothesis testing

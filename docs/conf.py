@@ -1,5 +1,5 @@
 # Configuration file for the Sphinx documentation builder.
-# Chat Juicer API Documentation
+# Wishgate API Documentation
 
 import os
 import sys
@@ -8,9 +8,9 @@ import sys
 sys.path.insert(0, os.path.abspath("../src"))
 
 # -- Project information -----------------------------------------------------
-project = "Chat Juicer"
-copyright = "2025, Chat Juicer Contributors"
-author = "Chat Juicer Contributors"
+project = "Wishgate"
+copyright = "2025, Wishgate Contributors"
+author = "Wishgate Contributors"
 release = "1.0.0"
 
 # -- General configuration ---------------------------------------------------

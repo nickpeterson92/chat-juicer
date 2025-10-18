@@ -85,7 +85,7 @@ class SDKTokenTracker:
         if content is None or content == "":
             return 0
 
-        content_str = json_safe(content) if isinstance(content, (dict, list)) else str(content)
+        content_str = json_safe(content) if isinstance(content, dict | list) else str(content)
 
         # Count tokens
         result = count_tokens(content_str)

@@ -1,6 +1,6 @@
 /**
- * Function call card UI components for tool execution visualization
- * Optimized with JSON caching and throttled status updates
+ * Function call card UI components for inline tool execution visualization
+ * Optimized with JSON caching and collapsible design
  */
 
 import { FUNCTION_CARD_CLEANUP_DELAY } from "../config/constants.js";
@@ -11,16 +11,24 @@ const pendingUpdates = new Map();
 let updateScheduled = false;
 
 /**
- * Create or get a function call card
- * @param {HTMLElement} toolsContainer - The tools container element
+ * Create or get an inline function call card (collapsed by default)
+ * @param {HTMLElement} chatContainer - The chat container element (not tools container)
  * @param {Map} activeCalls - Map of active function calls
+ * @param {Object} appState - Application state with message.currentAssistant
  * @param {string} callId - Unique call identifier
  * @param {string} functionName - Function name
  * @param {string} status - Initial status
- * @returns {Object} Card object with element, name, timestamp
+ * @returns {Object} Card object with element, name, timestamp, expanded state
  */
-export function createFunctionCallCard(toolsContainer, activeCalls, callId, functionName, status = "preparing") {
-  window.electronAPI.log("info", "Creating function card", { callId, functionName, status });
+export function createFunctionCallCard(
+  chatContainer,
+  activeCalls,
+  appState,
+  callId,
+  functionName,
+  status = "preparing"
+) {
+  window.electronAPI.log("info", "Creating inline function card", { callId, functionName, status });
 
   // Handle case where callId might not be provided initially
   if (!callId) {
@@ -30,10 +38,11 @@ export function createFunctionCallCard(toolsContainer, activeCalls, callId, func
   let card = activeCalls.get(callId);
 
   if (!card) {
-    // Create new card
+    // Create new inline card (collapsed by default)
     const cardDiv = document.createElement("div");
-    cardDiv.className = "function-call-card executing function-executing-pulse";
+    cardDiv.className = "function-call-card executing";
     cardDiv.id = `function-${callId}`;
+    cardDiv.dataset.expanded = "false";
 
     const headerDiv = document.createElement("div");
     headerDiv.className = "function-header";
@@ -50,19 +59,71 @@ export function createFunctionCallCard(toolsContainer, activeCalls, callId, func
     statusDiv.className = "function-status";
     statusDiv.textContent = status;
 
+    const expandIndicator = document.createElement("div");
+    expandIndicator.className = "function-expand-indicator";
+    expandIndicator.textContent = "▶";
+
     headerDiv.appendChild(iconDiv);
     headerDiv.appendChild(nameDiv);
     headerDiv.appendChild(statusDiv);
+    headerDiv.appendChild(expandIndicator);
     cardDiv.appendChild(headerDiv);
 
-    toolsContainer.appendChild(cardDiv);
-    toolsContainer.scrollTop = toolsContainer.scrollHeight;
+    // Add preview div for collapsed state
+    const previewDiv = document.createElement("div");
+    previewDiv.className = "function-preview";
+    previewDiv.textContent = `${functionName}()`;
+    cardDiv.appendChild(previewDiv);
 
-    card = { element: cardDiv, name: functionName, timestamp: Date.now() };
+    // Add click handler for expand/collapse
+    cardDiv.addEventListener("click", () => toggleFunctionCard(cardDiv));
+
+    // Insert function card BEFORE the current streaming assistant message
+    // This ensures tool calls appear above the model's response
+    if (appState?.message?.currentAssistant) {
+      // Find the parent message div of the current assistant text span
+      const currentAssistantSpan = appState.message.currentAssistant;
+      const assistantMessageDiv = currentAssistantSpan.closest(".message");
+
+      if (assistantMessageDiv) {
+        // Insert before the streaming assistant message
+        chatContainer.insertBefore(cardDiv, assistantMessageDiv);
+      } else {
+        // Fallback: append at end
+        chatContainer.appendChild(cardDiv);
+      }
+    } else {
+      // No current assistant message, append at end
+      chatContainer.appendChild(cardDiv);
+    }
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+
+    card = {
+      element: cardDiv,
+      name: functionName,
+      timestamp: Date.now(),
+      expanded: false,
+    };
     activeCalls.set(callId, card);
   }
 
   return card;
+}
+
+/**
+ * Toggle function card between collapsed and expanded states
+ * @param {HTMLElement} cardElement - The card element to toggle
+ */
+function toggleFunctionCard(cardElement) {
+  const isExpanded = cardElement.dataset.expanded === "true";
+
+  if (isExpanded) {
+    cardElement.classList.remove("expanded");
+    cardElement.dataset.expanded = "false";
+  } else {
+    cardElement.classList.add("expanded");
+    cardElement.dataset.expanded = "true";
+  }
 }
 
 /**
@@ -103,13 +164,16 @@ function flushStatusUpdates(activeCalls) {
 
     // Update card styling based on status
     if (status === "executing") {
-      card.element.className = "function-call-card executing function-executing-pulse";
+      card.element.className =
+        card.element.dataset.expanded === "true"
+          ? "function-call-card executing expanded"
+          : "function-call-card executing";
     } else if (status === "completed") {
-      card.element.className = "function-call-card success";
-      card.element.classList.remove("function-executing-pulse");
+      card.element.className =
+        card.element.dataset.expanded === "true" ? "function-call-card success expanded" : "function-call-card success";
     } else if (status === "error") {
-      card.element.className = "function-call-card error";
-      card.element.classList.remove("function-executing-pulse");
+      card.element.className =
+        card.element.dataset.expanded === "true" ? "function-call-card error expanded" : "function-call-card error";
     }
 
     // Add arguments if provided (optimized with JSON cache)
@@ -121,6 +185,9 @@ function flushStatusUpdates(activeCalls) {
       argsDiv.textContent = typeof parsedArgs === "string" ? parsedArgs : JSON.stringify(parsedArgs, null, 2);
 
       card.element.appendChild(argsDiv);
+
+      // Update preview
+      updateFunctionPreview(card.element, data.arguments);
     }
 
     // Add result if provided
@@ -129,6 +196,9 @@ function flushStatusUpdates(activeCalls) {
       resultDiv.className = "function-result";
       resultDiv.textContent = data.result;
       card.element.appendChild(resultDiv);
+
+      // Update preview with result summary
+      updateFunctionPreview(card.element, null, data.result);
     }
 
     // Add error if provided
@@ -137,10 +207,43 @@ function flushStatusUpdates(activeCalls) {
       resultDiv.className = "function-result";
       resultDiv.textContent = `Error: ${data.error}`;
       card.element.appendChild(resultDiv);
+
+      // Update preview with error
+      updateFunctionPreview(card.element, null, null, data.error);
     }
   }
 
   pendingUpdates.clear();
+}
+
+/**
+ * Update function preview text for collapsed state
+ * @param {HTMLElement} cardElement - Card element
+ * @param {string} args - Arguments string
+ * @param {string} result - Result string
+ * @param {string} error - Error string
+ */
+function updateFunctionPreview(cardElement, args = null, result = null, error = null) {
+  const previewDiv = cardElement.querySelector(".function-preview");
+  if (!previewDiv) return;
+
+  const functionName = cardElement.querySelector(".function-name")?.textContent || "function";
+
+  if (error) {
+    previewDiv.textContent = `❌ ${functionName}() → Error`;
+  } else if (result) {
+    const resultPreview = result.length > 50 ? `${result.substring(0, 50)}...` : result;
+    previewDiv.textContent = `✓ ${functionName}() → ${resultPreview}`;
+  } else if (args) {
+    try {
+      const parsed = safeParse(args, args);
+      const argsPreview = typeof parsed === "string" ? parsed : JSON.stringify(parsed);
+      const shortArgs = argsPreview.length > 40 ? `${argsPreview.substring(0, 40)}...` : argsPreview;
+      previewDiv.textContent = `${functionName}(${shortArgs})`;
+    } catch {
+      previewDiv.textContent = `${functionName}(...)`;
+    }
+  }
 }
 
 /**
@@ -178,10 +281,14 @@ export function updateFunctionArguments(activeCalls, argumentsBuffer, callId, de
     const parsedArgs = safeParse(argumentsBuffer.get(callId), argumentsBuffer.get(callId));
     argsDiv.textContent = typeof parsedArgs === "string" ? parsedArgs : JSON.stringify(parsedArgs, null, 2);
 
+    // Update preview
+    updateFunctionPreview(card.element, argumentsBuffer.get(callId));
+
     argumentsBuffer.delete(callId);
   } else {
     // Show partial arguments while streaming
     argsDiv.textContent = `${argumentsBuffer.get(callId)}...`;
+    updateFunctionPreview(card.element, argumentsBuffer.get(callId));
   }
 }
 
@@ -201,8 +308,12 @@ export function scheduleFunctionCardCleanup(activeCalls, activeTimers, callId) {
 
 /**
  * Clear all function cards
- * @param {HTMLElement} toolsContainer - The tools container element
+ * @param {HTMLElement} chatContainer - The chat container element
  */
-export function clearFunctionCards(toolsContainer) {
-  toolsContainer.innerHTML = "";
+export function clearFunctionCards(chatContainer) {
+  // Remove all function cards from chat container
+  const cards = chatContainer.querySelectorAll(".function-call-card");
+  for (const card of cards) {
+    card.remove();
+  }
 }

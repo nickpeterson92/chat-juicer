@@ -1,5 +1,5 @@
 """
-Constants and configuration for Chat Juicer.
+Constants and configuration for Wishgate.
 Centralizes all magic numbers and configuration values.
 Includes Pydantic validation for environment variables.
 """

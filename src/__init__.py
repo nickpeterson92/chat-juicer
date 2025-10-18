@@ -1,5 +1,5 @@
 """
-Chat Juicer - Production-grade AI chat with document generation
+Wishgate - Production-grade AI chat with document generation
 ================================================================
 
 Agent/Runner pattern with MCP server support for Azure OpenAI.

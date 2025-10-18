@@ -1,5 +1,5 @@
 """
-Document processing utilities for Chat Juicer.
+Document processing utilities for Wishgate.
 Handles document conversion, summarization, and content optimization.
 """
 

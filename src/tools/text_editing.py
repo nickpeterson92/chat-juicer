@@ -1,5 +1,5 @@
 """
-Text editing tools for Chat Juicer.
+Text editing tools for Wishgate.
 Provides find/replace, regex editing, and text insertion capabilities.
 """
 

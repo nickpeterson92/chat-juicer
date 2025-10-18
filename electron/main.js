@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
 const { spawn } = require("node:child_process");
 const path = require("node:path");
+const fs = require("node:fs/promises");
 const Logger = require("./logger");
 const PythonManager = require("../scripts/python-manager");
 const platformConfig = require("../scripts/platform-config");
@@ -11,6 +12,7 @@ const {
   HEALTH_CHECK_INTERVAL,
   SIGTERM_DELAY,
   FILE_UPLOAD_TIMEOUT,
+  HIDDEN_FILE_PREFIX,
 } = require("./config/main-constants");
 
 // Initialize logger for main process
@@ -295,6 +297,69 @@ app.whenReady().then(() => {
       });
     } catch (error) {
       logger.error("File upload error", { error: error.message });
+      return { success: false, error: error.message };
+    }
+  });
+
+  // IPC handler for listing directory contents
+  ipcMain.handle("list-directory", async (_event, dirPath) => {
+    logger.info("Directory list requested", { dirPath });
+
+    try {
+      // Construct absolute path relative to project root
+      const projectRoot = path.join(__dirname, "..");
+      const absolutePath = path.join(projectRoot, dirPath);
+
+      // Read directory contents
+      const entries = await fs.readdir(absolutePath, { withFileTypes: true });
+
+      // Get file stats for each entry (exclude hidden files like .DS_Store)
+      const files = await Promise.all(
+        entries
+          .filter((entry) => entry.isFile() && !entry.name.startsWith(HIDDEN_FILE_PREFIX))
+          .map(async (entry) => {
+            const filePath = path.join(absolutePath, entry.name);
+            const stats = await fs.stat(filePath);
+            return {
+              name: entry.name,
+              size: stats.size,
+              modified: stats.mtime,
+            };
+          })
+      );
+
+      logger.debug("Directory listed successfully", { dirPath, fileCount: files.length });
+      return { success: true, files };
+    } catch (error) {
+      logger.error("Failed to list directory", { dirPath, error: error.message });
+      return { success: false, error: error.message };
+    }
+  });
+
+  // IPC handler for deleting files
+  ipcMain.handle("delete-file", async (_event, { dirPath, filename }) => {
+    logger.info("File delete requested", { dirPath, filename });
+
+    try {
+      // Construct absolute path relative to project root
+      const projectRoot = path.join(__dirname, "..");
+      const absolutePath = path.join(projectRoot, dirPath, filename);
+
+      // Security check: ensure path is within project directory
+      const normalizedPath = path.normalize(absolutePath);
+      const normalizedRoot = path.normalize(projectRoot);
+      if (!normalizedPath.startsWith(normalizedRoot)) {
+        logger.error("Security: Attempted to delete file outside project", { path: normalizedPath });
+        return { success: false, error: "Invalid file path" };
+      }
+
+      // Delete the file
+      await fs.unlink(absolutePath);
+
+      logger.info("File deleted successfully", { dirPath, filename });
+      return { success: true };
+    } catch (error) {
+      logger.error("Failed to delete file", { dirPath, filename, error: error.message });
       return { success: false, error: error.message };
     }
   });

@@ -1,5 +1,5 @@
 """
-Session management models for Chat Juicer.
+Session management models for Wishgate.
 Provides Pydantic models for session metadata and commands with runtime validation.
 """
 

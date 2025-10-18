@@ -1,5 +1,5 @@
 /**
- * Structured logging system for Chat Juicer Electron app
+ * Structured logging system for Wishgate Electron app
  * Provides unified logging across main and renderer processes
  */
 

@@ -48,6 +48,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return await ipcRenderer.invoke("upload-file", fileData);
   },
 
+  // List directory contents
+  listDirectory: async (dirPath) => {
+    return await ipcRenderer.invoke("list-directory", dirPath);
+  },
+
+  // Delete file
+  deleteFile: async (dirPath, filename) => {
+    return await ipcRenderer.invoke("delete-file", { dirPath, filename });
+  },
+
   // Cleanup methods to prevent memory leaks
   removeListener: (channel) => {
     ipcRenderer.removeAllListeners(channel);

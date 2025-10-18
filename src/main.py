@@ -1,5 +1,5 @@
 """
-Chat Juicer - Azure OpenAI Agent with MCP Server Support
+Wishgate - Azure OpenAI Agent with MCP Server Support
 Using Agent/Runner pattern for native MCP integration
 """
 
@@ -206,7 +206,7 @@ async def process_user_input(session: TokenAwareSQLiteSession, user_input: str) 
 
 
 async def main() -> None:
-    """Main entry point for Chat Juicer with Agent/Runner pattern"""
+    """Main entry point for Wishgate with Agent/Runner pattern"""
 
     # Load environment variables from src/.env
     env_path = os.path.join(os.path.dirname(__file__), ".env")
@@ -435,7 +435,7 @@ async def main() -> None:
         except Exception as e:
             logger.warning(f"Error closing MCP server: {e}")
 
-    logger.info("Chat Juicer shutdown complete")
+    logger.info("Wishgate shutdown complete")
 
 
 if __name__ == "__main__":
