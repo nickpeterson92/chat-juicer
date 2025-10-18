@@ -41,6 +41,7 @@ import {
   MSG_SUMMARIZE_ERROR,
   MSG_UPLOADING_FILE,
   OLD_CARD_THRESHOLD,
+  SIDEBAR_COLLAPSE_DELAY,
   SIZE_PRECISION_MULTIPLIER,
   UPLOAD_PROGRESS_HIDE_DELAY,
 } from "./config/constants.js";
@@ -653,6 +654,17 @@ async function handleDeleteFile(filename, directory = "sources") {
 // Session Management UI
 // ====================
 
+/**
+ * Collapse sidebar to give content more space
+ * Reusable utility for new chat and session switching
+ */
+function collapseSidebar() {
+  if (elements.sidebar) {
+    elements.sidebar.classList.add("collapsed");
+    window.electronAPI.log("debug", "Sidebar collapsed");
+  }
+}
+
 function updateSessionsList() {
   if (!elements.sessionsList) return;
 
@@ -728,9 +740,7 @@ async function handleCreateNewSession() {
   showWelcomeView();
 
   // Collapse sidebar to give welcome screen more space
-  if (elements.sidebar) {
-    elements.sidebar.classList.add("collapsed");
-  }
+  collapseSidebar();
 
   // Clear chat for fresh start
   clearChat(elements.chatContainer);
@@ -747,20 +757,17 @@ async function handleSwitchSession(sessionId) {
     showChatView();
 
     // Collapse sidebar to give chat more space
-    if (elements.sidebar) {
-      elements.sidebar.classList.add("collapsed");
-    }
+    collapseSidebar();
 
     // Session list already updated by switchSession
     updateSessionsList();
 
     // Scroll to bottom after sidebar collapse and all messages are rendered
-    // Wait for transition (300ms) + buffer for system message render
     setTimeout(() => {
       if (elements.chatContainer) {
         elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight;
       }
-    }, 400);
+    }, SIDEBAR_COLLAPSE_DELAY);
   }
 }
 

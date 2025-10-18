@@ -59,9 +59,7 @@ export async function createNewSession(api, elements, title = null) {
       // Clear chat for new session
       if (elements.chatContainer) {
         clearChat(elements.chatContainer);
-      }
-      if (elements.toolsContainer) {
-        clearFunctionCards(elements.toolsContainer);
+        clearFunctionCards(elements.chatContainer);
       }
 
       addMessage(elements.chatContainer, "New conversation started.", "system");
@@ -100,9 +98,7 @@ export async function switchSession(api, elements, appState, sessionId) {
       // Clear current chat
       if (elements.chatContainer) {
         clearChat(elements.chatContainer);
-      }
-      if (elements.toolsContainer) {
-        clearFunctionCards(elements.toolsContainer);
+        clearFunctionCards(elements.chatContainer);
       }
 
       // Reset state

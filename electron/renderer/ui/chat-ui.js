@@ -3,7 +3,7 @@
  * Optimized with DOM caching and batched scroll updates
  */
 
-import { MAX_MESSAGES } from "../config/constants.js";
+import { LOADING_SVG, MAX_MESSAGES } from "../config/constants.js";
 import { processMermaidDiagrams, renderMarkdown } from "../utils/markdown-renderer.js";
 import { scheduleScroll } from "../utils/scroll-utils.js";
 
@@ -129,29 +129,10 @@ export function createStreamingAssistantMessage(chatContainer) {
   contentDiv.className =
     "message-content text-gray-800 dark:text-slate-100 max-w-full block py-4 px-0 leading-relaxed break-words whitespace-pre-wrap";
 
-  // Add loading smoke animation initially (inline SVG with volumetric puffs)
+  // Add loading smoke animation initially (volumetric puffs animation from constants)
   const loadingSpan = document.createElement("span");
   loadingSpan.className = "loading-lamp";
-  loadingSpan.innerHTML = `
-    <svg width="48" height="48" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" style="display: inline-block;">
-      <defs>
-        <filter id="smokeBlur">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="2"/>
-        </filter>
-      </defs>
-      <style>
-        @keyframes puff1 { 0% { opacity: 0; transform: translateY(10px) scale(0.3); } 30% { opacity: 0.5; } 100% { opacity: 0; transform: translateY(-45px) scale(1.5); } }
-        @keyframes puff2 { 0% { opacity: 0; transform: translateY(10px) scale(0.3); } 30% { opacity: 0.5; } 100% { opacity: 0; transform: translateY(-45px) scale(1.5); } }
-        @keyframes puff3 { 0% { opacity: 0; transform: translateY(10px) scale(0.3); } 30% { opacity: 0.5; } 100% { opacity: 0; transform: translateY(-45px) scale(1.5); } }
-        .puff-1 { animation: puff1 2.5s ease-out infinite; transform-origin: center; }
-        .puff-2 { animation: puff2 2.5s ease-out infinite; animation-delay: 0.8s; transform-origin: center; }
-        .puff-3 { animation: puff3 2.5s ease-out infinite; animation-delay: 1.6s; transform-origin: center; }
-      </style>
-      <ellipse class="puff-1" cx="32" cy="52" rx="8" ry="6" fill="#0066cc" filter="url(#smokeBlur)"/>
-      <ellipse class="puff-2" cx="30" cy="52" rx="8" ry="6" fill="#0066cc" filter="url(#smokeBlur)"/>
-      <ellipse class="puff-3" cx="34" cy="52" rx="8" ry="6" fill="#0066cc" filter="url(#smokeBlur)"/>
-    </svg>
-  `;
+  loadingSpan.innerHTML = LOADING_SVG;
 
   const textSpan = document.createElement("span");
   textSpan.className = "streaming-text";

@@ -12,6 +12,8 @@ export const FUNCTION_CARD_CLEANUP_DELAY = 30000; // 30 seconds
 export const CONNECTION_RESET_DELAY = 1000; // 1 second
 export const OLD_CARD_THRESHOLD = 60000; // 1 minute
 export const UPLOAD_PROGRESS_HIDE_DELAY = 1000; // 1 second
+export const SIDEBAR_TRANSITION_DURATION = 300; // Matches Tailwind duration-300
+export const SIDEBAR_COLLAPSE_DELAY = 400; // Transition + render buffer for scroll fix
 
 // Message batching performance
 export const MESSAGE_BATCH_SIZE = 10;
@@ -55,3 +57,25 @@ export const MSG_SESSION_CREATE_FAILED = "Failed to create session. Please try a
 export const MSG_SESSION_DELETE_FAILED = "Failed to delete session. Please try again.";
 export const MSG_SUMMARIZE_ERROR = "An unexpected error occurred.";
 export const MSG_UPLOADING_FILE = "Uploading {filename} ({current}/{total})";
+
+// UI Components - Loading animations
+export const LOADING_SVG = `
+  <svg width="48" height="48" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" style="display: inline-block;">
+    <defs>
+      <filter id="smokeBlur">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="2"/>
+      </filter>
+    </defs>
+    <style>
+      @keyframes puff1 { 0% { opacity: 0; transform: translateY(10px) scale(0.3); } 30% { opacity: 0.5; } 100% { opacity: 0; transform: translateY(-45px) scale(1.5); } }
+      @keyframes puff2 { 0% { opacity: 0; transform: translateY(10px) scale(0.3); } 30% { opacity: 0.5; } 100% { opacity: 0; transform: translateY(-45px) scale(1.5); } }
+      @keyframes puff3 { 0% { opacity: 0; transform: translateY(10px) scale(0.3); } 30% { opacity: 0.5; } 100% { opacity: 0; transform: translateY(-45px) scale(1.5); } }
+      .puff-1 { animation: puff1 2.5s ease-out infinite; transform-origin: center; }
+      .puff-2 { animation: puff2 2.5s ease-out infinite; animation-delay: 0.8s; transform-origin: center; }
+      .puff-3 { animation: puff3 2.5s ease-out infinite; animation-delay: 1.6s; transform-origin: center; }
+    </style>
+    <ellipse class="puff-1" cx="32" cy="52" rx="8" ry="6" fill="#0066cc" filter="url(#smokeBlur)"/>
+    <ellipse class="puff-2" cx="30" cy="52" rx="8" ry="6" fill="#0066cc" filter="url(#smokeBlur)"/>
+    <ellipse class="puff-3" cx="34" cy="52" rx="8" ry="6" fill="#0066cc" filter="url(#smokeBlur)"/>
+  </svg>
+`;
