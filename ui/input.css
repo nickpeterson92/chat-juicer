@@ -187,6 +187,17 @@
     background-color: rgba(255, 255, 255, 0.2);
   }
 
+  /* Inline session title editing */
+  .session-title-edit {
+    font-family: inherit;
+  }
+
+  [data-theme="dark"] .session-title-edit {
+    background-color: var(--color-dark-input-bg);
+    color: var(--color-dark-text-primary);
+    border-color: var(--color-input-focus);
+  }
+
   /* Function call cards */
   .function-call-card {
     background-color: rgba(59, 130, 246, 0.05);
@@ -1155,6 +1166,53 @@
 
   .message-content details > *:not(summary) {
     margin-top: 0.5em;
+  }
+
+  /* Toast notifications */
+  .toast {
+    padding: 0.875rem 1.25rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    pointer-events: auto;
+    backdrop-filter: blur(10px);
+    min-width: 200px;
+    max-width: 400px;
+    word-wrap: break-word;
+  }
+
+  @keyframes fadeOut {
+    0% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-8px) scale(0.95);
+    }
+  }
+
+  .animate-fadeOut {
+    animation: fadeOut 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+
+  .animate-slideIn {
+    animation: slideIn 0.3s ease-out;
+  }
+
+  /* Toast pulse animation for duplicate notifications */
+  @keyframes toast-pulse {
+    0%, 100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.05);
+    }
+  }
+
+  .toast-pulse {
+    animation: toast-pulse 0.2s ease-in-out;
   }
 }
 

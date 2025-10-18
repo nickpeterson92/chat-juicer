@@ -552,9 +552,25 @@ class TokenAwareSQLiteSession(SQLiteSession):
         Layer 1 (SQLiteSession): Token-optimized LLM context, may be summarized
         Layer 2 (FullHistoryStore): Complete user-visible history, never trimmed
 
+        CRITICAL SAFEGUARD: Prevents orphaned sessions by enforcing dual-layer writes.
+        If full_history_store is None during normal operation, this is a configuration error.
+
         Args:
             items: List of conversation items to add
+
+        Raises:
+            RuntimeError: If full_history_store is None when not skipping (prevents orphaned sessions)
         """
+        # SAFEGUARD: Enforce dual-layer persistence during normal operation
+        # Only allow Layer 1-only writes during summarization repopulation (_skip_full_history=True)
+        if not self._skip_full_history and not self.full_history_store:
+            error_msg = (
+                f"CRITICAL: Attempted to write to Layer 1 without Layer 2 for session {self.session_id}. "
+                f"This would create an orphaned session. full_history_store must be configured."
+            )
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
         # Save to Layer 1 (LLM context) - parent SQLiteSession
         await super().add_items(items)
 
@@ -562,11 +578,27 @@ class TokenAwareSQLiteSession(SQLiteSession):
         # Note: save_message handles its own errors (best-effort Layer 2)
         # Filter out SDK internal items (tool_call_item, reasoning_item, etc.) - only save chat messages
         if not self._skip_full_history and self.full_history_store:
+            layer2_success_count = 0
+            layer2_fail_count = 0
+
             for item in items:
                 # Only save items with a 'role' field (user/assistant/system/tool messages)
                 # Skip SDK internal items with 'type' field (tool_call_item, reasoning_item, etc.)
                 if item.get("role"):
-                    self.full_history_store.save_message(self.session_id, item)
+                    success = self.full_history_store.save_message(self.session_id, item)
+                    if success:
+                        layer2_success_count += 1
+                    else:
+                        layer2_fail_count += 1
+
+            # Log Layer 2 save results for monitoring
+            if layer2_fail_count > 0:
+                logger.warning(
+                    f"Layer 2 partial save for session {self.session_id}: "
+                    f"{layer2_success_count} succeeded, {layer2_fail_count} failed"
+                )
+            elif layer2_success_count > 0:
+                logger.debug(f"Layer 2 saved {layer2_success_count} messages for session {self.session_id}")
 
     async def delete_storage(self) -> bool:
         """Delete all Layer 1 (LLM context) storage for this session.

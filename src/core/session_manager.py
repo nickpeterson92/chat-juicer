@@ -10,6 +10,7 @@ import uuid
 
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from core.constants import DEFAULT_SESSION_METADATA_PATH, SESSION_ID_LENGTH
 from models.session_models import SessionMetadata, SessionUpdate
@@ -199,3 +200,124 @@ class SessionManager:
         if self.current_session_id:
             return self.sessions.get(self.current_session_id)
         return None
+
+    async def generate_session_title(  # noqa: PLR0911
+        self, session_id: str, recent_messages: list[dict[str, Any]]
+    ) -> bool:
+        """Generate and update session title using LLM based on conversation context.
+
+        Non-blocking operation that runs in background after trigger condition is met.
+        Falls back to keeping existing title if generation fails.
+
+        Args:
+            session_id: Session to name
+            recent_messages: Recent conversation messages for context (typically 3-6 messages)
+
+        Returns:
+            True if title generated and updated successfully, False otherwise
+        """
+        try:
+            from core.constants import SESSION_TITLE_MAX_TOKENS, get_settings
+            from core.prompts import SESSION_TITLE_GENERATION_PROMPT
+            from utils.client_factory import create_openai_client
+
+            session = self.sessions.get(session_id)
+            if not session:
+                logger.warning(f"Cannot generate title for non-existent session: {session_id}")
+                return False
+
+            # Skip if already named
+            if session.is_named:
+                logger.debug(f"Session {session_id} already named, skipping")
+                return False
+
+            # Need at least 2 messages for meaningful title
+            if len(recent_messages) < 2:
+                logger.debug(f"Not enough messages ({len(recent_messages)}) to generate title")
+                return False
+
+            logger.info(f"Generating title for session {session_id} from {len(recent_messages)} messages")
+
+            # Get settings and create client
+            settings = get_settings()
+            api_key = settings.azure_openai_api_key
+            endpoint = settings.azure_endpoint_str
+            deployment = settings.azure_openai_deployment
+
+            client = create_openai_client(api_key=api_key, base_url=endpoint)
+
+            # Build messages for title generation using MessageNormalizer
+            from core.session import MessageNormalizer
+
+            normalizer = MessageNormalizer()
+            messages = []
+
+            for msg in recent_messages:
+                role = msg.get("role", "")
+                if role not in ["user", "assistant"]:
+                    continue
+
+                # Use MessageNormalizer to handle content extraction
+                content = normalizer.normalize_content(msg.get("content", ""))
+                if not content or not content.strip():
+                    continue
+
+                # Truncate very long messages to keep prompt concise
+                if len(content) > 500:
+                    content = content[:500] + "..."
+
+                messages.append({"role": role, "content": content})
+
+            # Add title generation request
+            messages.append({"role": "user", "content": SESSION_TITLE_GENERATION_PROMPT})
+
+            # Call LLM to generate title
+            response = await client.chat.completions.create(
+                model=deployment, messages=messages, max_completion_tokens=SESSION_TITLE_MAX_TOKENS, temperature=0.7
+            )
+
+            generated_title = response.choices[0].message.content
+            if not generated_title:
+                logger.warning("Title generation returned empty response")
+                return False
+
+            # Clean up the title (remove quotes, extra whitespace, trailing punctuation)
+            generated_title = generated_title.strip().strip('"').strip("'").rstrip(".!?")
+
+            # Validate title length (fallback if too long)
+            if len(generated_title) > 200:
+                generated_title = generated_title[:197] + "..."
+
+            logger.info(f"Generated title for session {session_id}: {generated_title}")
+
+            # Update session metadata
+            from models.session_models import SessionUpdate
+
+            update = SessionUpdate(title=generated_title)
+            success = self.update_session(session_id, update)
+
+            if success:
+                # Mark as named
+                session.is_named = True
+                self._save_metadata()
+
+                # Send IPC notification to update frontend
+                from utils.ipc import IPCManager
+
+                result = {
+                    "success": True,
+                    "message": "Session titled",
+                    "session": session.model_dump(),
+                    "sessions": [s.model_dump() for s in self.list_sessions()],
+                }
+                IPCManager.send_session_response(result)
+
+                logger.info(f"Successfully updated session {session_id} with generated title")
+                return True
+            else:
+                logger.error(f"Failed to update session {session_id} with generated title")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error generating session title for {session_id}: {e}", exc_info=True)
+            return False

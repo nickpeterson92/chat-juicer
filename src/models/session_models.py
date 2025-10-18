@@ -81,6 +81,7 @@ class SessionMetadata(BaseModel):
 
     session_id: str = Field(..., min_length=1, description="Unique session identifier")
     title: str = Field(default="New Conversation", min_length=1, max_length=200)
+    is_named: bool = Field(default=False, description="Whether session has been auto-named")
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     last_used: str = Field(default_factory=lambda: datetime.now().isoformat())
     message_count: int = Field(default=0, ge=0, description="Non-negative message count")
@@ -238,6 +239,56 @@ class ClearSessionCommand(BaseModel):
 
 
 # Union type for all session commands
+
+
+class LoadMoreMessagesCommand(BaseModel):
+    """Command to load additional messages for pagination.
+
+    Used for progressive loading of large sessions to avoid IPC buffer overflow
+    and timeout issues. Initial session load returns first chunk, then this command
+    loads remaining messages in batches.
+    """
+
+    command: Literal["load_more"] = "load_more"
+    session_id: str = Field(..., min_length=1, description="Session to load messages from")
+    offset: int = Field(ge=0, description="Starting position (0-based index)")
+    limit: int = Field(default=50, ge=1, le=100, description="Number of messages to load (max 100)")
+
+    @field_validator("session_id")
+    @classmethod
+    def validate_session_id(cls, v: str) -> str:
+        """Validate session_id format."""
+        if not v.startswith("chat_"):
+            raise ValueError("session_id must start with 'chat_'")
+        return v
+
+    def to_json(self) -> str:
+        """Convert to JSON for IPC."""
+        json_str: str = self.model_dump_json(exclude_none=True)
+        return json_str
+
+
+class RenameSessionCommand(BaseModel):
+    """Command to rename a session."""
+
+    command: Literal["rename"] = "rename"
+    session_id: str = Field(..., min_length=1, description="Session to rename")
+    title: str = Field(..., min_length=1, max_length=200, description="New session title")
+
+    @field_validator("session_id")
+    @classmethod
+    def validate_session_id(cls, v: str) -> str:
+        """Validate session_id format."""
+        if not v.startswith("chat_"):
+            raise ValueError("session_id must start with 'chat_'")
+        return v
+
+    def to_json(self) -> str:
+        """Convert to JSON for IPC."""
+        json_str: str = self.model_dump_json(exclude_none=True)
+        return json_str
+
+
 SessionCommand = (
     CreateSessionCommand
     | SwitchSessionCommand
@@ -245,10 +296,12 @@ SessionCommand = (
     | ListSessionsCommand
     | SummarizeSessionCommand
     | ClearSessionCommand
+    | LoadMoreMessagesCommand
+    | RenameSessionCommand
 )
 
 
-def parse_session_command(data: dict[str, Any]) -> SessionCommand:
+def parse_session_command(data: dict[str, Any]) -> SessionCommand:  # noqa: PLR0911
     """Parse and validate session command from raw data.
 
     Args:
@@ -274,6 +327,10 @@ def parse_session_command(data: dict[str, Any]) -> SessionCommand:
         return SummarizeSessionCommand.model_validate(data)
     elif command_type == "clear":
         return ClearSessionCommand.model_validate(data)
+    elif command_type == "load_more":
+        return LoadMoreMessagesCommand.model_validate(data)
+    elif command_type == "rename":
+        return RenameSessionCommand.model_validate(data)
     else:
         raise ValueError(f"Unknown command type: {command_type}")
 
@@ -342,8 +399,10 @@ __all__ = [
     "FullHistoryProtocol",
     "ImageContent",
     "ListSessionsCommand",
+    "LoadMoreMessagesCommand",
     "OutputTextContent",
     "RefusalContent",
+    "RenameSessionCommand",
     "SessionCommand",
     "SessionMetadata",
     "SessionUpdate",

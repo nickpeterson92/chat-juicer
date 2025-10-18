@@ -268,6 +268,17 @@ function handleSessionCreated(message, context) {
     appState.setState("ui.currentView", "chat");
     window.electronAPI.log("debug", "Transitioned from welcome to chat view");
   }
+
+  // Trigger custom event to reload sessions list
+  // This ensures the sidebar updates immediately when a session is created
+  window.dispatchEvent(
+    new CustomEvent("session-created", {
+      detail: {
+        session_id: message.session_id,
+        title: message.title,
+      },
+    })
+  );
 }
 
 /**

@@ -14,7 +14,7 @@ const HEALTH_CHECK_INTERVAL = 300000; // 5 minutes - interval for process health
 
 // IPC operation timeouts
 const FILE_UPLOAD_TIMEOUT = 10000; // 10 seconds - timeout for file upload operations
-const SESSION_COMMAND_TIMEOUT = 5000; // 5 seconds - default session command timeout
+const SESSION_COMMAND_TIMEOUT = 5000; // 5 seconds - session commands (load/switch) with large message payloads
 const SUMMARIZE_COMMAND_TIMEOUT = 30000; // 30 seconds - LLM summarization needs longer timeout
 
 // Window configuration
@@ -25,6 +25,10 @@ const WINDOW_MIN_HEIGHT = 600; // Minimum window height
 
 // File system constants
 const HIDDEN_FILE_PREFIX = "."; // Prefix for hidden files/directories (Unix convention)
+
+// IPC protocol constants
+const JSON_DELIMITER = "__JSON__";
+const JSON_DELIMITER_LENGTH = JSON_DELIMITER.length; // 8 characters
 
 module.exports = {
   RESTART_DELAY,
@@ -40,4 +44,6 @@ module.exports = {
   WINDOW_MIN_WIDTH,
   WINDOW_MIN_HEIGHT,
   HIDDEN_FILE_PREFIX,
+  JSON_DELIMITER,
+  JSON_DELIMITER_LENGTH,
 };

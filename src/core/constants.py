@@ -243,6 +243,19 @@ ERROR_EMPTY_SUMMARY = "Summarization failed: empty summary returned"
 ERROR_NOTHING_TO_SUMMARIZE = "All items are recent - nothing to summarize"
 
 # ============================================================================
+# Session Naming Configuration
+# ============================================================================
+
+#: Trigger automatic session naming after this many user messages.
+#: Provides enough conversation context to generate meaningful titles.
+#: Value of 3 balances between quick naming and sufficient context.
+SESSION_NAMING_TRIGGER_MESSAGES = 3
+
+#: Maximum tokens allowed for session title generation.
+#: Keeps titles concise (3-10 words typically = 5-15 tokens).
+SESSION_TITLE_MAX_TOKENS = 20
+
+# ============================================================================
 # Session Summarization Configuration
 # ============================================================================
 
@@ -254,7 +267,7 @@ SUMMARY_CALL_ID_PREFIX = "sum_"
 #: Example: 0.2 × GPT-5's 272k tokens = 54,400 token trigger point.
 #: When total_tokens exceeds this threshold, TokenAwareSQLiteSession automatically
 #: summarizes the conversation and resets the context.
-CONVERSATION_SUMMARIZATION_THRESHOLD = 0.2
+CONVERSATION_SUMMARIZATION_THRESHOLD = 0.4
 
 #: Number of recent user messages to keep when summarizing conversations.
 #: Keeps the last N complete user-assistant exchanges unsummarized.
@@ -354,6 +367,20 @@ FULL_HISTORY_TABLE_PREFIX = "full_history_"
 #: Used by TokenAwareSQLiteSession for token-optimized AI context.
 #: Table naming: {SESSION_TABLE_PREFIX}{session_id}
 SESSION_TABLE_PREFIX = "session_"
+
+# ============================================================================
+# Session Loading Pagination Configuration
+# ============================================================================
+
+#: Number of messages to load initially when switching sessions.
+#: Provides fast initial load while allowing progressive loading of remaining messages.
+#: Value of 50 balances between quick display and minimizing number of pagination requests.
+INITIAL_SESSION_CHUNK_SIZE = 50
+
+#: Maximum number of messages to load per pagination request.
+#: Prevents excessively large payloads that could exceed IPC buffer limits (1-2 MB).
+#: Value of 100 provides good throughput while staying well under buffer constraints.
+MAX_MESSAGES_PER_CHUNK = 100
 
 # ============================================================================
 # Model Token Limits (Input Context Windows)

@@ -21,11 +21,25 @@ export const MESSAGE_BATCH_DELAY = 16; // One animation frame (60fps)
 
 // IPC protocol delimiters
 export const JSON_DELIMITER = "__JSON__";
+export const JSON_DELIMITER_LENGTH = JSON_DELIMITER.length; // 8 characters
 export const SESSION_PREFIX = "__SESSION__";
 
 // File size formatting
 export const BYTES_PER_KILOBYTE = 1024;
 export const SIZE_PRECISION_MULTIPLIER = 100; // For rounding to 2 decimal places
+
+// Toast animation timing
+export const TOAST_ANIMATION_DELAY = 10; // ms before showing toast
+export const TOAST_FADE_DURATION = 500; // ms for fadeOut animation
+export const TOAST_PULSE_DURATION = 200; // ms for duplicate flash
+
+// Pagination configuration
+export const PAGINATION_THROTTLE_DELAY = 100; // ms delay between chunks
+export const PAGINATION_CHUNK_SIZE = 50; // messages per chunk (matches backend)
+export const INITIAL_RENDER_COUNT = 10; // messages to show immediately
+export const IDLE_RENDER_TIMEOUT = 1000; // ms for requestIdleCallback
+export const PAGINATION_MAX_RETRIES = 3; // Maximum retry attempts for failed chunks
+export const PAGINATION_RETRY_DELAY_BASE = 1000; // Base delay for exponential backoff (ms)
 
 // UI Messages - System notifications
 export const DELETE_SESSION_CONFIRM_MESSAGE = "This will permanently remove the conversation history.";

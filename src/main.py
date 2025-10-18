@@ -126,17 +126,17 @@ def handle_streaming_error(error: Exception) -> None:
     IPCManager.send_assistant_end()
 
 
-async def ensure_session_exists(app_state: AppState) -> TokenAwareSQLiteSession:
+async def ensure_session_exists(app_state: AppState) -> tuple[TokenAwareSQLiteSession, bool]:
     """Ensure a session exists, creating one if needed (lazy initialization).
 
     Args:
         app_state: Application state container
 
     Returns:
-        Active TokenAwareSQLiteSession instance
+        Tuple of (Active TokenAwareSQLiteSession instance, is_new_session flag)
     """
     if app_state.current_session is not None:
-        return app_state.current_session
+        return app_state.current_session, False
 
     logger.info("No active session - creating new session on first message")
 
@@ -170,10 +170,9 @@ async def ensure_session_exists(app_state: AppState) -> TokenAwareSQLiteSession:
     # Connect session to SDK token tracker for automatic tracking
     connect_session(app_state.current_session)
 
-    # Send session creation event to frontend
-    IPCManager.send({"type": "session_created", "session_id": session_meta.session_id, "title": session_meta.title})
-
-    return app_state.current_session
+    # Return session and flag indicating this is a newly created session
+    # Session creation event will be sent AFTER first message completes
+    return app_state.current_session, True
 
 
 async def process_user_input(session: TokenAwareSQLiteSession, user_input: str) -> None:
@@ -348,6 +347,21 @@ async def main() -> None:
     _app_state.full_history_store = FullHistoryStore(db_path=CHAT_HISTORY_DB_PATH)
     logger.info("Full history store initialized")
 
+    # SAFEGUARD: Validate session integrity on startup
+    from utils.session_integrity import validate_and_repair_all_sessions
+
+    validation_results = validate_and_repair_all_sessions(
+        full_history_store=_app_state.full_history_store, db_path=CHAT_HISTORY_DB_PATH, auto_repair=True
+    )
+
+    if validation_results["orphaned_count"] > 0:
+        logger.warning(
+            f"Session integrity check: Found {validation_results['orphaned_count']} orphaned sessions. "
+            f"Repaired: {validation_results['repaired_count']}, Failed: {validation_results['repair_failed_count']}"
+        )
+    else:
+        logger.info(f"Session integrity check: All {validation_results['healthy_count']} sessions are healthy")
+
     # Initialize session manager
     _app_state.session_manager = SessionManager(metadata_path=DEFAULT_SESSION_METADATA_PATH)
     logger.info("Session manager initialized")
@@ -394,7 +408,7 @@ async def main() -> None:
                     logger.info(f"Processing file upload: {upload_data.get('filename')}")
 
                     # Ensure session exists before file upload (handles welcome screen uploads)
-                    session = await ensure_session_exists(_app_state)
+                    session, _ = await ensure_session_exists(_app_state)
                     logger.info(f"Session ensured for file upload: {session.session_id}")
 
                     # Process upload
@@ -429,7 +443,7 @@ async def main() -> None:
             logger.info(f"User: {user_input}", extra={"file_message": file_msg})
 
             # Ensure session exists (lazy initialization on first message)
-            session = await ensure_session_exists(_app_state)
+            session, is_new_session = await ensure_session_exists(_app_state)
 
             # Process user input through session (handles summarization automatically)
             await process_user_input(session, user_input)
@@ -447,6 +461,37 @@ async def main() -> None:
             # Type narrowing: we know session_manager exists from ensure_session_exists
             if _app_state.session_manager is not None:
                 _app_state.session_manager.update_session(session.session_id, updates)
+
+            # Auto-generate session title after N user messages (non-blocking)
+            if _app_state.session_manager is not None:
+                from core.constants import SESSION_NAMING_TRIGGER_MESSAGES
+
+                session_meta = _app_state.session_manager.get_session(session.session_id)
+                if session_meta and not session_meta.is_named:
+                    # Count only USER messages (not assistant responses)
+                    user_message_count = sum(1 for item in items if item.get("role") == "user")
+
+                    if user_message_count == SESSION_NAMING_TRIGGER_MESSAGES:
+                        logger.info(
+                            f"Naming trigger reached for session {session.session_id} "
+                            f"({user_message_count} user messages) - starting background title generation"
+                        )
+                        # Get recent messages for context (last 6 messages = ~3 exchanges)
+                        recent_messages = items[-6:] if len(items) >= 6 else items
+                        # Fire and forget - non-blocking background task
+                        asyncio.create_task(  # noqa: RUF006
+                            _app_state.session_manager.generate_session_title(session.session_id, recent_messages)
+                        )
+
+            # Send session creation event AFTER first message completes
+            # This ensures the session has messages and updated metadata before frontend loads it
+            if is_new_session:
+                session_meta = _app_state.session_manager.get_session(session.session_id)
+                if session_meta:
+                    IPCManager.send(
+                        {"type": "session_created", "session_id": session_meta.session_id, "title": session_meta.title}
+                    )
+                    logger.info(f"Sent session_created event for {session.session_id} after first message")
 
         except KeyboardInterrupt:
             logger.info("Keyboard interrupt received")

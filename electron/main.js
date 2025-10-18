@@ -20,6 +20,8 @@ const {
   WINDOW_MIN_WIDTH,
   WINDOW_MIN_HEIGHT,
   HIDDEN_FILE_PREFIX,
+  JSON_DELIMITER,
+  JSON_DELIMITER_LENGTH,
 } = require("./config/main-constants");
 
 // Initialize logger for main process
@@ -122,16 +124,53 @@ async function startPythonBot() {
     const output = data.toString("utf-8");
     logger.trace("Python stdout received", { length: output.length });
 
-    // Don't forward upload_response to renderer (handled by IPC handler)
-    if (output.includes('"type":"upload_response"')) {
-      logger.trace("Skipping upload_response forwarding to renderer");
-      return;
+    // Parse and filter individual messages to avoid blocking entire chunks
+    // A single chunk may contain multiple JSON messages (e.g., function events + session_response)
+    let filteredOutput = output;
+
+    // Check if output contains IPC response messages that should not go to renderer
+    if (output.includes('"type":"upload_response"') || output.includes('"type":"session_response"')) {
+      // Find and remove complete JSON messages that are IPC responses
+      // Match pattern: __JSON__<content>__JSON__
+      let result = output;
+      let startIdx = 0;
+
+      while (true) {
+        const start = result.indexOf(JSON_DELIMITER, startIdx);
+        if (start === -1) break;
+
+        const contentStart = start + JSON_DELIMITER_LENGTH;
+        const end = result.indexOf(JSON_DELIMITER, contentStart);
+        if (end === -1) break;
+
+        const content = result.substring(contentStart, end);
+
+        try {
+          const message = JSON.parse(content);
+
+          // If this is an IPC response message, remove it
+          if (message.type === "upload_response" || message.type === "session_response") {
+            logger.trace("Filtering out IPC response message", { type: message.type });
+            // Remove the entire message including both delimiters
+            result = result.substring(0, start) + result.substring(end + JSON_DELIMITER_LENGTH);
+            // Don't advance startIdx - check same position again
+            continue;
+          }
+        } catch (e) {
+          // Not valid JSON, skip this message
+        }
+
+        // Move past this message
+        startIdx = end + JSON_DELIMITER_LENGTH;
+      }
+
+      filteredOutput = result;
     }
 
-    if (mainWindow) {
-      // Send to renderer process
-      mainWindow.webContents.send("bot-output", output);
-      logger.logIPC("send", "bot-output", output, { toRenderer: true });
+    // Forward filtered output to renderer (if not empty after filtering)
+    if (mainWindow && filteredOutput.trim()) {
+      mainWindow.webContents.send("bot-output", filteredOutput);
+      logger.logIPC("send", "bot-output", filteredOutput, { toRenderer: true });
     }
   });
 
@@ -217,32 +256,47 @@ app.whenReady().then(() => {
       // Summarization needs longer timeout since it calls LLM (network delays, large conversations)
       const timeoutMs = command === "summarize" ? SUMMARIZE_COMMAND_TIMEOUT : SESSION_COMMAND_TIMEOUT;
       return new Promise((resolve) => {
+        let buffer = ""; // Accumulate chunks for large responses
+
         const timeout = setTimeout(() => {
           logger.warn("Session command timed out", { command });
+          pythonProcess.stdout.removeListener("data", responseHandler);
           resolve({ error: "Command timed out" });
         }, timeoutMs);
 
         // Listen for response from Python
         const responseHandler = (data) => {
-          const output = data.toString("utf-8");
+          buffer += data.toString("utf-8");
 
-          // Look for session_response in the output
-          const jsonStart = output.indexOf("__JSON__");
-          if (jsonStart !== -1) {
-            const jsonEnd = output.indexOf("__JSON__", jsonStart + 8);
-            if (jsonEnd !== -1) {
-              try {
-                const jsonStr = output.substring(jsonStart + 8, jsonEnd);
-                const message = JSON.parse(jsonStr);
+          // Loop through ALL complete messages in buffer to find session_response
+          // A chunk may contain multiple messages (function events + session_response)
+          while (true) {
+            const jsonStart = buffer.indexOf(JSON_DELIMITER);
+            if (jsonStart === -1) break; // No more messages
 
-                if (message.type === "session_response") {
-                  clearTimeout(timeout);
-                  pythonProcess.stdout.removeListener("data", responseHandler);
-                  resolve(message.data);
-                }
-              } catch (e) {
-                logger.error("Failed to parse session response", { error: e.message });
+            const jsonEnd = buffer.indexOf(JSON_DELIMITER, jsonStart + JSON_DELIMITER_LENGTH);
+            if (jsonEnd === -1) break; // Incomplete message, wait for more data
+
+            try {
+              const jsonStr = buffer.substring(jsonStart + JSON_DELIMITER_LENGTH, jsonEnd);
+              const message = JSON.parse(jsonStr);
+
+              // Remove this message from buffer before checking type
+              buffer = buffer.substring(jsonEnd + JSON_DELIMITER_LENGTH);
+
+              // If this is the session_response we're waiting for, resolve
+              if (message.type === "session_response") {
+                clearTimeout(timeout);
+                pythonProcess.stdout.removeListener("data", responseHandler);
+                resolve(message.data);
+                return; // Stop processing
               }
+
+              // Otherwise, continue to next message in buffer
+            } catch (e) {
+              // Failed to parse, remove malformed message and continue
+              buffer = buffer.substring(jsonEnd + JSON_DELIMITER_LENGTH);
+              logger.error("Failed to parse message in session response handler", { error: e.message });
             }
           }
         };
@@ -274,30 +328,42 @@ app.whenReady().then(() => {
 
       // Wait for response with timeout
       return new Promise((resolve) => {
+        let buffer = ""; // Accumulate chunks for large responses
+
         const timeout = setTimeout(() => {
           logger.warn("File upload timed out", { filename });
+          pythonProcess.stdout.removeListener("data", responseHandler);
           resolve({ success: false, error: "Upload timed out" });
         }, FILE_UPLOAD_TIMEOUT);
 
         const responseHandler = (data) => {
-          const output = data.toString("utf-8");
+          buffer += data.toString("utf-8");
 
-          const jsonStart = output.indexOf("__JSON__");
-          if (jsonStart !== -1) {
-            const jsonEnd = output.indexOf("__JSON__", jsonStart + 8);
-            if (jsonEnd !== -1) {
-              try {
-                const jsonStr = output.substring(jsonStart + 8, jsonEnd);
-                const message = JSON.parse(jsonStr);
+          // Loop through ALL complete messages to find upload_response
+          while (true) {
+            const jsonStart = buffer.indexOf(JSON_DELIMITER);
+            if (jsonStart === -1) break;
 
-                if (message.type === "upload_response") {
-                  clearTimeout(timeout);
-                  pythonProcess.stdout.removeListener("data", responseHandler);
-                  resolve(message.data);
-                }
-              } catch (e) {
-                logger.error("Failed to parse upload response", { error: e.message });
+            const jsonEnd = buffer.indexOf(JSON_DELIMITER, jsonStart + JSON_DELIMITER_LENGTH);
+            if (jsonEnd === -1) break;
+
+            try {
+              const jsonStr = buffer.substring(jsonStart + JSON_DELIMITER_LENGTH, jsonEnd);
+              const message = JSON.parse(jsonStr);
+
+              // Remove this message from buffer
+              buffer = buffer.substring(jsonEnd + JSON_DELIMITER_LENGTH);
+
+              // If this is the upload_response, resolve
+              if (message.type === "upload_response") {
+                clearTimeout(timeout);
+                pythonProcess.stdout.removeListener("data", responseHandler);
+                resolve(message.data);
+                return;
               }
+            } catch (e) {
+              buffer = buffer.substring(jsonEnd + JSON_DELIMITER_LENGTH);
+              logger.error("Failed to parse message in upload response handler", { error: e.message });
             }
           }
         };

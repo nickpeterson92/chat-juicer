@@ -7,7 +7,6 @@
 import "highlight.js/styles/github-dark.css";
 import "katex/dist/katex.min.css";
 
-// Module imports
 import {
   BYTES_PER_KILOBYTE,
   CONNECTION_RESET_DELAY,
@@ -51,6 +50,7 @@ import {
   clearCurrentSession,
   deleteSession,
   loadSessions,
+  renameSession,
   sessionState,
   summarizeCurrentSession,
   switchSession,
@@ -59,6 +59,8 @@ import { addMessage, clearChat, clearMessageCache } from "./ui/chat-ui.js";
 import { clearFunctionCards } from "./ui/function-card-ui.js";
 import { getSuggestionPrompt, hideWelcomePage, showWelcomePage } from "./ui/welcome-page.js";
 import { clearParseCache } from "./utils/json-cache.js";
+// Module imports
+import { showToast } from "./utils/toast.js";
 
 // ====================
 // DOM Element Management
@@ -320,11 +322,7 @@ function attachWelcomePageListeners() {
     // Send to main process
     window.electronAPI.sendUserInput(message);
 
-    // Refresh session list after short delay to show newly created session
-    // Backend creates session via lazy initialization when first message is sent
-    setTimeout(() => {
-      loadSessions(window.electronAPI, updateSessionsList);
-    }, 500);
+    // Session list will be updated automatically via session-created event
   };
 
   // Send button click
@@ -416,7 +414,7 @@ window.electronAPI.onBotOutput((output) => {
       maxSize: MAX_JSON_BUFFER,
     });
     jsonBuffer = ""; // Reset buffer
-    addMessage(elements.chatContainer, "Error: Message too large. Connection reset.", "error");
+    showToast("Error: Message too large. Connection reset", "error", 5000);
     return;
   }
 
@@ -438,6 +436,11 @@ window.electronAPI.onBotOutput((output) => {
 
     // Update startIndex for next iteration
     startIndex = jsonBuffer.indexOf(JSON_DELIMITER);
+
+    // Skip empty or whitespace-only content (can occur with consecutive delimiters)
+    if (!jsonStr.trim()) {
+      continue;
+    }
 
     // Parse and handle the JSON message
     try {
@@ -492,7 +495,7 @@ window.electronAPI.onBotOutput((output) => {
     if (line.includes("Goodbye!") || line.includes("An error occurred")) {
       setConnectionStatus(false);
       if (line.includes("Goodbye!")) {
-        addMessage(elements.chatContainer, MSG_BOT_SESSION_ENDED, "system");
+        showToast(MSG_BOT_SESSION_ENDED, "warning", 4000);
       }
     }
   }
@@ -509,7 +512,7 @@ window.electronAPI.onBotError((error) => {
     elements.aiThinking.classList.remove("active");
   }
 
-  addMessage(elements.chatContainer, `Error: ${error}`, "error");
+  showToast(`Error: ${error}`, "error", 5000);
   setConnectionStatus(false);
 });
 
@@ -519,7 +522,7 @@ window.electronAPI.onBotDisconnected(() => {
   }
 
   setConnectionStatus(false);
-  addMessage(elements.chatContainer, MSG_BOT_DISCONNECTED, "system");
+  showToast(MSG_BOT_DISCONNECTED, "error", 5000);
 });
 
 window.electronAPI.onBotRestarted(() => {
@@ -544,11 +547,11 @@ window.electronAPI.onBotRestarted(() => {
   clearMessageCache();
   clearParseCache();
 
-  addMessage(elements.chatContainer, MSG_BOT_RESTARTING, "system");
+  showToast(MSG_BOT_RESTARTING, "info", 2000);
 
   setTimeout(() => {
     setConnectionStatus(true);
-    addMessage(elements.chatContainer, MSG_BOT_RESTARTED, "system");
+    showToast(MSG_BOT_RESTARTED, "success", 3000);
   }, CONNECTION_RESET_DELAY);
 });
 
@@ -626,11 +629,11 @@ async function loadFiles(directory = "sources") {
         try {
           const result = await window.electronAPI.openFile(activeFilesDirectory, file.name);
           if (!result.success) {
-            addMessage(elements.chatContainer, `Failed to open file: ${result.error}`, "error");
+            showToast(`Failed to open file: ${result.error}`, "error", 4000);
           }
         } catch (error) {
           window.electronAPI.log("error", "Failed to open file", { filename: file.name, error: error.message });
-          addMessage(elements.chatContainer, `Error opening file: ${error.message}`, "error");
+          showToast(`Error opening file: ${error.message}`, "error", 4000);
         }
       };
 
@@ -660,7 +663,7 @@ function formatFileSize(bytes) {
 
 async function handleDeleteFile(filename, directory = "sources") {
   if (!filename) {
-    addMessage(elements.chatContainer, MSG_NO_FILE_SELECTED, "error");
+    showToast(MSG_NO_FILE_SELECTED, "error", 3000);
     return;
   }
 
@@ -672,19 +675,15 @@ async function handleDeleteFile(filename, directory = "sources") {
     const result = await window.electronAPI.deleteFile(directory, filename);
 
     if (result.success) {
-      addMessage(elements.chatContainer, MSG_FILE_DELETED.replace("{filename}", filename), "system");
+      showToast(MSG_FILE_DELETED.replace("{filename}", filename), "success", 3000);
       // Refresh the files list
       loadFiles(directory);
     } else {
-      addMessage(
-        elements.chatContainer,
-        MSG_FILE_DELETE_FAILED.replace("{filename}", filename).replace("{error}", result.error),
-        "error"
-      );
+      showToast(MSG_FILE_DELETE_FAILED.replace("{filename}", filename).replace("{error}", result.error), "error", 4000);
     }
   } catch (error) {
     window.electronAPI.log("error", "Failed to delete file", { filename, error: error.message });
-    addMessage(elements.chatContainer, MSG_FILE_DELETE_ERROR.replace("{filename}", filename), "error");
+    showToast(MSG_FILE_DELETE_ERROR.replace("{filename}", filename), "error", 4000);
   }
 }
 
@@ -745,6 +744,17 @@ function updateSessionsList() {
       handleSummarizeSession(session.session_id);
     };
     sessionActions.appendChild(summarizeBtn);
+
+    // Rename button
+    const renameBtn = document.createElement("button");
+    renameBtn.className = "session-action-btn";
+    renameBtn.innerHTML = "✏️";
+    renameBtn.title = "Rename session";
+    renameBtn.onclick = (e) => {
+      e.stopPropagation();
+      handleRenameSession(session.session_id, session.title);
+    };
+    sessionActions.appendChild(renameBtn);
 
     // Delete button
     const deleteBtn = document.createElement("button");
@@ -811,7 +821,7 @@ async function handleSwitchSession(sessionId) {
 
 async function handleDeleteSession(sessionIdToDelete) {
   if (!sessionIdToDelete) {
-    addMessage(elements.chatContainer, MSG_NO_SESSION_SELECTED, "error");
+    showToast(MSG_NO_SESSION_SELECTED, "error", 3000);
     return;
   }
 
@@ -830,7 +840,7 @@ async function handleDeleteSession(sessionIdToDelete) {
     result = await deleteSession(window.electronAPI, elements, sessionIdToDelete);
   } catch (error) {
     window.electronAPI.log("error", "Failed to delete session", { error: error.message });
-    addMessage(elements.chatContainer, MSG_SESSION_DELETE_FAILED, "system");
+    showToast(MSG_SESSION_DELETE_FAILED, "error", 4000);
     return;
   }
 
@@ -851,19 +861,19 @@ async function handleDeleteSession(sessionIdToDelete) {
     }
 
     await loadSessions(window.electronAPI, updateSessionsList);
-    addMessage(elements.chatContainer, MSG_SESSION_DELETED.replace("{title}", title), "system");
+    showToast(MSG_SESSION_DELETED.replace("{title}", title), "success", 3000);
   }
 }
 
 async function handleSummarizeSession(sessionId) {
   if (!sessionId) {
-    addMessage(elements.chatContainer, MSG_NO_SESSION_SELECTED, "error");
+    showToast(MSG_NO_SESSION_SELECTED, "error", 3000);
     return;
   }
 
   // If summarizing a different session, switch to it first
   if (sessionId !== sessionState.currentSessionId) {
-    addMessage(elements.chatContainer, MSG_SUMMARIZE_CURRENT_ONLY, "system");
+    showToast(MSG_SUMMARIZE_CURRENT_ONLY, "warning", 3000);
     return;
   }
 
@@ -872,8 +882,99 @@ async function handleSummarizeSession(sessionId) {
     // Result messages are already handled by the service function
   } catch (error) {
     window.electronAPI.log("error", "Unexpected error during summarization", { error: error.message });
-    addMessage(elements.chatContainer, MSG_SUMMARIZE_ERROR, "error");
+    showToast(MSG_SUMMARIZE_ERROR, "error", 4000);
   }
+}
+
+async function handleRenameSession(sessionId, currentTitle) {
+  if (!sessionId) {
+    showToast(MSG_NO_SESSION_SELECTED, "error", 3000);
+    return;
+  }
+
+  // Find the session item in the DOM
+  const sessionItem = document.querySelector(`.session-item[data-session-id="${sessionId}"]`);
+  if (!sessionItem) return;
+
+  const titleElement = sessionItem.querySelector(".session-title");
+  if (!titleElement) return;
+
+  // Store original title for cancel
+  const originalTitle = titleElement.textContent;
+
+  // Create an input element
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = currentTitle;
+  input.className = "session-title-edit";
+  input.style.cssText = `
+    width: 100%;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--color-input-focus);
+    border-radius: 0.25rem;
+    background-color: var(--color-input-bg);
+    color: var(--color-text-primary);
+    font-size: 0.875rem;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.2);
+  `;
+
+  // Replace title with input
+  titleElement.style.display = "none";
+  titleElement.parentNode.insertBefore(input, titleElement);
+
+  // Focus and select all text
+  input.focus();
+  input.select();
+
+  // Handler to save the new title
+  const saveRename = async () => {
+    const newTitle = input.value.trim();
+
+    // Remove input and restore title display
+    input.remove();
+    titleElement.style.display = "";
+
+    // If title unchanged or empty, just cancel
+    if (!newTitle || newTitle === originalTitle) {
+      return;
+    }
+
+    try {
+      const result = await renameSession(window.electronAPI, sessionId, newTitle);
+      if (result.success) {
+        // Update sessions list
+        await loadSessions(window.electronAPI, updateSessionsList);
+      }
+      // Result messages (toasts) are already handled by the service function
+    } catch (error) {
+      window.electronAPI.log("error", "Unexpected error during rename", { error: error.message });
+      showToast("Failed to rename conversation", "error", 4000);
+    }
+  };
+
+  // Handler to cancel editing
+  const cancelRename = () => {
+    input.remove();
+    titleElement.style.display = "";
+  };
+
+  // Save on Enter, cancel on Escape
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      saveRename();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cancelRename();
+    }
+  });
+
+  // Save when clicking outside
+  input.addEventListener("blur", () => {
+    // Small delay to allow click events to fire
+    setTimeout(saveRename, 100);
+  });
 }
 
 // ====================
@@ -1018,6 +1119,24 @@ function initializeEventListeners() {
 initializeEventListeners();
 
 // ====================
+// Session Creation Handler
+// ====================
+
+// Session creation event handler (stored for cleanup)
+const handleSessionCreated = (e) => {
+  window.electronAPI.log("info", "Handling session-created event", {
+    session_id: e.detail.session_id,
+    title: e.detail.title,
+  });
+
+  // Reload sessions list to show newly created session
+  loadSessions(window.electronAPI, updateSessionsList);
+};
+
+// Listen for session creation events from backend
+window.addEventListener("session-created", handleSessionCreated);
+
+// ====================
 // File Upload Handlers
 // ====================
 
@@ -1062,7 +1181,7 @@ async function handleFileDrop(e) {
   const files = Array.from(e.dataTransfer.files);
 
   if (files.length === 0) {
-    addMessage(elements.chatContainer, MSG_NO_FILES_DROPPED, "error");
+    showToast(MSG_NO_FILES_DROPPED, "error", 3000);
     return;
   }
 
@@ -1160,14 +1279,14 @@ async function handleFileDrop(e) {
   const failCount = results.length - successCount;
 
   if (failCount === 0) {
-    addMessage(elements.chatContainer, MSG_FILE_UPLOADED.replace("{count}", successCount), "system");
+    showToast(MSG_FILE_UPLOADED.replace("{count}", successCount), "success", 3000);
   } else if (successCount === 0) {
-    addMessage(elements.chatContainer, MSG_FILE_UPLOAD_FAILED.replace("{count}", failCount), "error");
+    showToast(MSG_FILE_UPLOAD_FAILED.replace("{count}", failCount), "error", 4000);
   } else {
-    addMessage(
-      elements.chatContainer,
+    showToast(
       MSG_FILE_UPLOAD_PARTIAL.replace("{success}", successCount).replace("{failed}", failCount),
-      "system"
+      "warning",
+      4000
     );
   }
 
@@ -1267,6 +1386,9 @@ function cleanup() {
     }
   });
   eventListeners.length = 0;
+
+  // Remove window-level event listeners
+  window.removeEventListener("session-created", handleSessionCreated);
 
   // Hide indicators
   if (elements.typingIndicator) {

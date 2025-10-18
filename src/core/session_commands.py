@@ -17,6 +17,7 @@ from core.constants import (
     ERROR_NO_ACTIVE_SESSION,
     ERROR_SESSION_MANAGER_NOT_INITIALIZED,
     ERROR_SESSION_NOT_FOUND,
+    INITIAL_SESSION_CHUNK_SIZE,
 )
 from core.session import SessionBuilder
 from integrations.sdk_token_tracker import connect_session, disconnect_session
@@ -26,6 +27,8 @@ from models.session_models import (
     CreateSessionCommand,
     DeleteSessionCommand,
     ListSessionsCommand,
+    LoadMoreMessagesCommand,
+    RenameSessionCommand,
     SessionUpdate,
     SummarizeSessionCommand,
     SwitchSessionCommand,
@@ -114,13 +117,45 @@ async def switch_to_session(app_state: AppStateProtocol, session_id: str) -> dic
             f"{session_meta.accumulated_tool_tokens} tool tokens, {app_state.current_session.total_tokens} total tokens"
         )
 
-    # Get full history for UI display (Layer 2)
+    # Get full history for UI display (Layer 2) - chunked loading for large sessions
+    # Fallback to Layer 1 for old sessions without full_history tables
     full_messages = []
-    message_count = len(items)  # Default to Layer 1 count
+    message_count = 0
+    has_more = False
+
     if app_state.full_history_store:
-        full_messages = app_state.full_history_store.get_messages(session_id)
-        message_count = len(full_messages)  # Use Layer 2 count for accurate metadata
-        logger.info(f"Loaded {len(full_messages)} messages from full_history for session {session_id}")
+        # Get total count first (fast query)
+        message_count = app_state.full_history_store.get_message_count(session_id)
+
+        if message_count > 0:
+            # Layer 2 exists - use it with chunked loading
+            full_messages = app_state.full_history_store.get_messages(
+                session_id, limit=INITIAL_SESSION_CHUNK_SIZE, offset=0
+            )
+
+            has_more = message_count > INITIAL_SESSION_CHUNK_SIZE
+
+            logger.info(
+                f"Loaded initial {len(full_messages)}/{message_count} messages from Layer 2 for session {session_id}"
+                + (f" (has_more={has_more})" if has_more else "")
+            )
+        else:
+            # Layer 2 empty/missing - fallback to Layer 1 (old sessions)
+            logger.warning(f"No Layer 2 data for session {session_id}, falling back to Layer 1 (agent_messages)")
+
+            # Convert Layer 1 items to message format (filter SDK internals)
+            for item in items:
+                role = item.get("role")
+                content = item.get("content")
+
+                # Only include user/assistant/system/tool messages (skip SDK internals)
+                if role in ["user", "assistant", "system", "tool"] and content:
+                    full_messages.append({"role": role, "content": content})
+
+            message_count = len(full_messages)
+            has_more = False  # All messages loaded from Layer 1
+
+            logger.info(f"Loaded {message_count} messages from Layer 1 (fallback) for session {session_id}")
 
     # Connect new session to token tracker
     connect_session(app_state.current_session)
@@ -134,14 +169,77 @@ async def switch_to_session(app_state: AppStateProtocol, session_id: str) -> dic
     )
     app_state.session_manager.update_session(session_id, updates)
 
-    # Return session info (only include full_history for UI, not raw messages)
+    # Return session info with pagination metadata
     # Frontend only needs Layer 2 (full_history) for display
     # Layer 1 (messages) includes SDK internals and can be huge (causing pipe buffer overflow)
     return {
         "session": session_meta.model_dump(),
         "message_count": message_count,
         "tokens": app_state.current_session.total_tokens,
-        "full_history": full_messages,  # Layer 2: Complete history for UI display
+        "full_history": full_messages,  # Initial chunk only
+        "has_more": has_more,  # Pagination flag for frontend
+        "loaded_count": len(full_messages),  # Messages in this response
+    }
+
+
+async def load_more_messages(
+    app_state: AppStateProtocol,
+    session_id: str,
+    offset: int,
+    limit: int = INITIAL_SESSION_CHUNK_SIZE,
+) -> dict[str, Any]:
+    """Load additional messages for pagination.
+
+    Used for progressive loading of large sessions to avoid IPC buffer overflow.
+    Frontend calls this repeatedly to load remaining messages after initial session load.
+
+    Args:
+        app_state: Application state containing full_history_store
+        session_id: Session to load messages from
+        offset: Starting position (0-based index)
+        limit: Number of messages to load (capped at MAX_MESSAGES_PER_CHUNK)
+
+    Returns:
+        Chunk of messages with pagination metadata
+    """
+    if not app_state.full_history_store:
+        return {
+            "messages": [],
+            "offset": offset,
+            "loaded_count": 0,
+            "total_count": 0,
+            "has_more": False,
+        }
+
+    # Cap limit to prevent excessively large payloads
+    from core.constants import MAX_MESSAGES_PER_CHUNK
+
+    capped_limit = min(limit, MAX_MESSAGES_PER_CHUNK)
+
+    # Load message chunk
+    messages = app_state.full_history_store.get_messages(
+        session_id,
+        limit=capped_limit,
+        offset=offset,
+    )
+
+    # Get total count for has_more calculation
+    total_count = app_state.full_history_store.get_message_count(session_id)
+
+    loaded_count = len(messages)
+    has_more = (offset + loaded_count) < total_count
+
+    logger.info(
+        f"Loaded messages {offset}-{offset + loaded_count} of {total_count} "
+        f"for session {session_id} (has_more={has_more})"
+    )
+
+    return {
+        "messages": messages,
+        "offset": offset,
+        "loaded_count": loaded_count,
+        "total_count": total_count,
+        "has_more": has_more,
     }
 
 
@@ -278,6 +376,46 @@ async def clear_current_session(app_state: AppStateProtocol) -> dict[str, Any]:
     }
 
 
+async def rename_session(app_state: AppStateProtocol, session_id: str, title: str) -> dict[str, Any]:
+    """Rename a session with a new title.
+
+    Args:
+        app_state: Application state containing session manager
+        session_id: Session to rename
+        title: New title for the session
+
+    Returns:
+        Updated session info
+    """
+    if not app_state.session_manager:
+        return _session_error(ERROR_SESSION_MANAGER_NOT_INITIALIZED)
+
+    session_meta = app_state.session_manager.get_session(session_id)
+    if not session_meta:
+        return _session_error(ERROR_SESSION_NOT_FOUND.format(session_id=session_id))
+
+    # Update session with new title
+    updates = SessionUpdate(title=title)
+    success = app_state.session_manager.update_session(session_id, updates)
+
+    if not success:
+        return _session_error("Failed to rename session")
+
+    # Mark as manually named (prevent auto-naming from overwriting)
+    session_meta.is_named = True
+    app_state.session_manager._save_metadata()
+
+    logger.info(f"Renamed session {session_id} to: {title}")
+
+    # Return updated session info
+    return {
+        "success": True,
+        "message": "Session renamed successfully",
+        "session": session_meta.model_dump(),
+        "sessions": [s.model_dump() for s in app_state.session_manager.list_sessions()],
+    }
+
+
 async def handle_session_command(app_state: AppStateProtocol, command: str, data: dict[str, Any]) -> dict[str, Any]:
     """Handle session management commands from IPC with Pydantic validation.
 
@@ -299,6 +437,8 @@ async def handle_session_command(app_state: AppStateProtocol, command: str, data
         DeleteSessionCommand: lambda cmd: delete_session_by_id(app_state, cmd.session_id),
         SummarizeSessionCommand: lambda _: summarize_current_session(app_state),
         ClearSessionCommand: lambda _: clear_current_session(app_state),
+        LoadMoreMessagesCommand: lambda cmd: load_more_messages(app_state, cmd.session_id, cmd.offset, cmd.limit),
+        RenameSessionCommand: lambda cmd: rename_session(app_state, cmd.session_id, cmd.title),
     }
 
     try:
