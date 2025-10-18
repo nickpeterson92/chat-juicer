@@ -11,9 +11,9 @@ import uuid
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
-from agents import Runner, SQLiteSession
+from agents import Agent, Runner, SQLiteSession
 
 from core.constants import (
     CHAT_HISTORY_DB_PATH,
@@ -22,193 +22,15 @@ from core.constants import (
     MESSAGE_STRUCTURE_TOKEN_OVERHEAD,
     MIN_MESSAGES_FOR_SUMMARIZATION,
     MODEL_TOKEN_LIMITS,
-    SUMMARY_MAX_COMPLETION_TOKENS,
     get_settings,
 )
-from core.prompts import CONVERSATION_SUMMARIZATION_PROMPT, SUMMARY_REQUEST_PROMPT
+from core.prompts import CONVERSATION_SUMMARIZATION_PROMPT
 from core.session_manager import SessionManager
 from models.event_models import FunctionEventMessage
-from models.session_models import ContentItem, FullHistoryProtocol, SessionUpdate
-from utils.client_factory import create_openai_client
+from models.session_models import FullHistoryProtocol, SessionUpdate
 from utils.json_utils import json_compact
 from utils.logger import logger
 from utils.token_utils import count_tokens
-
-
-class MessageNormalizer:
-    """Normalizes Agent/Runner messages for OpenAI chat.completions API."""
-
-    __slots__ = ("content_type_handlers",)
-
-    # Valid content types for OpenAI chat.completions API
-    VALID_CONTENT_TYPES: ClassVar[set[str]] = {"text", "image_url", "input_audio", "refusal", "audio", "file"}
-
-    def __init__(self) -> None:
-        """Initialize the message normalizer with content type handlers."""
-        # Strategy pattern for handling different SDK internal item types
-        self.content_type_handlers = {
-            "function_call": self._handle_function_call,
-            "function_call_output": self._handle_function_call_output,
-            "reasoning": self._handle_reasoning,
-        }
-
-    def normalize_content(self, content: str | list[ContentItem] | ContentItem) -> str:
-        """Normalize Agent/Runner content to OpenAI format.
-
-        Args:
-            content: Content from Agent/Runner (string, list, or dict)
-
-        Returns:
-            Normalized string content
-        """
-        if isinstance(content, str):
-            return content
-
-        if isinstance(content, list):
-            return self._normalize_content_list(content)
-
-        # Handle other types by converting to string
-        return str(content) if content else ""
-
-    def _normalize_content_list(self, content_list: list[ContentItem]) -> str:
-        """Normalize a list of content items.
-
-        Args:
-            content_list: List of content items from Agent/Runner
-
-        Returns:
-            Normalized string content
-        """
-        text_parts = []
-
-        for content_item in content_list:
-            if isinstance(content_item, dict):
-                text_part = self._extract_text_from_dict(content_item)
-                if text_part:
-                    text_parts.append(text_part)
-            elif isinstance(content_item, str):
-                text_parts.append(content_item)
-
-        return "\n".join(text_parts) if text_parts else ""
-
-    def _extract_text_from_dict(self, content_item: dict[str, Any]) -> str | None:
-        """Extract text from a dictionary content item.
-
-        Args:
-            content_item: Dictionary containing content
-
-        Returns:
-            Extracted text or None
-        """
-        content_type = content_item.get("type", "")
-
-        # Use match statement for efficient pattern-based dispatch (Python 3.10+)
-        match content_type:
-            case "" if "text" in content_item:
-                # No type field, but has text
-                return str(content_item["text"])
-            case "text" if "text" in content_item:
-                # Valid text type with text content
-                return str(content_item["text"])
-            case _ if content_type and content_type not in self.VALID_CONTENT_TYPES:
-                # Invalid type - try to extract text or output
-                if "text" in content_item:
-                    return str(content_item["text"])
-                elif "output" in content_item:
-                    return str(content_item["output"])
-                return None
-            case _:
-                # Valid non-text type or no extractable content
-                return None
-
-    def normalize_item(self, item: Any) -> dict[str, Any] | None:
-        """Normalize a single conversation item.
-
-        Args:
-            item: Conversation item from Agent/Runner
-
-        Returns:
-            Normalized message dict or None if should be skipped
-        """
-        role = item.get("role")
-
-        # Process items with valid roles
-        if role in ["user", "assistant", "system", "tool"]:
-            content = item.get("content", "")
-            normalized_content = self.normalize_content(content)
-            return {"role": role, "content": normalized_content}
-
-        # Handle items without proper roles (Agent/Runner SDK internal items)
-        if not role or role == "unknown":
-            return self._handle_internal_item(item)
-
-        return None
-
-    def _handle_internal_item(self, item: Any) -> dict[str, Any] | None:
-        """Handle SDK internal items without proper roles.
-
-        Args:
-            item: Internal SDK item
-
-        Returns:
-            Normalized message dict or None if should be skipped
-        """
-        item_type = item.get("type", "")
-
-        # Use strategy pattern for known types
-        if item_type in self.content_type_handlers:
-            return self.content_type_handlers[item_type](item)
-
-        # Handle unknown types with output
-        if "output" in item:
-            return {"role": "assistant", "content": f"[Output: {item.get('output')}]"}
-
-        return None
-
-    def _handle_function_call(self, item: Any) -> dict[str, Any]:
-        """Handle function_call type items."""
-        tool_name = item.get("name", "unknown")
-        arguments = item.get("arguments", "{}")
-        return {"role": "assistant", "content": f"[Called tool: {tool_name} with arguments: {arguments}]"}
-
-    def _handle_function_call_output(self, item: Any) -> dict[str, Any]:
-        """Handle function_call_output type items."""
-        output = item.get("output", "")
-        return {"role": "assistant", "content": f"[Tool result: {output}]"}
-
-    def _handle_reasoning(self, _item: Any) -> dict[str, Any] | None:
-        """Handle reasoning type items - skip for summarization.
-
-        Args:
-            _item: Unused - reasoning items are always skipped
-
-        Returns:
-            None to indicate item should be skipped
-        """
-        return None  # Skip reasoning items (usually empty)
-
-    def create_summary_messages(self, items: list[Any], system_prompt: str) -> Any:
-        """Create normalized messages for summarization.
-
-        Args:
-            items: List of conversation items
-            system_prompt: System prompt for summarization
-
-        Returns:
-            List of normalized messages for chat.completions API
-        """
-        messages = [{"role": "system", "content": system_prompt}]
-
-        # Process and normalize all items
-        for item in items:
-            normalized_msg = self.normalize_item(item)
-            if normalized_msg:  # Only add if not None (skipped)
-                messages.append(normalized_msg)
-
-        # Add the summary request
-        messages.append({"role": "user", "content": SUMMARY_REQUEST_PROMPT})
-
-        return messages
 
 
 class SessionBuilder:
@@ -875,42 +697,40 @@ class TokenAwareSQLiteSession(SQLiteSession):
         return call_id, recent_items
 
     async def _generate_summary_text(self, items: list[Any]) -> str:
-        """Generate summary text from conversation items.
+        """Generate summary text from conversation items using Agent/Runner.
+
+        Uses the Responses API (via Agent/Runner) for consistency with the rest of the application.
+        The SDK automatically handles item formatting, reasoning items, and tool outputs.
 
         Args:
-            items: Conversation items to summarize
+            items: Conversation items to summarize (from session.get_items())
 
         Returns:
             Generated summary text
         """
         logger.info(f"Summarizing {len(items)} messages ({self.total_tokens} tokens)")
 
-        # Use the responses API (same as Agent/Runner uses internally)
-        # This handles complex content structures seamlessly
-
-        # Create client using validated settings and centralized factory
+        # Get settings and deployment
         settings = get_settings()
-        api_key = settings.azure_openai_api_key
-        endpoint = settings.azure_endpoint_str
         deployment = settings.azure_openai_deployment
 
-        client = create_openai_client(api_key=api_key, base_url=endpoint)
-
-        # System prompt with summarization instructions from prompts.py
-        system_prompt = CONVERSATION_SUMMARIZATION_PROMPT
-
-        # Build messages using the new normalizer
-        normalizer = MessageNormalizer()
-        messages = normalizer.create_summary_messages(items, system_prompt)
-
-        # Use standard chat.completions API with normalized messages
-        response = await client.chat.completions.create(
+        # Create a one-off summarization agent
+        # Note: Agent uses Responses API by default (same as main chat)
+        summary_agent = Agent(
+            name="Summarizer",
             model=deployment,
-            messages=messages,
-            max_completion_tokens=SUMMARY_MAX_COMPLETION_TOKENS,
+            instructions=CONVERSATION_SUMMARIZATION_PROMPT,
         )
 
-        return response.choices[0].message.content or ""
+        # Pass session items directly to Runner - SDK handles format automatically!
+        # No MessageNormalizer needed - items are already in TResponseInputItem format
+        result = await Runner.run(
+            summary_agent,
+            input=items,  # Session items already compatible with Runner.run()
+            session=None,  # No session for summarization (one-shot operation)
+        )
+
+        return result.final_output or ""
 
     async def _update_session_with_summary(self, summary_text: str, recent_items: list[Any], call_id: str) -> None:
         """Update session with summary and recent items.

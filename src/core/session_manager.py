@@ -246,10 +246,7 @@ class SessionManager:
 
             client = create_openai_client(api_key=api_key, base_url=endpoint)
 
-            # Build messages for title generation using MessageNormalizer
-            from core.session import MessageNormalizer
-
-            normalizer = MessageNormalizer()
+            # Build messages for title generation
             messages = []
 
             for msg in recent_messages:
@@ -257,8 +254,21 @@ class SessionManager:
                 if role not in ["user", "assistant"]:
                     continue
 
-                # Use MessageNormalizer to handle content extraction
-                content = normalizer.normalize_content(msg.get("content", ""))
+                # Extract text content from message
+                content = msg.get("content", "")
+
+                # Handle list content (SDK format)
+                if isinstance(content, list):
+                    text_parts = []
+                    for item in content:
+                        if isinstance(item, dict) and "text" in item:
+                            text_parts.append(str(item["text"]))
+                        elif isinstance(item, str):
+                            text_parts.append(item)
+                    content = " ".join(text_parts)
+                elif not isinstance(content, str):
+                    content = str(content)
+
                 if not content or not content.strip():
                     continue
 
