@@ -766,129 +766,139 @@ if (elements.fileDropZone) {
   });
 }
 
-// Handle file drop
-if (elements.chatPanel) {
-  elements.chatPanel.addEventListener("drop", async (e) => {
-    // Hide drop zone
-    if (elements.fileDropZone) {
-      elements.fileDropZone.classList.remove("active");
-    }
+/**
+ * Handle file drop upload
+ * @param {DragEvent} e - Drop event
+ */
+async function handleFileDrop(e) {
+  // Hide drop zone
+  if (elements.fileDropZone) {
+    elements.fileDropZone.classList.remove("active");
+  }
 
-    const files = Array.from(e.dataTransfer.files);
+  const files = Array.from(e.dataTransfer.files);
 
-    if (files.length === 0) {
-      addMessage(elements.chatContainer, MSG_NO_FILES_DROPPED, "error");
-      return;
-    }
+  if (files.length === 0) {
+    addMessage(elements.chatContainer, MSG_NO_FILES_DROPPED, "error");
+    return;
+  }
 
-    // Show progress bar
-    if (elements.uploadProgress) {
-      elements.uploadProgress.classList.add("active");
-    }
+  // Show progress bar
+  if (elements.uploadProgress) {
+    elements.uploadProgress.classList.add("active");
+  }
 
-    let completed = 0;
-    const results = [];
+  let completed = 0;
+  const results = [];
 
-    for (const file of files) {
-      try {
-        // Update progress immediately when starting this file
-        const currentFileIndex = completed + 1;
-        const startPercentage = (completed / files.length) * 100;
+  for (const file of files) {
+    try {
+      // Update progress immediately when starting this file
+      const currentFileIndex = completed + 1;
+      const startPercentage = (completed / files.length) * 100;
 
-        if (elements.progressText) {
-          elements.progressText.textContent = MSG_UPLOADING_FILE.replace("{filename}", file.name)
-            .replace("{current}", currentFileIndex)
-            .replace("{total}", files.length);
-        }
-
-        if (elements.progressBar) {
-          elements.progressBar.style.width = `${startPercentage}%`;
-        }
-
-        window.electronAPI.log("info", "Processing file upload", {
-          filename: file.name,
-          size: file.size,
-          type: file.type,
-        });
-
-        const buffer = await file.arrayBuffer();
-        const uint8Array = new Uint8Array(buffer);
-
-        const result = await window.electronAPI.uploadFile({
-          filename: file.name,
-          data: Array.from(uint8Array),
-          size: file.size,
-          type: file.type,
-        });
-
-        completed++;
-
-        // Update progress bar to completed percentage
-        if (elements.progressBar) {
-          const percentage = (completed / files.length) * 100;
-          elements.progressBar.style.width = `${percentage}%`;
-        }
-
-        results.push({ file: file.name, result });
-
-        if (result.success) {
-          window.electronAPI.log("info", "File uploaded successfully", {
-            filename: file.name,
-            path: result.file_path,
-          });
-        } else {
-          window.electronAPI.log("error", "File upload failed", {
-            filename: file.name,
-            error: result.error,
-          });
-        }
-      } catch (error) {
-        completed++;
-
-        // Update progress bar to completed percentage even on error
-        if (elements.progressBar) {
-          const percentage = (completed / files.length) * 100;
-          elements.progressBar.style.width = `${percentage}%`;
-        }
-
-        window.electronAPI.log("error", "File upload error", {
-          filename: file.name,
-          error: error.message,
-        });
-        results.push({ file: file.name, result: { success: false, error: error.message } });
+      if (elements.progressText) {
+        elements.progressText.textContent = MSG_UPLOADING_FILE.replace("{filename}", file.name)
+          .replace("{current}", currentFileIndex)
+          .replace("{total}", files.length);
       }
-    }
 
-    // Hide progress bar after a short delay
-    setTimeout(() => {
-      if (elements.uploadProgress) {
-        elements.uploadProgress.classList.remove("active");
-      }
-      // Reset progress bar
       if (elements.progressBar) {
-        elements.progressBar.style.width = "0%";
+        elements.progressBar.style.width = `${startPercentage}%`;
       }
-    }, UPLOAD_PROGRESS_HIDE_DELAY);
 
-    // Show summary message
-    const successCount = results.filter((r) => r.result.success).length;
-    const failCount = results.length - successCount;
+      window.electronAPI.log("info", "Processing file upload", {
+        filename: file.name,
+        size: file.size,
+        type: file.type,
+      });
 
-    if (failCount === 0) {
-      addMessage(elements.chatContainer, MSG_FILE_UPLOADED.replace("{count}", successCount), "system");
-    } else if (successCount === 0) {
-      addMessage(elements.chatContainer, MSG_FILE_UPLOAD_FAILED.replace("{count}", failCount), "error");
-    } else {
-      addMessage(
-        elements.chatContainer,
-        MSG_FILE_UPLOAD_PARTIAL.replace("{success}", successCount).replace("{failed}", failCount),
-        "system"
-      );
+      const buffer = await file.arrayBuffer();
+      const uint8Array = new Uint8Array(buffer);
+
+      const result = await window.electronAPI.uploadFile({
+        filename: file.name,
+        data: Array.from(uint8Array),
+        size: file.size,
+        type: file.type,
+      });
+
+      completed++;
+
+      // Update progress bar to completed percentage
+      if (elements.progressBar) {
+        const percentage = (completed / files.length) * 100;
+        elements.progressBar.style.width = `${percentage}%`;
+      }
+
+      results.push({ file: file.name, result });
+
+      if (result.success) {
+        window.electronAPI.log("info", "File uploaded successfully", {
+          filename: file.name,
+          path: result.file_path,
+        });
+      } else {
+        window.electronAPI.log("error", "File upload failed", {
+          filename: file.name,
+          error: result.error,
+        });
+      }
+    } catch (error) {
+      completed++;
+
+      // Update progress bar to completed percentage even on error
+      if (elements.progressBar) {
+        const percentage = (completed / files.length) * 100;
+        elements.progressBar.style.width = `${percentage}%`;
+      }
+
+      window.electronAPI.log("error", "File upload error", {
+        filename: file.name,
+        error: error.message,
+      });
+      results.push({ file: file.name, result: { success: false, error: error.message } });
     }
+  }
 
-    // Refresh the files panel after upload
-    loadSourceFiles();
-  });
+  // Hide progress bar after a short delay
+  setTimeout(() => {
+    if (elements.uploadProgress) {
+      elements.uploadProgress.classList.remove("active");
+    }
+    // Reset progress bar
+    if (elements.progressBar) {
+      elements.progressBar.style.width = "0%";
+    }
+  }, UPLOAD_PROGRESS_HIDE_DELAY);
+
+  // Show summary message
+  const successCount = results.filter((r) => r.result.success).length;
+  const failCount = results.length - successCount;
+
+  if (failCount === 0) {
+    addMessage(elements.chatContainer, MSG_FILE_UPLOADED.replace("{count}", successCount), "system");
+  } else if (successCount === 0) {
+    addMessage(elements.chatContainer, MSG_FILE_UPLOAD_FAILED.replace("{count}", failCount), "error");
+  } else {
+    addMessage(
+      elements.chatContainer,
+      MSG_FILE_UPLOAD_PARTIAL.replace("{success}", successCount).replace("{failed}", failCount),
+      "system"
+    );
+  }
+
+  // Refresh the files panel after upload
+  loadSourceFiles();
+}
+
+// Attach drop handler to both chat panel and drop zone
+if (elements.chatPanel) {
+  elements.chatPanel.addEventListener("drop", handleFileDrop);
+}
+
+if (elements.fileDropZone) {
+  elements.fileDropZone.addEventListener("drop", handleFileDrop);
 }
 
 // ====================
