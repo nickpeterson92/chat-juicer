@@ -473,6 +473,14 @@
   .file-icon {
     font-size: 1.125rem;
     flex-shrink: 0;
+    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  [data-theme="dark"] .file-icon {
+    color: var(--color-text-secondary-dark);
   }
 
   .file-name {
@@ -711,6 +719,111 @@
   }
 
   /* View mode toggles */
+  /* Welcome page files section */
+  .welcome-files-section {
+    margin-top: 2rem;
+    width: 100%;
+    max-width: 600px;
+  }
+
+  .welcome-files-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+    padding: 0 0.25rem;
+  }
+
+  .welcome-files-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+  }
+
+  [data-theme="dark"] .welcome-files-title {
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .welcome-files-refresh-btn {
+    background: none;
+    border: none;
+    padding: 0.25rem;
+    cursor: pointer;
+    color: var(--color-text-secondary);
+    border-radius: 0.25rem;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .welcome-files-refresh-btn:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    color: var(--color-text-primary);
+  }
+
+  [data-theme="dark"] .welcome-files-refresh-btn {
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  [data-theme="dark"] .welcome-files-refresh-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--color-text-primary-dark);
+  }
+
+  .welcome-files-list {
+    background-color: rgba(0, 0, 0, 0.02);
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    max-height: 200px;
+    overflow-y: auto;
+    min-height: 60px;
+  }
+
+  [data-theme="dark"] .welcome-files-list {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-color: var(--color-border-dark);
+  }
+
+  .welcome-files-list:empty::before {
+    content: "No files uploaded yet";
+    display: block;
+    text-align: center;
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+    padding: 1rem;
+  }
+
+  [data-theme="dark"] .welcome-files-list:empty::before {
+    color: var(--color-text-secondary-dark);
+  }
+
+  /* Reuse existing file-item styles for welcome page */
+  .welcome-files-list .file-item {
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .welcome-files-list .file-item:last-child {
+    margin-bottom: 0;
+  }
+
+  .welcome-files-list .files-loading,
+  .welcome-files-list .files-error,
+  .welcome-files-list .files-empty {
+    text-align: center;
+    padding: 1rem;
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+  }
+
+  [data-theme="dark"] .welcome-files-list .files-loading,
+  [data-theme="dark"] .welcome-files-list .files-error,
+  [data-theme="dark"] .welcome-files-list .files-empty {
+    color: var(--color-text-secondary-dark);
+  }
+
   .view-welcome .chat-panel,
   .view-welcome .files-panel,
   .view-welcome #files-toggle-wrapper {

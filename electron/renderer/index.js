@@ -89,6 +89,7 @@ function initializeElements() {
   elements.sidebar = document.getElementById("sidebar");
   elements.sidebarToggle = document.getElementById("sidebar-toggle");
   elements.sidebarCloseBtn = document.getElementById("sidebar-close-btn");
+  elements.logoHomeBtn = document.getElementById("logo-home-btn");
   elements.fileDropZone = document.getElementById("file-drop-zone");
   elements.chatPanel = document.querySelector(".chat-panel");
   elements.uploadProgress = document.getElementById("file-upload-progress");
@@ -141,16 +142,6 @@ appState.subscribe("connection.status", (newStatus) => {
   updateConnectionUI(newStatus);
 });
 
-// Subscribe to model name changes and update welcome page if visible
-appState.subscribe("ui.modelName", (newModelName) => {
-  if (appState.ui.currentView === "welcome") {
-    const modelNameElement = document.getElementById("welcome-model-name");
-    if (modelNameElement && newModelName) {
-      modelNameElement.textContent = newModelName;
-    }
-  }
-});
-
 // ====================
 // Event Listener Management
 // ====================
@@ -198,6 +189,9 @@ function sendMessage() {
 async function showWelcomeView() {
   if (!elements.welcomePageContainer) return;
 
+  // Update state FIRST before rendering
+  appState.setState("ui.currentView", "welcome");
+
   // Get system username
   let userName = "User"; // Fallback
   try {
@@ -206,14 +200,8 @@ async function showWelcomeView() {
     window.electronAPI.log("error", "Failed to get username", { error: error.message });
   }
 
-  // Get model name from state
-  const modelName = appState.ui.modelName || "Loading...";
-
   // Show welcome page
-  showWelcomePage(elements.welcomePageContainer, userName, modelName);
-
-  // Update state
-  appState.setState("ui.currentView", "welcome");
+  showWelcomePage(elements.welcomePageContainer, userName);
 
   // Add CSS class to container for view switching
   document.body.classList.add("view-welcome");
@@ -300,6 +288,25 @@ function attachWelcomePageListeners() {
     };
     welcomeContainer.addEventListener("drop", dropHandler);
     welcomePageListeners.push({ element: welcomeContainer, event: "drop", handler: dropHandler });
+  }
+
+  // Load files into welcome page container
+  const welcomeFilesContainer = document.getElementById("welcome-files-container");
+  if (welcomeFilesContainer) {
+    loadFiles("sources", welcomeFilesContainer);
+  }
+
+  // Handle welcome files refresh button
+  const welcomeFilesRefreshBtn = document.getElementById("welcome-files-refresh");
+  if (welcomeFilesRefreshBtn) {
+    const refreshHandler = () => {
+      const container = document.getElementById("welcome-files-container");
+      if (container) {
+        loadFiles("sources", container);
+      }
+    };
+    welcomeFilesRefreshBtn.addEventListener("click", refreshHandler);
+    welcomePageListeners.push({ element: welcomeFilesRefreshBtn, event: "click", handler: refreshHandler });
   }
 
   // Handle welcome input send
@@ -446,9 +453,6 @@ window.electronAPI.onBotOutput((output) => {
     try {
       const message = JSON.parse(jsonStr);
 
-      // DEBUGGING: Log ALL messages to console
-      console.log("📨 Message received:", message.type);
-
       window.electronAPI.log("debug", "Processing message type", { type: message.type });
 
       if (message.type === "assistant_delta") {
@@ -480,15 +484,6 @@ window.electronAPI.onBotOutput((output) => {
         line.includes("====") ||
         line.includes("Enter your message"))
     ) {
-      // Capture model/deployment name
-      if (line.includes("Using deployment:")) {
-        const modelName = line.split("Using deployment:")[1].trim();
-        appState.setState("ui.modelName", modelName);
-      } else if (line.includes("Using model:")) {
-        const modelName = line.split("Using model:")[1].trim();
-        appState.setState("ui.modelName", modelName);
-      }
-
       appState.setState("connection.isInitial", false);
       appState.setState("connection.hasShownWelcome", true);
       continue;
@@ -577,28 +572,31 @@ function setConnectionStatus(connected) {
 // Track active directory tab
 let activeFilesDirectory = "sources";
 
-async function loadFiles(directory = "sources") {
-  if (!elements.filesContainer) return;
+async function loadFiles(directory = "sources", container = null) {
+  // Use provided container or default to elements.filesContainer
+  const targetContainer = container || elements.filesContainer;
 
-  elements.filesContainer.innerHTML = `<div class="files-loading">${MSG_LOADING_FILES}</div>`;
+  if (!targetContainer) return;
+
+  targetContainer.innerHTML = `<div class="files-loading">${MSG_LOADING_FILES}</div>`;
 
   try {
     const result = await window.electronAPI.listDirectory(directory);
 
     if (!result.success) {
-      elements.filesContainer.innerHTML = `<div class="files-error">${MSG_FILES_ERROR.replace("{error}", result.error)}</div>`;
+      targetContainer.innerHTML = `<div class="files-error">${MSG_FILES_ERROR.replace("{error}", result.error)}</div>`;
       return;
     }
 
     const files = result.files || [];
 
     if (files.length === 0) {
-      elements.filesContainer.innerHTML = `<div class="files-empty">${MSG_NO_FILES}</div>`;
+      targetContainer.innerHTML = `<div class="files-empty">${MSG_NO_FILES}</div>`;
       return;
     }
 
     // Clear and populate with file items
-    elements.filesContainer.innerHTML = "";
+    targetContainer.innerHTML = "";
 
     files.forEach((file) => {
       const fileItem = document.createElement("div");
@@ -606,7 +604,7 @@ async function loadFiles(directory = "sources") {
 
       const fileIcon = document.createElement("span");
       fileIcon.className = "file-icon";
-      fileIcon.textContent = "📄";
+      fileIcon.innerHTML = getFileIcon(file.name);
 
       const fileName = document.createElement("span");
       fileName.className = "file-name";
@@ -620,7 +618,9 @@ async function loadFiles(directory = "sources") {
       // Delete button
       const deleteBtn = document.createElement("button");
       deleteBtn.className = "file-delete-btn";
-      deleteBtn.innerHTML = "🗑️";
+      deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+      </svg>`;
       deleteBtn.title = "Delete file";
       deleteBtn.onclick = (e) => {
         e.stopPropagation();
@@ -645,12 +645,111 @@ async function loadFiles(directory = "sources") {
       fileItem.appendChild(fileSize);
       fileItem.appendChild(deleteBtn);
 
-      elements.filesContainer.appendChild(fileItem);
+      targetContainer.appendChild(fileItem);
     });
   } catch (error) {
     window.electronAPI.log("error", "Failed to load source files", { error: error.message });
-    elements.filesContainer.innerHTML = `<div class="files-error">${MSG_FILES_LOAD_FAILED}</div>`;
+    targetContainer.innerHTML = `<div class="files-error">${MSG_FILES_LOAD_FAILED}</div>`;
   }
+}
+
+/**
+ * Get file icon SVG based on file extension
+ * @param {string} filename - The filename with extension
+ * @returns {string} SVG markup for the file icon
+ */
+function getFileIcon(filename) {
+  const ext = filename.split(".").pop()?.toLowerCase() || "";
+
+  // Document formats - Red
+  if (["pdf"].includes(ext)) {
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <path d="M14 2v6h6M10 12h4M10 16h4"/>
+    </svg>`;
+  }
+
+  // Word documents - Blue
+  if (["doc", "docx", "odt"].includes(ext)) {
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <path d="M14 2v6h6M16 13H8m8 4H8m8 4H8"/>
+    </svg>`;
+  }
+
+  // Spreadsheets - Green
+  if (["xls", "xlsx", "csv", "ods"].includes(ext)) {
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <path d="M14 2v6h6M8 13h8M8 17h8M12 9v12"/>
+    </svg>`;
+  }
+
+  // Presentations - Orange
+  if (["ppt", "pptx", "odp"].includes(ext)) {
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <path d="M14 2v6h6M9 12h6v4H9z"/>
+    </svg>`;
+  }
+
+  // Images - Purple
+  if (["jpg", "jpeg", "png", "gif", "bmp", "svg", "webp", "ico"].includes(ext)) {
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2">
+      <rect x="3" y="3" width="18" height="18" rx="2"/>
+      <circle cx="8.5" cy="8.5" r="1.5"/>
+      <path d="M21 15l-5-5L5 21"/>
+    </svg>`;
+  }
+
+  // Code files - Yellow
+  if (
+    ["js", "jsx", "ts", "tsx", "py", "java", "c", "cpp", "cs", "go", "rb", "php", "swift", "kt", "rs"].includes(ext)
+  ) {
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="2">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <path d="M14 2v6h6M10 12l-2 2 2 2m4-4l2 2-2 2"/>
+    </svg>`;
+  }
+
+  // Markup/data - Gray
+  if (["html", "xml", "json", "yaml", "yml", "toml", "ini", "md", "txt"].includes(ext)) {
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <path d="M14 2v6h6M9 13h6m-6 4h6"/>
+    </svg>`;
+  }
+
+  // Archives - Brown
+  if (["zip", "rar", "7z", "tar", "gz", "bz2"].includes(ext)) {
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#92400e" stroke-width="2">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <path d="M14 2v6h6M12 6v2m0 2v2m0 2v2"/>
+    </svg>`;
+  }
+
+  // Video - Red/Pink
+  if (["mp4", "avi", "mov", "mkv", "webm", "flv"].includes(ext)) {
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2">
+      <rect x="2" y="6" width="20" height="12" rx="2"/>
+      <path d="M10 9l5 3-5 3V9z"/>
+    </svg>`;
+  }
+
+  // Audio - Pink
+  if (["mp3", "wav", "flac", "aac", "ogg", "m4a"].includes(ext)) {
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ec4899" stroke-width="2">
+      <path d="M9 18V5l12-2v13"/>
+      <circle cx="6" cy="18" r="3"/>
+      <circle cx="18" cy="16" r="3"/>
+    </svg>`;
+  }
+
+  // Default document icon - Slate
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+    <path d="M14 2v6h6M16 13H8m8 4H8"/>
+  </svg>`;
 }
 
 function formatFileSize(bytes) {
@@ -740,7 +839,9 @@ function updateSessionsList() {
     // Summarize button
     const summarizeBtn = document.createElement("button");
     summarizeBtn.className = "session-action-btn";
-    summarizeBtn.innerHTML = "📝";
+    summarizeBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/>
+    </svg>`;
     summarizeBtn.title = "Summarize session";
     summarizeBtn.onclick = (e) => {
       e.stopPropagation();
@@ -751,7 +852,9 @@ function updateSessionsList() {
     // Rename button
     const renameBtn = document.createElement("button");
     renameBtn.className = "session-action-btn";
-    renameBtn.innerHTML = "✏️";
+    renameBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+    </svg>`;
     renameBtn.title = "Rename session";
     renameBtn.onclick = (e) => {
       e.stopPropagation();
@@ -762,7 +865,9 @@ function updateSessionsList() {
     // Delete button
     const deleteBtn = document.createElement("button");
     deleteBtn.className = "session-action-btn";
-    deleteBtn.innerHTML = "🗑️";
+    deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+    </svg>`;
     deleteBtn.title = "Delete session";
     deleteBtn.onclick = (e) => {
       e.stopPropagation();
@@ -865,19 +970,47 @@ async function handleDeleteSession(sessionIdToDelete) {
   }
 
   if (result.success) {
-    // If we deleted the current session, switch to another or create new
-    if (sessionIdToDelete === sessionState.currentSessionId) {
-      const otherSession = sessionState.sessions.find((s) => s.session_id !== sessionIdToDelete);
+    // Check if there will be any sessions left after deletion
+    const remainingSessions = sessionState.sessions.filter((s) => s.session_id !== sessionIdToDelete);
 
-      if (otherSession) {
-        window.electronAPI.log("info", "Switching to another session after deleting current", {
-          to: otherSession.session_id,
-        });
-        await handleSwitchSession(otherSession.session_id);
-      } else {
-        window.electronAPI.log("info", "Creating new session after deleting last one");
-        await handleCreateNewSession();
+    if (remainingSessions.length === 0) {
+      // Last chat deleted - fresh start with everything collapsed
+      window.electronAPI.log("info", "Last session deleted - triggering fresh start");
+
+      // Clear current session in backend
+      await clearCurrentSession(window.electronAPI);
+
+      // Show welcome page
+      showWelcomeView();
+
+      // Collapse sidebar for fresh start
+      collapseSidebar();
+
+      // Collapse files panel too for complete fresh start
+      if (elements.filesPanel && !elements.filesPanel.classList.contains("collapsed")) {
+        elements.filesPanel.classList.add("collapsed");
+        const wrapper = document.getElementById("files-toggle-wrapper");
+        const icon = document.getElementById("toggle-files-icon");
+        if (wrapper) {
+          wrapper.classList.add("panel-collapsed");
+        }
+        if (elements.toggleFilesBtn) {
+          elements.toggleFilesBtn.title = "Show source files";
+          if (icon) {
+            icon.style.transform = "rotate(0deg)"; // Point left when collapsed
+          }
+        }
       }
+
+      // Clear chat for fresh start
+      clearChat(elements.chatContainer);
+      clearFunctionCards(elements.chatContainer);
+    } else if (sessionIdToDelete === sessionState.currentSessionId) {
+      // We deleted the current session, but there are others - switch to one
+      window.electronAPI.log("info", "Switching to another session after deleting current", {
+        to: remainingSessions[0].session_id,
+      });
+      await handleSwitchSession(remainingSessions[0].session_id);
     }
 
     await loadSessions(window.electronAPI, updateSessionsList);
@@ -1016,10 +1149,17 @@ function initializeTheme() {
 function updateThemeToggle(isDark) {
   if (elements.themeIcon && elements.themeText) {
     if (isDark) {
-      elements.themeIcon.textContent = "☀️";
+      // Sun icon for switching to light mode
+      elements.themeIcon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="5"/>
+        <path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42m12.72-12.72l1.42-1.42"/>
+      </svg>`;
       elements.themeText.textContent = "Light";
     } else {
-      elements.themeIcon.textContent = "🌙";
+      // Moon icon for switching to dark mode
+      elements.themeIcon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>`;
       elements.themeText.textContent = "Dark";
     }
   }
@@ -1066,18 +1206,56 @@ function initializeEventListeners() {
     });
   }
 
+  // Logo home button
+  if (elements.logoHomeBtn) {
+    addManagedEventListener(elements.logoHomeBtn, "click", () => {
+      // Only navigate to welcome if not already there
+      if (appState.ui.currentView !== "welcome") {
+        showWelcomeView();
+
+        // Collapse sidebar when returning home
+        collapseSidebar();
+
+        // Collapse files panel for clean welcome view
+        if (elements.filesPanel && !elements.filesPanel.classList.contains("collapsed")) {
+          elements.filesPanel.classList.add("collapsed");
+          const wrapper = document.getElementById("files-toggle-wrapper");
+          const icon = document.getElementById("toggle-files-icon");
+          if (wrapper) {
+            wrapper.classList.add("panel-collapsed");
+          }
+          if (elements.toggleFilesBtn) {
+            elements.toggleFilesBtn.title = "Show source files";
+            if (icon) {
+              icon.style.transform = "rotate(0deg)"; // Point left when collapsed
+            }
+          }
+        }
+      }
+    });
+  }
+
   // Toggle files panel
   if (elements.toggleFilesBtn) {
     addManagedEventListener(elements.toggleFilesBtn, "click", () => {
       const wrapper = document.getElementById("files-toggle-wrapper");
+      const icon = document.getElementById("toggle-files-icon");
+
       elements.filesPanel.classList.toggle("collapsed");
       if (wrapper) {
         wrapper.classList.toggle("panel-collapsed");
       }
-      elements.toggleFilesBtn.textContent = elements.filesPanel.classList.contains("collapsed") ? "◀" : "▶";
-      elements.toggleFilesBtn.title = elements.filesPanel.classList.contains("collapsed")
-        ? "Show source files"
-        : "Hide source files";
+
+      // Rotate icon: collapsed (panel hidden) = point left, open (panel visible) = point right
+      if (icon) {
+        if (elements.filesPanel.classList.contains("collapsed")) {
+          icon.style.transform = "rotate(0deg)"; // Point left (◀) when collapsed
+          elements.toggleFilesBtn.title = "Show source files";
+        } else {
+          icon.style.transform = "rotate(180deg)"; // Point right (▶) when open
+          elements.toggleFilesBtn.title = "Hide source files";
+        }
+      }
     });
   }
 
@@ -1328,6 +1506,14 @@ async function handleFileDrop(e) {
   if (activeFilesDirectory === "sources") {
     loadFiles("sources");
   }
+
+  // Also refresh welcome page files container if on welcome page
+  if (appState.ui.currentView === "welcome") {
+    const welcomeFilesContainer = document.getElementById("welcome-files-container");
+    if (welcomeFilesContainer) {
+      loadFiles("sources", welcomeFilesContainer);
+    }
+  }
 }
 
 /**
@@ -1336,15 +1522,8 @@ async function handleFileDrop(e) {
  * @param {boolean} fromWelcome - Whether upload is from welcome page
  */
 async function handleFileDropWithSession(e, fromWelcome = false) {
-  // If from welcome page, transition to chat view first
-  if (fromWelcome && appState.ui.currentView === "welcome") {
-    showChatView();
-
-    // Refresh session list after short delay to show newly created session
-    setTimeout(() => {
-      loadSessions(window.electronAPI, updateSessionsList);
-    }, 500);
-  }
+  // Note: fromWelcome parameter kept for backwards compatibility but no longer
+  // triggers auto-session creation. Session will be created on first user message.
 
   // Use existing upload handler
   await handleFileDrop(e);

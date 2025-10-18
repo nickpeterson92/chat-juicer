@@ -18,7 +18,9 @@
       <div class="flex items-center justify-between gap-3 p-4 border-b border-gray-200 dark:border-gray-600">
         <span class="flex-1 text-base font-semibold text-gray-800 dark:text-gray-100 pl-1">Sessions</span>
         <button class="bg-transparent border-none cursor-pointer p-2 rounded-md transition-colors hover:bg-gray-50 dark:hover:bg-gray-900 text-gray-800 dark:text-gray-100 text-base flex items-center justify-center opacity-70 hover:opacity-100" id="sidebar-close-btn" title="Toggle sidebar">
-          <span>✕</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
         </button>
       </div>
 
@@ -36,7 +38,11 @@
       <!-- Sidebar Footer (Settings) -->
       <div class="border-t border-gray-200 dark:border-gray-600 p-2">
         <button class="w-full py-2.5 px-3 bg-transparent border-none rounded-md cursor-pointer text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2.5 transition-colors hover:bg-gray-50 dark:hover:bg-gray-900 text-left" id="theme-toggle" title="Toggle dark mode">
-          <span class="text-base w-5 text-center" id="theme-icon">🌙</span>
+          <span class="w-5 flex items-center justify-center" id="theme-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
+          </span>
           <span class="flex-1 text-sm" id="theme-text">Dark mode</span>
         </button>
         <div class="w-full py-2.5 px-3 bg-transparent border-none rounded-md text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2.5 text-left cursor-default">
@@ -44,7 +50,12 @@
           <span class="flex-1 text-sm" id="status-text">Connected</span>
         </div>
         <button class="w-full py-2.5 px-3 bg-transparent border-none rounded-md cursor-pointer text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2.5 transition-colors hover:bg-gray-50 dark:hover:bg-gray-900 text-left" id="restart-btn" title="Restart bot">
-          <span class="text-base w-5 text-center">🔄</span>
+          <span class="w-5 flex items-center justify-center">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 4v6h6M23 20v-6h-6"/>
+              <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+            </svg>
+          </span>
           <span class="flex-1 text-sm">Restart</span>
         </button>
       </div>
@@ -59,23 +70,31 @@
       <div class="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 py-4 px-5 flex items-center justify-between">
         <!-- Sidebar Toggle (stays visible when collapsed) -->
         <div class="transition-all duration-300 flex items-center z-[200] relative [.sidebar:not(.collapsed)~.main-content_&]:opacity-0 [.sidebar:not(.collapsed)~.main-content_&]:pointer-events-none [.sidebar:not(.collapsed)~.main-content_&]:w-0 [.sidebar:not(.collapsed)~.main-content_&]:overflow-hidden [.sidebar.collapsed~.main-content_&]:opacity-100 [.sidebar.collapsed~.main-content_&]:pointer-events-auto [.sidebar.collapsed~.main-content_&]:w-auto [.sidebar.collapsed~.main-content_&]:mr-4" id="sidebar-toggle-wrapper">
-          <button class="bg-transparent border border-gray-300 dark:border-gray-600 cursor-pointer py-1.5 px-2.5 rounded-md transition-all duration-200 text-gray-700 dark:text-gray-300 text-lg flex items-center justify-center whitespace-nowrap hover:bg-gray-100 dark:hover:bg-gray-800" id="sidebar-toggle" title="Toggle sidebar">
-            <span>☰</span>
+          <button class="bg-transparent border-none cursor-pointer py-1.5 px-2.5 rounded-md transition-all duration-200 text-gray-700 dark:text-gray-300 text-lg flex items-center justify-center whitespace-nowrap hover:bg-gray-100 dark:hover:bg-gray-800" id="sidebar-toggle" title="Toggle sidebar">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M3 12h18M3 6h18M3 18h18"/>
+            </svg>
           </button>
         </div>
-        <img src="wishgate-logo.png" alt="Wishgate" class="h-12 w-12 rounded-lg">
+        <button id="logo-home-btn" class="bg-transparent border-none cursor-pointer p-0 rounded-lg transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2" aria-label="Return to home" title="Return to home">
+          <img src="wishgate-logo.png" alt="Wishgate" class="h-12 w-12 rounded-lg">
+        </button>
       </div>
 
       <!-- Content Wrapper (chat + tools side by side) -->
       <div class="flex flex-1 flex-row overflow-hidden relative items-stretch">
-        <div class="flex-1 flex flex-col min-w-[400px] border-r border-gray-200 dark:border-gray-600 chat-panel">
-          <!-- File upload drop zone -->
-          <div class="absolute top-0 left-0 right-0 bottom-0 bg-gray-100/50 dark:bg-gray-800/50 border-[3px] border-dashed border-gray-300 dark:border-gray-600 hidden items-center justify-center z-[1000] pointer-events-none backdrop-blur-sm animate-fadeIn [&.active]:flex" id="file-drop-zone">
-            <div class="text-center text-xl text-gray-700 dark:text-gray-300 font-semibold pointer-events-none">
-              <span class="block text-6xl mb-4 animate-bounce">📁</span>
-              <span class="block text-lg tracking-wide">Drop files here to upload to sources/</span>
-            </div>
+        <!-- File upload drop zone (covers entire content area) -->
+        <div class="absolute top-0 left-0 right-0 bottom-0 bg-gray-100/50 dark:bg-gray-800/50 border-[3px] border-dashed border-gray-300 dark:border-gray-600 hidden items-center justify-center z-[1000] pointer-events-none backdrop-blur-sm animate-fadeIn [&.active]:flex" id="file-drop-zone">
+          <div class="text-center text-xl text-gray-700 dark:text-gray-300 font-semibold pointer-events-none">
+            <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="mb-4 animate-bounce text-gray-700 dark:text-gray-300">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              <path d="M12 11v6m-3-3l3 3 3-3"/>
+            </svg>
+            <span class="block text-lg tracking-wide">Drop files here to upload to sources/</span>
           </div>
+        </div>
+
+        <div class="flex-1 flex flex-col min-w-[400px] border-r border-gray-200 dark:border-gray-600 chat-panel">
 
           <!-- File upload progress bar -->
           <div class="hidden absolute top-5 left-5 right-5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl p-4 z-[900] shadow-lg animate-slideIn [&.active]:block" id="file-upload-progress">
@@ -141,14 +160,24 @@
           <div class="p-4 px-5 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center h-14">
             <div class="flex gap-2 flex-1">
               <button class="bg-transparent border border-gray-200 dark:border-gray-600 rounded-lg py-1.5 px-3 text-gray-600 dark:text-gray-400 text-[13px] font-medium cursor-pointer transition-all duration-200 flex items-center gap-1 whitespace-nowrap hover:bg-gray-100 dark:hover:bg-gray-800 [&.active]:bg-gray-200 dark:[&.active]:bg-gray-700 [&.active]:border-gray-400 dark:[&.active]:border-gray-500 [&.active]:text-gray-900 dark:[&.active]:text-gray-100 [&.active]:font-semibold active" id="tab-sources" data-directory="sources">
-                📁 Sources
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                </svg>
+                Sources
               </button>
               <button class="bg-transparent border border-gray-200 dark:border-gray-600 rounded-lg py-1.5 px-3 text-gray-600 dark:text-gray-400 text-[13px] font-medium cursor-pointer transition-all duration-200 flex items-center gap-1 whitespace-nowrap hover:bg-gray-100 dark:hover:bg-gray-800 [&.active]:bg-gray-200 dark:[&.active]:bg-gray-700 [&.active]:border-gray-400 dark:[&.active]:border-gray-500 [&.active]:text-gray-900 dark:[&.active]:text-gray-100 [&.active]:font-semibold" id="tab-output" data-directory="output">
-                📄 Output
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <path d="M14 2v6h6M16 13H8m8 4H8m8 4H8"/>
+                </svg>
+                Output
               </button>
             </div>
             <button class="bg-transparent border border-gray-200 dark:border-gray-600 cursor-pointer py-1.5 px-2 text-gray-600 dark:text-gray-400 text-sm rounded-md transition-all duration-200 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800" id="refresh-files-btn" title="Refresh file list">
-              🔄
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 4v6h6M23 20v-6h-6"/>
+                <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+              </svg>
             </button>
           </div>
           <div class="flex-1 overflow-y-auto p-4 transition-opacity duration-300 flex flex-col gap-2 custom-scrollbar [contain:layout_style_paint]" id="files-container">
@@ -158,8 +187,10 @@
 
         <!-- Toggle button for files panel -->
         <div class="absolute right-[420px] top-1/2 -translate-y-1/2 z-[200] transition-[right_0.15s_cubic-bezier(0.4,0,0.2,1)] [&.panel-collapsed]:right-0 panel-collapsed" id="files-toggle-wrapper">
-          <button class="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-600 cursor-pointer py-2 px-1 text-gray-700 dark:text-gray-300 text-sm rounded-l-lg transition-all duration-200 w-8 h-12 flex items-center justify-center shadow-sm hover:bg-gray-200 dark:hover:bg-gray-700" id="toggle-files-btn" title="Toggle files panel">
-            ▶
+          <button class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 cursor-pointer p-2 text-gray-600 dark:text-gray-400 rounded-full transition-all duration-200 w-8 h-8 flex items-center justify-center shadow-md hover:bg-gray-50 dark:hover:bg-gray-700 hover:shadow-lg hover:scale-110 active:scale-95" id="toggle-files-btn" title="Show source files">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="transition-transform duration-200" id="toggle-files-icon">
+              <path d="M15 18l-6-6 6-6"/>
+            </svg>
           </button>
         </div>
       </div>
