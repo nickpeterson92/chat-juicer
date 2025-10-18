@@ -13,6 +13,12 @@ const {
   HEALTH_CHECK_INTERVAL,
   SIGTERM_DELAY,
   FILE_UPLOAD_TIMEOUT,
+  SESSION_COMMAND_TIMEOUT,
+  SUMMARIZE_COMMAND_TIMEOUT,
+  WINDOW_DEFAULT_WIDTH,
+  WINDOW_DEFAULT_HEIGHT,
+  WINDOW_MIN_WIDTH,
+  WINDOW_MIN_HEIGHT,
   HIDDEN_FILE_PREFIX,
 } = require("./config/main-constants");
 
@@ -30,8 +36,10 @@ let processHealthCheckInterval = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: WINDOW_DEFAULT_WIDTH,
+    height: WINDOW_DEFAULT_HEIGHT,
+    minWidth: WINDOW_MIN_WIDTH,
+    minHeight: WINDOW_MIN_HEIGHT,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -207,7 +215,7 @@ app.whenReady().then(() => {
 
       // Wait for response (with timeout)
       // Summarization needs longer timeout since it calls LLM (network delays, large conversations)
-      const timeoutMs = command === "summarize" ? 30000 : 5000;
+      const timeoutMs = command === "summarize" ? SUMMARIZE_COMMAND_TIMEOUT : SESSION_COMMAND_TIMEOUT;
       return new Promise((resolve) => {
         const timeout = setTimeout(() => {
           logger.warn("Session command timed out", { command });

@@ -7,7 +7,8 @@ import DOMPurify from "dompurify";
 import hljs from "highlight.js";
 import katex from "katex";
 // Import from npm packages (bundled by Vite)
-import { marked } from "marked";
+import { Marked, marked } from "marked";
+import markedFootnote from "marked-footnote";
 import mermaid from "mermaid";
 
 /**
@@ -148,28 +149,65 @@ renderer.code = (token) => {
   return `<pre><code class="hljs">${escapeHtml(code)}</code></pre>`;
 };
 
-// Configure marked with renderer and extensions
+// Configure marked with renderer and extensions (without footnotes for streaming safety)
 marked.use({
   renderer,
   gfm: true, // GitHub Flavored Markdown
   breaks: true, // Convert line breaks to <br>
   headerIds: true, // Generate header IDs
   mangle: false, // Don't escape email addresses
+  pedantic: false, // Don't use strict markdown rules
+  silent: true, // Don't throw on parse errors
 });
+
+// Create separate marked instance with footnotes for complete content
+// Use the Marked constructor (imported as named export)
+const markedWithFootnotes = new Marked({
+  renderer,
+  gfm: true,
+  breaks: true,
+  headerIds: true,
+  mangle: false,
+  pedantic: false,
+  silent: true,
+});
+
+// Add footnote support to the complete-content parser
+try {
+  markedWithFootnotes.use(markedFootnote());
+} catch (err) {
+  console.warn("[MARKDOWN] Footnote extension failed to load:", err.message);
+}
 
 /**
  * Render markdown to safe HTML with all extensions
  * @param {string} markdown - Raw markdown text
+ * @param {boolean} isComplete - Whether this is complete content (not streaming fragment)
  * @returns {string} Sanitized HTML
  */
-export function renderMarkdown(markdown) {
+export function renderMarkdown(markdown, isComplete = false) {
   if (!markdown) return "";
 
   // Process LaTeX math expressions before markdown parsing
-  // Convert $$...$$ (display math) and $...$ (inline math)
+  // Support both $ and \( \) / \[ \] syntax
   let processed = markdown;
 
-  // Process display math ($$...$$) - must come before inline math
+  // Process display math - support both \[ \] and $$...$$
+  // \[ ... \] format (must come first to avoid conflicts)
+  processed = processed.replace(/\\\[([\s\S]+?)\\\]/g, (_match, math) => {
+    try {
+      return katex.renderToString(math, {
+        displayMode: true,
+        throwOnError: false,
+        output: "html",
+      });
+    } catch (err) {
+      console.error("[MATH ERROR] Display math error:", err.message);
+      return `<span class="math-error">${err.message}</span>`;
+    }
+  });
+
+  // $$...$$ format
   processed = processed.replace(/\$\$([\s\S]+?)\$\$/g, (_match, math) => {
     try {
       return katex.renderToString(math, {
@@ -178,11 +216,27 @@ export function renderMarkdown(markdown) {
         output: "html",
       });
     } catch (err) {
+      console.error("[MATH ERROR] Display math error:", err.message);
       return `<span class="math-error">${err.message}</span>`;
     }
   });
 
-  // Process inline math ($...$)
+  // Process inline math - support both \( \) and $...$
+  // \( ... \) format (must come first to avoid conflicts)
+  processed = processed.replace(/\\\(([\s\S]+?)\\\)/g, (_match, math) => {
+    try {
+      return katex.renderToString(math, {
+        displayMode: false,
+        throwOnError: false,
+        output: "html",
+      });
+    } catch (err) {
+      console.error("[MATH ERROR] Inline math error:", err.message);
+      return `<span class="math-error">${err.message}</span>`;
+    }
+  });
+
+  // $...$ format
   processed = processed.replace(/\$([^$\n]+?)\$/g, (_match, math) => {
     try {
       return katex.renderToString(math, {
@@ -191,12 +245,27 @@ export function renderMarkdown(markdown) {
         output: "html",
       });
     } catch (err) {
+      console.error("[MATH ERROR] Inline math error:", err.message);
       return `<span class="math-error">${err.message}</span>`;
     }
   });
 
-  // Parse markdown to HTML
-  const rawHtml = marked.parse(processed);
+  // Parse markdown to HTML with error handling for streaming fragments
+  // Use footnote-enabled parser only for complete content to avoid tokenizer errors
+  let rawHtml;
+  try {
+    if (isComplete) {
+      // Complete content: use parser with footnote support
+      rawHtml = markedWithFootnotes.parse(processed);
+    } else {
+      // Streaming fragment: use basic parser without footnotes
+      rawHtml = marked.parse(processed);
+    }
+  } catch (err) {
+    // During streaming, fragments may be incomplete - return plain text wrapped in <p>
+    console.warn("[MARKDOWN] Parse error (likely streaming fragment):", err.message);
+    return DOMPurify.sanitize(`<p>${escapeHtml(markdown)}</p>`);
+  }
 
   // Sanitize to prevent XSS attacks (expanded allowlist for extensions)
   const cleanHtml = DOMPurify.sanitize(rawHtml, {
@@ -228,6 +297,23 @@ export function renderMarkdown(markdown) {
       "hr",
       "del",
       "ins",
+      // Footnote elements
+      "sup",
+      "sub",
+      "section",
+      // Images
+      "img",
+      // Task lists
+      "input",
+      // Extended markdown elements
+      "dl",
+      "dt",
+      "dd",
+      "abbr",
+      "kbd",
+      "mark",
+      "details",
+      "summary",
       // KaTeX elements
       "span",
       "div",
@@ -276,6 +362,22 @@ export function renderMarkdown(markdown) {
       "class",
       "id",
       "style",
+      // Image attributes
+      "src",
+      "alt",
+      "title",
+      "loading",
+      "decoding",
+      // Input attributes (for task lists)
+      "type",
+      "checked",
+      "disabled",
+      // Table attributes
+      "align",
+      "colspan",
+      "rowspan",
+      // Details/summary attributes
+      "open",
       // KaTeX attributes
       "aria-hidden",
       "focusable",
@@ -372,6 +474,11 @@ export async function processMermaidDiagrams(element) {
     block: block,
   }));
 
+  console.log(
+    "[MERMAID DEBUG] Diagrams to render:",
+    diagramsToRender.map((d) => ({ id: d.id, codeLength: d.code.length }))
+  );
+
   // Render all diagrams concurrently
   const renderPromises = diagramsToRender.map(async ({ id, code, block }) => {
     try {
@@ -394,7 +501,7 @@ export async function processMermaidDiagrams(element) {
 
       return { block, wrapper };
     } catch (err) {
-      console.error(`Mermaid rendering error (${id}):`, err);
+      window.electronAPI.log("error", "Mermaid rendering error", { id, error: err.message });
       const errorDiv = document.createElement("div");
       errorDiv.className = "mermaid-error";
       errorDiv.textContent = `Mermaid Error: ${err.message}`;

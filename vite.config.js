@@ -1,7 +1,11 @@
 import { resolve } from "node:path";
+import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  // Plugins
+  plugins: [tailwindcss()],
+
   // Base public path for assets
   base: "./",
 
@@ -38,6 +42,6 @@ export default defineConfig({
 
   // Optimize dependencies
   optimizeDeps: {
-    include: ["marked", "dompurify", "highlight.js", "katex", "mermaid"],
+    include: ["marked", "marked-footnote", "dompurify", "highlight.js", "katex", "mermaid"],
   },
 });

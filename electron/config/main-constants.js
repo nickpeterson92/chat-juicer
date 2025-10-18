@@ -14,6 +14,14 @@ const HEALTH_CHECK_INTERVAL = 300000; // 5 minutes - interval for process health
 
 // IPC operation timeouts
 const FILE_UPLOAD_TIMEOUT = 10000; // 10 seconds - timeout for file upload operations
+const SESSION_COMMAND_TIMEOUT = 5000; // 5 seconds - default session command timeout
+const SUMMARIZE_COMMAND_TIMEOUT = 30000; // 30 seconds - LLM summarization needs longer timeout
+
+// Window configuration
+const WINDOW_DEFAULT_WIDTH = 1200; // Default window width
+const WINDOW_DEFAULT_HEIGHT = 800; // Default window height
+const WINDOW_MIN_WIDTH = 800; // Minimum window width
+const WINDOW_MIN_HEIGHT = 600; // Minimum window height
 
 // File system constants
 const HIDDEN_FILE_PREFIX = "."; // Prefix for hidden files/directories (Unix convention)
@@ -25,5 +33,11 @@ module.exports = {
   SIGTERM_DELAY,
   HEALTH_CHECK_INTERVAL,
   FILE_UPLOAD_TIMEOUT,
+  SESSION_COMMAND_TIMEOUT,
+  SUMMARIZE_COMMAND_TIMEOUT,
+  WINDOW_DEFAULT_WIDTH,
+  WINDOW_DEFAULT_HEIGHT,
+  WINDOW_MIN_WIDTH,
+  WINDOW_MIN_HEIGHT,
   HIDDEN_FILE_PREFIX,
 };

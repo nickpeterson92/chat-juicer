@@ -393,6 +393,10 @@ async def main() -> None:
 
                     logger.info(f"Processing file upload: {upload_data.get('filename')}")
 
+                    # Ensure session exists before file upload (handles welcome screen uploads)
+                    session = await ensure_session_exists(_app_state)
+                    logger.info(f"Session ensured for file upload: {session.session_id}")
+
                     # Process upload
                     result = save_uploaded_file(filename=upload_data["filename"], data=upload_data["data"])
 

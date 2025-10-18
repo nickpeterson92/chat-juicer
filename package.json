@@ -17,8 +17,11 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.3",
+    "@tailwindcss/typography": "^0.5.19",
+    "@tailwindcss/vite": "^4.1.14",
     "electron": "^38.1.2",
     "electron-vite": "^4.0.1",
+    "tailwindcss": "^4.1.14",
     "vite": "^7.1.10",
     "vite-plugin-electron": "^0.29.0",
     "vite-plugin-electron-renderer": "^0.14.6"
@@ -30,6 +33,7 @@
     "highlight.js": "^11.11.1",
     "katex": "^0.16.25",
     "marked": "^16.4.1",
+    "marked-footnote": "^1.4.0",
     "mermaid": "^11.12.0"
   }
 }

@@ -19,16 +19,37 @@ const messageCache = new Map();
  */
 export function addMessage(chatContainer, content, type = "assistant") {
   const messageDiv = document.createElement("div");
-  messageDiv.className = `message ${type}`;
+  // Base message styles + type-specific styles
+  const baseClasses = "message mb-6 animate-slideIn [contain:layout_style]";
+  const typeClasses = {
+    user: "user text-left",
+    assistant: "assistant",
+    system: "system",
+    error: "error",
+  };
+  messageDiv.className = `${baseClasses} ${typeClasses[type] || ""}`;
   const messageId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
   messageDiv.dataset.messageId = messageId;
 
   const contentDiv = document.createElement("div");
-  contentDiv.className = "message-content";
+  // Content styles based on message type
+  if (type === "user") {
+    contentDiv.className =
+      "inline-block py-3 px-4 rounded-2xl max-w-[70%] break-words whitespace-pre-wrap leading-snug min-h-6 bg-user-gradient text-white";
+  } else if (type === "assistant") {
+    contentDiv.className =
+      "message-content text-gray-800 dark:text-slate-100 max-w-full block py-4 px-0 leading-relaxed break-words whitespace-pre-wrap";
+  } else if (type === "system") {
+    contentDiv.className =
+      "inline-block py-3 px-4 rounded-2xl max-w-[70%] break-words whitespace-pre-wrap leading-snug min-h-6 bg-amber-50 text-amber-900 text-sm italic";
+  } else if (type === "error") {
+    contentDiv.className =
+      "inline-block py-3 px-4 rounded-2xl max-w-[70%] break-words whitespace-pre-wrap leading-snug min-h-6 bg-red-50 text-red-900";
+  }
 
   // Render markdown for assistant messages, plain text for others
   if (type === "assistant") {
-    contentDiv.innerHTML = renderMarkdown(content);
+    contentDiv.innerHTML = renderMarkdown(content, true); // isComplete = true for static messages
     // Process Mermaid diagrams asynchronously after DOM insertion
     setTimeout(() => {
       processMermaidDiagrams(contentDiv).catch((err) =>
@@ -99,12 +120,14 @@ export function updateAssistantMessage(chatContainer, currentAssistantElement, c
  */
 export function createStreamingAssistantMessage(chatContainer) {
   const messageDiv = document.createElement("div");
-  messageDiv.className = "message assistant streaming";
+  messageDiv.className = "message assistant mb-6 animate-slideIn [contain:layout_style] streaming";
+  messageDiv.dataset.streaming = "true";
   const messageId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
   messageDiv.dataset.messageId = messageId;
 
   const contentDiv = document.createElement("div");
-  contentDiv.className = "message-content";
+  contentDiv.className =
+    "message-content text-gray-800 dark:text-slate-100 max-w-full block py-4 px-0 leading-relaxed break-words whitespace-pre-wrap";
 
   // Add loading smoke animation initially (inline SVG with volumetric puffs)
   const loadingSpan = document.createElement("span");
@@ -152,12 +175,21 @@ export function createStreamingAssistantMessage(chatContainer) {
  * @param {HTMLElement} chatContainer - The chat container element
  */
 export function completeStreamingMessage(chatContainer) {
-  const streamingMsg = chatContainer.querySelector(".message.assistant.streaming");
+  const streamingMsg = chatContainer.querySelector("[data-streaming='true']");
   if (streamingMsg) {
     streamingMsg.classList.remove("streaming");
+    streamingMsg.removeAttribute("data-streaming");
+
+    // Remove streaming cursor
     const cursor = streamingMsg.querySelector(".streaming-cursor");
     if (cursor) {
       cursor.remove();
+    }
+
+    // Remove loading smoke animation
+    const loadingLamp = streamingMsg.querySelector(".loading-lamp");
+    if (loadingLamp) {
+      loadingLamp.remove();
     }
   }
 }

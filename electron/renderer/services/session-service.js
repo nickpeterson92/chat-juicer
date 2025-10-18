@@ -29,7 +29,9 @@ export async function loadSessions(api, onSuccess) {
     const response = await api.sessionCommand("list", {});
     if (response?.sessions) {
       sessionState.sessions = response.sessions;
-      sessionState.currentSessionId = response.current_session_id;
+      // Don't auto-select session on boot - let user choose
+      // sessionState.currentSessionId = response.current_session_id;
+      sessionState.currentSessionId = null;
       if (onSuccess) {
         onSuccess(sessionState);
       }
@@ -141,18 +143,30 @@ export async function switchSession(api, elements, appState, sessionId) {
 
           // Only show user and assistant messages with actual content
           if ((role === "user" || role === "assistant") && content && content.trim()) {
-            // Create message element directly instead of using addMessage
+            // Create message element with proper Tailwind styling (matching chat-ui.js)
             const messageDiv = document.createElement("div");
-            messageDiv.className = `message ${role}`;
+            const baseClasses = "message mb-6 animate-slideIn [contain:layout_style]";
+            const typeClasses = {
+              user: "user text-left",
+              assistant: "assistant",
+            };
+            messageDiv.className = `${baseClasses} ${typeClasses[role] || ""}`;
             const messageId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
             messageDiv.dataset.messageId = messageId;
 
             const contentDiv = document.createElement("div");
-            contentDiv.className = "message-content";
+            // Apply proper Tailwind classes based on message type (matching chat-ui.js)
+            if (role === "user") {
+              contentDiv.className =
+                "inline-block py-3 px-4 rounded-2xl max-w-[70%] break-words whitespace-pre-wrap leading-snug min-h-6 bg-user-gradient text-white";
+            } else if (role === "assistant") {
+              contentDiv.className =
+                "message-content text-gray-800 dark:text-slate-100 max-w-full block py-4 px-0 leading-relaxed break-words whitespace-pre-wrap";
+            }
 
             // Render markdown for assistant messages, plain text for user messages
             if (role === "assistant") {
-              contentDiv.innerHTML = renderMarkdown(content);
+              contentDiv.innerHTML = renderMarkdown(content, true); // isComplete = true for loaded sessions
             } else {
               contentDiv.textContent = content;
             }

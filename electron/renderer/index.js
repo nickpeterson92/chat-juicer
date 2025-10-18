@@ -727,6 +727,11 @@ async function handleCreateNewSession() {
   // Show welcome page (defers session creation until first message)
   showWelcomeView();
 
+  // Collapse sidebar to give welcome screen more space
+  if (elements.sidebar) {
+    elements.sidebar.classList.add("collapsed");
+  }
+
   // Clear chat for fresh start
   clearChat(elements.chatContainer);
   clearFunctionCards(elements.chatContainer);
@@ -741,8 +746,21 @@ async function handleSwitchSession(sessionId) {
     // Switch to chat view when loading existing session
     showChatView();
 
+    // Collapse sidebar to give chat more space
+    if (elements.sidebar) {
+      elements.sidebar.classList.add("collapsed");
+    }
+
     // Session list already updated by switchSession
     updateSessionsList();
+
+    // Scroll to bottom after sidebar collapse and all messages are rendered
+    // Wait for transition (300ms) + buffer for system message render
+    setTimeout(() => {
+      if (elements.chatContainer) {
+        elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight;
+      }
+    }, 400);
   }
 }
 
@@ -903,7 +921,10 @@ function initializeEventListeners() {
   }
 
   // File tabs switching
-  const filesTabs = document.querySelectorAll(".files-tab");
+  const sourcesTab = document.getElementById("tab-sources");
+  const outputTab = document.getElementById("tab-output");
+  const filesTabs = [sourcesTab, outputTab].filter(Boolean);
+
   for (const tab of filesTabs) {
     addManagedEventListener(tab, "click", () => {
       const directory = tab.dataset.directory;
@@ -925,20 +946,20 @@ function initializeEventListeners() {
     addManagedEventListener(elements.themeToggle, "click", toggleTheme);
   }
 
-  // Sidebar toggle (open from collapsed state)
+  // Sidebar toggle (unified toggle button)
   if (elements.sidebarToggle) {
     addManagedEventListener(elements.sidebarToggle, "click", () => {
       if (elements.sidebar) {
-        elements.sidebar.classList.remove("collapsed");
+        elements.sidebar.classList.toggle("collapsed");
       }
     });
   }
 
-  // Sidebar close (close from open state)
+  // Sidebar close button (also acts as toggle)
   if (elements.sidebarCloseBtn) {
     addManagedEventListener(elements.sidebarCloseBtn, "click", () => {
       if (elements.sidebar) {
-        elements.sidebar.classList.add("collapsed");
+        elements.sidebar.classList.toggle("collapsed");
       }
     });
   }
