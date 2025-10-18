@@ -9,21 +9,21 @@
 </head>
 <body class="view-welcome">
   <!-- Toast notifications container -->
-  <div id="toast-container" class="fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none"></div>
+  <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-2 pointer-events-none"></div>
 
-  <div class="bg-white dark:bg-slate-800 w-full h-screen flex flex-row overflow-hidden transition-all duration-300">
+  <div class="bg-white dark:bg-gray-800 w-full h-screen flex flex-row overflow-hidden transition-all duration-300">
     <!-- Sidebar -->
-    <div class="w-[260px] bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-600 flex flex-col transition-all duration-300 relative overflow-hidden [&.collapsed]:w-0 [&.collapsed]:ml-0 [&.collapsed]:border-r-0 collapsed" id="sidebar">
+    <div class="w-[260px] bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-600 flex flex-col transition-all duration-300 relative overflow-hidden [&.collapsed]:w-0 [&.collapsed]:ml-0 [&.collapsed]:border-r-0 collapsed" id="sidebar">
       <!-- Sidebar Header -->
-      <div class="flex items-center justify-between gap-3 p-4 border-b border-gray-200 dark:border-slate-600">
-        <span class="flex-1 text-base font-semibold text-gray-800 dark:text-slate-100 pl-1">Sessions</span>
-        <button class="bg-transparent border-none cursor-pointer p-2 rounded-md transition-colors hover:bg-gray-50 dark:hover:bg-slate-900 text-gray-800 dark:text-slate-100 text-base flex items-center justify-center opacity-70 hover:opacity-100" id="sidebar-close-btn" title="Toggle sidebar">
+      <div class="flex items-center justify-between gap-3 p-4 border-b border-gray-200 dark:border-gray-600">
+        <span class="flex-1 text-base font-semibold text-gray-800 dark:text-gray-100 pl-1">Sessions</span>
+        <button class="bg-transparent border-none cursor-pointer p-2 rounded-md transition-colors hover:bg-gray-50 dark:hover:bg-gray-900 text-gray-800 dark:text-gray-100 text-base flex items-center justify-center opacity-70 hover:opacity-100" id="sidebar-close-btn" title="Toggle sidebar">
           <span>✕</span>
         </button>
       </div>
 
       <!-- New Chat Button -->
-      <button class="mx-3 my-3 py-3 px-4 bg-transparent border border-gray-200 dark:border-slate-600 rounded-lg cursor-pointer text-sm font-medium text-gray-800 dark:text-slate-100 flex items-center gap-2 transition-all duration-200 hover:bg-gray-50 dark:hover:bg-slate-900 hover:border-blue-600 dark:hover:border-blue-600" id="new-session-btn" title="New conversation">
+      <button class="mx-3 my-3 py-3 px-4 bg-transparent border border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center gap-2 transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-900 hover:border-blue-600 dark:hover:border-blue-600" id="new-session-btn" title="New conversation">
         <span class="text-lg font-light">+</span>
         <span>New chat</span>
       </button>
@@ -34,16 +34,16 @@
       </div>
 
       <!-- Sidebar Footer (Settings) -->
-      <div class="border-t border-gray-200 dark:border-slate-600 p-2">
-        <button class="w-full py-2.5 px-3 bg-transparent border-none rounded-md cursor-pointer text-sm text-gray-800 dark:text-slate-100 flex items-center gap-2.5 transition-colors hover:bg-gray-50 dark:hover:bg-slate-900 text-left" id="theme-toggle" title="Toggle dark mode">
+      <div class="border-t border-gray-200 dark:border-gray-600 p-2">
+        <button class="w-full py-2.5 px-3 bg-transparent border-none rounded-md cursor-pointer text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2.5 transition-colors hover:bg-gray-50 dark:hover:bg-gray-900 text-left" id="theme-toggle" title="Toggle dark mode">
           <span class="text-base w-5 text-center" id="theme-icon">🌙</span>
           <span class="flex-1 text-sm" id="theme-text">Dark mode</span>
         </button>
-        <div class="w-full py-2.5 px-3 bg-transparent border-none rounded-md text-sm text-gray-800 dark:text-slate-100 flex items-center gap-2.5 text-left cursor-default">
+        <div class="w-full py-2.5 px-3 bg-transparent border-none rounded-md text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2.5 text-left cursor-default">
           <div class="w-2.5 h-2.5 rounded-full bg-emerald-500 dark:bg-emerald-500 animate-pulse" id="status-indicator"></div>
           <span class="flex-1 text-sm" id="status-text">Connected</span>
         </div>
-        <button class="w-full py-2.5 px-3 bg-transparent border-none rounded-md cursor-pointer text-sm text-gray-800 dark:text-slate-100 flex items-center gap-2.5 transition-colors hover:bg-gray-50 dark:hover:bg-slate-900 text-left" id="restart-btn" title="Restart bot">
+        <button class="w-full py-2.5 px-3 bg-transparent border-none rounded-md cursor-pointer text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2.5 transition-colors hover:bg-gray-50 dark:hover:bg-gray-900 text-left" id="restart-btn" title="Restart bot">
           <span class="text-base w-5 text-center">🔄</span>
           <span class="flex-1 text-sm">Restart</span>
         </button>
@@ -56,45 +56,42 @@
       <div id="welcome-page-container"></div>
 
       <!-- Minimal Header -->
-      <div class="bg-primary-gradient text-white py-5 px-5 flex items-center gap-3">
+      <div class="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 py-4 px-5 flex items-center justify-between">
         <!-- Sidebar Toggle (stays visible when collapsed) -->
         <div class="transition-all duration-300 flex items-center z-[200] relative [.sidebar:not(.collapsed)~.main-content_&]:opacity-0 [.sidebar:not(.collapsed)~.main-content_&]:pointer-events-none [.sidebar:not(.collapsed)~.main-content_&]:w-0 [.sidebar:not(.collapsed)~.main-content_&]:overflow-hidden [.sidebar.collapsed~.main-content_&]:opacity-100 [.sidebar.collapsed~.main-content_&]:pointer-events-auto [.sidebar.collapsed~.main-content_&]:w-auto [.sidebar.collapsed~.main-content_&]:mr-4" id="sidebar-toggle-wrapper">
-          <button class="bg-white/20 border border-white/30 cursor-pointer py-1.5 px-2.5 rounded-md transition-all duration-200 text-white text-lg flex items-center justify-center whitespace-nowrap hover:bg-white/30 hover:border-white/50 hover:scale-105" id="sidebar-toggle" title="Toggle sidebar">
+          <button class="bg-transparent border border-gray-300 dark:border-gray-600 cursor-pointer py-1.5 px-2.5 rounded-md transition-all duration-200 text-gray-700 dark:text-gray-300 text-lg flex items-center justify-center whitespace-nowrap hover:bg-gray-100 dark:hover:bg-gray-800" id="sidebar-toggle" title="Toggle sidebar">
             <span>☰</span>
           </button>
         </div>
-        <div class="flex items-center gap-3">
-          <img src="wishgate-logo.png" alt="Wishgate" class="h-8 w-8 rounded-lg">
-          <h1 class="text-2xl font-semibold m-0">Wishgate</h1>
-        </div>
+        <img src="wishgate-logo.png" alt="Wishgate" class="h-12 w-12 rounded-lg">
       </div>
 
       <!-- Content Wrapper (chat + tools side by side) -->
       <div class="flex flex-1 flex-row overflow-hidden relative items-stretch">
-        <div class="flex-1 flex flex-col min-w-[400px] border-r border-gray-200 dark:border-slate-600 chat-panel">
+        <div class="flex-1 flex flex-col min-w-[400px] border-r border-gray-200 dark:border-gray-600 chat-panel">
           <!-- File upload drop zone -->
-          <div class="absolute top-0 left-0 right-0 bottom-0 bg-blue-500/10 dark:bg-purple-500/20 border-[3px] border-dashed border-blue-500/60 dark:border-purple-500/70 hidden items-center justify-center z-[1000] pointer-events-none backdrop-blur-sm animate-fadeIn [&.active]:flex" id="file-drop-zone">
-            <div class="text-center text-xl text-blue-600 dark:text-purple-400 font-semibold pointer-events-none">
+          <div class="absolute top-0 left-0 right-0 bottom-0 bg-gray-100/50 dark:bg-gray-800/50 border-[3px] border-dashed border-gray-300 dark:border-gray-600 hidden items-center justify-center z-[1000] pointer-events-none backdrop-blur-sm animate-fadeIn [&.active]:flex" id="file-drop-zone">
+            <div class="text-center text-xl text-gray-700 dark:text-gray-300 font-semibold pointer-events-none">
               <span class="block text-6xl mb-4 animate-bounce">📁</span>
               <span class="block text-lg tracking-wide">Drop files here to upload to sources/</span>
             </div>
           </div>
 
           <!-- File upload progress bar -->
-          <div class="hidden absolute top-5 left-5 right-5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl p-4 z-[900] shadow-lg animate-slideIn [&.active]:block" id="file-upload-progress">
-            <div class="w-full h-2 bg-gray-50 dark:bg-slate-900 rounded overflow-hidden mb-2">
-              <div class="h-full bg-primary-gradient rounded transition-all duration-300 w-0" id="progress-bar-fill"></div>
+          <div class="hidden absolute top-5 left-5 right-5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl p-4 z-[900] shadow-lg animate-slideIn [&.active]:block" id="file-upload-progress">
+            <div class="w-full h-2 bg-gray-50 dark:bg-gray-900 rounded overflow-hidden mb-2">
+              <div class="h-full bg-gray-800 dark:bg-gray-300 rounded transition-all duration-300 w-0" id="progress-bar-fill"></div>
             </div>
             <div class="files-loading" id="progress-text">Uploading files...</div>
           </div>
 
-          <div class="flex-1 overflow-y-auto p-5 bg-gray-50 dark:bg-slate-900 custom-scrollbar [contain:strict]" id="chat-container">
+          <div class="flex-1 overflow-y-auto p-5 bg-gray-50 dark:bg-gray-900 custom-scrollbar [contain:strict]" id="chat-container">
           </div>
 
           <!-- AI Thinking Indicator -->
-          <div class="hidden p-3 px-5 my-3 mx-5 bg-gradient-to-br from-blue-600/10 to-blue-700/10 rounded-2xl border border-blue-600/30 animate-slideIn [&.active]:block" id="ai-thinking">
-            <div class="flex items-center gap-3 text-gray-800 dark:text-slate-100 text-sm font-medium">
-              <svg width="48" height="48" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" class="block opacity-80 drop-shadow-[0_2px_4px_rgba(0,102,204,0.3)]">
+          <div class="hidden p-3 px-5 my-3 mx-5 bg-gray-100 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 animate-slideIn [&.active]:block" id="ai-thinking">
+            <div class="flex items-center gap-3 text-gray-800 dark:text-gray-100 text-sm font-medium">
+              <svg width="48" height="48" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" class="block opacity-80">
                 <defs>
                   <filter id="smokeBlur">
                     <feGaussianBlur in="SourceGraphic" stdDeviation="2"/>
@@ -108,9 +105,9 @@
                   .puff-2 { animation: puff2 2.5s ease-out infinite; animation-delay: 0.8s; transform-origin: center; }
                   .puff-3 { animation: puff3 2.5s ease-out infinite; animation-delay: 1.6s; transform-origin: center; }
                 </style>
-                <ellipse class="puff-1" cx="32" cy="52" rx="8" ry="6" fill="#0066cc" filter="url(#smokeBlur)"/>
-                <ellipse class="puff-2" cx="30" cy="52" rx="8" ry="6" fill="#0066cc" filter="url(#smokeBlur)"/>
-                <ellipse class="puff-3" cx="34" cy="52" rx="8" ry="6" fill="#0066cc" filter="url(#smokeBlur)"/>
+                <ellipse class="puff-1" cx="32" cy="52" rx="8" ry="6" fill="#666666" filter="url(#smokeBlur)"/>
+                <ellipse class="puff-2" cx="30" cy="52" rx="8" ry="6" fill="#666666" filter="url(#smokeBlur)"/>
+                <ellipse class="puff-3" cx="34" cy="52" rx="8" ry="6" fill="#666666" filter="url(#smokeBlur)"/>
               </svg>
               <div class="opacity-80 animate-fade-text">AI is thinking...</div>
             </div>
@@ -125,32 +122,32 @@
             </div>
           </div>
 
-          <div class="p-5 bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-600 flex gap-2.5">
+          <div class="p-5 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-600 flex gap-2.5">
             <div class="flex-1 relative">
               <input
                 type="text"
                 id="user-input"
                 placeholder="Type your message here..."
                 autocomplete="off"
-                class="w-full py-3 px-4 border-2 border-gray-200 dark:border-slate-600 rounded-3xl text-base outline-none transition-colors bg-white dark:bg-slate-800 text-gray-800 dark:text-slate-100 focus:border-blue-600 dark:focus:border-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                class="w-full py-3 px-4 border-2 border-gray-200 dark:border-gray-600 rounded-3xl text-base outline-none transition-colors bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:border-gray-400 dark:focus:border-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
-            <button class="py-3 px-6 bg-primary-gradient text-white border-none rounded-3xl text-base font-semibold cursor-pointer transition-all duration-200 hover:transform hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(0,102,204,0.3)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none" id="send-btn">Send</button>
+            <button class="py-3 px-6 bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900 border-none rounded-3xl text-base font-semibold cursor-pointer transition-all duration-200 hover:bg-gray-700 dark:hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed" id="send-btn">Send</button>
           </div>
         </div>
 
         <!-- Files Panel (repurposed from tools panel) -->
-        <div class="w-[420px] flex-[0_0_auto] flex flex-col bg-gray-50 dark:bg-slate-800 relative self-stretch files-panel [&.collapsed]:-mr-[420px] [&.collapsed]:transition-[margin-right_0.15s_cubic-bezier(0.4,0,0.2,1)] [&:not(.collapsed)]:mr-0 [&:not(.collapsed)]:transition-[margin-right_0.15s_cubic-bezier(0.4,0,0.2,1)] [&.collapsed_.files-header]:opacity-0 [&.collapsed_.files-header]:invisible [&.collapsed_.files-container]:opacity-0 [&.collapsed_.files-container]:invisible collapsed" id="files-panel">
-          <div class="p-4 px-5 bg-primary-gradient text-white flex justify-between items-center h-14 border-b border-white/10">
+        <div class="w-[420px] flex-[0_0_auto] flex flex-col bg-gray-50 dark:bg-gray-900 relative self-stretch files-panel [&.collapsed]:-mr-[420px] [&.collapsed]:transition-[margin-right_0.15s_cubic-bezier(0.4,0,0.2,1)] [&:not(.collapsed)]:mr-0 [&:not(.collapsed)]:transition-[margin-right_0.15s_cubic-bezier(0.4,0,0.2,1)] [&.collapsed_.files-header]:opacity-0 [&.collapsed_.files-header]:invisible [&.collapsed_.files-container]:opacity-0 [&.collapsed_.files-container]:invisible collapsed" id="files-panel">
+          <div class="p-4 px-5 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center h-14">
             <div class="flex gap-2 flex-1">
-              <button class="bg-white/10 border border-white/20 rounded-lg py-1.5 px-3 text-white/80 text-[13px] font-medium cursor-pointer transition-all duration-200 flex items-center gap-1 whitespace-nowrap hover:bg-white/20 hover:border-white/40 hover:text-white [&.active]:bg-white/25 [&.active]:border-white/50 [&.active]:text-white [&.active]:font-semibold [&.active]:shadow-sm active" id="tab-sources" data-directory="sources">
+              <button class="bg-transparent border border-gray-200 dark:border-gray-600 rounded-lg py-1.5 px-3 text-gray-600 dark:text-gray-400 text-[13px] font-medium cursor-pointer transition-all duration-200 flex items-center gap-1 whitespace-nowrap hover:bg-gray-100 dark:hover:bg-gray-800 [&.active]:bg-gray-200 dark:[&.active]:bg-gray-700 [&.active]:border-gray-400 dark:[&.active]:border-gray-500 [&.active]:text-gray-900 dark:[&.active]:text-gray-100 [&.active]:font-semibold active" id="tab-sources" data-directory="sources">
                 📁 Sources
               </button>
-              <button class="bg-white/10 border border-white/20 rounded-lg py-1.5 px-3 text-white/80 text-[13px] font-medium cursor-pointer transition-all duration-200 flex items-center gap-1 whitespace-nowrap hover:bg-white/20 hover:border-white/40 hover:text-white [&.active]:bg-white/25 [&.active]:border-white/50 [&.active]:text-white [&.active]:font-semibold [&.active]:shadow-sm" id="tab-output" data-directory="output">
+              <button class="bg-transparent border border-gray-200 dark:border-gray-600 rounded-lg py-1.5 px-3 text-gray-600 dark:text-gray-400 text-[13px] font-medium cursor-pointer transition-all duration-200 flex items-center gap-1 whitespace-nowrap hover:bg-gray-100 dark:hover:bg-gray-800 [&.active]:bg-gray-200 dark:[&.active]:bg-gray-700 [&.active]:border-gray-400 dark:[&.active]:border-gray-500 [&.active]:text-gray-900 dark:[&.active]:text-gray-100 [&.active]:font-semibold" id="tab-output" data-directory="output">
                 📄 Output
               </button>
             </div>
-            <button class="bg-white/20 border-none cursor-pointer py-1.5 px-2 text-white text-sm rounded-md transition-all duration-200 flex items-center justify-center hover:bg-white/30 hover:scale-105" id="refresh-files-btn" title="Refresh file list">
+            <button class="bg-transparent border border-gray-200 dark:border-gray-600 cursor-pointer py-1.5 px-2 text-gray-600 dark:text-gray-400 text-sm rounded-md transition-all duration-200 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800" id="refresh-files-btn" title="Refresh file list">
               🔄
             </button>
           </div>
@@ -161,7 +158,7 @@
 
         <!-- Toggle button for files panel -->
         <div class="absolute right-[420px] top-1/2 -translate-y-1/2 z-[200] transition-[right_0.15s_cubic-bezier(0.4,0,0.2,1)] [&.panel-collapsed]:right-0 panel-collapsed" id="files-toggle-wrapper">
-          <button class="bg-primary-gradient border-none cursor-pointer py-2 px-1 text-white text-sm rounded-l-lg transition-all duration-300 w-8 h-12 flex items-center justify-center shadow-[-2px_0_8px_rgba(0,0,0,0.15)] font-[system-ui,-apple-system,sans-serif] hover:-translate-x-0.5 hover:shadow-[-4px_0_12px_rgba(0,102,204,0.3)]" id="toggle-files-btn" title="Toggle files panel">
+          <button class="bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-600 cursor-pointer py-2 px-1 text-gray-700 dark:text-gray-300 text-sm rounded-l-lg transition-all duration-200 w-8 h-12 flex items-center justify-center shadow-sm hover:bg-gray-200 dark:hover:bg-gray-700" id="toggle-files-btn" title="Toggle files panel">
             ▶
           </button>
         </div>
