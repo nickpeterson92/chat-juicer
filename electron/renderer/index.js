@@ -840,7 +840,10 @@ const handleSessionCreated = (e) => {
     title: e.detail.title,
   });
 
-  // Reload sessions list to show newly created session
+  // Update current session ID so it gets highlighted
+  sessionState.currentSessionId = e.detail.session_id;
+
+  // Reload sessions list to show newly created session with selection
   loadSessions(window.electronAPI, updateSessionsList);
 };
 

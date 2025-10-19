@@ -174,6 +174,12 @@ function attachWelcomePageListeners(elements, appState) {
     // Transition to chat view
     showChatView(elements, appState);
 
+    // Collapse sidebar to give chat more space (matches behavior when switching sessions)
+    if (elements.sidebar) {
+      elements.sidebar.classList.add("collapsed");
+      window.electronAPI.log("debug", "Sidebar collapsed after starting chat from welcome page");
+    }
+
     // Add user message to chat
     addMessage(elements.chatContainer, message, "user");
 

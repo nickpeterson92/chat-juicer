@@ -144,8 +144,8 @@ export async function loadSessions(api, onSuccess, offset = 0, limit = 50) {
       sessionState.totalSessions = response.total_count || response.sessions.length;
       sessionState.hasMoreSessions = response.has_more || false;
 
-      // Don't auto-select session on boot - let user choose
-      sessionState.currentSessionId = null;
+      // Don't reset currentSessionId if it's already set (e.g., from session-created event)
+      // This preserves the selection when reloading sessions list
 
       if (onSuccess) {
         onSuccess(sessionState);
