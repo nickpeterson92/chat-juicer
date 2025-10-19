@@ -62,6 +62,7 @@ import {
 } from "./services/session-service.js";
 import { addMessage, clearChat, clearMessageCache } from "./ui/chat-ui.js";
 import { clearFunctionCards } from "./ui/function-card-ui.js";
+import { cleanupTitlebar, initializeTitlebar } from "./ui/titlebar.js";
 import { getSuggestionPrompt, hideWelcomePage, showWelcomePage } from "./ui/welcome-page.js";
 import { clearParseCache } from "./utils/json-cache.js";
 // Module imports
@@ -79,6 +80,9 @@ initializeElements();
 // ====================
 
 const appState = new AppState();
+
+// Initialize custom titlebar (Windows/Linux only)
+let titlebarInstance = null;
 
 // ====================
 // Connection Status UI Handler
@@ -1184,6 +1188,9 @@ window.addEventListener("load", () => {
   setConnectionStatus(true);
   initializeTheme(elements);
 
+  // Initialize custom titlebar (Windows/Linux only, null on macOS)
+  titlebarInstance = initializeTitlebar();
+
   // Load sessions first, then handle file loading
   loadSessions(window.electronAPI, updateSessionsList).then(() => {
     // If there's an active session, load session files
@@ -1207,6 +1214,12 @@ window.addEventListener("load", () => {
 
 function cleanup() {
   window.electronAPI.log("info", "Cleaning up renderer resources");
+
+  // Cleanup titlebar if initialized
+  if (titlebarInstance) {
+    cleanupTitlebar(titlebarInstance);
+    titlebarInstance = null;
+  }
 
   // Clear timers
   appState.functions.activeTimers.forEach((timerId) => {

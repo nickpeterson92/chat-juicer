@@ -68,6 +68,26 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return await ipcRenderer.invoke("get-username");
   },
 
+  // Window controls (for custom titlebar on Windows/Linux)
+  windowMinimize: () => {
+    ipcRenderer.send("window-minimize");
+  },
+
+  windowMaximize: () => {
+    ipcRenderer.send("window-maximize");
+  },
+
+  windowClose: () => {
+    ipcRenderer.send("window-close");
+  },
+
+  windowIsMaximized: async () => {
+    return await ipcRenderer.invoke("window-is-maximized");
+  },
+
+  // Platform detection
+  platform: process.platform,
+
   // Cleanup methods to prevent memory leaks
   removeListener: (channel) => {
     ipcRenderer.removeAllListeners(channel);

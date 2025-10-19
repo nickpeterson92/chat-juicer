@@ -37,14 +37,17 @@ let isShuttingDown = false;
 let processHealthCheckInterval = null;
 
 function createWindow() {
-  mainWindow = new BrowserWindow({
+  // Platform detection for cross-platform borderless window support
+  const isMac = process.platform === "darwin";
+  const isWindows = process.platform === "win32";
+  const isLinux = process.platform === "linux";
+
+  // Build platform-specific window configuration
+  const windowConfig = {
     width: WINDOW_DEFAULT_WIDTH,
     height: WINDOW_DEFAULT_HEIGHT,
     minWidth: WINDOW_MIN_WIDTH,
     minHeight: WINDOW_MIN_HEIGHT,
-    // macOS-specific: Hide title bar but keep traffic light buttons
-    titleBarStyle: "hidden",
-    trafficLightPosition: { x: 10, y: 10 },
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -56,8 +59,21 @@ function createWindow() {
     // Hardware acceleration options
     disableHardwareAcceleration: false, // Set to true if issues persist
     transparent: false,
-    icon: path.join(__dirname, "icon.png"), // Optional, you can add an icon later
-  });
+    icon: path.join(__dirname, "icon.png"),
+  };
+
+  // Platform-specific title bar configuration
+  if (isMac) {
+    // macOS: Use native traffic light buttons with hidden title bar
+    windowConfig.titleBarStyle = "hidden";
+    windowConfig.trafficLightPosition = { x: 10, y: 10 };
+  } else if (isWindows || isLinux) {
+    // Windows/Linux: Use frameless window for custom titlebar
+    windowConfig.frame = false;
+    windowConfig.titleBarStyle = "hidden";
+  }
+
+  mainWindow = new BrowserWindow(windowConfig);
 
   // Load from Vite dev server in development, built files in production
   if (process.env.VITE_DEV_SERVER_URL) {
@@ -227,6 +243,37 @@ app.whenReady().then(() => {
     } else {
       rendererLogger[level](message);
     }
+  });
+
+  // IPC handlers for window controls (for custom titlebar on Windows/Linux)
+  ipcMain.on("window-minimize", () => {
+    if (mainWindow) {
+      mainWindow.minimize();
+      logger.debug("Window minimized via IPC");
+    }
+  });
+
+  ipcMain.on("window-maximize", () => {
+    if (mainWindow) {
+      if (mainWindow.isMaximized()) {
+        mainWindow.unmaximize();
+        logger.debug("Window unmaximized via IPC");
+      } else {
+        mainWindow.maximize();
+        logger.debug("Window maximized via IPC");
+      }
+    }
+  });
+
+  ipcMain.on("window-close", () => {
+    if (mainWindow) {
+      mainWindow.close();
+      logger.debug("Window close requested via IPC");
+    }
+  });
+
+  ipcMain.handle("window-is-maximized", () => {
+    return mainWindow ? mainWindow.isMaximized() : false;
   });
 
   // IPC handler for user input
