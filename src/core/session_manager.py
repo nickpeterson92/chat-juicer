@@ -80,7 +80,11 @@ class SessionManager:
             logger.error(f"Failed to save session metadata: {e}", exc_info=True)
 
     def create_session(self, title: str | None = None) -> SessionMetadata:
-        """Create a new session.
+        """Create a new session with secure directory structure.
+
+        Creates session workspace with:
+        - sources/ subdirectory for uploaded files
+        - templates/ symlink to global templates (read-only)
 
         Args:
             title: Initial title for the session (defaults to datetime format)
@@ -88,12 +92,49 @@ class SessionManager:
         Returns:
             Newly created session metadata
         """
+        import platform
+        import shutil
+
         # Generate datetime title if none provided
         if title is None:
             title = f"Conversation {datetime.now().strftime('%Y-%m-%d %I:%M %p')}"
 
         session_id = f"chat_{uuid.uuid4().hex[:SESSION_ID_LENGTH]}"
         session = SessionMetadata(session_id=session_id, title=title)
+
+        # Create secure session directory structure
+        session_dir = Path(f"data/files/{session_id}")
+        session_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create sources/ subdirectory for uploaded files
+        sources_dir = session_dir / "sources"
+        sources_dir.mkdir(exist_ok=True)
+        logger.info(f"Created sources directory: {sources_dir}")
+
+        # Create output/ subdirectory for generated documents
+        output_dir = session_dir / "output"
+        output_dir.mkdir(exist_ok=True)
+        logger.info(f"Created output directory: {output_dir}")
+
+        # Create templates/ symlink to global templates
+        templates_link = session_dir / "templates"
+        templates_target = Path("templates").resolve()
+
+        try:
+            if not templates_link.exists():
+                # Check platform for symlink support
+                if platform.system() == "Windows":
+                    # Windows fallback: copy templates instead of symlink
+                    # (requires admin privileges or Developer Mode for symlinks)
+                    shutil.copytree(templates_target, templates_link, dirs_exist_ok=True)
+                    logger.info(f"Created templates copy (Windows): {templates_link}")
+                else:
+                    # Unix-like systems: use symlink
+                    templates_link.symlink_to(templates_target, target_is_directory=True)
+                    logger.info(f"Created templates symlink: {templates_link} -> {templates_target}")
+        except Exception as e:
+            logger.warning(f"Failed to create templates link/copy: {e}")
+            # Non-fatal: session can still function without templates
 
         self.sessions[session_id] = session
         self.current_session_id = session_id
@@ -122,7 +163,7 @@ class SessionManager:
         return sorted(self.sessions.values(), key=lambda s: s.last_used, reverse=True)
 
     def delete_session(self, session_id: str) -> bool:
-        """Delete a session.
+        """Delete a session and its associated files.
 
         Args:
             session_id: Session to delete
@@ -134,15 +175,79 @@ class SessionManager:
             logger.warning(f"Attempted to delete non-existent session: {session_id}")
             return False
 
+        # Delete session metadata
         del self.sessions[session_id]
 
         # If deleting current session, clear it
         if self.current_session_id == session_id:
             self.current_session_id = None
 
+        # Delete session files directory
+        import shutil
+
+        from pathlib import Path
+
+        session_files_dir = Path(f"data/files/{session_id}")
+        if session_files_dir.exists():
+            try:
+                shutil.rmtree(session_files_dir)
+                logger.info(f"Deleted session files directory: {session_files_dir}")
+            except Exception as e:
+                logger.error(f"Failed to delete session files directory {session_files_dir}: {e}", exc_info=True)
+                # Continue with session deletion even if file cleanup fails
+
         self._save_metadata()
         logger.info(f"Deleted session: {session_id}")
         return True
+
+    def cleanup_empty_sessions(self, max_age_hours: int = 24) -> int:
+        """Delete sessions with no messages older than max_age_hours.
+
+        This prevents orphaned sessions from accumulating when users upload files
+        but never send a message.
+
+        Args:
+            max_age_hours: Maximum age in hours for empty sessions (default: 24)
+
+        Returns:
+            Number of sessions deleted
+        """
+        import shutil
+
+        from datetime import datetime
+        from pathlib import Path
+
+        cutoff_time = datetime.now().timestamp() - (max_age_hours * 3600)
+        deleted_count = 0
+
+        # Iterate over copy of sessions dict since we're modifying it
+        for session_id, session in list(self.sessions.items()):
+            # Skip sessions with messages
+            if session.message_count > 0:
+                continue
+
+            # Check if session is older than cutoff
+            # Parse ISO format timestamp to datetime for comparison
+            session_created = datetime.fromisoformat(session.created_at).timestamp()
+            if session_created < cutoff_time:
+                # Delete session files directory
+                session_files_dir = Path(f"data/files/{session_id}")
+                if session_files_dir.exists():
+                    try:
+                        shutil.rmtree(session_files_dir)
+                        logger.info(f"Cleaned up empty session files: {session_files_dir}")
+                    except Exception as e:
+                        logger.error(f"Failed to cleanup session files {session_files_dir}: {e}", exc_info=True)
+
+                # Delete session metadata (reuse delete_session method)
+                if self.delete_session(session_id):
+                    deleted_count += 1
+                    logger.info(f"Cleaned up empty session: {session_id}")
+
+        if deleted_count > 0:
+            logger.info(f"Cleanup complete: removed {deleted_count} empty sessions older than {max_age_hours}h")
+
+        return deleted_count
 
     def update_session(self, session_id: str, updates: SessionUpdate) -> bool:
         """Update session metadata using SessionUpdate dataclass.

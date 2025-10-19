@@ -93,11 +93,25 @@ async def switch_to_session(app_state: AppStateProtocol, session_id: str) -> dic
     if app_state.current_session:
         disconnect_session()
 
+    # Create session-specific agent with workspace-isolated tools
+    from core.agent import create_agent
+    from core.prompts import SYSTEM_INSTRUCTIONS
+    from tools.wrappers import create_session_aware_tools
+
+    # Create session-aware tools that inject session_id for workspace isolation
+    session_tools = create_session_aware_tools(session_id)
+    logger.info(f"Created {len(session_tools)} session-aware tools for session switch: {session_id}")
+
+    # Create session-specific agent with isolated tools (instructions are global, tools are session-specific)
+    mcp_servers: list[Any] = []  # MCP servers already running globally
+    session_agent = create_agent(app_state.deployment, SYSTEM_INSTRUCTIONS, session_tools, mcp_servers)
+    logger.info(f"Created session-specific agent with workspace isolation for switch: {session_id}")
+
     # Create new session object with persistent storage and full history (using Builder pattern)
     app_state.current_session = (
         SessionBuilder(session_id)
         .with_persistent_storage(CHAT_HISTORY_DB_PATH)
-        .with_agent(app_state.agent)
+        .with_agent(session_agent)
         .with_model(app_state.deployment)
         .with_threshold(CONVERSATION_SUMMARIZATION_THRESHOLD)
         .with_full_history(app_state.full_history_store)
@@ -405,7 +419,7 @@ async def rename_session(app_state: AppStateProtocol, session_id: str, title: st
     if not session_meta:
         return _session_error(ERROR_SESSION_NOT_FOUND.format(session_id=session_id))
 
-    # Update session with new title
+    # Update session with new title and mark as manually named
     updates = SessionUpdate(title=title)
     success = app_state.session_manager.update_session(session_id, updates)
 
@@ -413,8 +427,11 @@ async def rename_session(app_state: AppStateProtocol, session_id: str, title: st
         return _session_error("Failed to rename session")
 
     # Mark as manually named (prevent auto-naming from overwriting)
-    session_meta.is_named = True
-    app_state.session_manager._save_metadata()
+    # Using model property access after update for consistency
+    updated_session = app_state.session_manager.get_session(session_id)
+    if updated_session:
+        updated_session.is_named = True
+        app_state.session_manager._save_metadata()
 
     logger.info(f"Renamed session {session_id} to: {title}")
 

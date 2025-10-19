@@ -19,6 +19,7 @@ import { showToast } from "../utils/toast.js";
 
 /**
  * Track active directory tab
+ * For session-aware mode, this will be "data/files/{session_id}"
  */
 export let activeFilesDirectory = "sources";
 
@@ -28,6 +29,18 @@ export let activeFilesDirectory = "sources";
  */
 export function setActiveFilesDirectory(directory) {
   activeFilesDirectory = directory;
+}
+
+/**
+ * Load session-specific files
+ * @param {string} sessionId - Session ID to load files for
+ * @param {HTMLElement} container - Container element to render files into
+ */
+export async function loadSessionFiles(sessionId, container) {
+  if (!container || !sessionId) return;
+
+  const sessionDirectory = `data/files/${sessionId}/sources`;
+  await loadFiles(sessionDirectory, container);
 }
 
 /**

@@ -503,6 +503,12 @@ async function handleCreateNewSession() {
   clearChat(elements.chatContainer);
   clearFunctionCards(elements.chatContainer);
 
+  // Clear file panel (no session = no files to show)
+  setActiveFilesDirectory("sources");
+  if (elements.filesContainer) {
+    elements.filesContainer.innerHTML = '<div class="files-empty">No active session</div>';
+  }
+
   // Update sessions list
   await loadSessions(window.electronAPI, updateSessionsList);
 }
@@ -518,6 +524,11 @@ async function handleSwitchSession(sessionId) {
 
     // Session list already updated by switchSession
     updateSessionsList();
+
+    // Update files panel to show session files (sources/ subdirectory)
+    const sessionDirectory = `data/files/${sessionId}/sources`;
+    setActiveFilesDirectory(sessionDirectory);
+    loadFiles(sessionDirectory);
 
     // Scroll to bottom after sidebar collapse and all messages are rendered
     setTimeout(() => {
@@ -748,7 +759,7 @@ function initializeEventListeners() {
     });
   }
 
-  // Files panel toggle button (in main header) - true toggle
+  // Files panel toggle button (in header) - true toggle
   if (elements.openFilesBtn) {
     addManagedEventListener(elements.openFilesBtn, "click", () => {
       elements.filesPanel.classList.toggle("collapsed");
@@ -757,7 +768,16 @@ function initializeEventListeners() {
 
   // Refresh files button
   if (elements.refreshFilesBtn) {
-    addManagedEventListener(elements.refreshFilesBtn, "click", () => loadFiles(activeFilesDirectory));
+    addManagedEventListener(elements.refreshFilesBtn, "click", () => {
+      // Use session directory if available, otherwise use active directory
+      if (sessionState.currentSessionId) {
+        const sessionDirectory = `data/files/${sessionState.currentSessionId}/sources`;
+        setActiveFilesDirectory(sessionDirectory);
+        loadFiles(sessionDirectory);
+      } else {
+        loadFiles(activeFilesDirectory);
+      }
+    });
   }
 
   // File tabs switching
@@ -767,7 +787,16 @@ function initializeEventListeners() {
 
   for (const tab of filesTabs) {
     addManagedEventListener(tab, "click", () => {
-      const directory = tab.dataset.directory;
+      let directory = tab.dataset.directory;
+
+      // Use session-specific directories when session is active
+      if (sessionState.currentSessionId) {
+        if (directory === "sources") {
+          directory = `data/files/${sessionState.currentSessionId}/sources`;
+        } else if (directory === "output") {
+          directory = `data/files/${sessionState.currentSessionId}/output`;
+        }
+      }
 
       // Update active tab styling
       for (const t of filesTabs) {
@@ -789,15 +818,6 @@ function initializeEventListeners() {
   // Sidebar toggle (unified toggle button)
   if (elements.sidebarToggle) {
     addManagedEventListener(elements.sidebarToggle, "click", () => {
-      if (elements.sidebar) {
-        elements.sidebar.classList.toggle("collapsed");
-      }
-    });
-  }
-
-  // Sidebar close button (also acts as toggle)
-  if (elements.sidebarCloseBtn) {
-    addManagedEventListener(elements.sidebarCloseBtn, "click", () => {
       if (elements.sidebar) {
         elements.sidebar.classList.toggle("collapsed");
       }
@@ -896,20 +916,13 @@ if (elements.fileDropZone) {
 }
 
 /**
- * Handle file drop upload
- * @param {DragEvent} e - Drop event
+ * Core file upload logic shared by all upload handlers
+ * @param {File[]} files - Array of File objects to upload
+ * @returns {Promise<Array>} Upload results for each file
  */
-async function handleFileDrop(e) {
-  // Hide drop zone
-  if (elements.fileDropZone) {
-    elements.fileDropZone.classList.remove("active");
-  }
-
-  const files = Array.from(e.dataTransfer.files);
-
-  if (files.length === 0) {
-    showToast(MSG_NO_FILES_DROPPED, "error", 3000);
-    return;
+async function processFileUploads(files) {
+  if (!files || files.length === 0) {
+    return [];
   }
 
   // Show progress bar
@@ -1017,16 +1030,112 @@ async function handleFileDrop(e) {
     );
   }
 
-  // Refresh the files panel after upload (only if on sources tab)
-  if (activeFilesDirectory === "sources") {
+  return results;
+}
+
+/**
+ * Handle file drop upload
+ * @param {DragEvent} e - Drop event
+ */
+async function handleFileDrop(e) {
+  // Hide drop zone
+  if (elements.fileDropZone) {
+    elements.fileDropZone.classList.remove("active");
+  }
+
+  const files = Array.from(e.dataTransfer.files);
+
+  if (files.length === 0) {
+    showToast(MSG_NO_FILES_DROPPED, "error", 3000);
+    return;
+  }
+
+  // Process uploads using shared logic
+  await processFileUploads(files);
+
+  // Refresh the files panel after upload
+  // Use session directory if available
+  if (sessionState.currentSessionId) {
+    const sessionDirectory = `data/files/${sessionState.currentSessionId}/sources`;
+    setActiveFilesDirectory(sessionDirectory);
+    loadFiles(sessionDirectory);
+  } else if (activeFilesDirectory === "sources") {
     loadFiles("sources");
   }
 
   // Also refresh welcome page files container if on welcome page
   if (appState.ui.currentView === "welcome") {
     const welcomeFilesContainer = document.getElementById("welcome-files-container");
+    if (welcomeFilesContainer && sessionState.currentSessionId) {
+      const sessionDirectory = `data/files/${sessionState.currentSessionId}/sources`;
+      loadFiles(sessionDirectory, welcomeFilesContainer);
+    }
+  }
+}
+
+/**
+ * Handle file upload with session creation support (for welcome page button uploads)
+ * @param {File[]} files - Array of File objects to upload
+ * @param {boolean} fromWelcome - Whether upload is from welcome page
+ * @returns {Promise<void>}
+ */
+export async function handleFileUploadWithSession(files, fromWelcome = false) {
+  if (!files || files.length === 0) {
+    showToast(MSG_NO_FILE_SELECTED, "error", 3000);
+    return;
+  }
+
+  // Process uploads using shared logic
+  const results = await processFileUploads(files);
+
+  // Show file section and display uploaded files in welcome page if on welcome page
+  if (appState.ui.currentView === "welcome" || fromWelcome) {
+    // Show the file section since we now have a session with files
+    const welcomeFilesSection = document.getElementById("welcome-files-section");
+    if (welcomeFilesSection) {
+      welcomeFilesSection.style.display = "block";
+    }
+
+    const welcomeFilesContainer = document.getElementById("welcome-files-container");
     if (welcomeFilesContainer) {
-      loadFiles("sources", welcomeFilesContainer);
+      // Display the successfully uploaded files
+      const successfulUploads = results.filter((r) => r.result.success);
+
+      if (successfulUploads.length > 0) {
+        // Import utilities dynamically to avoid circular dependencies
+        const { formatFileSize, getFileIcon } = await import("./utils/file-utils.js");
+
+        // Clear empty state if present
+        const emptyState = welcomeFilesContainer.querySelector(".welcome-empty-state");
+        if (emptyState) {
+          emptyState.remove();
+        }
+
+        // Add file items for each uploaded file
+        for (const upload of successfulUploads) {
+          const fileItem = document.createElement("div");
+          fileItem.className = "welcome-file-item";
+
+          const fileIcon = document.createElement("span");
+          fileIcon.className = "file-icon";
+          fileIcon.innerHTML = getFileIcon(upload.file);
+
+          const fileName = document.createElement("span");
+          fileName.className = "file-name";
+          fileName.textContent = upload.file;
+          fileName.title = upload.file;
+
+          const fileSize = document.createElement("span");
+          fileSize.className = "file-size";
+          fileSize.textContent = formatFileSize(upload.result.size || 0);
+
+          fileItem.appendChild(fileIcon);
+          fileItem.appendChild(fileName);
+          fileItem.appendChild(fileSize);
+
+          welcomeFilesContainer.appendChild(fileItem);
+        }
+      }
     }
   }
 }
@@ -1036,7 +1145,7 @@ async function handleFileDrop(e) {
  * @param {DragEvent} e - Drop event
  * @param {boolean} fromWelcome - Whether upload is from welcome page
  */
-async function handleFileDropWithSession(e, fromWelcome = false) {
+export async function handleFileDropWithSession(e, fromWelcome = false) {
   // Note: fromWelcome parameter kept for backwards compatibility but no longer
   // triggers auto-session creation. Session will be created on first user message.
 
@@ -1076,8 +1185,18 @@ window.addEventListener("load", () => {
 
   setConnectionStatus(true);
   initializeTheme(elements);
-  loadSessions(window.electronAPI, updateSessionsList);
-  loadFiles(activeFilesDirectory);
+
+  // Load sessions first, then handle file loading
+  loadSessions(window.electronAPI, updateSessionsList).then(() => {
+    // If there's an active session, load session files
+    if (sessionState.currentSessionId) {
+      const sessionDirectory = `data/files/${sessionState.currentSessionId}/sources`;
+      setActiveFilesDirectory(sessionDirectory);
+      loadFiles(sessionDirectory);
+    } else {
+      loadFiles(activeFilesDirectory);
+    }
+  });
 
   // Show welcome page on startup
   showWelcomeView(elements, appState);

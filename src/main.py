@@ -148,11 +148,24 @@ async def ensure_session_exists(app_state: AppState) -> tuple[TokenAwareSQLiteSe
     session_meta = app_state.session_manager.create_session()
     logger.info(f"Created new session: {session_meta.session_id} - {session_meta.title}")
 
+    # Create session-specific agent with workspace-isolated tools
+    from tools.wrappers import create_session_aware_tools
+
+    # Create session-aware tools that inject session_id for workspace isolation
+    session_tools = create_session_aware_tools(session_meta.session_id)
+    logger.info(f"Created {len(session_tools)} session-aware tools for session: {session_meta.session_id}")
+
+    # MCP servers are already initialized in app_state, reuse them
+    # Create new agent with isolated tools (instructions are global, tools are session-specific)
+    mcp_servers: list[Any] = []  # MCP servers already running, agent will use them via default client
+    session_agent = create_agent(app_state.deployment, SYSTEM_INSTRUCTIONS, session_tools, mcp_servers)
+    logger.info(f"Created session-specific agent with workspace isolation for: {session_meta.session_id}")
+
     # Create token-aware session with persistent storage and full history
     app_state.current_session = TokenAwareSQLiteSession(
         session_id=session_meta.session_id,
         db_path=CHAT_HISTORY_DB_PATH,
-        agent=app_state.agent,
+        agent=session_agent,
         model=app_state.deployment,
         threshold=CONVERSATION_SUMMARIZATION_THRESHOLD,
         full_history_store=app_state.full_history_store,
@@ -366,6 +379,11 @@ async def main() -> None:
     _app_state.session_manager = SessionManager(metadata_path=DEFAULT_SESSION_METADATA_PATH)
     logger.info("Session manager initialized")
 
+    # Cleanup empty sessions on startup (prevent orphaned sessions from file uploads)
+    deleted_count = _app_state.session_manager.cleanup_empty_sessions(max_age_hours=24)
+    if deleted_count > 0:
+        logger.info(f"Startup cleanup: removed {deleted_count} empty sessions")
+
     # LAZY INITIALIZATION: No session created on startup
     # Session will be created on first user message or when switching to existing session
     _app_state.current_session = None
@@ -407,10 +425,24 @@ async def main() -> None:
 
                     logger.info(f"Processing file upload: {upload_data.get('filename')}")
 
-                    # Process upload
-                    result = save_uploaded_file(filename=upload_data["filename"], data=upload_data["data"])
+                    # Ensure session exists (create if needed)
+                    session, is_new = await ensure_session_exists(_app_state)
+                    session_id = _app_state.session_manager.current_session_id if _app_state.session_manager else None
 
-                    # Send response back to Electron
+                    # Process upload with session_id
+                    result = save_uploaded_file(
+                        filename=upload_data["filename"], data=upload_data["data"], session_id=session_id
+                    )
+
+                    # If this is a new session, send session info to frontend
+                    if is_new and session_id:
+                        session_meta = _app_state.session_manager.get_session(session_id)
+                        if session_meta:
+                            session_info = {"type": "session_created", "session": session_meta.model_dump()}
+                            IPCManager.send(session_info)
+                            logger.info(f"New session created for upload: {session_id}")
+
+                    # Send upload response back to Electron
                     response_msg = {"type": "upload_response", "data": result}
                     IPCManager.send(response_msg)
                     logger.info(f"Upload response sent: {result.get('success')}")

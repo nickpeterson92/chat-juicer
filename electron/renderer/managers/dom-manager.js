@@ -25,7 +25,6 @@ export function initializeElements() {
   elements.filesPanel = document.getElementById("files-panel");
   elements.filesContainer = document.getElementById("files-container");
   elements.openFilesBtn = document.getElementById("open-files-btn");
-  elements.filesPanelToggleWrapper = document.getElementById("files-panel-toggle-wrapper");
   elements.refreshFilesBtn = document.getElementById("refresh-files-btn");
   elements.themeToggle = document.getElementById("theme-toggle");
   elements.themeIcon = document.getElementById("theme-icon");
@@ -34,7 +33,6 @@ export function initializeElements() {
   elements.newSessionBtn = document.getElementById("new-session-btn");
   elements.sidebar = document.getElementById("sidebar");
   elements.sidebarToggle = document.getElementById("sidebar-toggle");
-  elements.sidebarCloseBtn = document.getElementById("sidebar-close-btn");
   elements.fileDropZone = document.getElementById("file-drop-zone");
   elements.chatPanel = document.querySelector(".chat-panel");
   elements.uploadProgress = document.getElementById("file-upload-progress");

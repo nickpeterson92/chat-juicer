@@ -54,13 +54,13 @@ export function createWelcomePage(userName = "User") {
           </button>
         </div>
 
-        <div class="welcome-files-section">
+        <div class="welcome-files-section" id="welcome-files-section" style="display: none;">
           <div class="welcome-files-header">
             <span class="welcome-files-title flex items-center gap-1.5">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
               </svg>
-              Source Files
+              Session Files
             </span>
             <button id="welcome-files-refresh" class="welcome-files-refresh-btn" title="Refresh files">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -70,7 +70,13 @@ export function createWelcomePage(userName = "User") {
             </button>
           </div>
           <div id="welcome-files-container" class="welcome-files-list">
-            <!-- Files will be loaded here -->
+            <div class="welcome-empty-state">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="opacity-30 mb-3">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              </svg>
+              <p class="text-sm text-gray-500 dark:text-gray-400">Drag and drop files here</p>
+              <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Files will be uploaded to this session</p>
+            </div>
           </div>
         </div>
 

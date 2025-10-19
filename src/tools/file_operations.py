@@ -15,20 +15,24 @@ from utils.logger import logger
 from utils.token_utils import count_tokens
 
 
-def list_directory(path: str = ".", show_hidden: bool = False) -> str:
+def list_directory(path: str = ".", session_id: str | None = None, show_hidden: bool = False) -> str:
     """
     List contents of a directory for project discovery.
 
+    Security: When session_id is provided, path is restricted to session workspace.
+    Agent works with relative paths (sources/, templates/, output/) - tool handles full resolution.
+
     Args:
-        path: Directory path to list (relative or absolute)
+        path: Directory path to list (relative to session workspace if session_id provided)
+        session_id: Session ID for workspace isolation (enforces chroot jail)
         show_hidden: Whether to include hidden files/folders
 
     Returns:
         JSON string with directory contents and metadata
     """
     try:
-        # Validate directory path
-        target_path, error = validate_directory_path(path, check_exists=True)
+        # Validate directory path (with session sandbox if session_id provided)
+        target_path, error = validate_directory_path(path, check_exists=True, session_id=session_id)
         if error:
             return DirectoryListResponse(success=False, path=path, items=[], error=error).to_json()  # type: ignore[no-any-return]
 
@@ -71,20 +75,24 @@ def list_directory(path: str = ".", show_hidden: bool = False) -> str:
         ).to_json()
 
 
-async def read_file(file_path: str) -> str:
+async def read_file(file_path: str, session_id: str | None = None) -> str:
     """
     Read a file's contents for documentation processing.
     Automatically converts non-markdown formats to markdown for token efficiency.
     Protected with 100MB size limit.
 
+    Security: When session_id is provided, path is restricted to session workspace.
+    Agent works with relative paths (sources/, templates/, output/) - tool handles full resolution.
+
     Args:
-        file_path: Path to the file to read
+        file_path: Path to the file to read (relative to session workspace if session_id provided)
+        session_id: Session ID for workspace isolation (enforces chroot jail)
 
     Returns:
         JSON string with file contents and metadata
     """
-    # Validate path with size check (100MB limit)
-    target_file, error = validate_file_path(file_path, check_exists=True, max_size=MAX_FILE_SIZE)
+    # Validate path with size check (100MB limit) and session sandbox if session_id provided
+    target_file, error = validate_file_path(file_path, check_exists=True, max_size=MAX_FILE_SIZE, session_id=session_id)
     if error:
         return FileReadResponse(success=False, file_path=file_path, error=error).to_json()  # type: ignore[no-any-return]
 

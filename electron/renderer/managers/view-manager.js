@@ -140,24 +140,22 @@ function attachWelcomePageListeners(elements, appState) {
     welcomePageListeners.push({ element: welcomeContainer, event: "drop", handler: dropHandler });
   }
 
-  // Load files into welcome page container
-  const welcomeFilesContainer = document.getElementById("welcome-files-container");
-  if (welcomeFilesContainer) {
-    // Dynamic import to avoid circular dependency
-    import("./file-manager.js").then(({ loadFiles }) => {
-      loadFiles("sources", welcomeFilesContainer);
-    });
-  }
-
   // Handle welcome files refresh button
   const welcomeFilesRefreshBtn = document.getElementById("welcome-files-refresh");
   if (welcomeFilesRefreshBtn) {
-    const refreshHandler = () => {
-      const container = document.getElementById("welcome-files-container");
-      if (container) {
-        import("./file-manager.js").then(({ loadFiles }) => {
-          loadFiles("sources", container);
-        });
+    const refreshHandler = async () => {
+      // Get current session ID to load session files
+      const { sessionState } = await import("../services/session-service.js");
+      const sessionId = sessionState.currentSessionId;
+
+      if (sessionId) {
+        // Load session-specific files
+        const container = document.getElementById("welcome-files-container");
+        if (container) {
+          import("./file-manager.js").then(({ loadSessionFiles }) => {
+            loadSessionFiles(sessionId, container);
+          });
+        }
       }
     };
     welcomeFilesRefreshBtn.addEventListener("click", refreshHandler);

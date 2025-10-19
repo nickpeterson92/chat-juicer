@@ -20,22 +20,26 @@ async def generate_document(
     content: str,
     output_file: str,
     create_backup: bool = False,
+    session_id: str | None = None,
 ) -> str:
     """
     Generate and save documentation to a file.
     Unified function that handles document generation output.
 
+    Security: When session_id is provided, path is restricted to session workspace.
+
     Args:
         content: The generated document content to save
-        output_file: Path where to save the document
+        output_file: Path where to save the document (relative to session workspace if session_id provided)
         create_backup: Whether to backup existing file if it exists
+        session_id: Session ID for workspace isolation (enforces chroot jail)
 
     Returns:
         JSON string with operation result and metadata
     """
     try:
-        # Validate path (don't check exists since we're creating)
-        output_path, error = validate_file_path(output_file, check_exists=False)
+        # Validate path (don't check exists since we're creating, use session sandbox if session_id provided)
+        output_path, error = validate_file_path(output_file, check_exists=False, session_id=session_id)
         if error:
             return DocumentGenerateResponse(success=False, output_file=output_file, error=error).to_json()  # type: ignore[no-any-return]
 

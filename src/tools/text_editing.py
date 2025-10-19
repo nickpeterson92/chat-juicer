@@ -17,16 +17,20 @@ async def text_edit(
     find: str,
     replace_with: str,
     replace_all: bool = False,
+    session_id: str | None = None,
 ) -> str:
     """
     Simple text find and replace in documents.
     Set replace_with to empty string to delete text.
 
+    Security: When session_id is provided, path is restricted to session workspace.
+
     Args:
-        file_path: Path to file to edit
+        file_path: Path to file to edit (relative to session workspace if session_id provided)
         find: Exact text to find
         replace_with: Text to replace with (empty string to delete)
         replace_all: Replace all occurrences (default: first only)
+        session_id: Session ID for workspace isolation (enforces chroot jail)
 
     Returns:
         JSON with success status and replacements made
@@ -59,7 +63,9 @@ async def text_edit(
             "text_found": find_text[:50] + "..." if len(find_text) > 50 else find_text,
         }
 
-    result = await file_operation(file_path, do_edit, find=find, replace_with=replace_with, replace_all=replace_all)
+    result = await file_operation(
+        file_path, do_edit, session_id=session_id, find=find, replace_with=replace_with, replace_all=replace_all
+    )
     return result  # type: ignore[no-any-return]
 
 
@@ -69,17 +75,21 @@ async def regex_edit(
     replacement: str,
     replace_all: bool = False,
     flags: str = "ms",
+    session_id: str | None = None,
 ) -> str:
     """
     Pattern-based editing using regular expressions.
     Supports capture groups and backreferences.
 
+    Security: When session_id is provided, path is restricted to session workspace.
+
     Args:
-        file_path: Path to file to edit
+        file_path: Path to file to edit (relative to session workspace if session_id provided)
         pattern: Regular expression pattern to match
         replacement: Replacement text (can use \1, \2 for capture groups)
         replace_all: Replace all matches (default: first only)
         flags: Regex flags - m=multiline, s=dotall, i=ignorecase (default: 'ms')
+        session_id: Session ID for workspace isolation (enforces chroot jail)
 
     Returns:
         JSON with success status and replacements made
@@ -121,7 +131,13 @@ async def regex_edit(
         return new_content, {"operation": operation, "pattern": pattern_str, "replacements": replacements}
 
     result = await file_operation(
-        file_path, do_regex_edit, pattern=pattern, replacement=replacement, replace_all=replace_all, flags=flags
+        file_path,
+        do_regex_edit,
+        session_id=session_id,
+        pattern=pattern,
+        replacement=replacement,
+        replace_all=replace_all,
+        flags=flags,
     )
     return result  # type: ignore[no-any-return]
 
@@ -131,15 +147,19 @@ async def insert_text(
     anchor: str,
     text: str,
     position: str = "after",
+    session_id: str | None = None,
 ) -> str:
     """
     Insert text before or after an anchor point in a document.
 
+    Security: When session_id is provided, path is restricted to session workspace.
+
     Args:
-        file_path: Path to file to edit
+        file_path: Path to file to edit (relative to session workspace if session_id provided)
         anchor: Text to find as the insertion point
         text: Text to insert
         position: Where to insert - 'before' or 'after' the anchor
+        session_id: Session ID for workspace isolation (enforces chroot jail)
 
     Returns:
         JSON with success status
@@ -174,5 +194,7 @@ async def insert_text(
             "text_length": len(insert_text),
         }
 
-    result = await file_operation(file_path, do_insert, anchor=anchor, text=text, position=position)
+    result = await file_operation(
+        file_path, do_insert, session_id=session_id, anchor=anchor, text=text, position=position
+    )
     return result  # type: ignore[no-any-return]

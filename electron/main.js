@@ -42,6 +42,9 @@ function createWindow() {
     height: WINDOW_DEFAULT_HEIGHT,
     minWidth: WINDOW_MIN_WIDTH,
     minHeight: WINDOW_MIN_HEIGHT,
+    // macOS-specific: Hide title bar but keep traffic light buttons
+    titleBarStyle: "hidden",
+    trafficLightPosition: { x: 10, y: 10 },
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,

@@ -253,20 +253,37 @@ function handleFunctionExecuted(message, context) {
 }
 
 /**
- * Handle session_created message (when backend creates session on first message)
+ * Handle session_created message
+ * Two cases:
+ * 1. From file upload: {type: "session_created", session: {...}} - Stay on welcome page
+ * 2. From first message: {type: "session_created", session_id: "...", title: "..."} - Transition to chat
  */
 function handleSessionCreated(message, context) {
   const { appState } = context;
 
+  // Distinguish between file upload (has session object) vs first message (has separate fields)
+  const isFromFileUpload = !!message.session;
+  const sessionId = message.session?.session_id || message.session_id;
+  const title = message.session?.title || message.title;
+
   window.electronAPI.log("info", "Session created", {
-    session_id: message.session_id,
-    title: message.title,
+    session_id: sessionId,
+    title: title,
+    from_file_upload: isFromFileUpload,
   });
 
-  // Transition from welcome view to chat view
-  if (appState.ui && appState.ui.currentView === "welcome") {
+  // Only transition to chat view if this is from first message, not file upload
+  if (!isFromFileUpload && appState.ui && appState.ui.currentView === "welcome") {
     appState.setState("ui.currentView", "chat");
-    window.electronAPI.log("debug", "Transitioned from welcome to chat view");
+    window.electronAPI.log("debug", "Transitioned from welcome to chat view (first message)");
+  } else if (isFromFileUpload) {
+    window.electronAPI.log("debug", "Session created from file upload - staying on welcome page");
+
+    // Show file section on welcome page now that we have a session
+    const welcomeFilesSection = document.getElementById("welcome-files-section");
+    if (welcomeFilesSection) {
+      welcomeFilesSection.style.display = "block";
+    }
   }
 
   // Trigger custom event to reload sessions list
@@ -274,8 +291,9 @@ function handleSessionCreated(message, context) {
   window.dispatchEvent(
     new CustomEvent("session-created", {
       detail: {
-        session_id: message.session_id,
-        title: message.title,
+        session_id: sessionId,
+        title: title,
+        from_file_upload: isFromFileUpload,
       },
     })
   );
