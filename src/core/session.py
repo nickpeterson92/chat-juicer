@@ -24,7 +24,6 @@ from core.constants import (
     MODEL_TOKEN_LIMITS,
     get_settings,
 )
-from core.prompts import CONVERSATION_SUMMARIZATION_PROMPT
 from core.session_manager import SessionManager
 from models.event_models import FunctionEventMessage
 from models.session_models import FullHistoryProtocol, SessionUpdate
@@ -705,7 +704,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
         """Generate summary text from conversation items using Agent/Runner.
 
         Uses the Responses API (via Agent/Runner) for consistency with the rest of the application.
-        The SDK automatically handles item formatting, reasoning items, and tool outputs.
+        Appends a user message with summarization instructions to the conversation items.
 
         Args:
             items: Conversation items to summarize (from session.get_items())
@@ -719,19 +718,31 @@ class TokenAwareSQLiteSession(SQLiteSession):
         settings = get_settings()
         deployment = settings.azure_openai_deployment
 
-        # Create a one-off summarization agent
-        # Note: Agent uses Responses API by default (same as main chat)
+        # Create a one-off summarization agent with generic instructions
         summary_agent = Agent(
             name="Summarizer",
             model=deployment,
-            instructions=CONVERSATION_SUMMARIZATION_PROMPT,
+            instructions="You are a helpful assistant that creates CONCISE but TECHNICALLY COMPLETE conversation summaries.",
         )
 
-        # Pass session items directly to Runner - SDK handles format automatically!
-        # No MessageNormalizer needed - items are already in TResponseInputItem format
+        # Append summarization request as final user message
+        # This provides explicit guidance on what to summarize and how
+        from core.prompts import CONVERSATION_SUMMARIZATION_REQUEST
+
+        summary_request = {
+            "role": "user",
+            "content": CONVERSATION_SUMMARIZATION_REQUEST,
+        }
+
+        # Cast to TResponseInputItem for type safety (runtime-compatible dict)
+        from typing import cast
+
+        messages_with_request = [*items, cast(TResponseInputItem, summary_request)]
+
+        # Pass items with summarization request to Runner
         result = await Runner.run(
             summary_agent,
-            input=items,  # Session items already compatible with Runner.run()
+            input=messages_with_request,
             session=None,  # No session for summarization (one-shot operation)
         )
 

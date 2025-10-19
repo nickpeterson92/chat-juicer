@@ -144,8 +144,9 @@ For complex problems, the Sequential Thinking tool helps:
 - If the user's complex problem is not solved accurately, they will be VERY UPSET!"""
 
 
-# Document Summarization Prompt (use .format(file_name=..., content=...) to inject values)
-DOCUMENT_SUMMARIZATION_PROMPT = """Create a **CONCISE** but **TECHNICALLY COMPLETE** summary of the following document: {file_name}.
+# Document Summarization Request (user message for appended request pattern)
+# Use .format(file_name=..., tokens=...) to inject metadata
+DOCUMENT_SUMMARIZATION_REQUEST = """Summarize the document above: {file_name}.
 
 ## PRIORITIZE:
 - Core technical concepts and architectural decisions
@@ -160,23 +161,18 @@ DOCUMENT_SUMMARIZATION_PROMPT = """Create a **CONCISE** but **TECHNICALLY COMPLE
 
 Keep the summary information-dense while preserving technical accuracy.
 
-**CRITICAL**: The summary MUST be less than {tokens} tokens or you will FAIL!
-
-## Document content:
-{content}"""
+**CRITICAL**: The summary MUST be less than {tokens} tokens or you will FAIL!"""
 
 
-# Conversation Summarization Prompt
-CONVERSATION_SUMMARIZATION_PROMPT = """You are a helpful assistant that summarizes conversations concisely.
-
-## Provide a summary that captures:
+# Conversation Summarization Prompt (user message for appended request pattern)
+CONVERSATION_SUMMARIZATION_REQUEST = """Summarize the conversation above. Provide a summary that captures:
 1. **Main user requests and goals**
 2. **Key tools/functions used** and their purposes (e.g., files read, documents generated)
 3. **Important findings or results** from tool usage
 4. **Current task state** and any pending next steps
 5. **Any errors or issues** encountered
 
-**The summary** should include **all** the details necessary for someone to understand EVERYTHING about the above criteria."""
+The summary should include all the details necessary for someone to understand EVERYTHING about the above criteria."""
 
 
 # Session Title Generation Prompt

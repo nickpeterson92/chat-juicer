@@ -13,7 +13,6 @@ if TYPE_CHECKING:
     from markitdown import MarkItDown
 
 from core.constants import DOCUMENT_SUMMARIZATION_THRESHOLD, get_settings
-from core.prompts import DOCUMENT_SUMMARIZATION_PROMPT
 from utils.logger import logger
 from utils.token_utils import count_tokens
 
@@ -40,26 +39,40 @@ async def summarize_content(content: str, file_name: str = "document", model: st
         Summarized content or original if summarization fails
     """
     try:
+        from typing import cast
+
+        from agents import TResponseInputItem
+
+        from core.prompts import DOCUMENT_SUMMARIZATION_REQUEST
+
         settings = get_settings()
         deployment = settings.azure_openai_deployment
 
-        # Create concise summarization prompt using template from prompts.py
-        prompt = DOCUMENT_SUMMARIZATION_PROMPT.format(
-            file_name=file_name, tokens=DOCUMENT_SUMMARIZATION_THRESHOLD, content=content
-        )
-
-        # Create a one-off document summarization agent
-        # Note: Agent uses Responses API by default
+        # Create a one-off document summarization agent with generic instructions
         summary_agent = Agent(
             name="DocumentSummarizer",
             model=deployment,
-            instructions="You are a helpful assistant that creates CONCISE document summaries.",
+            instructions="You are a helpful assistant that creates CONCISE but TECHNICALLY COMPLETE document summaries.",
         )
 
-        # Use Agent/Runner pattern for consistency with rest of application
+        # Pass document content as first user message
+        content_message = {"role": "user", "content": content}
+
+        # Append summarization request as second message
+        summary_request = {
+            "role": "user",
+            "content": DOCUMENT_SUMMARIZATION_REQUEST.format(
+                file_name=file_name, tokens=DOCUMENT_SUMMARIZATION_THRESHOLD
+            ),
+        }
+
+        # Cast to TResponseInputItem for type safety (runtime-compatible dict)
+        messages = [cast(TResponseInputItem, content_message), cast(TResponseInputItem, summary_request)]
+
+        # Use Agent/Runner pattern with appended message
         result = await Runner.run(
             summary_agent,
-            input=prompt,
+            input=messages,
             session=None,  # No session for document summarization (one-shot operation)
         )
 
@@ -69,7 +82,7 @@ async def summarize_content(content: str, file_name: str = "document", model: st
             logger.error(
                 f"Agent returned empty/null summary for {file_name} - "
                 f"deployment={deployment}, "
-                f"prompt_length={len(prompt)} chars"
+                f"content_length={len(content)} chars"
             )
             return content
 
@@ -85,10 +98,10 @@ async def summarize_content(content: str, file_name: str = "document", model: st
             f"({int((1 - summ_count / orig_count) * 100)}% reduction)"
         )
 
-        return str(summarized)
+        return summarized
 
     except Exception as e:
-        logger.error(f"Summarization failed: {e}", exc_info=True)
+        logger.error(f"Document summarization failed for {file_name}: {e}", exc_info=True)
         return content  # Return original on error
 
 
