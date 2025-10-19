@@ -163,11 +163,29 @@ function attachWelcomePageListeners(elements, appState) {
   }
 
   // Handle welcome input send
-  const sendWelcomeMessage = () => {
+  const sendWelcomeMessage = async () => {
     if (!welcomeInput) return;
 
     const message = welcomeInput.value.trim();
     if (!message || appState.connection.status !== "CONNECTED") return;
+
+    // Get MCP config from checkboxes
+    const { getMcpConfig } = await import("../ui/welcome-page.js");
+    const mcpConfig = getMcpConfig();
+
+    // Create new session with MCP config BEFORE sending message
+    const { createNewSession } = await import("../services/session-service.js");
+    const result = await createNewSession(window.electronAPI, elements, null, mcpConfig);
+
+    if (!result.success) {
+      window.electronAPI.log("error", "Failed to create session from welcome page", { error: result.error });
+      return;
+    }
+
+    window.electronAPI.log("info", "Session created with MCP config", {
+      session_id: result.data?.session_id,
+      mcp_config: mcpConfig,
+    });
 
     // Transition to chat view
     showChatView(elements, appState);
@@ -218,6 +236,7 @@ function attachWelcomePageListeners(elements, appState) {
       if (prompt && welcomeInput) {
         welcomeInput.value = prompt;
         welcomeInput.focus();
+        welcomeInput.dispatchEvent(new Event("input", { bubbles: true }));
 
         // Auto-resize textarea
         welcomeInput.style.height = "auto";

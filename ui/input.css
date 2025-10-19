@@ -765,11 +765,13 @@
 
   .welcome-input-section {
     width: 100%;
-    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
     background-color: var(--color-assistant-msg-bg);
     border: 1px solid var(--color-border-color);
     border-radius: 1.5rem;
-    padding: 1rem 4rem 1rem 1.5rem;
+    padding: 1.25rem 1.5rem;
     transition: all 150ms;
   }
 
@@ -783,9 +785,78 @@
     box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.2);
   }
 
+  .welcome-input-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-top: 0.5rem;
+  }
+
+  .mcp-toggle-buttons {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-shrink: 0;
+  }
+
+  .mcp-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 0.65rem;
+    background-color: rgba(15, 23, 42, 0.03);
+    color: rgba(55, 65, 81, 0.65);
+    cursor: pointer;
+    transition: all 180ms ease;
+    flex-shrink: 0;
+    box-shadow: inset 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+
+  [data-theme="dark"] .mcp-toggle-btn {
+    border-color: rgba(255, 255, 255, 0.1);
+    background-color: rgba(255, 255, 255, 0.03);
+    color: rgba(203, 213, 225, 0.7);
+  }
+
+  .mcp-toggle-btn:hover {
+    border-color: rgba(0, 0, 0, 0.18);
+    background-color: rgba(15, 23, 42, 0.07);
+    color: rgba(55, 65, 81, 0.82);
+  }
+
+  [data-theme="dark"] .mcp-toggle-btn:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    background-color: rgba(255, 255, 255, 0.07);
+    color: rgba(226, 232, 240, 0.85);
+  }
+
+  .mcp-toggle-btn.active {
+    border-color: rgba(59, 130, 246, 0.65);
+    background-color: rgba(59, 130, 246, 0.12);
+    color: #3b82f6;
+    box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.2);
+  }
+
+  [data-theme="dark"] .mcp-toggle-btn.active {
+    border-color: rgba(59, 130, 246, 0.7);
+    background-color: rgba(59, 130, 246, 0.18);
+    color: #60a5fa;
+    box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.35);
+  }
+
+  .mcp-toggle-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+
   .welcome-input {
     width: 100%;
-    min-height: 1.5rem;
+    min-height: 1.75rem;
     max-height: 200px;
     border: none;
     outline: none;
@@ -795,6 +866,7 @@
     line-height: 1.625;
     resize: none;
     overflow-y: auto;
+    padding: 0;
   }
 
   [data-theme="dark"] .welcome-input {
@@ -810,35 +882,58 @@
   }
 
   .welcome-send-btn {
-    position: absolute;
-    right: 0.75rem;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 2.5rem;
-    height: 2.5rem;
-    border: none;
-    border-radius: 9999px;
-    background-color: var(--color-input-focus);
-    color: white;
-    cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 150ms;
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: 9999px;
+    background-color: rgba(59, 130, 246, 0.18);
+    color: rgba(255, 255, 255, 0.75);
+    cursor: not-allowed;
+    transition: all 150ms ease;
+    box-shadow: inset 0 0 0 0 rgba(59, 130, 246, 0.4);
   }
 
-  .welcome-send-btn:hover {
-    background-color: #2563eb;
-    transform: translateY(-50%) scale(1.05);
+  [data-theme="dark"] .welcome-send-btn {
+    background-color: rgba(59, 130, 246, 0.2);
+    color: rgba(219, 234, 254, 0.8);
   }
 
-  .welcome-send-btn:active {
-    transform: translateY(-50%) scale(0.95);
+  .welcome-send-btn.ready {
+    cursor: pointer;
+    background-color: var(--color-input-focus);
+    color: white;
+    box-shadow: 0 10px 20px -12px rgba(37, 99, 235, 0.7);
+  }
+
+  [data-theme="dark"] .welcome-send-btn.ready {
+    background-color: #3b82f6;
+    color: white;
+    box-shadow: 0 10px 24px -14px rgba(96, 165, 250, 0.8);
+  }
+
+  .welcome-send-btn.ready:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 26px -16px rgba(37, 99, 235, 0.9);
+  }
+
+  [data-theme="dark"] .welcome-send-btn.ready:hover {
+    box-shadow: 0 12px 28px -18px rgba(96, 165, 250, 0.9);
+  }
+
+  .welcome-send-btn.ready:active {
+    transform: translateY(0);
+    box-shadow: 0 6px 18px -12px rgba(37, 99, 235, 0.75);
+  }
+
+  [data-theme="dark"] .welcome-send-btn.ready:active {
+    box-shadow: 0 8px 20px -14px rgba(59, 130, 246, 0.85);
   }
 
   .welcome-send-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+    opacity: 1;
   }
 
   .suggestion-pills {

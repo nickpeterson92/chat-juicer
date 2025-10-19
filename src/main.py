@@ -44,7 +44,7 @@ from core.session import TokenAwareSQLiteSession
 from core.session_commands import handle_session_command
 from core.session_manager import SessionManager
 from integrations.event_handlers import CallTracker, build_event_handlers
-from integrations.mcp_servers import setup_mcp_servers
+from integrations.mcp_registry import initialize_all_mcp_servers
 from integrations.sdk_token_tracker import connect_session, disconnect_session, patch_sdk_for_auto_tracking
 from models.event_models import UserInput
 from models.sdk_models import StreamEvent
@@ -68,7 +68,7 @@ class AppState:
     agent: Agent | None = None
     deployment: str = ""
     full_history_store: FullHistoryStore | None = None
-    mcp_servers: list[Any] = field(default_factory=list)
+    mcp_servers: dict[str, Any] = field(default_factory=dict)
 
 
 # Module-level application state instance
@@ -156,9 +156,13 @@ async def ensure_session_exists(app_state: AppState) -> tuple[TokenAwareSQLiteSe
     session_tools = create_session_aware_tools(session_meta.session_id)
     logger.info(f"Created {len(session_tools)} session-aware tools for session: {session_meta.session_id}")
 
-    # Use MCP servers from app_state (passed to each session-specific agent)
+    # Use MCP servers from app_state, filtered by session's mcp_config
     # Create new agent with isolated tools (instructions are global, tools are session-specific)
-    session_agent = create_agent(app_state.deployment, SYSTEM_INSTRUCTIONS, session_tools, app_state.mcp_servers)
+    from integrations.mcp_registry import filter_mcp_servers
+
+    session_mcp_servers = filter_mcp_servers(app_state.mcp_servers, session_meta.mcp_config)
+    session_agent = create_agent(app_state.deployment, SYSTEM_INSTRUCTIONS, session_tools, session_mcp_servers)
+    logger.info(f"Session agent created with {len(session_mcp_servers)} MCP servers: {session_meta.mcp_config}")
     logger.info(f"Created session-specific agent with workspace isolation for: {session_meta.session_id}")
 
     # Create token-aware session with persistent storage and full history
@@ -335,11 +339,12 @@ async def main() -> None:
     else:
         logger.warning("SDK-level token tracking not available, using manual tracking")
 
-    # Set up MCP servers
-    mcp_servers = await setup_mcp_servers()
+    # Set up MCP servers (initialize all available servers into a global pool)
+    mcp_servers_dict = await initialize_all_mcp_servers()
 
-    # Create agent with tools and MCP servers
-    agent = create_agent(deployment, SYSTEM_INSTRUCTIONS, AGENT_TOOLS, mcp_servers)
+    # Create initial agent with all MCP servers for global context
+    all_mcp_servers = list(mcp_servers_dict.values())
+    agent = create_agent(deployment, SYSTEM_INSTRUCTIONS, AGENT_TOOLS, all_mcp_servers)
 
     # Display connection info based on provider
     if settings.api_provider == "azure":
@@ -349,13 +354,14 @@ async def main() -> None:
         print("Connected to OpenAI")
         print(f"Using model: {deployment}")
 
-    if mcp_servers:
-        print("MCP Servers: Sequential Thinking enabled")
+    if mcp_servers_dict:
+        server_names = ", ".join(mcp_servers_dict.keys())
+        print(f"MCP Servers: {server_names}")
 
     # Initialize application state for session management
     _app_state.agent = agent
     _app_state.deployment = deployment
-    _app_state.mcp_servers = mcp_servers
+    _app_state.mcp_servers = mcp_servers_dict
 
     # Initialize full history store for layered persistence
     _app_state.full_history_store = FullHistoryStore(db_path=CHAT_HISTORY_DB_PATH)
@@ -538,7 +544,7 @@ async def main() -> None:
     disconnect_session()
 
     # Clean up MCP servers
-    for server in mcp_servers:
+    for server in mcp_servers_dict.values():
         try:
             # Use asyncio.wait_for with a timeout to prevent hanging
             await asyncio.wait_for(server.__aexit__(None, None, None), timeout=2.0)

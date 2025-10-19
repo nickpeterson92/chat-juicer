@@ -88,6 +88,10 @@ class SessionMetadata(BaseModel):
     last_used: str = Field(default_factory=lambda: datetime.now().isoformat())
     message_count: int = Field(default=0, ge=0, description="Non-negative message count")
     accumulated_tool_tokens: int = Field(default=0, ge=0, description="Accumulated tool tokens for this session")
+    mcp_config: list[str] = Field(
+        default_factory=lambda: ["sequential", "fetch"],
+        description="List of enabled MCP server names (sequential, fetch)",
+    )
 
     @field_validator("session_id")
     @classmethod
@@ -156,6 +160,7 @@ class CreateSessionCommand(BaseModel):
 
     command: Literal["new"] = "new"
     title: str | None = Field(default=None, max_length=200)
+    mcp_config: list[str] | None = Field(default=None, description="List of enabled MCP servers (None = use defaults)")
 
     def to_json(self) -> str:
         """Convert to JSON for IPC."""

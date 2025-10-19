@@ -183,11 +183,16 @@ export async function loadMoreSessions(api, onSuccess) {
  * @param {Object} api - Electron API
  * @param {Object} elements - DOM elements
  * @param {string} title - Optional session title
+ * @param {string[]} mcpConfig - Optional MCP server configuration
  * @returns {Promise<Object>} Result with success/error
  */
-export async function createNewSession(api, elements, title = null) {
+export async function createNewSession(api, elements, title = null, mcpConfig = null) {
   try {
-    const response = await api.sessionCommand("new", title ? { title } : {});
+    const data = {};
+    if (title) data.title = title;
+    if (mcpConfig) data.mcp_config = mcpConfig;
+
+    const response = await api.sessionCommand("new", data);
 
     if (response?.session_id) {
       // Clear chat for new session

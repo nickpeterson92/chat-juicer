@@ -79,7 +79,7 @@ class SessionManager:
         except Exception as e:
             logger.error(f"Failed to save session metadata: {e}", exc_info=True)
 
-    def create_session(self, title: str | None = None) -> SessionMetadata:
+    def create_session(self, title: str | None = None, mcp_config: list[str] | None = None) -> SessionMetadata:
         """Create a new session with secure directory structure.
 
         Creates session workspace with:
@@ -88,6 +88,7 @@ class SessionManager:
 
         Args:
             title: Initial title for the session (defaults to datetime format)
+            mcp_config: List of enabled MCP server names (None = use defaults)
 
         Returns:
             Newly created session metadata
@@ -100,7 +101,12 @@ class SessionManager:
             title = f"Conversation {datetime.now().strftime('%Y-%m-%d %I:%M %p')}"
 
         session_id = f"chat_{uuid.uuid4().hex[:SESSION_ID_LENGTH]}"
-        session = SessionMetadata(session_id=session_id, title=title)
+
+        # Create session metadata with mcp_config (defaults handled by SessionMetadata)
+        if mcp_config is not None:
+            session = SessionMetadata(session_id=session_id, title=title, mcp_config=mcp_config)
+        else:
+            session = SessionMetadata(session_id=session_id, title=title)
 
         # Create secure session directory structure
         session_dir = Path(f"data/files/{session_id}")

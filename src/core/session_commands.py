@@ -49,12 +49,15 @@ def _session_error(message: str) -> dict[str, str]:
     return {"error": message}
 
 
-async def create_new_session(app_state: AppStateProtocol, title: str | None = None) -> dict[str, Any]:
+async def create_new_session(
+    app_state: AppStateProtocol, title: str | None = None, mcp_config: list[str] | None = None
+) -> dict[str, Any]:
     """Create a new session and switch to it.
 
     Args:
         app_state: Application state containing session manager
         title: Title for the new session (defaults to datetime format)
+        mcp_config: List of enabled MCP server names (None = use defaults)
 
     Returns:
         Session metadata dictionary
@@ -63,7 +66,7 @@ async def create_new_session(app_state: AppStateProtocol, title: str | None = No
         return _session_error(ERROR_SESSION_MANAGER_NOT_INITIALIZED)
 
     # Create new session metadata (title defaults to datetime in create_session)
-    session_meta = app_state.session_manager.create_session(title)
+    session_meta = app_state.session_manager.create_session(title, mcp_config)
 
     # Switch to the new session
     await switch_to_session(app_state, session_meta.session_id)
@@ -103,8 +106,12 @@ async def switch_to_session(app_state: AppStateProtocol, session_id: str) -> dic
     logger.info(f"Created {len(session_tools)} session-aware tools for session switch: {session_id}")
 
     # Create session-specific agent with isolated tools (instructions are global, tools are session-specific)
-    # Use MCP servers from app_state (passed to each session-specific agent)
-    session_agent = create_agent(app_state.deployment, SYSTEM_INSTRUCTIONS, session_tools, app_state.mcp_servers)
+    # Use MCP servers from app_state, filtered by session's mcp_config
+    from integrations.mcp_registry import filter_mcp_servers
+
+    session_mcp_servers = filter_mcp_servers(app_state.mcp_servers, session_meta.mcp_config)
+    session_agent = create_agent(app_state.deployment, SYSTEM_INSTRUCTIONS, session_tools, session_mcp_servers)
+    logger.info(f"Session agent created with {len(session_mcp_servers)} MCP servers: {session_meta.mcp_config}")
     logger.info(f"Created session-specific agent with workspace isolation for switch: {session_id}")
 
     # Create new session object with persistent storage and full history (using Builder pattern)
@@ -459,7 +466,7 @@ async def handle_session_command(app_state: AppStateProtocol, command: str, data
 
     # Command dispatch registry mapping command types to handlers
     command_handlers: dict[type, Any] = {
-        CreateSessionCommand: lambda cmd: create_new_session(app_state, cmd.title),
+        CreateSessionCommand: lambda cmd: create_new_session(app_state, cmd.title, cmd.mcp_config),
         SwitchSessionCommand: lambda cmd: switch_to_session(app_state, cmd.session_id),
         ListSessionsCommand: lambda cmd: list_all_sessions(app_state, cmd.offset, cmd.limit),
         DeleteSessionCommand: lambda cmd: delete_session_by_id(app_state, cmd.session_id),

@@ -47,11 +47,27 @@ export function createWelcomePage(userName = "User") {
             placeholder="How can I help you today?"
             rows="1"
           ></textarea>
-          <button id="welcome-send-btn" class="welcome-send-btn" title="Send message">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M5 12h14M12 5l7 7-7 7"/>
-            </svg>
-          </button>
+          <div class="welcome-input-footer">
+            <div class="mcp-toggle-buttons">
+              <button class="mcp-toggle-btn active" data-mcp="sequential" title="Sequential Thinking">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"/>
+                </svg>
+              </button>
+              <button class="mcp-toggle-btn active" data-mcp="fetch" title="Web Fetch">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
+                </svg>
+              </button>
+            </div>
+            <button id="welcome-send-btn" class="welcome-send-btn" title="Send message">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div class="welcome-files-section" id="welcome-files-section" style="display: none;">
@@ -140,17 +156,47 @@ export function showWelcomePage(container, userName = "User") {
 
   container.innerHTML = createWelcomePage(userName);
 
-  // Auto-resize textarea
   const welcomeInput = document.getElementById("welcome-input");
+  const welcomeSendBtn = document.getElementById("welcome-send-btn");
+
+  const updateSendButtonState = () => {
+    if (!welcomeSendBtn) return;
+    const hasValue = welcomeInput ? welcomeInput.value.trim().length > 0 : false;
+    welcomeSendBtn.disabled = !hasValue;
+    welcomeSendBtn.classList.toggle("ready", hasValue);
+  };
+
   if (welcomeInput) {
     welcomeInput.addEventListener("input", () => {
       welcomeInput.style.height = "auto";
       welcomeInput.style.height = `${Math.min(welcomeInput.scrollHeight, 200)}px`;
+      updateSendButtonState();
     });
 
     // Focus input
     welcomeInput.focus();
   }
+
+  updateSendButtonState();
+
+  // Setup MCP toggle buttons
+  const mcpButtons = document.querySelectorAll(".mcp-toggle-btn");
+  mcpButtons.forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      btn.classList.toggle("active");
+    });
+  });
+}
+
+/**
+ * Get MCP configuration from toggle buttons
+ * @returns {string[]} Array of enabled MCP server keys
+ */
+export function getMcpConfig() {
+  const activeButtons = document.querySelectorAll(".mcp-toggle-btn.active");
+  return Array.from(activeButtons).map((btn) => btn.dataset.mcp);
 }
 
 /**
