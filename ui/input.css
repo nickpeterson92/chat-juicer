@@ -89,10 +89,18 @@
     top: 0;
     left: 0;
     right: 0;
-    height: 40px;
+    height: 32px;
     z-index: 10000;
     background: transparent;
     pointer-events: auto;
+  }
+
+  /* Make buttons clickable through the drag handle */
+  #sidebar-toggle,
+  #open-files-btn {
+    -webkit-app-region: no-drag;
+    position: relative;
+    z-index: 10001;
   }
 
   /* Gradient backgrounds */
