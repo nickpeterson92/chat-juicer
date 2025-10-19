@@ -6,6 +6,9 @@ export default defineConfig({
   // Plugins
   plugins: [tailwindcss()],
 
+  // Public directory for static assets
+  publicDir: "public",
+
   // Base public path for assets
   base: "./",
 

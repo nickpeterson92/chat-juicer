@@ -89,7 +89,6 @@ function initializeElements() {
   elements.sidebar = document.getElementById("sidebar");
   elements.sidebarToggle = document.getElementById("sidebar-toggle");
   elements.sidebarCloseBtn = document.getElementById("sidebar-close-btn");
-  elements.logoHomeBtn = document.getElementById("logo-home-btn");
   elements.fileDropZone = document.getElementById("file-drop-zone");
   elements.chatPanel = document.querySelector(".chat-panel");
   elements.uploadProgress = document.getElementById("file-upload-progress");
@@ -1203,35 +1202,6 @@ function initializeEventListeners() {
   if (elements.restartBtn) {
     addManagedEventListener(elements.restartBtn, "click", () => {
       window.electronAPI.restartBot();
-    });
-  }
-
-  // Logo home button
-  if (elements.logoHomeBtn) {
-    addManagedEventListener(elements.logoHomeBtn, "click", () => {
-      // Only navigate to welcome if not already there
-      if (appState.ui.currentView !== "welcome") {
-        showWelcomeView();
-
-        // Collapse sidebar when returning home
-        collapseSidebar();
-
-        // Collapse files panel for clean welcome view
-        if (elements.filesPanel && !elements.filesPanel.classList.contains("collapsed")) {
-          elements.filesPanel.classList.add("collapsed");
-          const wrapper = document.getElementById("files-toggle-wrapper");
-          const icon = document.getElementById("toggle-files-icon");
-          if (wrapper) {
-            wrapper.classList.add("panel-collapsed");
-          }
-          if (elements.toggleFilesBtn) {
-            elements.toggleFilesBtn.title = "Show source files";
-            if (icon) {
-              icon.style.transform = "rotate(0deg)"; // Point left when collapsed
-            }
-          }
-        }
-      }
     });
   }
 
