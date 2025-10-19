@@ -20,7 +20,7 @@ if sys.stdout.encoding != "utf-8":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8", errors="replace")
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from agents import Agent, set_default_openai_client, set_tracing_disabled
@@ -68,6 +68,7 @@ class AppState:
     agent: Agent | None = None
     deployment: str = ""
     full_history_store: FullHistoryStore | None = None
+    mcp_servers: list[Any] = field(default_factory=list)
 
 
 # Module-level application state instance
@@ -155,10 +156,9 @@ async def ensure_session_exists(app_state: AppState) -> tuple[TokenAwareSQLiteSe
     session_tools = create_session_aware_tools(session_meta.session_id)
     logger.info(f"Created {len(session_tools)} session-aware tools for session: {session_meta.session_id}")
 
-    # MCP servers are already initialized in app_state, reuse them
+    # Use MCP servers from app_state (passed to each session-specific agent)
     # Create new agent with isolated tools (instructions are global, tools are session-specific)
-    mcp_servers: list[Any] = []  # MCP servers already running, agent will use them via default client
-    session_agent = create_agent(app_state.deployment, SYSTEM_INSTRUCTIONS, session_tools, mcp_servers)
+    session_agent = create_agent(app_state.deployment, SYSTEM_INSTRUCTIONS, session_tools, app_state.mcp_servers)
     logger.info(f"Created session-specific agent with workspace isolation for: {session_meta.session_id}")
 
     # Create token-aware session with persistent storage and full history
@@ -355,6 +355,7 @@ async def main() -> None:
     # Initialize application state for session management
     _app_state.agent = agent
     _app_state.deployment = deployment
+    _app_state.mcp_servers = mcp_servers
 
     # Initialize full history store for layered persistence
     _app_state.full_history_store = FullHistoryStore(db_path=CHAT_HISTORY_DB_PATH)

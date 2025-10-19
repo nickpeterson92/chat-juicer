@@ -103,8 +103,8 @@ async def switch_to_session(app_state: AppStateProtocol, session_id: str) -> dic
     logger.info(f"Created {len(session_tools)} session-aware tools for session switch: {session_id}")
 
     # Create session-specific agent with isolated tools (instructions are global, tools are session-specific)
-    mcp_servers: list[Any] = []  # MCP servers already running globally
-    session_agent = create_agent(app_state.deployment, SYSTEM_INSTRUCTIONS, session_tools, mcp_servers)
+    # Use MCP servers from app_state (passed to each session-specific agent)
+    session_agent = create_agent(app_state.deployment, SYSTEM_INSTRUCTIONS, session_tools, app_state.mcp_servers)
     logger.info(f"Created session-specific agent with workspace isolation for switch: {session_id}")
 
     # Create new session object with persistent storage and full history (using Builder pattern)
