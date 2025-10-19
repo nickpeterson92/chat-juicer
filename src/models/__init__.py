@@ -71,12 +71,12 @@ Example:
 
         from models.api_models import DocumentGenerateResponse
 
-        async def generate_document(content: str, output_file: str) -> str:
+        async def generate_document(content: str, filename: str) -> str:
             try:
                 # ... generate document ...
                 return DocumentGenerateResponse(
                     success=True,
-                    output_file=output_file,
+                    output_file=f"output/{filename}",
                     size=byte_count,
                     message="Document saved"
                 ).to_json()

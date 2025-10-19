@@ -18,19 +18,20 @@ from utils.token_utils import count_tokens
 
 async def generate_document(
     content: str,
-    output_file: str,
+    filename: str,
     create_backup: bool = False,
     session_id: str | None = None,
 ) -> str:
     """
-    Generate and save documentation to a file.
-    Unified function that handles document generation output.
+    Generate and save documentation to a file in the output directory.
+    Automatically saves to 'output/' within the session workspace.
 
     Security: When session_id is provided, path is restricted to session workspace.
 
     Args:
         content: The generated document content to save
-        output_file: Path where to save the document (relative to session workspace if session_id provided)
+        filename: Filename and optional subdirectories within output/
+                 Examples: "report.md", "reports/quarterly.md", "drafts/working.md"
         create_backup: Whether to backup existing file if it exists
         session_id: Session ID for workspace isolation (enforces chroot jail)
 
@@ -38,6 +39,9 @@ async def generate_document(
         JSON string with operation result and metadata
     """
     try:
+        # Auto-prefix output/ to enforce output directory
+        output_file = f"output/{filename}"
+
         # Validate path (don't check exists since we're creating, use session sandbox if session_id provided)
         output_path, error = validate_file_path(output_file, check_exists=False, session_id=session_id)
         if error:

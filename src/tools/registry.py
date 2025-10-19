@@ -107,7 +107,7 @@ TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "name": "generate_document",
-        "description": "Save generated content to a file. Use this after creating or modifying document content. Creates the file if it doesn't exist, overwrites if it does.",
+        "description": "Save generated content to the output directory. Files are automatically saved to 'output/' within the current session. Use this after creating or modifying document content.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -115,16 +115,16 @@ TOOLS: list[dict[str, Any]] = [
                     "type": "string",
                     "description": "The complete document content to save. Can be markdown, plain text, or any text format.",
                 },
-                "output_file": {
+                "filename": {
                     "type": "string",
-                    "description": "Where to save the file. Examples: 'output/report.md', 'summary.txt', 'docs/guide.md'",
+                    "description": "Filename and optional subdirectories within output/. Examples: 'report.md', 'reports/quarterly.md', 'drafts/working.md'",
                 },
                 "create_backup": {
                     "type": "boolean",
-                    "description": "Create a backup (.bak) of existing file before overwriting - default is false",
+                    "description": "Create a backup (.backup) of existing file before overwriting - default is false",
                 },
             },
-            "required": ["content", "output_file"],
+            "required": ["content", "filename"],
         },
     },
     {

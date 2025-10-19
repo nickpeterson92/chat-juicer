@@ -158,22 +158,22 @@ def create_session_aware_tools(session_id: str) -> list[Any]:
     # Document Generation - Write tool with session_id injection
     async def wrapped_generate_document(
         content: str,
-        output_file: str,
+        filename: str,
         create_backup: bool = False,
     ) -> str:
-        """Save generated content to a file.
+        """Save generated content to the output directory.
 
         Args:
             content: Complete document content to save
-            output_file: Where to save the file (relative to session workspace)
-            create_backup: Create .bak backup of existing file (default: False)
+            filename: Filename and optional subdirectories within output/
+            create_backup: Create .backup backup of existing file (default: False)
 
         Returns:
             JSON with success status
         """
         return await generate_document(  # type: ignore[no-any-return]
             content=content,
-            output_file=output_file,
+            filename=filename,
             create_backup=create_backup,
             session_id=session_id,
         )

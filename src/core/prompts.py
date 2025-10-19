@@ -57,7 +57,14 @@ Consider checking for templates that might provide a helpful starting structure:
 3. Use **list_directory** to discover source files in `sources/`
 4. Read source files (in parallel when possible)
 5. Generate content following any template structure if applicable
-6. Use **generate_document** to save output to `output/` directory
+6. Use **generate_document** to save files - they are automatically saved to the output directory
+
+**Important**: When using generate_document:
+- Specify only the filename, like: "report.md" or "reports/quarterly.md"
+- Files are automatically saved to the output directory
+- You can organize with subdirectories: "reports/q1.md", "drafts/working.md"
+- Do NOT include "output/" prefix - it's added automatically
+- Do NOT store files in "sources/" - that's for uploaded input files only
 
 **Document Quality Guidelines:**
 - Maintain proper markdown structure (header hierarchy: # ## ### ####)

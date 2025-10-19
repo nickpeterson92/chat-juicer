@@ -773,13 +773,10 @@ function initializeEventListeners() {
   // Refresh files button
   if (elements.refreshFilesBtn) {
     addManagedEventListener(elements.refreshFilesBtn, "click", () => {
-      // Only refresh files if there's an active session
-      if (sessionState.currentSessionId) {
-        const sessionDirectory = `data/files/${sessionState.currentSessionId}/sources`;
-        setActiveFilesDirectory(sessionDirectory);
-        loadFiles(sessionDirectory);
+      // Refresh the currently active directory (respects active tab)
+      if (sessionState.currentSessionId && activeFilesDirectory) {
+        loadFiles(activeFilesDirectory);
       }
-      // No else needed - files only load when session is active
     });
   }
 

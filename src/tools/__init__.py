@@ -73,10 +73,10 @@ Example:
         # Read source file (auto-converts to markdown)
         content = await read_file(file_path="sources/report.pdf")
 
-        # Generate document
+        # Generate document (auto-saved to output/)
         output = await generate_document(
-            content="# My Document\\n\\nContent here",
-            output_file="output/doc.md",
+            content="# My Document\n\nContent here",
+            filename="doc.md",
             create_backup=True
         )
 
