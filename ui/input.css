@@ -82,6 +82,19 @@
 
 /* Custom component classes for complex patterns */
 @layer components {
+  /* Window drag handle for borderless macOS window */
+  .window-drag-handle {
+    -webkit-app-region: drag;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 40px;
+    z-index: 10000;
+    background: transparent;
+    pointer-events: auto;
+  }
+
   /* Gradient backgrounds */
   .bg-user-gradient {
     background: linear-gradient(135deg, #0066cc 0%, #0052a3 100%);
