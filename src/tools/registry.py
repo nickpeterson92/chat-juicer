@@ -9,8 +9,8 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from tools.document_generation import generate_document
-from tools.file_operations import list_directory, read_file
-from tools.text_editing import insert_text, regex_edit, text_edit
+from tools.file_operations import list_directory, read_file, search_files
+from tools.text_editing import edit_file
 
 # Agent/Runner tools - wrap functions with function_tool decorator
 # The concrete tool type comes from the external agents SDK; keep as Any at boundary
@@ -33,29 +33,26 @@ def initialize_tools() -> tuple[list[Any], dict[str, Callable[..., str] | Callab
         # Wrap existing functions as Agent tools
         list_directory_tool = function_tool(list_directory)
         read_file_tool = function_tool(read_file)
+        search_files_tool = function_tool(search_files)
         generate_document_tool = function_tool(generate_document)
-        text_edit_tool = function_tool(text_edit)
-        regex_edit_tool = function_tool(regex_edit)
-        insert_text_tool = function_tool(insert_text)
+        edit_file_tool = function_tool(edit_file)
 
         # List of tools for Agent
         agent_tools = [
             list_directory_tool,
             read_file_tool,
+            search_files_tool,
             generate_document_tool,
-            regex_edit_tool,
-            text_edit_tool,
-            insert_text_tool,
+            edit_file_tool,
         ]
 
         # Function registry for direct execution
         function_registry = {
             "list_directory": list_directory,
             "read_file": read_file,
+            "search_files": search_files,
             "generate_document": generate_document,
-            "text_edit": text_edit,
-            "regex_edit": regex_edit,
-            "insert_text": insert_text,
+            "edit_file": edit_file,
         }
 
         return agent_tools, function_registry
@@ -92,7 +89,7 @@ TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "name": "read_file",
-        "description": "Read any file to view its contents. Automatically converts PDFs, Word docs, Excel sheets, and other formats to text. Use this before editing or analyzing documents. Read multiple files in parallel for efficiency. Protected with 100MB size limit.",
+        "description": "Read any file to view its contents. Automatically converts PDFs, Word docs, Excel sheets, and other formats to text. Use this before editing or analyzing documents. Read multiple files in parallel for efficiency. Protected with 100MB size limit. Supports partial reads with head/tail for previewing large files.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -100,8 +97,43 @@ TOOLS: list[dict[str, Any]] = [
                     "type": "string",
                     "description": "Path to the file. Examples: 'document.txt', 'sources/report.pdf', 'data.xlsx'",
                 },
+                "head": {
+                    "type": "integer",
+                    "description": "Read only first N lines (raw text only, skips format conversion). Useful for previewing large files.",
+                },
+                "tail": {
+                    "type": "integer",
+                    "description": "Read only last N lines (raw text only, skips format conversion). Useful for checking file endings or logs.",
+                },
             },
             "required": ["file_path"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "search_files",
+        "description": "Search for files matching a glob pattern. Use to find files by name or extension across directory trees. Supports wildcards (* and ?) and recursive search. Returns up to 100 results by default.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "Glob pattern to match. Examples: '*.md' (all markdown), '**/*.py' (all Python files recursively), 'report_*.txt' (reports with any suffix)",
+                },
+                "base_path": {
+                    "type": "string",
+                    "description": "Directory to start search from. Default is current directory ('.'). Examples: 'sources/', 'output/', 'data/processed/'",
+                },
+                "recursive": {
+                    "type": "boolean",
+                    "description": "Search subdirectories recursively - default is true. Set to false for single-level search.",
+                },
+                "max_results": {
+                    "type": "integer",
+                    "description": "Maximum number of results to return - default is 100. Prevents resource exhaustion on large searches.",
+                },
+            },
+            "required": ["pattern"],
         },
     },
     {
@@ -129,88 +161,35 @@ TOOLS: list[dict[str, Any]] = [
     },
     {
         "type": "function",
-        "name": "text_edit",
-        "description": "Find and replace exact text in a document. Use for simple text changes like updating names, dates, or fixing typos. To delete text, set replace_with to empty string ''.",
+        "name": "edit_file",
+        "description": "Make line-based edits to a text file. Each edit replaces exact line sequences with new content. Returns a git-style diff showing the changes made. Supports batch operations and whitespace-flexible matching. For consistency with generate_document, paths are auto-prefixed with output/ unless they start with output/, sources/, templates/, or are absolute paths.",
         "parameters": {
             "type": "object",
             "properties": {
                 "file_path": {
                     "type": "string",
-                    "description": "Path to file to edit. Example: 'document.md', 'output/report.txt'",
+                    "description": "Path to file to edit. Auto-prepends output/ unless path starts with output/, sources/, templates/, or is absolute. Examples: 'report.md' → 'output/report.md', 'output/report.txt' (no prepend), 'sources/data.txt' (no prepend).",
                 },
-                "find": {
-                    "type": "string",
-                    "description": "Exact text to search for. Must match exactly including spaces and punctuation.",
-                },
-                "replace_with": {
-                    "type": "string",
-                    "description": "New text to replace with. Use empty string '' to delete the found text.",
-                },
-                "replace_all": {
-                    "type": "boolean",
-                    "description": "true = replace ALL occurrences, false = replace only FIRST occurrence (default: false)",
-                },
-            },
-            "required": ["file_path", "find", "replace_with"],
-        },
-    },
-    {
-        "type": "function",
-        "name": "regex_edit",
-        "description": "Advanced find/replace using regex patterns. Use for complex patterns like 'all dates', 'version numbers', or text with wildcards. Supports capture groups with \\1, \\2 in replacement.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "file_path": {
-                    "type": "string",
-                    "description": "Path to file to edit. Example: 'document.md', 'output/report.txt'",
-                },
-                "pattern": {
-                    "type": "string",
-                    "description": "Regex pattern. Examples: '\\d{4}-\\d{2}-\\d{2}' for dates, 'v\\d+\\.\\d+' for versions, 'Chapter \\d+:' for chapters",
-                },
-                "replacement": {
-                    "type": "string",
-                    "description": "Replacement text. Use \\1, \\2 for capture groups. Example: 'Version \\1.\\2' or empty string '' to delete matches",
-                },
-                "replace_all": {
-                    "type": "boolean",
-                    "description": "true = replace ALL matches, false = replace only FIRST match (default: false)",
-                },
-                "flags": {
-                    "type": "string",
-                    "description": "Regex flags as string: 'm' for multiline, 's' for dotall, 'i' for case-insensitive. Default 'ms'. Example: 'msi' for all three",
+                "edits": {
+                    "type": "array",
+                    "description": "Array of edit operations to apply sequentially. Each edit specifies oldText to find and newText to replace it with.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "oldText": {
+                                "type": "string",
+                                "description": "Exact text to search for and replace. Uses whitespace-flexible matching (tries exact first, then normalized).",
+                            },
+                            "newText": {
+                                "type": "string",
+                                "description": "New text to replace with. Use empty string '' to delete the oldText.",
+                            },
+                        },
+                        "required": ["oldText", "newText"],
+                    },
                 },
             },
-            "required": ["file_path", "pattern", "replacement"],
-        },
-    },
-    {
-        "type": "function",
-        "name": "insert_text",
-        "description": "Add new text at a specific location without replacing existing content. Use to insert new sections, paragraphs, or content before/after existing text.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "file_path": {
-                    "type": "string",
-                    "description": "Path to file to edit. Example: 'document.md', 'output/report.txt'",
-                },
-                "anchor": {
-                    "type": "string",
-                    "description": "Existing text to use as reference point. The new text will be inserted relative to this. Example: '## Introduction' or 'Chapter 1:'",
-                },
-                "text": {
-                    "type": "string",
-                    "description": "New text to insert. Can include newlines for multi-line content. Example: '\\n## New Section\\nContent here\\n'",
-                },
-                "position": {
-                    "type": "string",
-                    "description": "Where to insert relative to anchor: 'before' inserts BEFORE the anchor, 'after' inserts AFTER the anchor (default: 'after')",
-                    "enum": ["before", "after"],
-                },
-            },
-            "required": ["file_path", "anchor", "text"],
+            "required": ["file_path", "edits"],
         },
     },
 ]

@@ -13,11 +13,34 @@ from typing import Any, cast
 
 import aiofiles
 
+from core.constants import (
+    ERROR_NULL_BYTE_IN_PATH,
+    ERROR_PATH_OUTSIDE_PROJECT,
+    ERROR_PATH_OUTSIDE_WORKSPACE,
+    ERROR_PATH_TRAVERSAL,
+    ERROR_SYMLINK_ESCAPE,
+)
 from models.api_models import TextEditResponse
 from utils.json_utils import json_pretty
 
 
-def validate_session_path(file_path: str, session_id: str | None = None) -> tuple[Path, str | None]:
+def get_relative_path(path: Path) -> Path:
+    """Get path relative to current working directory.
+
+    Helper function to standardize relative path calculation across tools.
+    If path is within cwd, returns relative path. Otherwise returns original path.
+
+    Args:
+        path: Absolute path to convert to relative
+
+    Returns:
+        Path object, relative to cwd if possible, otherwise absolute
+    """
+    cwd = Path.cwd()
+    return path.relative_to(cwd) if cwd in path.parents else path
+
+
+def validate_session_path(file_path: str, session_id: str | None = None) -> tuple[Path, str | None]:  # noqa: PLR0911
     """
     Validate a path within session workspace boundaries.
 
@@ -45,9 +68,13 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
         If error_message is None, validation passed
     """
     try:
+        # Prevent null byte injection attacks
+        if "\0" in file_path:
+            return Path(), ERROR_NULL_BYTE_IN_PATH
+
         # Prevent path traversal attacks (.. components and absolute paths)
         if ".." in file_path or file_path.startswith("/"):
-            return Path(), "Access denied: Path traversal not allowed"
+            return Path(), ERROR_PATH_TRAVERSAL
 
         # If session_id provided, enforce workspace boundaries
         if session_id:
@@ -61,10 +88,25 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
             try:
                 target_path.relative_to(session_dir)
             except ValueError:
-                return Path(), "Access denied: Path outside session workspace"
+                return Path(), ERROR_PATH_OUTSIDE_WORKSPACE
 
             # NOW resolve symlinks for actual file operations
             resolved_path = target_path.resolve()
+
+            # Whitelist of allowed symlinks that can resolve outside session workspace
+            # These are legitimate symlinks created by the application
+            allowed_symlinks = {"templates", "output"}
+
+            # Get first component of file_path to check if it's an allowed symlink
+            first_component = Path(file_path).parts[0] if Path(file_path).parts else ""
+
+            # Security check: ensure resolved path is still within session workspace
+            # UNLESS it's one of our allowed symlinks (templates/, output/)
+            if first_component not in allowed_symlinks:
+                try:
+                    resolved_path.relative_to(session_dir)
+                except ValueError:
+                    return Path(), ERROR_SYMLINK_ESCAPE
 
             return resolved_path, None
         else:
@@ -74,7 +116,7 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
 
             # Security check: ensure path is within project scope
             if not (cwd in target_path.parents or target_path == cwd):
-                return target_path, "Access denied: Path outside project scope"
+                return target_path, ERROR_PATH_OUTSIDE_PROJECT
 
             return target_path, None
 

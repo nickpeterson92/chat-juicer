@@ -201,8 +201,26 @@ export async function createNewSession(api, elements, title = null, mcpConfig = 
         clearFunctionCards(elements.chatContainer);
       }
 
+      const sessionId = response.session_id;
+      const sessionTitle = response.title || title || "Untitled Conversation";
+
+      sessionState.currentSessionId = sessionId;
+
+      // Update files panel to point at the new session directory
+      // Notify listeners (e.g., sidebar) so they can refresh session lists
+      window.dispatchEvent(
+        new CustomEvent("session-created", {
+          detail: {
+            session_id: sessionId,
+            title: sessionTitle,
+            source: "client",
+            from_file_upload: false,
+          },
+        })
+      );
+
       showToast("New conversation started", "success", 2000);
-      window.electronAPI.log("info", "Created new session", { session_id: response.session_id });
+      window.electronAPI.log("info", "Created new session", { session_id: sessionId });
 
       return { success: true, data: response };
     }

@@ -7,12 +7,40 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from core.constants import CONVERTIBLE_EXTENSIONS, DOCUMENT_SUMMARIZATION_THRESHOLD, MAX_FILE_SIZE
+import aiofiles
+
+from core.constants import (
+    CONVERTIBLE_EXTENSIONS,
+    DEFAULT_SEARCH_MAX_RESULTS,
+    DOCUMENT_SUMMARIZATION_THRESHOLD,
+    MAX_FILE_SIZE,
+)
 from models.api_models import DirectoryListResponse, FileInfo, FileReadResponse
 from utils.document_processor import get_markitdown_converter, summarize_content
-from utils.file_utils import read_file_content, validate_directory_path, validate_file_path
+from utils.file_utils import get_relative_path, read_file_content, validate_directory_path, validate_file_path
 from utils.logger import logger
 from utils.token_utils import count_tokens
+
+
+def _create_file_info(file_path: Path) -> FileInfo:
+    """Create FileInfo model from Path object.
+
+    Helper function to standardize file metadata extraction across tools.
+
+    Args:
+        file_path: Path object to extract metadata from
+
+    Returns:
+        FileInfo model with standardized metadata
+    """
+    return FileInfo(
+        name=file_path.name,
+        type="folder" if file_path.is_dir() else "file",
+        size=file_path.stat().st_size if file_path.is_file() else 0,
+        modified=str(file_path.stat().st_mtime),
+        file_count=len(list(file_path.iterdir())) if file_path.is_dir() else None,
+        extension=file_path.suffix if file_path.is_file() else None,
+    )
 
 
 def list_directory(path: str = ".", session_id: str | None = None, show_hidden: bool = False) -> str:
@@ -43,14 +71,7 @@ def list_directory(path: str = ".", session_id: str | None = None, show_hidden: 
                 continue
 
             # Create FileInfo model for each item
-            file_info = FileInfo(
-                name=item.name,
-                type="folder" if item.is_dir() else "file",
-                size=item.stat().st_size if item.is_file() else 0,
-                modified=str(item.stat().st_mtime),
-                file_count=len(list(item.iterdir())) if item.is_dir() else None,
-                extension=item.suffix if item.is_file() else None,
-            )
+            file_info = _create_file_info(item)
             items.append(file_info)
 
         # Sort directories first, then files
@@ -75,7 +96,85 @@ def list_directory(path: str = ".", session_id: str | None = None, show_hidden: 
         ).to_json()
 
 
-async def read_file(file_path: str, session_id: str | None = None) -> str:
+async def search_files(
+    pattern: str,
+    base_path: str = ".",
+    session_id: str | None = None,
+    recursive: bool = True,
+    max_results: int = DEFAULT_SEARCH_MAX_RESULTS,
+) -> str:
+    """
+    Search for files matching a glob pattern.
+
+    Security: When session_id is provided, search restricted to session workspace.
+    Agent works with relative paths - tool handles full resolution.
+
+    Args:
+        pattern: Glob pattern (e.g., "*.md", "**/*.py", "report_*.txt")
+        base_path: Directory to start search (default: current directory)
+        session_id: Session ID for workspace isolation (enforces chroot jail)
+        recursive: Search subdirectories (default: True)
+        max_results: Maximum number of results to return (default: 100)
+
+    Returns:
+        JSON string with SearchFilesResponse containing matching files
+    """
+    from models.api_models import SearchFilesResponse
+
+    try:
+        # Validate base directory path
+        base_dir, error = validate_directory_path(base_path, check_exists=True, session_id=session_id)
+        if error:
+            return SearchFilesResponse(  # type: ignore[no-any-return]
+                success=False, pattern=pattern, base_path=base_path, items=[], count=0, error=error
+            ).to_json()
+
+        # Use rglob for recursive, glob for non-recursive
+        matches: list[FileInfo] = []
+        file_iter = base_dir.rglob(pattern) if recursive else base_dir.glob(pattern)
+
+        # Collect matches up to max_results
+        for file_path in file_iter:
+            if len(matches) >= max_results:
+                break
+
+            # Create FileInfo for each match
+            file_info = _create_file_info(file_path)
+            matches.append(file_info)
+
+        truncated = len(matches) >= max_results
+        count = len(matches)
+
+        # Log search operation
+        logger.info(
+            f"Searched '{pattern}' in {base_dir.name}: found {count} matches{' (truncated)' if truncated else ''}",
+            functions="search_files",
+        )
+
+        # Get relative path for response
+        relative_base = get_relative_path(base_dir)
+
+        return SearchFilesResponse(  # type: ignore[no-any-return]
+            success=True,
+            pattern=pattern,
+            base_path=str(relative_base),
+            items=matches,
+            count=count,
+            truncated=truncated,
+        ).to_json()
+
+    except Exception as e:
+        return SearchFilesResponse(  # type: ignore[no-any-return]
+            success=False, pattern=pattern, base_path=base_path, items=[], count=0, error=f"Search failed: {e!s}"
+        ).to_json()
+
+
+async def read_file(  # noqa: PLR0911
+    file_path: str,
+    session_id: str | None = None,
+    head: int | None = None,
+    tail: int | None = None,
+) -> str:
     """
     Read a file's contents for documentation processing.
     Automatically converts non-markdown formats to markdown for token efficiency.
@@ -87,6 +186,8 @@ async def read_file(file_path: str, session_id: str | None = None) -> str:
     Args:
         file_path: Path to the file to read (relative to session workspace if session_id provided)
         session_id: Session ID for workspace isolation (enforces chroot jail)
+        head: Read only first N lines (raw text only, skips conversion)
+        tail: Read only last N lines (raw text only, skips conversion)
 
     Returns:
         JSON string with file contents and metadata
@@ -97,9 +198,57 @@ async def read_file(file_path: str, session_id: str | None = None) -> str:
         return FileReadResponse(success=False, file_path=file_path, error=error).to_json()  # type: ignore[no-any-return]
 
     try:
+        # Handle partial reads (head/tail) - raw text only, skip conversion
+        if head is not None or tail is not None:
+            try:
+                async with aiofiles.open(target_file, encoding="utf-8") as f:
+                    if head is not None:
+                        # Read first N lines
+                        lines = []
+                        async for line in f:
+                            lines.append(line)
+                            if len(lines) >= head:
+                                break
+                        content = "".join(lines)
+                    elif tail is not None:
+                        # Read last N lines (read all, take last N)
+                        all_lines = await f.readlines()
+                        content = "".join(all_lines[-tail:] if len(all_lines) > tail else all_lines)
+
+                # Token counting for partial read
+                token_count = count_tokens(content)
+                exact_tokens = token_count["exact_tokens"]
+                file_size = target_file.stat().st_size
+
+                logger.info(
+                    f"Partial read {target_file.name} ({'head' if head else 'tail'}={head or tail}): "
+                    f"{len(content)} chars, {len(content.splitlines())} lines, {exact_tokens} tokens",
+                    tokens=exact_tokens,
+                    functions="read_file",
+                    func="partial_read",
+                )
+
+                return FileReadResponse(  # type: ignore[no-any-return]
+                    success=True,
+                    content=content,
+                    file_path=str(get_relative_path(target_file)),
+                    size=file_size,
+                    format="text (partial)",
+                ).to_json()
+
+            except UnicodeDecodeError:
+                return FileReadResponse(  # type: ignore[no-any-return]
+                    success=False, file_path=file_path, error="File is not text/UTF-8 encoded"
+                ).to_json()
+            except Exception as e:
+                return FileReadResponse(  # type: ignore[no-any-return]
+                    success=False, file_path=file_path, error=f"Failed to read file: {e!s}"
+                ).to_json()
+
+        # Full read with optional conversion
         extension = target_file.suffix.lower()
         needs_conversion = extension in CONVERTIBLE_EXTENSIONS
-        content = None
+        content = None  # type: ignore[assignment]
         conversion_method = "none"
 
         if needs_conversion:
@@ -130,7 +279,7 @@ async def read_file(file_path: str, session_id: str | None = None) -> str:
             except Exception as conv_error:
                 logger.error(f"Conversion error: {conv_error}", exc_info=True)
                 # Fall back to direct read
-                content = None
+                content = None  # type: ignore[assignment]
 
         # If no conversion or conversion failed, try direct read
         if not content:
@@ -143,9 +292,6 @@ async def read_file(file_path: str, session_id: str | None = None) -> str:
         # Token counting for logging and summarization check
         token_count = count_tokens(content)
         exact_tokens = token_count["exact_tokens"]
-
-        # Get relative path
-        cwd = Path.cwd()
         file_size = target_file.stat().st_size
 
         # Check if content needs summarization
@@ -186,7 +332,7 @@ async def read_file(file_path: str, session_id: str | None = None) -> str:
         return FileReadResponse(  # type: ignore[no-any-return]
             success=True,
             content=content,
-            file_path=str(target_file.relative_to(cwd) if cwd in target_file.parents else target_file),
+            file_path=str(get_relative_path(target_file)),
             size=file_size,
             format=extension if extension else "text",
         ).to_json()

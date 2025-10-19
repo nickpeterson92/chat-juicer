@@ -1,200 +1,226 @@
 """
 Text editing tools for Wishgate.
-Provides find/replace, regex editing, and text insertion capabilities.
+Provides unified file editing with diff preview and batch operations.
 """
 
 from __future__ import annotations
 
-import re
+import difflib
 
 from typing import Any
+
+from pydantic import BaseModel
 
 from utils.file_utils import file_operation
 
 
-async def text_edit(
+def resolve_edit_path(file_path: str) -> str:
+    """Resolve edit path with smart output/ prepending for consistency with generate_document.
+
+    Rules:
+    - If path starts with output/, sources/, templates/, or is absolute → use as-is
+    - Otherwise → prepend output/ for consistency with document generation workflow
+
+    Args:
+        file_path: Original file path from user
+
+    Returns:
+        Resolved file path with output/ prepended if needed
+
+    Examples:
+        "report.md" → "output/report.md"
+        "drafts/v2.md" → "output/drafts/v2.md"
+        "output/report.md" → "output/report.md" (no double prepend)
+        "sources/input.txt" → "sources/input.txt"
+        "templates/base.md" → "templates/base.md"
+        "/absolute/path.md" → "/absolute/path.md"
+    """
+    # Don't prepend if path already has a directory prefix or is absolute
+    if file_path.startswith(("output/", "sources/", "templates/", "/", "../")):
+        return file_path
+    # Default: prepend output/ for consistency with generate_document
+    return f"output/{file_path}"
+
+
+class EditOperation(BaseModel):
+    """Represents a single edit operation in a file."""
+
+    oldText: str
+    newText: str
+
+
+def normalize_whitespace_for_matching(text: str) -> str:
+    """Normalize whitespace for flexible matching while preserving structure.
+
+    Converts runs of spaces/tabs to single spaces, but preserves newlines.
+    This allows matching text with different indentation levels.
+
+    Args:
+        text: Text to normalize
+
+    Returns:
+        Text with normalized whitespace
+    """
+    lines = text.split("\n")
+    normalized_lines = []
+    for line in lines:
+        # Collapse multiple spaces/tabs to single space, but keep line structure
+        normalized = " ".join(line.split())
+        normalized_lines.append(normalized)
+    return "\n".join(normalized_lines)
+
+
+def find_text_with_flexible_whitespace(content: str, search_text: str) -> int:
+    """Find text in content with whitespace-flexible matching.
+
+    First tries exact match, then falls back to normalized whitespace matching.
+    This allows finding text even when indentation differs.
+
+    Args:
+        content: Full file content to search in
+        search_text: Text to find
+
+    Returns:
+        Index of match, or -1 if not found
+    """
+    # Try exact match first
+    idx = content.find(search_text)
+    if idx != -1:
+        return idx
+
+    # Try whitespace-flexible matching
+    normalized_content = normalize_whitespace_for_matching(content)
+    normalized_search = normalize_whitespace_for_matching(search_text)
+
+    idx = normalized_content.find(normalized_search)
+    if idx != -1:
+        # Map normalized position back to original position
+        # Count characters in original up to this point
+        char_count = 0
+        for i, char in enumerate(content):
+            if char_count == idx:
+                return i
+            if not char.isspace() or char == "\n":
+                char_count += 1
+
+    return -1
+
+
+def generate_diff(original_content: str, new_content: str, file_path: str) -> str:
+    """Generate git-style unified diff showing changes.
+
+    Args:
+        original_content: Original file content
+        new_content: Modified file content
+        file_path: Path to file (for diff headers)
+
+    Returns:
+        Unified diff string
+    """
+    original_lines = original_content.splitlines(keepends=True)
+    new_lines = new_content.splitlines(keepends=True)
+
+    diff = difflib.unified_diff(
+        original_lines,
+        new_lines,
+        fromfile=f"a/{file_path}",
+        tofile=f"b/{file_path}",
+        lineterm="",
+    )
+
+    return "".join(diff)
+
+
+async def edit_file(
     file_path: str,
-    find: str,
-    replace_with: str,
-    replace_all: bool = False,
+    edits: list[EditOperation],
     session_id: str | None = None,
 ) -> str:
     """
-    Simple text find and replace in documents.
-    Set replace_with to empty string to delete text.
+    Make line-based edits to a text file. Each edit replaces exact line sequences
+    with new content. Returns a git-style diff showing the changes made.
 
     Security: When session_id is provided, path is restricted to session workspace.
 
+    Path Resolution: For consistency with generate_document, paths are auto-prefixed
+    with output/ unless they explicitly start with output/, sources/, templates/,
+    or are absolute paths. Examples:
+    - "report.md" → "output/report.md"
+    - "output/report.md" → "output/report.md" (no double prepend)
+    - "sources/data.txt" → "sources/data.txt"
+
+    Features:
+    - Batch multiple edits in one operation
+    - Git-style diff output for verification
+    - Whitespace-flexible matching (tries exact first, then normalized)
+    - Sequential edit processing (each edit sees previous edit's result)
+    - Smart output/ prepending for workflow consistency
+
     Args:
-        file_path: Path to file to edit (relative to session workspace if session_id provided)
-        find: Exact text to find
-        replace_with: Text to replace with (empty string to delete)
-        replace_all: Replace all occurrences (default: first only)
+        file_path: Path to file to edit. Auto-prepends output/ unless path starts
+                  with output/, sources/, templates/, or is absolute.
+        edits: List of edit operations, each with {"oldText": "...", "newText": "..."}
         session_id: Session ID for workspace isolation (enforces chroot jail)
 
     Returns:
-        JSON with success status and replacements made
+        JSON response with diff and edit summary
+
+    Example:
+        edits = [
+            EditOperation(oldText="Hello World", newText="Hello Claude"),
+            EditOperation(oldText="Version 1.0", newText="Version 2.0")
+        ]
     """
+    # Resolve path with smart output/ prepending
+    resolved_path = resolve_edit_path(file_path)
 
-    def do_edit(content: str, **kwargs: Any) -> tuple[str, dict[str, Any]]:
-        """Inner function to perform text replacement."""
-        find_text: str = kwargs.get("find", "")
-        replace_text: str = kwargs.get("replace_with", "")
-        replace_all: bool = kwargs.get("replace_all", False)
+    def do_edit(content: str, **kwargs: Any) -> tuple[str | None, dict[str, Any]]:
+        """Inner function to perform batch edits."""
+        edits_list: list[EditOperation] = kwargs.get("edits", [])
 
-        if not find_text:
-            return content, {"error": "Find text cannot be empty"}
+        if not edits_list:
+            return None, {"error": "No edits provided"}
 
-        occurrences = content.count(find_text)
-        if occurrences == 0:
-            return content, {"warning": "Text not found", "find": find_text}
+        # Store original content for diff
+        original_content = content
+        current_content = content
+        changes_made = 0
 
-        if replace_all:
-            new_content = content.replace(find_text, replace_text)
-            replacements = occurrences
-        else:
-            new_content = content.replace(find_text, replace_text, 1)
-            replacements = 1
+        # Apply edits sequentially
+        for i, edit in enumerate(edits_list):
+            old_text = edit.oldText
+            new_text = edit.newText
 
-        operation = "delete" if replace_text == "" else "replace"
-        return new_content, {
-            "operation": operation,
-            "replacements": replacements,
-            "text_found": find_text[:50] + "..." if len(find_text) > 50 else find_text,
+            if not old_text:
+                return None, {"error": f"Edit {i + 1}: oldText cannot be empty"}
+
+            # Find text with flexible whitespace matching
+            idx = find_text_with_flexible_whitespace(current_content, old_text)
+
+            if idx == -1:
+                return None, {
+                    "error": f"Edit {i + 1}: oldText not found",
+                    "oldText": old_text[:100] + "..." if len(old_text) > 100 else old_text,
+                }
+
+            # Replace the text
+            current_content = current_content[:idx] + new_text + current_content[idx + len(old_text) :]
+            changes_made += 1
+
+        # Generate diff (use original file_path for clearer diff headers)
+        diff_output = generate_diff(original_content, current_content, file_path)
+
+        # Return new content to be written
+        return current_content, {
+            "operation": "edit",
+            "changes_made": changes_made,
+            "diff": diff_output,
         }
 
     result = await file_operation(
-        file_path, do_edit, session_id=session_id, find=find, replace_with=replace_with, replace_all=replace_all
-    )
-    return result  # type: ignore[no-any-return]
-
-
-async def regex_edit(
-    file_path: str,
-    pattern: str,
-    replacement: str,
-    replace_all: bool = False,
-    flags: str = "ms",
-    session_id: str | None = None,
-) -> str:
-    """
-    Pattern-based editing using regular expressions.
-    Supports capture groups and backreferences.
-
-    Security: When session_id is provided, path is restricted to session workspace.
-
-    Args:
-        file_path: Path to file to edit (relative to session workspace if session_id provided)
-        pattern: Regular expression pattern to match
-        replacement: Replacement text (can use \1, \2 for capture groups)
-        replace_all: Replace all matches (default: first only)
-        flags: Regex flags - m=multiline, s=dotall, i=ignorecase (default: 'ms')
-        session_id: Session ID for workspace isolation (enforces chroot jail)
-
-    Returns:
-        JSON with success status and replacements made
-    """
-
-    def do_regex_edit(content: str, **kwargs: Any) -> tuple[str, dict[str, Any]]:
-        """Inner function to perform regex replacement."""
-        pattern_str: str = kwargs.get("pattern", "")
-        replacement: str = kwargs.get("replacement", "")
-        replace_all: bool = kwargs.get("replace_all", False)
-        flags_str: str = kwargs.get("flags", "ms")
-
-        # Build regex flags
-        regex_flags = 0
-        if "m" in flags_str:
-            regex_flags |= re.MULTILINE
-        if "s" in flags_str:
-            regex_flags |= re.DOTALL
-        if "i" in flags_str:
-            regex_flags |= re.IGNORECASE
-
-        try:
-            regex_pattern = re.compile(pattern_str, regex_flags)
-        except re.error as e:
-            return content, {"error": f"Invalid regex pattern: {e}"}
-
-        matches = list(regex_pattern.finditer(content))
-        if not matches:
-            return content, {"warning": "No matches found", "pattern": pattern_str}
-
-        if replace_all:
-            new_content = regex_pattern.sub(replacement, content)
-            replacements = len(matches)
-        else:
-            new_content = regex_pattern.sub(replacement, content, count=1)
-            replacements = 1
-
-        operation = "delete" if replacement == "" else "replace"
-        return new_content, {"operation": operation, "pattern": pattern_str, "replacements": replacements}
-
-    result = await file_operation(
-        file_path,
-        do_regex_edit,
+        resolved_path,  # Use resolved path for actual file operation
+        do_edit,
         session_id=session_id,
-        pattern=pattern,
-        replacement=replacement,
-        replace_all=replace_all,
-        flags=flags,
-    )
-    return result  # type: ignore[no-any-return]
-
-
-async def insert_text(
-    file_path: str,
-    anchor: str,
-    text: str,
-    position: str = "after",
-    session_id: str | None = None,
-) -> str:
-    """
-    Insert text before or after an anchor point in a document.
-
-    Security: When session_id is provided, path is restricted to session workspace.
-
-    Args:
-        file_path: Path to file to edit (relative to session workspace if session_id provided)
-        anchor: Text to find as the insertion point
-        text: Text to insert
-        position: Where to insert - 'before' or 'after' the anchor
-        session_id: Session ID for workspace isolation (enforces chroot jail)
-
-    Returns:
-        JSON with success status
-    """
-
-    def do_insert(content: str, **kwargs: Any) -> tuple[str, dict[str, Any]]:
-        """Inner function to perform text insertion."""
-        anchor_text: str = kwargs.get("anchor", "")
-        insert_text: str = kwargs.get("text", "")
-        position: str = kwargs.get("position", "after")
-
-        if not anchor_text or not insert_text:
-            return content, {"error": "Anchor and text cannot be empty"}
-
-        idx = content.find(anchor_text)
-        if idx == -1:
-            return content, {"error": f"Anchor text not found: {anchor_text}"}
-
-        if position == "after":
-            insert_pos = idx + len(anchor_text)
-        elif position == "before":
-            insert_pos = idx
-        else:
-            return content, {"error": f"Invalid position: {position}. Use 'before' or 'after'"}
-
-        new_content = content[:insert_pos] + insert_text + content[insert_pos:]
-
-        return new_content, {
-            "operation": "insert",
-            "position": position,
-            "anchor": anchor_text[:50] + "..." if len(anchor_text) > 50 else anchor_text,
-            "text_length": len(insert_text),
-        }
-
-    result = await file_operation(
-        file_path, do_insert, session_id=session_id, anchor=anchor, text=text, position=position
+        edits=edits,
     )
     return result  # type: ignore[no-any-return]

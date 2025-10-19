@@ -21,6 +21,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 #: Model cannot override this value to prevent low-limit failures.
 MAX_FILE_SIZE = 100 * 1024 * 1024
 
+
+#: Default maximum results for file search operations.
+#: Prevents resource exhaustion on large directory scans while providing
+#: enough results for typical search scenarios. Can be overridden per-call.
+DEFAULT_SEARCH_MAX_RESULTS = 100
+
 #: Maximum number of backup versions to keep for generated files.
 #: When create_backup=True in generate_document(), old versions are saved as
 #: .backup, .backup1, .backup2, etc. up to this limit.
@@ -245,6 +251,26 @@ ERROR_EMPTY_SUMMARY = "Summarization failed: empty summary returned"
 
 #: Error message when all items are recent and nothing to summarize.
 ERROR_NOTHING_TO_SUMMARIZE = "All items are recent - nothing to summarize"
+
+
+# ============================================================================
+# Security Error Messages
+# ============================================================================
+
+#: Error message for null byte injection attacks in file paths.
+ERROR_NULL_BYTE_IN_PATH = "Access denied: Null bytes in path"
+
+#: Error message for path traversal attacks (.. or absolute paths).
+ERROR_PATH_TRAVERSAL = "Access denied: Path traversal not allowed"
+
+#: Error message when path is outside session workspace boundaries.
+ERROR_PATH_OUTSIDE_WORKSPACE = "Access denied: Path outside session workspace"
+
+#: Error message for symlink escape attempts after resolution.
+ERROR_SYMLINK_ESCAPE = "Access denied: Symlink escape attempt detected"
+
+#: Error message when path is outside project scope (no session isolation).
+ERROR_PATH_OUTSIDE_PROJECT = "Access denied: Path outside project scope"
 
 # ============================================================================
 # Session Naming Configuration

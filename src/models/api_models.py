@@ -92,11 +92,28 @@ class TextEditResponse(BaseModel):
         return self.model_dump_json(exclude_none=True, indent=indent)
 
 
+class SearchFilesResponse(BaseModel):
+    """Response model for search_files function."""
+
+    success: bool = True
+    pattern: str
+    base_path: str
+    items: list[FileInfo]
+    count: int
+    truncated: bool = False  # True if results limited by max_results
+    error: str | None = None
+
+    def to_json(self, indent: int = 2) -> str:
+        """Convert to JSON string for function return."""
+        return self.model_dump_json(exclude_none=True, indent=indent)
+
+
 __all__ = [
     "DirectoryListResponse",
     "DocumentGenerateResponse",
     "FileInfo",
     "FileReadResponse",
     "FunctionResponse",
+    "SearchFilesResponse",
     "TextEditResponse",
 ]

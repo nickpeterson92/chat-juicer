@@ -20,8 +20,8 @@ from __future__ import annotations
 from typing import Any
 
 from tools.document_generation import generate_document
-from tools.file_operations import list_directory, read_file
-from tools.text_editing import insert_text, regex_edit, text_edit
+from tools.file_operations import list_directory, read_file, search_files
+from tools.text_editing import EditOperation, edit_file
 from utils.logger import logger
 
 
@@ -65,93 +65,61 @@ def create_session_aware_tools(session_id: str) -> list[Any]:
         """
         return list_directory(path=path, session_id=session_id, show_hidden=show_hidden)  # type: ignore[no-any-return]
 
-    async def wrapped_read_file(file_path: str) -> str:
+    async def wrapped_read_file(file_path: str, head: int | None = None, tail: int | None = None) -> str:
         """Read file contents with automatic format conversion.
 
         Args:
             file_path: Path to file relative to session workspace
+            head: Read only first N lines (optional)
+            tail: Read only last N lines (optional)
 
         Returns:
             JSON with file contents and metadata
         """
-        return await read_file(file_path=file_path, session_id=session_id)  # type: ignore[no-any-return]
+        return await read_file(file_path=file_path, session_id=session_id, head=head, tail=tail)  # type: ignore[no-any-return]
 
-    # Text Editing - Modification tools with session_id injection
-    async def wrapped_text_edit(
-        file_path: str,
-        find: str,
-        replace_with: str,
-        replace_all: bool = False,
-    ) -> str:
-        """Find and replace exact text in a document.
-
-        Args:
-            file_path: Path to file relative to session workspace
-            find: Exact text to find
-            replace_with: Text to replace with (empty string to delete)
-            replace_all: Replace all occurrences (default: False)
-
-        Returns:
-            JSON with success status and replacements made
-        """
-        return await text_edit(  # type: ignore[no-any-return]
-            file_path=file_path,
-            find=find,
-            replace_with=replace_with,
-            replace_all=replace_all,
-            session_id=session_id,
-        )
-
-    async def wrapped_regex_edit(
-        file_path: str,
+    async def wrapped_search_files(
         pattern: str,
-        replacement: str,
-        replace_all: bool = False,
-        flags: str = "ms",
+        base_path: str = ".",
+        recursive: bool = True,
+        max_results: int = 100,
     ) -> str:
-        """Pattern-based editing using regular expressions.
+        """Search for files matching a glob pattern.
 
         Args:
-            file_path: Path to file relative to session workspace
-            pattern: Regular expression pattern to match
-            replacement: Replacement text (can use \\1, \\2 for capture groups)
-            replace_all: Replace all matches (default: False)
-            flags: Regex flags - m=multiline, s=dotall, i=ignorecase (default: 'ms')
+            pattern: Glob pattern (e.g., "*.md", "**/*.py", "report_*.txt")
+            base_path: Directory to start search (default: ".")
+            recursive: Search subdirectories recursively (default: True)
+            max_results: Maximum number of results (default: 100)
 
         Returns:
-            JSON with success status and replacements made
+            JSON with matching files and metadata
         """
-        return await regex_edit(  # type: ignore[no-any-return]
-            file_path=file_path,
+        return await search_files(  # type: ignore[no-any-return]
             pattern=pattern,
-            replacement=replacement,
-            replace_all=replace_all,
-            flags=flags,
+            base_path=base_path,
             session_id=session_id,
+            recursive=recursive,
+            max_results=max_results,
         )
 
-    async def wrapped_insert_text(
+    # Text Editing - Unified editing tool with session_id injection
+    async def wrapped_edit_file(
         file_path: str,
-        anchor: str,
-        text: str,
-        position: str = "after",
+        edits: list[EditOperation],
     ) -> str:
-        """Insert text before or after an anchor point.
+        """Make batch edits to a text file with git-style diff output.
 
         Args:
             file_path: Path to file relative to session workspace
-            anchor: Text to find as the insertion point
-            text: Text to insert
-            position: Where to insert - 'before' or 'after' the anchor (default: 'after')
+            edits: List of edit operations (oldText, newText pairs)
 
         Returns:
-            JSON with success status
+            JSON with diff output and edit summary
         """
-        return await insert_text(  # type: ignore[no-any-return]
+        return await edit_file(  # type: ignore[no-any-return]
             file_path=file_path,
-            anchor=anchor,
-            text=text,
-            position=position,
+            edits=edits,
             session_id=session_id,
         )
 
@@ -182,8 +150,7 @@ def create_session_aware_tools(session_id: str) -> list[Any]:
     return [
         function_tool(wrapped_list_directory),
         function_tool(wrapped_read_file),
-        function_tool(wrapped_text_edit),
-        function_tool(wrapped_regex_edit),
-        function_tool(wrapped_insert_text),
+        function_tool(wrapped_search_files),
+        function_tool(wrapped_edit_file),
         function_tool(wrapped_generate_document),
     ]

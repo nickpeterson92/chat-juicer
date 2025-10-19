@@ -8,8 +8,8 @@ automatic schema extraction and validation.
 
 Modules:
     document_generation: Generate and save documentation to output files
-    file_operations: List directories and read files (multi-format support)
-    text_editing: Text manipulation (exact match, regex, insert operations)
+    file_operations: List directories, search files, and read files (multi-format support)
+    text_editing: Unified file editing with diff preview and batch operations
     registry: Tool registration and schema definitions for Agent/Runner
 
 Tool Architecture:
@@ -35,15 +35,14 @@ Available Tools:
 
 File Operations:
     - list_directory: Explore project structure with metadata (size, modified time)
+    - search_files: Find files matching glob patterns with recursive search
     - read_file: Read any file format (auto-converts PDF, Word, Excel, HTML, etc.)
 
 Document Generation:
     - generate_document: Save generated content to output files with optional backup
 
 Text Editing:
-    - text_edit: Find and replace exact text or delete content
-    - regex_edit: Pattern-based editing with regex support
-    - insert_text: Add new content before or after existing text
+    - edit_file: Unified editing with batch operations, git-style diff, dry-run mode
 
 All tools return JSON strings using Pydantic response models for type safety.
 
@@ -86,18 +85,17 @@ See Also:
 """
 
 from tools.document_generation import generate_document
-from tools.file_operations import list_directory, read_file
+from tools.file_operations import list_directory, read_file, search_files
 from tools.registry import AGENT_TOOLS, FUNCTION_REGISTRY, TOOLS
-from tools.text_editing import insert_text, regex_edit, text_edit
+from tools.text_editing import edit_file
 
 __all__ = [
     "AGENT_TOOLS",
     "FUNCTION_REGISTRY",
     "TOOLS",
+    "edit_file",
     "generate_document",
-    "insert_text",
     "list_directory",
     "read_file",
-    "regex_edit",
-    "text_edit",
+    "search_files",
 ]

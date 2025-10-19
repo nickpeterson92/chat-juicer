@@ -837,17 +837,38 @@ initializeEventListeners();
 // ====================
 
 // Session creation event handler (stored for cleanup)
-const handleSessionCreated = (e) => {
+const handleSessionCreated = async (e) => {
+  const { session_id: sessionId, title } = e.detail;
+
   window.electronAPI.log("info", "Handling session-created event", {
-    session_id: e.detail.session_id,
-    title: e.detail.title,
+    session_id: sessionId,
+    title: title,
   });
 
   // Update current session ID so it gets highlighted
-  sessionState.currentSessionId = e.detail.session_id;
+  sessionState.currentSessionId = sessionId;
 
-  // Reload sessions list to show newly created session with selection
-  loadSessions(window.electronAPI, updateSessionsList);
+  // Update files panel to reflect the active session
+  const sessionDirectory = `data/files/${sessionId}/sources`;
+  setActiveFilesDirectory(sessionDirectory);
+  try {
+    await loadFiles(sessionDirectory);
+  } catch (error) {
+    window.electronAPI.log("error", "Failed to load files after session creation", {
+      session_id: sessionId,
+      error: error.message,
+    });
+  }
+
+  try {
+    // Reload sessions list to show newly created session with selection
+    await loadSessions(window.electronAPI, updateSessionsList);
+  } catch (error) {
+    window.electronAPI.log("error", "Failed to refresh sessions after session creation", {
+      session_id: sessionId,
+      error: error.message,
+    });
+  }
 };
 
 // Listen for session creation events from backend
