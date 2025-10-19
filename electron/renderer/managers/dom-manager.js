@@ -24,7 +24,8 @@ export function initializeElements() {
   elements.aiThinking = document.getElementById("ai-thinking");
   elements.filesPanel = document.getElementById("files-panel");
   elements.filesContainer = document.getElementById("files-container");
-  elements.toggleFilesBtn = document.getElementById("toggle-files-btn");
+  elements.openFilesBtn = document.getElementById("open-files-btn");
+  elements.filesPanelToggleWrapper = document.getElementById("files-panel-toggle-wrapper");
   elements.refreshFilesBtn = document.getElementById("refresh-files-btn");
   elements.themeToggle = document.getElementById("theme-toggle");
   elements.themeIcon = document.getElementById("theme-icon");

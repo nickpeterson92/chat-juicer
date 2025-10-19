@@ -895,7 +895,8 @@
 
   .view-welcome .chat-panel,
   .view-welcome .files-panel,
-  .view-welcome #files-toggle-wrapper {
+  .view-welcome #files-toggle-wrapper,
+  .view-welcome #files-panel-toggle-wrapper {
     display: none !important;
   }
 

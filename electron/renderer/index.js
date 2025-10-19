@@ -748,27 +748,10 @@ function initializeEventListeners() {
     });
   }
 
-  // Toggle files panel
-  if (elements.toggleFilesBtn) {
-    addManagedEventListener(elements.toggleFilesBtn, "click", () => {
-      const wrapper = document.getElementById("files-toggle-wrapper");
-      const icon = document.getElementById("toggle-files-icon");
-
+  // Files panel toggle button (in main header) - true toggle
+  if (elements.openFilesBtn) {
+    addManagedEventListener(elements.openFilesBtn, "click", () => {
       elements.filesPanel.classList.toggle("collapsed");
-      if (wrapper) {
-        wrapper.classList.toggle("panel-collapsed");
-      }
-
-      // Rotate icon: collapsed (panel hidden) = point left, open (panel visible) = point right
-      if (icon) {
-        if (elements.filesPanel.classList.contains("collapsed")) {
-          icon.style.transform = "rotate(0deg)"; // Point left (◀) when collapsed
-          elements.toggleFilesBtn.title = "Show source files";
-        } else {
-          icon.style.transform = "rotate(180deg)"; // Point right (▶) when open
-          elements.toggleFilesBtn.title = "Hide source files";
-        }
-      }
     });
   }
 
@@ -1098,6 +1081,8 @@ window.addEventListener("load", () => {
 
   // Show welcome page on startup
   showWelcomeView(elements, appState);
+
+  // Files panel toggle button is always visible in header (no initialization needed)
 });
 
 // ====================
