@@ -109,7 +109,10 @@ export function createFunctionCallCard(
     cardDiv.appendChild(headerDiv);
 
     // Add click handler for expand/collapse
-    cardDiv.addEventListener("click", () => toggleFunctionCard(cardDiv, activeCalls, activeTimers, callId));
+    cardDiv.addEventListener("click", () => {
+      window.electronAPI.log("debug", "Function card clicked", { callId });
+      toggleFunctionCard(cardDiv, activeCalls, appState.functions.activeTimers, callId);
+    });
 
     // Insert function card BEFORE the current streaming assistant message
     // This ensures tool calls appear above the model's response
