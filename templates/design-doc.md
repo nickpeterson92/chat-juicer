@@ -83,8 +83,8 @@ stateDiagram-v2
 ```
 
 
-### Entity Relationship Diagram
-[Create an ER diagram showing the main data entities, their attributes, and relationships. Include cardinality, primary keys, and foreign keys. Focus on the core domain model.]
+### Entity Relationship Diagrams
+[Create various ER diagrams showing the main data entities, their attributes, and relationships. Include cardinality, primary keys, and foreign keys. Focus on the core domain model. Each system included in the integration should have it's own discrete ERD, if you have enough information available.]
 
 REPLACE ABOVE WITH MERMAID like:
 ```mermaid

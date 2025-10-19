@@ -3,7 +3,9 @@
  * Optimized with DOM caching and batched scroll updates
  */
 
-import { LOADING_SVG, MAX_MESSAGES } from "../config/constants.js";
+import smokeAnimationData from "../../../ui/Smoke.json";
+import { MAX_MESSAGES } from "../config/constants.js";
+import { initLottieWithColor } from "../utils/lottie-color.js";
 import { processMermaidDiagrams, renderMarkdown } from "../utils/markdown-renderer.js";
 import { scheduleScroll } from "../utils/scroll-utils.js";
 
@@ -100,14 +102,8 @@ export function updateAssistantMessage(chatContainer, currentAssistantElement, c
     return;
   }
 
-  // Hide loading dots when we have content
-  const messageDiv = currentAssistantElement.closest(".message");
-  if (messageDiv && content.length > 0) {
-    const loadingDots = messageDiv.querySelector(".loading-lamp");
-    if (loadingDots) {
-      loadingDots.style.display = "none";
-    }
-  }
+  // Don't hide loading animation during streaming - let it show the whole time
+  // It will be removed when streaming completes via completeStreamingMessage()
 
   // Store pending update
   pendingContent = content;
@@ -188,10 +184,13 @@ export function createStreamingAssistantMessage(chatContainer) {
   contentDiv.className =
     "message-content text-gray-800 dark:text-slate-100 max-w-full block py-4 px-0 leading-relaxed break-words whitespace-pre-wrap";
 
-  // Add loading smoke animation initially (volumetric puffs animation from constants)
+  // Add loading indicator (start with dot, replace with Lottie if available)
   const loadingSpan = document.createElement("span");
   loadingSpan.className = "loading-lamp";
-  loadingSpan.innerHTML = LOADING_SVG;
+  loadingSpan.style.cssText =
+    "display: inline-block !important; width: 48px; height: 48px; vertical-align: middle; margin-right: 8px; opacity: 1; line-height: 48px; text-align: center; font-size: 32px; color: #0066cc; font-weight: bold;";
+  loadingSpan.textContent = "●"; // Start with visible fallback in brand blue
+  console.log("[Chat UI] Loading indicator created:", loadingSpan);
 
   const textSpan = document.createElement("span");
   textSpan.className = "streaming-text";
@@ -200,6 +199,24 @@ export function createStreamingAssistantMessage(chatContainer) {
   contentDiv.appendChild(textSpan);
   messageDiv.appendChild(contentDiv);
   chatContainer.appendChild(messageDiv);
+
+  // Initialize Lottie animation immediately after element is in DOM
+  requestAnimationFrame(() => {
+    try {
+      // Clear the dot before initializing Lottie
+      loadingSpan.textContent = "";
+      const animation = initLottieWithColor(loadingSpan, smokeAnimationData, "#0066cc");
+      if (!animation) {
+        console.error("[Chat UI] Failed to initialize Lottie animation");
+        loadingSpan.textContent = "●"; // Restore fallback if Lottie fails
+      } else {
+        console.log("[Chat UI] Lottie animation loaded successfully");
+      }
+    } catch (error) {
+      console.error("[Chat UI] Error loading Lottie:", error);
+      loadingSpan.textContent = "●"; // Restore fallback on error
+    }
+  });
 
   // Cache reference
   messageCache.set(messageId, messageDiv);
@@ -226,10 +243,16 @@ export function completeStreamingMessage(chatContainer) {
       cursor.remove();
     }
 
-    // Remove loading smoke animation
+    // Fade out loading smoke animation over 800ms before removing
     const loadingLamp = streamingMsg.querySelector(".loading-lamp");
     if (loadingLamp) {
-      loadingLamp.remove();
+      console.log("[Chat UI] Fading out loading indicator");
+      loadingLamp.style.transition = "opacity 800ms ease-out";
+      loadingLamp.style.opacity = "0";
+      setTimeout(() => {
+        loadingLamp.remove();
+        console.log("[Chat UI] Loading indicator removed");
+      }, 800);
     }
 
     // Note: Mermaid processing is handled in handleAssistantEnd to avoid race conditions

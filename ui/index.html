@@ -117,31 +117,6 @@
           <div class="flex-1 overflow-y-auto p-5 bg-gray-50 dark:bg-gray-900 custom-scrollbar [contain:strict]" id="chat-container">
           </div>
 
-          <!-- AI Thinking Indicator -->
-          <div class="hidden p-3 px-5 my-3 mx-5 bg-gray-100 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 animate-slideIn [&.active]:block" id="ai-thinking">
-            <div class="flex items-center gap-3 text-gray-800 dark:text-gray-100 text-sm font-medium">
-              <svg width="48" height="48" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" class="block opacity-80">
-                <defs>
-                  <filter id="smokeBlur">
-                    <feGaussianBlur in="SourceGraphic" stdDeviation="2"/>
-                  </filter>
-                </defs>
-                <style>
-                  @keyframes puff1 { 0% { opacity: 0; transform: translateY(10px) scale(0.3); } 30% { opacity: 0.5; } 100% { opacity: 0; transform: translateY(-45px) scale(1.5); } }
-                  @keyframes puff2 { 0% { opacity: 0; transform: translateY(10px) scale(0.3); } 30% { opacity: 0.5; } 100% { opacity: 0; transform: translateY(-45px) scale(1.5); } }
-                  @keyframes puff3 { 0% { opacity: 0; transform: translateY(10px) scale(0.3); } 30% { opacity: 0.5; } 100% { opacity: 0; transform: translateY(-45px) scale(1.5); } }
-                  .puff-1 { animation: puff1 2.5s ease-out infinite; transform-origin: center; }
-                  .puff-2 { animation: puff2 2.5s ease-out infinite; animation-delay: 0.8s; transform-origin: center; }
-                  .puff-3 { animation: puff3 2.5s ease-out infinite; animation-delay: 1.6s; transform-origin: center; }
-                </style>
-                <ellipse class="puff-1" cx="32" cy="52" rx="8" ry="6" fill="#666666" filter="url(#smokeBlur)"/>
-                <ellipse class="puff-2" cx="30" cy="52" rx="8" ry="6" fill="#666666" filter="url(#smokeBlur)"/>
-                <ellipse class="puff-3" cx="34" cy="52" rx="8" ry="6" fill="#666666" filter="url(#smokeBlur)"/>
-              </svg>
-              <div class="opacity-80 animate-fade-text">AI is thinking...</div>
-            </div>
-          </div>
-
           <!-- Legacy typing indicator (kept for compatibility) -->
           <div class="mb-6 px-5 py-0" style="display: none;">
             <div class="flex gap-1 p-2.5 opacity-0 transition-opacity duration-300 [&.active]:opacity-100" id="typing-indicator">
