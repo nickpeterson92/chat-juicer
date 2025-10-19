@@ -1,4 +1,4 @@
-.PHONY: help setup install install-node install-python install-mcp install-dev run dev clean test lint format typecheck precommit precommit-install quality validate docs docs-clean docs-serve logs logs-errors logs-all db-explore db-sessions db-compare db-layer1 db-layer2 db-tools db-types db-shell health status backend-only clean-venv clean-all reset
+.PHONY: help setup setup-dev install install-node install-python install-mcp install-dev run dev clean clean-cache test lint format typecheck precommit precommit-install quality validate fix check docs docs-clean docs-serve logs logs-errors logs-all db-explore db-sessions db-compare db-layer1 db-layer2 db-tools db-types db-shell db-reset db-backup db-restore health status backend-only clean-venv clean-all reset kill restart update-deps
 
 # Default target
 .DEFAULT_GOAL := help
@@ -14,6 +14,10 @@ NC := \033[0m
 setup: ## Complete first-time setup (run this first!)
 	@echo "$(BLUE)Running complete setup...$(NC)"
 	@node scripts/setup.js
+
+setup-dev: ## Complete setup with dev tools (linters, formatters, pre-commit)
+	@echo "$(BLUE)Running complete setup with dev tools...$(NC)"
+	@node scripts/setup.js --dev
 
 install: install-node install-python install-mcp ## Install all dependencies
 	@echo "$(GREEN)✓ All dependencies installed$(NC)"
@@ -32,11 +36,13 @@ install-python: ## Install Python dependencies into .juicer venv
 	@.juicer/bin/pip install -r src/requirements.txt
 	@echo "$(GREEN)✓ Python dependencies installed into .juicer venv$(NC)"
 
-install-mcp: ## Install MCP server globally
-	@echo "$(BLUE)Installing MCP server...$(NC)"
+install-mcp: ## Install MCP servers (Sequential Thinking via npm, Fetch via Python)
+	@echo "$(BLUE)Installing MCP servers...$(NC)"
+	@echo "$(BLUE)→ Installing Sequential Thinking MCP server (Node.js)...$(NC)"
 	@npm install -g @modelcontextprotocol/server-sequential-thinking || \
 		echo "$(YELLOW)⚠ Failed to install globally. You may need: sudo make install-mcp$(NC)"
-	@echo "$(GREEN)✓ MCP server installed$(NC)"
+	@echo "$(BLUE)→ Fetch MCP server (Python) installed via requirements.txt$(NC)"
+	@echo "$(GREEN)✓ MCP servers configured$(NC)"
 
 ##@ Running the Application
 
@@ -134,6 +140,49 @@ quality: format lint typecheck ## Run all quality checks (format, lint, typechec
 validate: test ## Validate Python code syntax
 	@echo "$(GREEN)✓ Validation complete$(NC)"
 
+fix: ## Auto-fix all fixable issues (format + lint with auto-fix)
+	@echo "$(BLUE)Auto-fixing code issues...$(NC)"
+	@if [ -f ".juicer/bin/black" ]; then \
+		.juicer/bin/black src/; \
+	else \
+		echo "$(YELLOW)⚠ Black not installed in .juicer venv$(NC)"; \
+		echo "$(BLUE)Run: make install-dev$(NC)"; \
+		exit 1; \
+	fi
+	@if [ -f ".juicer/bin/ruff" ]; then \
+		.juicer/bin/ruff check src/ --fix; \
+	else \
+		echo "$(YELLOW)⚠ Ruff not installed in .juicer venv$(NC)"; \
+		echo "$(BLUE)Run: make install-dev$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)✓ All fixable issues resolved$(NC)"
+
+check: ## Pre-commit validation gate (format check + lint + typecheck + test)
+	@echo "$(BLUE)Running pre-commit validation checks...$(NC)"
+	@echo "$(BLUE)→ Checking code format...$(NC)"
+	@if [ -f ".juicer/bin/black" ]; then \
+		.juicer/bin/black --check src/ || (echo "$(RED)✗ Format check failed. Run: make format$(NC)" && exit 1); \
+	else \
+		echo "$(YELLOW)⚠ Black not installed, skipping format check$(NC)"; \
+	fi
+	@echo "$(BLUE)→ Running linter...$(NC)"
+	@if [ -f ".juicer/bin/ruff" ]; then \
+		.juicer/bin/ruff check src/ || (echo "$(RED)✗ Lint check failed. Run: make lint$(NC)" && exit 1); \
+	else \
+		echo "$(YELLOW)⚠ Ruff not installed, skipping lint check$(NC)"; \
+	fi
+	@echo "$(BLUE)→ Running type checker...$(NC)"
+	@if [ -f ".juicer/bin/mypy" ]; then \
+		.juicer/bin/mypy src/ || (echo "$(RED)✗ Type check failed. Run: make typecheck$(NC)" && exit 1); \
+	else \
+		echo "$(YELLOW)⚠ Mypy not installed, skipping type check$(NC)"; \
+	fi
+	@echo "$(BLUE)→ Running syntax validation...$(NC)"
+	@python3 -m py_compile src/main.py || python -m py_compile src/main.py || (echo "$(RED)✗ Syntax validation failed$(NC)" && exit 1)
+	@python3 -m compileall src/ || python -m compileall src/ || (echo "$(RED)✗ Syntax validation failed$(NC)" && exit 1)
+	@echo "$(GREEN)✓ All validation checks passed$(NC)"
+
 ##@ Documentation
 
 docs: ## Generate API documentation with Sphinx
@@ -199,7 +248,76 @@ db-types: ## Show SDK item type distribution
 db-shell: ## Start interactive SQLite shell
 	@./scripts/explore-db.sh interactive
 
+db-reset: ## Clear all session data (WARNING: destructive operation)
+	@echo "$(YELLOW)⚠ This will delete ALL sessions and conversation data!$(NC)"
+	@echo "$(YELLOW)Press Ctrl+C to cancel, or Enter to continue...$(NC)"
+	@read confirm
+	@echo "$(BLUE)Resetting database...$(NC)"
+	@rm -f data/chat_history.db data/chat_history.db-wal data/chat_history.db-shm
+	@rm -f data/sessions.json
+	@rm -rf data/files/*
+	@echo "$(GREEN)✓ Database reset complete$(NC)"
+	@echo "$(BLUE)Recreating directory structure...$(NC)"
+	@mkdir -p data/files
+	@echo "$(GREEN)✓ Ready for fresh sessions$(NC)"
+
+db-backup: ## Backup database and session data to timestamped archive
+	@echo "$(BLUE)Creating database backup...$(NC)"
+	@mkdir -p data/backups
+	@BACKUP_NAME="backup_$$(date +%Y%m%d_%H%M%S)" && \
+		mkdir -p "data/backups/$$BACKUP_NAME" && \
+		cp data/chat_history.db "data/backups/$$BACKUP_NAME/" 2>/dev/null || true && \
+		cp data/chat_history.db-wal "data/backups/$$BACKUP_NAME/" 2>/dev/null || true && \
+		cp data/chat_history.db-shm "data/backups/$$BACKUP_NAME/" 2>/dev/null || true && \
+		cp data/sessions.json "data/backups/$$BACKUP_NAME/" 2>/dev/null || true && \
+		cp -r data/files "data/backups/$$BACKUP_NAME/" 2>/dev/null || true && \
+		echo "$(GREEN)✓ Backup created: data/backups/$$BACKUP_NAME$(NC)"
+
+db-restore: ## Restore database from backup (usage: make db-restore BACKUP=backup_20250101_120000)
+	@if [ -z "$(BACKUP)" ]; then \
+		echo "$(BLUE)Available backups:$(NC)"; \
+		ls -1t data/backups/ 2>/dev/null || echo "$(YELLOW)No backups found$(NC)"; \
+		echo ""; \
+		echo "$(BLUE)Usage: make db-restore BACKUP=backup_name$(NC)"; \
+		exit 1; \
+	fi
+	@if [ ! -d "data/backups/$(BACKUP)" ]; then \
+		echo "$(RED)✗ Backup not found: $(BACKUP)$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(YELLOW)⚠ This will replace current database with backup: $(BACKUP)$(NC)"
+	@echo "$(YELLOW)Press Ctrl+C to cancel, or Enter to continue...$(NC)"
+	@read confirm
+	@echo "$(BLUE)Restoring from backup...$(NC)"
+	@rm -f data/chat_history.db data/chat_history.db-wal data/chat_history.db-shm
+	@rm -f data/sessions.json
+	@rm -rf data/files/*
+	@cp "data/backups/$(BACKUP)/chat_history.db" data/ 2>/dev/null || true
+	@cp "data/backups/$(BACKUP)/chat_history.db-wal" data/ 2>/dev/null || true
+	@cp "data/backups/$(BACKUP)/chat_history.db-shm" data/ 2>/dev/null || true
+	@cp "data/backups/$(BACKUP)/sessions.json" data/ 2>/dev/null || true
+	@cp -r "data/backups/$(BACKUP)/files/"* data/files/ 2>/dev/null || true
+	@echo "$(GREEN)✓ Database restored from: $(BACKUP)$(NC)"
+
 ##@ Maintenance
+
+update-deps: ## Update dependencies (Node.js and Python)
+	@echo "$(BLUE)Updating dependencies...$(NC)"
+	@echo "$(BLUE)→ Updating Node.js dependencies...$(NC)"
+	@npm update
+	@echo "$(GREEN)✓ Node.js dependencies updated$(NC)"
+	@echo "$(BLUE)→ Updating Python dependencies...$(NC)"
+	@if [ -f ".juicer/bin/pip" ]; then \
+		.juicer/bin/pip install --upgrade pip && \
+		.juicer/bin/pip install --upgrade -r src/requirements.txt; \
+		echo "$(GREEN)✓ Python dependencies updated$(NC)"; \
+	else \
+		echo "$(YELLOW)⚠ Virtual environment not found$(NC)"; \
+		echo "$(BLUE)Run: make install-python$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)→ Running health check...$(NC)"
+	@$(MAKE) health
 
 kill: ## Kill all Wishgate processes (nuclear option for when things go wrong)
 	@echo "$(BLUE)Killing all Wishgate processes...$(NC)"
@@ -212,6 +330,11 @@ kill: ## Kill all Wishgate processes (nuclear option for when things go wrong)
 	@pkill -9 -f "launch.js" 2>/dev/null && echo "  $(GREEN)✓ Launch script killed$(NC)" || echo "  $(YELLOW)○ No launch script$(NC)"
 	@echo "$(GREEN)✓ All Wishgate processes terminated$(NC)"
 
+restart: kill ## Quick restart (kill processes + restart in dev mode)
+	@echo "$(BLUE)Restarting Wishgate...$(NC)"
+	@sleep 1
+	@$(MAKE) dev
+
 clean: ## Clean temporary files and logs
 	@echo "$(BLUE)Cleaning temporary files...$(NC)"
 	@rm -rf logs/*.jsonl
@@ -219,7 +342,17 @@ clean: ## Clean temporary files and logs
 	@rm -rf src/*/__pycache__
 	@find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	@find . -type f -name "*.pyc" -delete 2>/dev/null || true
+	@find . -type f -name ".DS_Store" -delete 2>/dev/null || true
+	@rm -rf dist/
 	@echo "$(GREEN)✓ Cleanup complete$(NC)"
+
+clean-cache: ## Clean development cache directories (mypy, ruff, pytest)
+	@echo "$(BLUE)Cleaning development caches...$(NC)"
+	@rm -rf .mypy_cache src/.mypy_cache
+	@rm -rf .ruff_cache src/.ruff_cache
+	@rm -rf .pytest_cache
+	@rm -rf .serena
+	@echo "$(GREEN)✓ Cache cleanup complete$(NC)"
 
 clean-venv: ## Remove virtual environment
 	@echo "$(BLUE)Removing .juicer virtual environment...$(NC)"
@@ -227,7 +360,7 @@ clean-venv: ## Remove virtual environment
 	@echo "$(GREEN)✓ Virtual environment removed$(NC)"
 	@echo "$(YELLOW)Run 'make install-python' to recreate$(NC)"
 
-clean-all: clean clean-venv ## Deep clean including dependencies and venv
+clean-all: clean clean-cache clean-venv ## Deep clean including dependencies and venv
 	@echo "$(BLUE)Deep cleaning...$(NC)"
 	@rm -rf node_modules
 	@echo "$(GREEN)✓ Deep clean complete$(NC)"
@@ -265,7 +398,11 @@ help: ## Show this help message
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\n  make $(YELLOW)<target>$(NC)\n\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  $(GREEN)%-18s$(NC) %s\n", $$1, $$2 } /^##@/ { printf "\n$(BLUE)%s$(NC)\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 	@echo ""
 	@echo "$(BLUE)Quick Start:$(NC)"
-	@echo "  1. Run 'make setup' for first-time installation"
+	@echo "  1. Run 'make setup' (or 'make setup-dev' for dev tools)"
 	@echo "  2. Configure src/.env with your Azure OpenAI credentials"
 	@echo "  3. Run 'make run' to start the application"
+	@echo ""
+	@echo "$(BLUE)Setup Options:$(NC)"
+	@echo "  make setup      - Essential dependencies only"
+	@echo "  make setup-dev  - Includes linters, formatters, pre-commit hooks"
 	@echo ""

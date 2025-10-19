@@ -16,19 +16,35 @@ wishgate/
 │   ├── main.js       # Electron main process, IPC handlers, health monitoring (5-min intervals)
 │   ├── preload.js    # Preload script for secure context-isolated IPC
 │   ├── logger.js     # Centralized structured logging with IPC forwarding
+│   ├── config/
+│   │   └── main-constants.js     # Main process configuration constants
 │   └── renderer/     # Modular renderer process (ES6 modules)
 │       ├── index.js              # Main entry point orchestrating all modules
 │       ├── config/constants.js   # Centralized configuration (timeouts, limits, delimiters)
 │       ├── core/state.js         # BoundedMap memory management and AppState pub/sub
 │       ├── ui/
 │       │   ├── chat-ui.js        # Message rendering and chat interface
-│       │   └── function-card-ui.js # Function call card visualization
+│       │   ├── function-card-ui.js # Function call card visualization
+│       │   ├── welcome-page.js   # Welcome page UI component
+│       │   └── titlebar.js       # Cross-platform custom titlebar
 │       ├── handlers/message-handlers.js # Handler registry for streaming events
 │       ├── services/session-service.js  # Session CRUD with consistent error handling
-│       └── utils/                # Renderer utilities (reserved)
+│       ├── managers/              # UI state and interaction managers
+│       │   ├── theme-manager.js  # Dark mode and theme management
+│       │   ├── view-manager.js   # View state (welcome vs chat)
+│       │   ├── dom-manager.js    # DOM element management
+│       │   └── file-manager.js   # File drag-and-drop handling
+│       └── utils/                # Renderer utilities
+│           ├── markdown-renderer.js # Markdown rendering with syntax highlighting
+│           ├── scroll-utils.js   # Scroll behavior utilities
+│           ├── json-cache.js     # JSON parsing cache
+│           ├── toast.js          # Toast notification system
+│           └── file-utils.js     # File handling utilities
 ├── ui/               # Frontend static assets
 │   ├── index.html    # Main chat UI (loads renderer/index.js as ES6 module)
-│   └── styles.css    # Global styles
+│   ├── input.css     # Tailwind CSS source
+│   ├── wishgate-logo-real.svg  # Application logo
+│   └── smoke-loading.svg       # Loading animation
 ├── src/              # Python backend (modular architecture)
 │   ├── main.py       # Application entry point and async event loop management
 │   ├── core/         # Core business logic
@@ -48,6 +64,7 @@ wishgate/
 │   │   ├── document_generation.py # Document generation from templates
 │   │   ├── file_operations.py     # File reading and directory listing
 │   │   ├── text_editing.py        # Text, regex, and insert editing operations
+│   │   ├── wrappers.py            # Tool wrapper utilities
 │   │   └── registry.py            # Tool registration and discovery
 │   ├── integrations/ # External integrations
 │   │   ├── mcp_servers.py        # MCP server setup and management
@@ -62,7 +79,8 @@ wishgate/
 │   │   ├── json_utils.py        # JSON parsing and formatting utilities
 │   │   ├── http_logger.py       # HTTP request logging middleware
 │   │   ├── client_factory.py    # Azure OpenAI client factory and configuration
-│   │   └── validation.py        # Input validation and sanitization
+│   │   ├── validation.py        # Input validation and sanitization
+│   │   └── session_integrity.py # Session integrity validation
 │   └── requirements.txt  # Python dependencies
 ├── sources/          # Source documents for processing
 ├── output/           # Generated documentation output
@@ -80,6 +98,8 @@ wishgate/
 │   ├── validate.js           # Validation utilities
 │   ├── python-manager.js     # Python environment management
 │   └── platform-config.js    # Platform detection and configuration
+├── claudedocs/       # Claude-specific documentation
+│   └── SETUP_ANALYSIS.md     # Setup system analysis and troubleshooting
 └── docs/             # Documentation (Sphinx)
     ├── _build/       # Generated HTML documentation
     ├── modules/      # Module documentation
@@ -134,9 +154,11 @@ The renderer process uses a modular architecture for maintainability:
 - `AppState`: Pub/sub state management with connection state machine
 - Structured state organization (connection, message, functions, ui)
 
-**UI Modules**:
-- `ui/chat-ui.js`: Message rendering (addMessage, streaming messages, clear chat)
-- `ui/function-card-ui.js`: Function call visualization cards with status updates
+**UI Modules** (`renderer/ui/`):
+- `chat-ui.js`: Message rendering (addMessage, streaming messages, clear chat)
+- `function-card-ui.js`: Function call visualization cards with status updates
+- `welcome-page.js`: Welcome page component with session loading
+- `titlebar.js`: Cross-platform custom titlebar (Windows/Linux borderless window support)
 
 **Event Handling** (`handlers/message-handlers.js`):
 - Handler registry pattern replacing monolithic switch statement
@@ -149,11 +171,25 @@ The renderer process uses a modular architecture for maintainability:
 - Consistent error handling and result objects
 - DRY patterns for session management
 
+**Managers** (`renderer/managers/`):
+- `theme-manager.js`: Dark mode and theme persistence
+- `view-manager.js`: View state management (welcome vs chat)
+- `dom-manager.js`: DOM element reference management
+- `file-manager.js`: File drag-and-drop handling
+
+**Utilities** (`renderer/utils/`):
+- `markdown-renderer.js`: Markdown rendering with syntax highlighting (highlight.js), math (KaTeX), diagrams (Mermaid)
+- `scroll-utils.js`: Auto-scroll behavior with user override detection
+- `json-cache.js`: JSON parsing cache with LRU eviction
+- `toast.js`: Toast notification system
+- `file-utils.js`: File handling utilities
+
 **Benefits**:
 - Modular structure enables easier testing and maintenance
 - Handler registry allows adding new message types without modifying routing logic
-- Clear separation of concerns (state, UI, services, handlers)
+- Clear separation of concerns (state, UI, services, handlers, managers)
 - ES6 modules with explicit imports/exports
+- Manager pattern for complex UI state coordination
 
 ### Agent Configuration
 ```python
@@ -228,7 +264,9 @@ make validate           # Validate Python code syntax
 make lint               # Run ruff linter with auto-fix
 make format             # Format code with black
 make typecheck          # Run mypy type checking
-make precommit          # Run all pre-commit hooks
+make fix                # Auto-fix all fixable issues (format + lint with --fix)
+make check              # Pre-commit validation gate (format check + lint + typecheck + test)
+make precommit          # Run all pre-commit hooks (comprehensive, includes JS/TS)
 make quality            # Run format + lint + typecheck (all checks)
 make install-dev        # Install dev dependencies (linters, formatters, pre-commit)
 make precommit-install  # Install pre-commit git hooks
@@ -242,13 +280,33 @@ make logs-errors        # Show error logs (tail -f, requires jq)
 make logs-all           # Show recent logs from both files
 ```
 
+### Database Management
+
+```bash
+make db-explore         # Show database exploration help
+make db-sessions        # List all sessions in database
+make db-compare         # Compare Layer 1 vs Layer 2 for current session
+make db-layer1          # Show Layer 1 (LLM context) for current session
+make db-layer2          # Show Layer 2 (UI display) for current session
+make db-tools           # Show all tool calls for current session
+make db-types           # Show SDK item type distribution
+make db-shell           # Start interactive SQLite shell
+make db-reset           # Clear all session data (WARNING: destructive)
+make db-backup          # Backup database to timestamped archive
+make db-restore BACKUP=name  # Restore from backup
+```
+
 ### Maintenance
 
 ```bash
 make clean              # Clean temporary files and logs
+make clean-cache        # Clean development cache directories (mypy, ruff, pytest, serena)
 make clean-venv         # Remove .juicer virtual environment
-make clean-all          # Deep clean (logs + venv + node_modules)
+make clean-all          # Deep clean (logs + cache + venv + node_modules)
 make reset              # Complete reset (clean-all + remove .env)
+make kill               # Kill all Wishgate processes (nuclear option)
+make restart            # Quick restart (kill + sleep + dev)
+make update-deps        # Update dependencies (Node.js and Python) + health check
 ```
 
 ### Diagnostics
@@ -288,9 +346,24 @@ Optional:
 - `python-dotenv>=1.0.0` - Environment variable management
 - `httpx>=0.25.0` - Modern HTTP client (dependency of openai)
 
-#### Node Dependencies
+#### Node Dependencies (package.json)
+**Production**:
+- `marked` - Markdown parser
+- `marked-footnote` - Footnote support for marked
+- `dompurify` - HTML sanitization
+- `highlight.js` - Syntax highlighting
+- `katex` - Math rendering
+- `mermaid` - Diagram rendering
+
+**Development**:
 - `electron` - Desktop application framework
-- `@modelcontextprotocol/server-sequential-thinking` - MCP server for reasoning
+- `vite` - Build tool and dev server
+- `@tailwindcss/vite` - Tailwind CSS 4.x integration
+- `@tailwindcss/typography` - Typography plugin
+- `@biomejs/biome` - JavaScript/TypeScript linter and formatter
+
+**MCP Servers**:
+- `@modelcontextprotocol/server-sequential-thinking` - Sequential reasoning MCP server (npm global)
 
 ### Streaming Event Handling
 The Agent/Runner pattern provides structured events:
@@ -327,7 +400,7 @@ make test               # Validate Python syntax
 
 1. **Setup failures**
    - Run `make health` to identify missing dependencies
-   - Check Python version: `python3 --version` (need 3.9+)
+   - Check Python version: `python3 --version` (need 3.13+)
    - Check Node version: `node --version` (need 16+)
    - Verify virtual environment: `ls -la .juicer/`
 

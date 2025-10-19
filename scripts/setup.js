@@ -153,42 +153,44 @@ async function setupPythonEnvironment() {
 }
 
 /**
- * Install MCP server
+ * Install MCP servers
  */
-async function installMCPServer() {
-  printHeader("Installing MCP Server");
+async function installMCPServers() {
+  printHeader("Installing MCP Servers");
 
-  const mcpPackage = "@modelcontextprotocol/server-sequential-thinking";
+  // Sequential Thinking Server (Node.js-based, global install)
+  const seqThinkingPackage = "@modelcontextprotocol/server-sequential-thinking";
 
   try {
     // Check if already installed
     try {
-      execSync(`npm list -g ${mcpPackage}`, { stdio: "ignore" });
-      printSuccess(`MCP server already installed`);
-      return true;
+      execSync(`npm list -g ${seqThinkingPackage}`, { stdio: "ignore" });
+      printSuccess(`Sequential Thinking MCP server already installed`);
     } catch (_error) {
       // Not installed, proceed with installation
+      printInfo(`Installing ${seqThinkingPackage} globally...`);
+
+      execSync(`npm install -g ${seqThinkingPackage}`, {
+        stdio: "inherit",
+      });
+
+      printSuccess("Sequential Thinking MCP server installed");
     }
-
-    printInfo(`Installing ${mcpPackage} globally...`);
-
-    execSync(`npm install -g ${mcpPackage}`, {
-      stdio: "inherit",
-    });
-
-    printSuccess("MCP server installed");
-    return true;
   } catch (_error) {
-    printWarning("Failed to install MCP server globally");
+    printWarning("Failed to install Sequential Thinking MCP server globally");
     printInfo("You may need elevated permissions. Try:");
     if (platformConfig.isWindows()) {
-      printInfo(`  Run as Administrator: npm install -g ${mcpPackage}`);
+      printInfo(`  Run as Administrator: npm install -g ${seqThinkingPackage}`);
     } else {
-      printInfo(`  sudo npm install -g ${mcpPackage}`);
+      printInfo(`  sudo npm install -g ${seqThinkingPackage}`);
     }
-    // Don't fail setup for this
-    return false;
   }
+
+  // Fetch Server (Python-based, installed in venv via requirements.txt)
+  printInfo("Fetch MCP server will be installed with Python dependencies");
+  printSuccess("MCP servers configuration complete");
+
+  return true;
 }
 
 /**
@@ -229,13 +231,70 @@ async function setupEnvironment() {
 }
 
 /**
+ * Install development tools (optional)
+ */
+async function installDevTools() {
+  const args = process.argv.slice(2);
+  const installDev = args.includes("--dev") || args.includes("--with-dev");
+
+  if (!installDev) {
+    printInfo("Skipping dev tools (use --dev to install linters, formatters, etc.)");
+    return true;
+  }
+
+  printHeader("Installing Development Tools");
+
+  const pythonManager = new PythonManager();
+  const devRequirementsPath = path.join(process.cwd(), "requirements-dev.txt");
+
+  if (!existsSync(devRequirementsPath)) {
+    printWarning("requirements-dev.txt not found, skipping dev tools");
+    return true;
+  }
+
+  try {
+    const pipPath = path.join(process.cwd(), pythonManager.venvPaths.pipBin);
+
+    printInfo("Installing Python dev dependencies (ruff, black, mypy, pre-commit)...");
+    execSync(`"${pipPath}" install -r requirements-dev.txt`, {
+      stdio: "inherit",
+      cwd: process.cwd(),
+    });
+
+    printSuccess("Python dev dependencies installed");
+
+    // Install pre-commit hooks
+    printInfo("Installing pre-commit hooks...");
+    const preCommitPath = path.join(process.cwd(), pythonManager.venvPaths.venvDir, "bin", "pre-commit");
+    execSync(`"${preCommitPath}" install`, {
+      stdio: "inherit",
+      cwd: process.cwd(),
+    });
+
+    printSuccess("Pre-commit hooks installed");
+    return true;
+  } catch (error) {
+    printWarning(`Dev tools installation failed: ${error.message}`);
+    printInfo("You can install them later with: make install-dev");
+    return false;
+  }
+}
+
+/**
  * Create necessary directories
  */
 async function createDirectories() {
   printHeader("Creating Project Directories");
 
   const fs = require("node:fs");
-  const dirs = ["logs", "sources", "output", "templates"];
+  const dirs = [
+    "logs", // Log files (conversations.jsonl, errors.jsonl)
+    "sources", // Global source documents (deprecated in favor of per-session)
+    "output", // Global output documents (deprecated in favor of per-session)
+    "templates", // Global document templates
+    "data", // Session metadata and SQLite databases
+    "data/files", // Per-session workspaces (sources, output, templates)
+  ];
 
   for (const dir of dirs) {
     const dirPath = path.join(process.cwd(), dir);
@@ -291,7 +350,8 @@ async function main() {
     await checkPrerequisites();
     await installNodeDependencies();
     await setupPythonEnvironment();
-    await installMCPServer();
+    await installMCPServers();
+    await installDevTools();
     await setupEnvironment();
     await createDirectories();
     await validateSetup();

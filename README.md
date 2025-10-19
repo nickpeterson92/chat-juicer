@@ -97,7 +97,7 @@ Wishgate uses OpenAI's **Agent/Runner pattern** with a **two-layer persistence a
 ## Prerequisites
 
 - Node.js 16+ and npm
-- Python 3.9+ (for type annotations and modern async features)
+- **Python 3.13+** (strictly required for all dependencies)
 - Azure OpenAI resource with deployment (e.g., gpt-5-mini, gpt-4o, gpt-4)
 - Azure OpenAI API credentials
 - Internet connection for MCP server downloads
@@ -109,7 +109,7 @@ Wishgate uses OpenAI's **Agent/Runner pattern** with a **two-layer persistence a
 - Node.js 16+ and npm required
 
 ### Python Dependencies
-- Python 3.9+ required (for modern type hints and async features)
+- **Python 3.13+ required** (strictly enforced for all dependencies)
 - Full type safety with mypy strict=true
 - See dependencies section below for package list
 
@@ -213,11 +213,12 @@ Run `make help` or `make` to see all available commands.
 #### Setup Commands
 
 ```bash
-make setup              # Complete first-time setup (recommended)
+make setup              # Complete first-time setup (essential dependencies only)
+make setup-dev          # Complete setup with dev tools (linters, formatters, pre-commit)
 make install            # Install all dependencies (Node, Python, MCP)
 make install-node       # Install Node.js dependencies only
 make install-python     # Install Python dependencies into .juicer venv
-make install-mcp        # Install MCP server globally
+make install-mcp        # Install MCP servers (Sequential Thinking + Fetch)
 make install-dev        # Install dev dependencies (linters, formatters, pre-commit)
 make precommit-install  # Install pre-commit git hooks
 ```
@@ -249,7 +250,9 @@ make validate           # Validate Python code syntax
 make lint               # Run ruff linter with auto-fix
 make format             # Format code with black
 make typecheck          # Run mypy type checking
-make precommit          # Run all pre-commit hooks
+make fix                # Auto-fix all fixable issues (format + lint with --fix)
+make check              # Pre-commit validation gate (format check + lint + typecheck + test)
+make precommit          # Run all pre-commit hooks (comprehensive, includes JS/TS)
 make quality            # Run format + lint + typecheck (all quality checks)
 ```
 
@@ -280,15 +283,22 @@ make db-layer2          # Show Layer 2 (UI display) for current session
 make db-tools           # Show all tool calls for current session
 make db-types           # Show SDK item type distribution
 make db-shell           # Start interactive SQLite shell
+make db-reset           # Clear all session data (WARNING: destructive)
+make db-backup          # Backup database to timestamped archive
+make db-restore BACKUP=name  # Restore from backup
 ```
 
 #### Maintenance
 
 ```bash
 make clean              # Clean temporary files and logs
+make clean-cache        # Clean development cache directories (mypy, ruff, pytest, serena)
 make clean-venv         # Remove .juicer virtual environment
-make clean-all          # Deep clean (logs + venv + node_modules)
+make clean-all          # Deep clean (logs + cache + venv + node_modules)
 make reset              # Complete reset (clean-all + remove .env)
+make kill               # Kill all Wishgate processes (nuclear option)
+make restart            # Quick restart (kill + sleep + dev)
+make update-deps        # Update dependencies (Node.js and Python) + health check
 ```
 
 #### Information
@@ -313,19 +323,35 @@ wishgate/
 │   ├── main.js       # Electron main process, IPC handlers, health monitoring
 │   ├── preload.js    # Preload script for secure context-isolated IPC
 │   ├── logger.js     # Centralized structured logging with IPC forwarding
+│   ├── config/
+│   │   └── main-constants.js     # Main process configuration constants
 │   └── renderer/     # Modular renderer process (ES6 modules)
-│       ├── index.js              # Main entry point
-│       ├── config/constants.js   # Configuration constants
-│       ├── core/state.js         # BoundedMap and AppState
+│       ├── index.js              # Main entry point orchestrating all modules
+│       ├── config/constants.js   # Centralized configuration
+│       ├── core/state.js         # BoundedMap memory management and AppState pub/sub
 │       ├── ui/
-│       │   ├── chat-ui.js        # Message rendering
-│       │   └── function-card-ui.js # Function card visualization
-│       ├── handlers/message-handlers.js # Event handler registry
-│       ├── services/session-service.js  # Session management
-│       └── utils/                # Renderer utilities (reserved)
+│       │   ├── chat-ui.js        # Message rendering and chat interface
+│       │   ├── function-card-ui.js # Function call card visualization
+│       │   ├── welcome-page.js   # Welcome page UI component
+│       │   └── titlebar.js       # Cross-platform custom titlebar
+│       ├── handlers/message-handlers.js # Handler registry for streaming events
+│       ├── services/session-service.js  # Session CRUD operations
+│       ├── managers/              # UI state and interaction managers
+│       │   ├── theme-manager.js  # Dark mode and theme management
+│       │   ├── view-manager.js   # View state (welcome vs chat)
+│       │   ├── dom-manager.js    # DOM element management
+│       │   └── file-manager.js   # File drag-and-drop handling
+│       └── utils/                # Renderer utilities
+│           ├── markdown-renderer.js # Markdown rendering with syntax highlighting
+│           ├── scroll-utils.js   # Scroll behavior utilities
+│           ├── json-cache.js     # JSON parsing cache
+│           ├── toast.js          # Toast notification system
+│           └── file-utils.js     # File handling utilities
 ├── ui/               # Frontend static assets
-│   ├── index.html    # Main chat UI with markdown rendering
-│   └── styles.css    # Global styles
+│   ├── index.html    # Main chat UI (loads renderer/index.js as ES6 module)
+│   ├── input.css     # Tailwind CSS source
+│   ├── wishgate-logo-real.svg  # Application logo
+│   └── smoke-loading.svg       # Loading animation
 ├── src/              # Python backend (modular architecture)
 │   ├── main.py       # Application entry point
 │   ├── core/         # Core business logic
@@ -345,6 +371,7 @@ wishgate/
 │   │   ├── document_generation.py # Document generation from templates
 │   │   ├── file_operations.py     # File reading and directory listing
 │   │   ├── text_editing.py        # Text editing operations
+│   │   ├── wrappers.py            # Tool wrapper utilities
 │   │   └── registry.py            # Tool registration and discovery
 │   ├── integrations/ # External integrations
 │   │   ├── mcp_servers.py        # MCP server setup and management
@@ -359,7 +386,8 @@ wishgate/
 │   │   ├── json_utils.py        # JSON parsing and formatting
 │   │   ├── http_logger.py       # HTTP request logging
 │   │   ├── client_factory.py    # Azure OpenAI client factory
-│   │   └── validation.py        # Input validation utilities
+│   │   ├── validation.py        # Input validation utilities
+│   │   └── session_integrity.py # Session integrity validation
 │   └── requirements.txt  # Python dependencies
 ├── sources/          # Source documents for processing
 ├── output/           # Generated documentation output
@@ -376,7 +404,9 @@ wishgate/
 │   ├── launch.js             # Application launcher
 │   ├── validate.js           # Validation utilities
 │   ├── python-manager.js     # Python environment management
-│   └── platform-config.js    # Platform detection
+│   └── platform-config.js    # Platform detection and configuration
+├── claudedocs/       # Claude-specific documentation
+│   └── SETUP_ANALYSIS.md     # Setup system analysis and troubleshooting
 └── docs/             # Documentation (Sphinx)
     ├── _build/       # Generated HTML documentation
     ├── modules/      # Module documentation
@@ -726,14 +756,39 @@ Recent improvements for better maintainability:
 
 ### Python Dependencies
 
-Required dependencies (from `src/requirements.txt`):
+**Required** (Python 3.13+, from `src/requirements.txt`):
 - `openai>=1.0.0`: Azure OpenAI client library (AsyncOpenAI)
-- `openai-agents>=0.2.0`: Agent/Runner framework with MCP support and SQLiteSession
-- `markitdown>=0.1.0`: Document conversion to markdown (PDF, Word, Excel, HTML, etc.)
+- `openai-agents>=0.3.3`: Agent/Runner framework with MCP support and SQLiteSession
+- `markitdown[all]>=0.1.0`: Document conversion to markdown (PDF, Word, Excel, HTML, CSV, JSON, images)
 - `tiktoken>=0.5.0`: OpenAI's official token counting library for exact token counts
-- `python-json-logger>=2.0.0`: Structured JSON logging for conversations and errors
+- `python-json-logger>=2.0.0`: Structured JSON logging with rotation and session correlation
 - `python-dotenv>=1.0.0`: Environment variable management (.env file loading)
 - `httpx>=0.25.0`: Modern HTTP client (dependency of openai library)
+- `aiofiles>=23.0.0`: Async file operations for non-blocking I/O
+- `pydantic>=2.5.0`: Runtime data validation with type hints
+- `pydantic-settings>=2.0.0`: Settings management with environment variables
+- `mcp-server-fetch>=2025.4.0`: MCP server for HTTP/web content retrieval
+
+### Node.js Dependencies
+
+**Production** (from `package.json`):
+- `marked`: Markdown parser
+- `marked-footnote`: Footnote support for marked
+- `dompurify`: HTML sanitization for security
+- `highlight.js`: Syntax highlighting for code blocks
+- `katex`: Math rendering (LaTeX support)
+- `mermaid`: Diagram rendering from text
+
+**Development**:
+- `electron`: Desktop application framework
+- `vite`: Build tool and dev server (v7.x)
+- `@tailwindcss/vite`: Tailwind CSS 4.x integration
+- `@tailwindcss/typography`: Typography plugin for prose content
+- `@biomejs/biome`: JavaScript/TypeScript linter and formatter
+
+**MCP Servers** (npm global):
+- `@modelcontextprotocol/server-sequential-thinking`: Sequential reasoning MCP server
+
 ## Troubleshooting
 
 ### Quick Diagnosis
@@ -756,9 +811,10 @@ make test               # Validate Python syntax
    - Verify network connectivity to Azure
    - View errors: `make logs-errors`
 
-3. **Python not found**
-   - Ensure Python 3.9+ is installed and in PATH
-   - Check: `python3 --version` or `python --version`
+3. **Python not found or wrong version**
+   - Ensure Python 3.13+ is installed and in PATH
+   - Check: `python3 --version` (must show 3.13 or higher)
+   - Install Python 3.13+ from https://www.python.org/downloads/
    - Use virtual environment: `make install-python`
 
 4. **Electron window doesn't open**

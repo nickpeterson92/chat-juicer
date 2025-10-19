@@ -39,6 +39,7 @@ class PlatformConfig {
 
   /**
    * Get fallback Python command names to try (in order of preference)
+   * Requires Python 3.13+ for all dependencies
    */
   getPythonCommands() {
     switch (this.platform) {
@@ -46,9 +47,9 @@ class PlatformConfig {
         return ["python", "py", "python3"];
       case "darwin":
       case "linux":
-        return ["python3", "python"];
+        return ["python3.13", "python3"];
       default:
-        return ["python3", "python"];
+        return ["python3.13", "python3"];
     }
   }
 

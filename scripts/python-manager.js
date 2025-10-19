@@ -41,7 +41,7 @@ class PythonManager {
     }
 
     throw new Error(
-      `Python not found. Please install Python 3.9+ from https://www.python.org/downloads/\n` +
+      `Python not found. Please install Python 3.13+ from https://www.python.org/downloads/\n` +
         `Tried: ${this.pythonCommands.join(", ")}`
     );
   }
@@ -108,12 +108,12 @@ class PythonManager {
         stdio: ["pipe", "pipe", "ignore"],
       }).trim();
 
-      // Check version is Python 3.9+
+      // Check version is Python 3.13+
       const match = version.match(/Python (\d+)\.(\d+)/);
       if (match) {
         const major = parseInt(match[1], 10);
         const minor = parseInt(match[2], 10);
-        return major === 3 && minor >= 9;
+        return major === 3 && minor >= 13;
       }
 
       return false;
