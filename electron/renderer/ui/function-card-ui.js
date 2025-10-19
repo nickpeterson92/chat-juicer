@@ -10,6 +10,45 @@ import { safeParse } from "../utils/json-cache.js";
 const pendingUpdates = new Map();
 let updateScheduled = false;
 
+// SVG icon mapping for functions
+const FUNCTION_ICONS = {
+  list_directory:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>',
+  read_file:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8m8 4H8m8-8H8"/></svg>',
+  generate_document:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>',
+  text_edit:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>',
+  regex_edit:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>',
+  insert_text:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
+  sequentialthinking:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"/></svg>',
+  fetch:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>',
+  default:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>',
+};
+
+/**
+ * Get SVG icon for a function
+ * @param {string} functionName - Function name
+ * @returns {string} SVG icon HTML
+ */
+function getFunctionIcon(functionName) {
+  const normalizedName = functionName.toLowerCase().replace(/[_-]/g, "");
+
+  for (const [key, icon] of Object.entries(FUNCTION_ICONS)) {
+    if (normalizedName.includes(key.toLowerCase().replace(/[_-]/g, ""))) {
+      return icon;
+    }
+  }
+
+  return FUNCTION_ICONS.default;
+}
+
 /**
  * Create or get an inline function call card (collapsed by default)
  * @param {HTMLElement} chatContainer - The chat container element (not tools container)
@@ -49,28 +88,28 @@ export function createFunctionCallCard(
 
     const iconDiv = document.createElement("div");
     iconDiv.className = "function-icon";
-    iconDiv.innerHTML = "🔧";
+    iconDiv.innerHTML = getFunctionIcon(functionName);
 
     const nameDiv = document.createElement("div");
     nameDiv.className = "function-name";
     nameDiv.textContent = functionName;
 
+    const paramsDiv = document.createElement("div");
+    paramsDiv.className = "function-params";
+    paramsDiv.textContent = "()"; // Will be updated with actual params
+
     const statusDiv = document.createElement("div");
     statusDiv.className = "function-status";
     statusDiv.textContent = status;
 
-    const expandIndicator = document.createElement("div");
-    expandIndicator.className = "function-expand-indicator";
-    expandIndicator.textContent = "▶";
-
     headerDiv.appendChild(iconDiv);
     headerDiv.appendChild(nameDiv);
+    headerDiv.appendChild(paramsDiv);
     headerDiv.appendChild(statusDiv);
-    headerDiv.appendChild(expandIndicator);
     cardDiv.appendChild(headerDiv);
 
     // Add click handler for expand/collapse
-    cardDiv.addEventListener("click", () => toggleFunctionCard(cardDiv));
+    cardDiv.addEventListener("click", () => toggleFunctionCard(cardDiv, activeCalls, activeTimers, callId));
 
     // Insert function card BEFORE the current streaming assistant message
     // This ensures tool calls appear above the model's response
@@ -97,6 +136,7 @@ export function createFunctionCallCard(
       name: functionName,
       timestamp: Date.now(),
       expanded: false,
+      cleanupTimerId: null, // Track timer for cancellation
     };
     activeCalls.set(callId, card);
   }
@@ -108,15 +148,46 @@ export function createFunctionCallCard(
  * Toggle function card between collapsed and expanded states
  * @param {HTMLElement} cardElement - The card element to toggle
  */
-function toggleFunctionCard(cardElement) {
+function toggleFunctionCard(cardElement, activeCalls, activeTimers, callId) {
   const isExpanded = cardElement.dataset.expanded === "true";
 
   if (isExpanded) {
+    // Collapsing - remove expanded state and trigger cleanup
     cardElement.classList.remove("expanded");
     cardElement.dataset.expanded = "false";
+
+    // Update card object state
+    if (callId && activeCalls) {
+      const card = activeCalls.get(callId);
+      if (card) {
+        card.expanded = false;
+      }
+
+      // Trigger cleanup now that card is collapsed
+      if (activeTimers) {
+        scheduleFunctionCardCleanup(activeCalls, activeTimers, callId);
+      }
+    }
   } else {
+    // Expanding - add expanded state and cancel any pending cleanup
     cardElement.classList.add("expanded");
     cardElement.dataset.expanded = "true";
+
+    // Update card object state and cancel cleanup timer
+    if (callId && activeCalls) {
+      const card = activeCalls.get(callId);
+      if (card) {
+        card.expanded = true;
+
+        // Cancel any pending cleanup timer since user wants to keep it visible
+        if (card.cleanupTimerId && activeTimers) {
+          clearTimeout(card.cleanupTimerId);
+          activeTimers.delete(card.cleanupTimerId);
+          card.cleanupTimerId = null;
+          window.electronAPI.log("debug", "Cancelled cleanup timer on expand", { callId });
+        }
+      }
+    }
   }
 }
 
@@ -172,12 +243,21 @@ function flushStatusUpdates(activeCalls) {
 
     // Add arguments if provided (optimized with JSON cache)
     if (data.arguments && !card.element.querySelector(".function-arguments")) {
+      const parsedArgs = safeParse(data.arguments, data.arguments);
+      const argsText = typeof parsedArgs === "string" ? parsedArgs : JSON.stringify(parsedArgs, null, 2);
+
+      // Update params display for collapsed state - show full params inline
+      const paramsDiv = card.element.querySelector(".function-params");
+      if (paramsDiv) {
+        // Show compact inline JSON representation
+        const compactJson = typeof parsedArgs === "object" ? JSON.stringify(parsedArgs) : parsedArgs;
+        paramsDiv.textContent = compactJson;
+      }
+
+      // Create full arguments section for expanded state
       const argsDiv = document.createElement("div");
       argsDiv.className = "function-arguments";
-
-      const parsedArgs = safeParse(data.arguments, data.arguments);
-      argsDiv.textContent = typeof parsedArgs === "string" ? parsedArgs : JSON.stringify(parsedArgs, null, 2);
-
+      argsDiv.textContent = argsText;
       card.element.appendChild(argsDiv);
     }
 
@@ -236,10 +316,23 @@ export function updateFunctionArguments(activeCalls, argumentsBuffer, callId, de
     const parsedArgs = safeParse(argumentsBuffer.get(callId), argumentsBuffer.get(callId));
     argsDiv.textContent = typeof parsedArgs === "string" ? parsedArgs : JSON.stringify(parsedArgs, null, 2);
 
+    // Update params display for collapsed state - show full params inline
+    const paramsDiv = card.element.querySelector(".function-params");
+    if (paramsDiv) {
+      const compactJson = typeof parsedArgs === "object" ? JSON.stringify(parsedArgs) : parsedArgs;
+      paramsDiv.textContent = compactJson;
+    }
+
     argumentsBuffer.delete(callId);
   } else {
     // Show partial arguments while streaming
     argsDiv.textContent = `${argumentsBuffer.get(callId)}...`;
+
+    // Update params to show streaming indicator
+    const paramsDiv = card.element.querySelector(".function-params");
+    if (paramsDiv) {
+      paramsDiv.textContent = argumentsBuffer.get(callId);
+    }
   }
 }
 
@@ -250,6 +343,21 @@ export function updateFunctionArguments(activeCalls, argumentsBuffer, callId, de
  * @param {string} callId - Call identifier to clean up
  */
 export function scheduleFunctionCardCleanup(activeCalls, activeTimers, callId) {
+  const card = activeCalls.get(callId);
+
+  // Don't clean up if card is expanded - user is still reviewing it
+  if (card?.expanded) {
+    window.electronAPI.log("debug", "Skipping cleanup for expanded card", { callId });
+    return;
+  }
+
+  // Cancel any existing timer for this card before scheduling new one
+  if (card?.cleanupTimerId) {
+    clearTimeout(card.cleanupTimerId);
+    activeTimers.delete(card.cleanupTimerId);
+    window.electronAPI.log("debug", "Cancelled previous cleanup timer", { callId });
+  }
+
   const timerId = setTimeout(() => {
     const card = activeCalls.get(callId);
 
@@ -266,6 +374,11 @@ export function scheduleFunctionCardCleanup(activeCalls, activeTimers, callId) {
     activeCalls.delete(callId);
     activeTimers.delete(timerId);
   }, FUNCTION_CARD_CLEANUP_DELAY);
+
+  // Store timer ID on card for later cancellation
+  if (card) {
+    card.cleanupTimerId = timerId;
+  }
   activeTimers.add(timerId);
 }
 
