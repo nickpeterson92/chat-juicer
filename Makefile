@@ -44,7 +44,7 @@ run: ## Start the application (production mode)
 	@echo "$(BLUE)Starting Wishgate...$(NC)"
 	@npm start
 
-dev: ## Start in development mode (with DevTools)
+dev: ## Start in development mode (with DevTools and hot reload)
 	@echo "$(BLUE)Starting Wishgate in development mode...$(NC)"
 	@npm run dev
 
@@ -200,6 +200,17 @@ db-shell: ## Start interactive SQLite shell
 	@./scripts/explore-db.sh interactive
 
 ##@ Maintenance
+
+kill: ## Kill all Wishgate processes (nuclear option for when things go wrong)
+	@echo "$(BLUE)Killing all Wishgate processes...$(NC)"
+	@echo "$(YELLOW)→ Killing Vite dev server (port 5173)...$(NC)"
+	@lsof -ti:5173 | xargs kill -9 2>/dev/null && echo "  $(GREEN)✓ Vite killed$(NC)" || echo "  $(YELLOW)○ No Vite process$(NC)"
+	@echo "$(YELLOW)→ Killing Python backend processes...$(NC)"
+	@pkill -9 -f "python.*main.py" 2>/dev/null && echo "  $(GREEN)✓ Python killed$(NC)" || echo "  $(YELLOW)○ No Python process$(NC)"
+	@echo "$(YELLOW)→ Killing Electron processes...$(NC)"
+	@pkill -9 -f "electron.*main.js" 2>/dev/null && echo "  $(GREEN)✓ Electron killed$(NC)" || echo "  $(YELLOW)○ No Electron process$(NC)"
+	@pkill -9 -f "launch.js" 2>/dev/null && echo "  $(GREEN)✓ Launch script killed$(NC)" || echo "  $(YELLOW)○ No launch script$(NC)"
+	@echo "$(GREEN)✓ All Wishgate processes terminated$(NC)"
 
 clean: ## Clean temporary files and logs
 	@echo "$(BLUE)Cleaning temporary files...$(NC)"

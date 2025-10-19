@@ -769,14 +769,13 @@ function initializeEventListeners() {
   // Refresh files button
   if (elements.refreshFilesBtn) {
     addManagedEventListener(elements.refreshFilesBtn, "click", () => {
-      // Use session directory if available, otherwise use active directory
+      // Only refresh files if there's an active session
       if (sessionState.currentSessionId) {
         const sessionDirectory = `data/files/${sessionState.currentSessionId}/sources`;
         setActiveFilesDirectory(sessionDirectory);
         loadFiles(sessionDirectory);
-      } else {
-        loadFiles(activeFilesDirectory);
       }
+      // No else needed - files only load when session is active
     });
   }
 
@@ -1059,9 +1058,8 @@ async function handleFileDrop(e) {
     const sessionDirectory = `data/files/${sessionState.currentSessionId}/sources`;
     setActiveFilesDirectory(sessionDirectory);
     loadFiles(sessionDirectory);
-  } else if (activeFilesDirectory === "sources") {
-    loadFiles("sources");
   }
+  // No else needed - files only load when session is active
 
   // Also refresh welcome page files container if on welcome page
   if (appState.ui.currentView === "welcome") {
@@ -1193,9 +1191,8 @@ window.addEventListener("load", () => {
       const sessionDirectory = `data/files/${sessionState.currentSessionId}/sources`;
       setActiveFilesDirectory(sessionDirectory);
       loadFiles(sessionDirectory);
-    } else {
-      loadFiles(activeFilesDirectory);
     }
+    // No else needed - files only load when session is active
   });
 
   // Show welcome page on startup

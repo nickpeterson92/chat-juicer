@@ -61,9 +61,13 @@ function createWindow() {
 
   // Load from Vite dev server in development, built files in production
   if (process.env.VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+    const devUrl = process.env.VITE_DEV_SERVER_URL;
+    logger.info("Loading from Vite dev server", { url: devUrl });
+    mainWindow.loadURL(devUrl);
   } else {
-    mainWindow.loadFile(path.join(__dirname, "..", "dist", "renderer", "ui", "index.html"));
+    const prodPath = path.join(__dirname, "..", "dist", "renderer", "ui", "index.html");
+    logger.info("Loading from built files", { path: prodPath });
+    mainWindow.loadFile(prodPath);
   }
 
   // Open DevTools in development

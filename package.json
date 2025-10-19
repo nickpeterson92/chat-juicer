@@ -6,8 +6,7 @@
   "scripts": {
     "prestart": "node scripts/validate.js",
     "start": "npm run build && node scripts/launch.js",
-    "dev": "npm run dev:vite & node scripts/launch.js --dev",
-    "dev:vite": "vite",
+    "dev": "node scripts/launch.js --dev",
     "build": "vite build",
     "inspect": "node scripts/launch.js --inspect",
     "setup": "npm install && node scripts/setup.js",
