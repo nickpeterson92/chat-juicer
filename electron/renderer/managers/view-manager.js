@@ -173,21 +173,30 @@ function attachWelcomePageListeners(elements, appState) {
     const { getMcpConfig } = await import("../ui/welcome-page.js");
     const mcpConfig = getMcpConfig();
 
-    // Create new session with MCP config BEFORE sending message
-    const { createNewSession } = await import("../services/session-service.js");
-    const result = await createNewSession(window.electronAPI, elements, null, mcpConfig);
+    // Create new session only if one does not already exist (e.g., created by file upload)
+    const { createNewSession, sessionState } = await import("../services/session-service.js");
+    let sessionId = sessionState.currentSessionId;
 
-    if (!result.success) {
-      window.electronAPI.log("error", "Failed to create session from welcome page", { error: result.error });
-      return;
+    if (!sessionId) {
+      const result = await createNewSession(window.electronAPI, elements, null, mcpConfig);
+      if (!result.success) {
+        window.electronAPI.log("error", "Failed to create session from welcome page", { error: result.error });
+        return;
+      }
+      sessionId = result.data?.session_id || null;
+
+      window.electronAPI.log("info", "Session created with MCP config", {
+        session_id: sessionId,
+        mcp_config: mcpConfig,
+      });
+    } else {
+      window.electronAPI.log("info", "Reusing existing session for welcome message", {
+        session_id: sessionId,
+        created_by: "file_upload",
+      });
     }
 
-    window.electronAPI.log("info", "Session created with MCP config", {
-      session_id: result.data?.session_id,
-      mcp_config: mcpConfig,
-    });
-
-    // Transition to chat view
+    // Transition to chat view (either new or existing session)
     showChatView(elements, appState);
 
     // Collapse sidebar to give chat more space (matches behavior when switching sessions)
