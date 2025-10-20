@@ -48,3 +48,26 @@ def create_openai_client(
     if base_url:
         kwargs["base_url"] = base_url
     return AsyncOpenAI(**kwargs)
+
+
+def create_sync_openai_client(
+    api_key: str,
+    base_url: str | None = None,
+) -> Any:
+    """Create synchronous OpenAI client for MarkItDown compatibility.
+
+    MarkItDown requires a synchronous client for image processing.
+
+    Args:
+        api_key: OpenAI or Azure OpenAI API key
+        base_url: Optional base URL for Azure or custom endpoints
+
+    Returns:
+        Configured synchronous OpenAI client
+    """
+    from openai import OpenAI
+
+    kwargs: dict[str, Any] = {"api_key": api_key}
+    if base_url:
+        kwargs["base_url"] = base_url
+    return OpenAI(**kwargs)

@@ -161,7 +161,7 @@ class FullHistoryStore:
                     return []
 
                 # Build query with optional pagination
-                query = f"SELECT role, content, metadata FROM {table_name} ORDER BY id ASC"
+                query = f"SELECT role, content, metadata FROM {table_name} ORDER BY id DESC"
                 params: tuple[Any, ...] = ()
 
                 if limit is not None:

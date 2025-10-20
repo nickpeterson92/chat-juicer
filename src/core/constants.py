@@ -59,6 +59,17 @@ LOG_PREVIEW_LENGTH = 50
 #: File extensions that can be converted to markdown using markitdown.
 #: The read_file() tool automatically converts these formats to text/markdown
 #: for processing by the agent. Requires markitdown[all] for full support.
+#: Image file extensions that support native vision API processing.
+#: These formats can be passed directly to vision-enabled models (GPT-4o, GPT-4-turbo, GPT-5)
+#: for image understanding without intermediate text conversion.
+IMAGE_EXTENSIONS = {
+    ".jpg",
+    ".jpeg",  # JPEG images
+    ".png",  # PNG images
+    ".gif",  # GIF images (first frame)
+    ".webp",  # WebP images
+}
+
 CONVERTIBLE_EXTENSIONS = {
     # Microsoft Office formats
     ".xlsx",
@@ -82,15 +93,15 @@ CONVERTIBLE_EXTENSIONS = {
     ".mht",  # MHTML archives
     # Code/Notebook formats
     ".ipynb",  # Jupyter notebooks
-    # Image formats (if LLM client configured in markitdown)
+    # Image formats - converted to text descriptions via markitdown
     ".jpg",
-    ".jpeg",  # JPEG images
-    ".png",  # PNG images
-    ".gif",  # GIF images
-    ".bmp",  # Bitmap images
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".bmp",
     ".tiff",
-    ".tif",  # TIFF images
-    ".webp",  # WebP images
+    ".tif",
+    ".webp",  # Images
 }
 
 # ============================================================================

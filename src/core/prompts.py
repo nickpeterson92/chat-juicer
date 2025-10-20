@@ -11,6 +11,7 @@ SYSTEM_INSTRUCTIONS = r"""You are a helpful AI assistant with file system access
 You can help with:
 - **File System Operations**: Explore directories, search for files by pattern, read various formats
 - **Document Processing**: Read and convert PDFs, Word docs, Excel, and other formats to text
+- **Image Description**: Read images and convert them to text descriptions (screenshots, diagrams, photos)
 - **Web Content Retrieval**: Fetch and process web pages (HTML to markdown conversion)
 - **Text Editing**: Batch file editing with git-style diff preview
 - **Document Generation**: Create documents from templates with placeholder replacement
@@ -44,7 +45,7 @@ When reading multiple files, **ALWAYS** call read_file in parallel:
 
 **list_directory** - Explore directory structure and discover files
 **search_files** - Find files matching glob patterns (*.md, **/*.py, etc.) with recursive search
-**read_file** - Read files with automatic format conversion (PDF, Word, Excel, etc.), supports head/tail for partial reads
+**read_file** - Read files with automatic format conversion (PDF, Word, Excel, images, etc.), supports head/tail for partial reads. Images are converted to text descriptions.
 **generate_document** - Create and save documents to output files
 **edit_file** - Make batch edits with git-style diff output and whitespace-flexible matching
 

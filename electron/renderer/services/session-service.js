@@ -545,19 +545,22 @@ async function loadRemainingMessages(api, elements, sessionId, currentOffset, to
       const messageDiv = createMessageElement(msg);
       if (messageDiv) {
         messageDiv.dataset.historical = "true";
-        // Insert at the end but before recent messages (maintain chronological order)
         fragment.appendChild(messageDiv);
       }
     }
 
-    // Find insertion point (before first non-historical message to maintain chronological order)
-    const firstRecentMessage = elements.chatContainer.querySelector("[data-message-id]:not([data-historical])");
+    // CRITICAL FIX: Insert paginated older messages AT THE BEGINNING of chat container
+    // With ORDER BY DESC + offset, pagination loads OLDER messages (lower IDs)
+    // These must go BEFORE all existing messages to maintain chronological order 1→2→3...→N
+    const chatContainer = elements.chatContainer;
+    const firstMessage = chatContainer.firstChild;
 
-    if (firstRecentMessage && firstRecentMessage.parentNode) {
-      firstRecentMessage.parentNode.insertBefore(fragment, firstRecentMessage);
+    if (firstMessage) {
+      // Insert before the first message in the container (prepend)
+      chatContainer.insertBefore(fragment, firstMessage);
     } else {
-      // No recent messages yet, append to end
-      elements.chatContainer.appendChild(fragment);
+      // Container is empty (shouldn't happen but handle gracefully)
+      chatContainer.appendChild(fragment);
     }
 
     // Process Mermaid diagrams in newly loaded messages

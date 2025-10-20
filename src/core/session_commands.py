@@ -153,6 +153,8 @@ async def switch_to_session(app_state: AppStateProtocol, session_id: str) -> dic
             full_messages = app_state.full_history_store.get_messages(
                 session_id, limit=INITIAL_SESSION_CHUNK_SIZE, offset=0
             )
+            # Reverse from DESC to ASC for chronological display (newest messages loaded first from DB)
+            full_messages.reverse()
 
             has_more = message_count > INITIAL_SESSION_CHUNK_SIZE
 
@@ -243,6 +245,8 @@ async def load_more_messages(
         limit=capped_limit,
         offset=offset,
     )
+    # Reverse from DESC to ASC for chronological display (older messages loaded with pagination)
+    messages.reverse()
 
     # Get total count for has_more calculation
     total_count = app_state.full_history_store.get_message_count(session_id)

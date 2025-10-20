@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from markitdown import MarkItDown
 
 from core.constants import DOCUMENT_SUMMARIZATION_THRESHOLD, get_settings
+from utils.client_factory import create_sync_openai_client
 from utils.logger import logger
 from utils.token_utils import count_tokens
 
@@ -20,10 +21,12 @@ from utils.token_utils import count_tokens
 try:
     from markitdown import MarkItDown as _MarkItDown
 
-    # Create singleton converter instance with plugins enabled
-    _markitdown_converter: _MarkItDown | None = _MarkItDown(enable_plugins=True)
+    _MarkItDownAvailable = True
 except ImportError:  # pragma: no cover - optional dependency
-    _markitdown_converter = None
+    _MarkItDownAvailable = False
+
+# Lazy-initialized converter cache (mutable container avoids global statement)
+_converter_cache: dict[str, _MarkItDown | None] = {}
 
 
 async def summarize_content(content: str, file_name: str = "document", model: str = "gpt-5-mini") -> str:
@@ -107,9 +110,51 @@ async def summarize_content(content: str, file_name: str = "document", model: st
 
 def get_markitdown_converter() -> MarkItDown | None:
     """
-    Get the MarkItDown converter instance.
+    Get the MarkItDown converter instance with LLM client for image processing.
+    Lazily initializes converter with user's configured Azure OpenAI deployment.
 
     Returns:
         MarkItDown converter instance or None if not available
     """
-    return _markitdown_converter
+    # Return existing converter if already initialized
+    if "instance" in _converter_cache:
+        return _converter_cache["instance"]
+
+    # Check if MarkItDown is available
+    if not _MarkItDownAvailable:
+        logger.warning("MarkItDown not installed - document conversion unavailable")
+        return None
+
+    try:
+        # Get user's configured deployment settings
+        settings = get_settings()
+
+        # Configure client based on API provider
+        if settings.api_provider == "azure":
+            api_key = settings.azure_openai_api_key
+            endpoint = settings.azure_endpoint_str
+            deployment = settings.azure_openai_deployment
+
+            logger.info(f"Initializing MarkItDown with Azure deployment: {deployment}")
+            llm_client = create_sync_openai_client(api_key, base_url=endpoint)
+
+        elif settings.api_provider == "openai":
+            api_key = settings.openai_api_key
+            deployment = settings.openai_model
+
+            logger.info(f"Initializing MarkItDown with OpenAI model: {deployment}")
+            llm_client = create_sync_openai_client(api_key)
+
+        else:
+            logger.error(f"Unknown API provider: {settings.api_provider}")
+            return None
+
+        # Initialize MarkItDown with LLM client for image processing
+        _converter_cache["instance"] = _MarkItDown(llm_client=llm_client, llm_model=deployment)
+        logger.info("MarkItDown initialized successfully with LLM client for image processing")
+
+        return _converter_cache["instance"]
+
+    except Exception as e:
+        logger.error(f"Failed to initialize MarkItDown with LLM client: {e}", exc_info=True)
+        return None
