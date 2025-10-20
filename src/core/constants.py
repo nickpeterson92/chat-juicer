@@ -485,6 +485,13 @@ class Settings(BaseSettings):
     # HTTP request/response logging (for debugging Azure OpenAI issues)
     http_request_logging: bool = Field(default=False, description="Enable HTTP request/response logging")
 
+    # Built-in Tools Configuration (comma-separated list of tool keys)
+    enabled_builtin_tools: str = Field(
+        default="",
+        description="Comma-separated list of enabled built-in tools: 'web_search', 'code_interpreter'. "
+        "Example: 'web_search,code_interpreter' or leave empty to disable all.",
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

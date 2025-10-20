@@ -63,7 +63,7 @@ wishgate/
 │   ├── tools/        # Function calling tools
 │   │   ├── document_generation.py # Document generation from templates
 │   │   ├── file_operations.py     # File reading and directory listing
-│   │   ├── text_editing.py        # Text, regex, and insert editing operations
+│   │   ├── text_editing.py        # Unified file editing with diff preview and batch operations
 │   │   ├── wrappers.py            # Tool wrapper utilities
 │   │   └── registry.py            # Tool registration and discovery
 │   ├── integrations/ # External integrations
@@ -226,15 +226,14 @@ All functions are implemented as async operations organized by module:
 
 **File Operations** (`tools/file_operations.py`):
 - **list_directory**: List directory contents with metadata (size, modified time, file count)
-- **read_file**: Read files with automatic format conversion via markitdown
+- **read_file**: Read files with automatic format conversion via markitdown, optional head/tail for partial reads
+- **search_files**: Recursive glob-pattern file search with configurable depth and result limits
 
 **Document Generation** (`tools/document_generation.py`):
 - **generate_document**: Generate docs from templates with placeholder replacement
 
 **Text Editing** (`tools/text_editing.py`):
-- **text_edit**: Find and replace exact text in documents
-- **regex_edit**: Pattern-based editing using regular expressions
-- **insert_text**: Add new content before or after existing text
+- **edit_file**: Unified file editing with batch operations, git-style diff output, and whitespace-flexible matching. Replaces text_edit, regex_edit, and insert_text with a single powerful tool inspired by MCP filesystem server design.
 
 All tools registered in `tools/registry.py` for automatic discovery by Agent/Runner framework.
 
@@ -474,6 +473,13 @@ The Sequential Thinking server is configured in `integrations/mcp_servers.py` an
 - All functions now async (updated from original sync implementation)
 
 ## Important Implementation Notes
+
+### Recent Additions (MCP Filesystem Security & Search Features)
+- **Null byte validation**: Path injection attack prevention in `validate_session_path()`
+- **Symlink resolution security**: Post-resolution sandbox verification to prevent symlink escape attacks
+- **search_files**: Recursive glob-pattern file search with max_results limit (default: 100)
+- **Partial file reading**: head/tail parameters in `read_file()` for previewing large files without full read
+- **Analysis**: See `claudedocs/mcp_filesystem_analysis.md` for complete feature analysis
 
 ### Logging Architecture
 - Structured JSON logging with rotating files (conversations.jsonl, errors.jsonl)

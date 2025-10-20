@@ -10,7 +10,7 @@ import uuid
 
 from datetime import datetime
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from agents import Agent, Runner, TResponseInputItem
 
@@ -79,7 +79,12 @@ class SessionManager:
         except Exception as e:
             logger.error(f"Failed to save session metadata: {e}", exc_info=True)
 
-    def create_session(self, title: str | None = None, mcp_config: list[str] | None = None) -> SessionMetadata:
+    def create_session(
+        self,
+        title: str | None = None,
+        mcp_config: list[str] | None = None,
+        builtin_tools_config: list[str] | None = None,
+    ) -> SessionMetadata:
         """Create a new session with secure directory structure.
 
         Creates session workspace with:
@@ -89,6 +94,7 @@ class SessionManager:
         Args:
             title: Initial title for the session (defaults to datetime format)
             mcp_config: List of enabled MCP server names (None = use defaults)
+            builtin_tools_config: List of enabled built-in tool names (None = use defaults)
 
         Returns:
             Newly created session metadata
@@ -102,11 +108,13 @@ class SessionManager:
 
         session_id = f"chat_{uuid.uuid4().hex[:SESSION_ID_LENGTH]}"
 
-        # Create session metadata with mcp_config (defaults handled by SessionMetadata)
+        # Create session metadata with mcp_config and builtin_tools_config (defaults handled by SessionMetadata)
+        session_kwargs: dict[str, Any] = {"session_id": session_id, "title": title}
         if mcp_config is not None:
-            session = SessionMetadata(session_id=session_id, title=title, mcp_config=mcp_config)
-        else:
-            session = SessionMetadata(session_id=session_id, title=title)
+            session_kwargs["mcp_config"] = mcp_config
+        if builtin_tools_config is not None:
+            session_kwargs["builtin_tools_config"] = builtin_tools_config
+        session = SessionMetadata(**session_kwargs)
 
         # Create secure session directory structure
         session_dir = Path(f"data/files/{session_id}")

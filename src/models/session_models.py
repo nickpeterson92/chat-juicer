@@ -92,6 +92,14 @@ class SessionMetadata(BaseModel):
         default_factory=lambda: ["sequential", "fetch"],
         description="List of enabled MCP server names (sequential, fetch)",
     )
+    builtin_tools_config: list[str] = Field(
+        default_factory=list,
+        description="List of enabled built-in tool names (web_search, code_interpreter)",
+    )
+    uploaded_file_ids: list[str] = Field(
+        default_factory=list,
+        description="OpenAI file IDs for code interpreter access (uploaded via Files API)",
+    )
 
     @field_validator("session_id")
     @classmethod
@@ -161,6 +169,9 @@ class CreateSessionCommand(BaseModel):
     command: Literal["new"] = "new"
     title: str | None = Field(default=None, max_length=200)
     mcp_config: list[str] | None = Field(default=None, description="List of enabled MCP servers (None = use defaults)")
+    builtin_tools_config: list[str] | None = Field(
+        default=None, description="List of enabled built-in tools (None = use defaults)"
+    )
 
     def to_json(self) -> str:
         """Convert to JSON for IPC."""

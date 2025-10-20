@@ -84,6 +84,8 @@ const appState = new AppState();
 // Initialize custom titlebar (Windows/Linux only)
 let titlebarInstance = null;
 
+const DOWNLOAD_LINK_PREFIX = "#download?";
+
 // ====================
 // Connection Status UI Handler
 // ====================
@@ -851,9 +853,89 @@ function initializeEventListeners() {
     }
   };
 
+  const handleAttachmentDownload = async (event) => {
+    const anchor = event.target.closest("a");
+    if (!anchor) return;
+
+    const href = anchor.getAttribute("href") || "";
+    if (!href.startsWith(DOWNLOAD_LINK_PREFIX)) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const query = href.slice(DOWNLOAD_LINK_PREFIX.length);
+    const params = new URLSearchParams(query);
+    const fileId = params.get("file_id");
+    const encodedName = params.get("filename");
+    const containerId = params.get("container_id");
+    const decodedName = encodedName ? decodeURIComponent(encodedName) : null;
+
+    if (!fileId) {
+      showToast("Download link is missing a file identifier.", "error", 3500);
+      return;
+    }
+
+    if (!sessionState.currentSessionId) {
+      showToast("No active session to save the downloaded file.", "error", 3500);
+      return;
+    }
+
+    try {
+      const result = await window.electronAPI.downloadCodeFile({
+        fileId,
+        filename: decodedName,
+        containerId,
+        sessionId: sessionState.currentSessionId,
+      });
+
+      if (!result || !result.success) {
+        showToast(result?.error || "Failed to download file from code interpreter.", "error", 4000);
+        return;
+      }
+
+      const savedName = result.filename || decodedName || fileId;
+      showToast(`Saved ${savedName} to output/`, "success", 3000);
+
+      const normalizedPath = (result.file_path || "").replace(/\\/g, "/");
+      if (normalizedPath) {
+        const parts = normalizedPath.split("/");
+        const savedFileName = parts.pop();
+        const dirPath = parts.join("/");
+
+        if (dirPath && savedFileName) {
+          // Attempt to open the downloaded file with system default app
+          try {
+            const openResult = await window.electronAPI.openFile(dirPath, savedFileName);
+            if (!openResult.success) {
+              window.electronAPI.log("warn", "Auto-open of downloaded file failed", {
+                fileId,
+                error: openResult.error,
+              });
+            }
+          } catch (openError) {
+            window.electronAPI.log("error", "Failed to auto-open downloaded file", {
+              fileId,
+              error: openError.message,
+            });
+          }
+
+          // Refresh output directory listing if visible
+          const outputDir = `data/files/${sessionState.currentSessionId}/output`;
+          if (activeFilesDirectory === outputDir) {
+            await loadFiles(outputDir);
+          }
+        }
+      }
+    } catch (error) {
+      window.electronAPI.log("error", "Code interpreter download failed", { fileId, error: error.message });
+      showToast(`Download failed: ${error.message}`, "error", 4000);
+    }
+  };
+
   // Attach to chat container (the scrollable chat area)
   if (elements.chatContainer) {
     addManagedEventListener(elements.chatContainer, "click", closePanelsOnCanvasClick);
+    addManagedEventListener(elements.chatContainer, "click", handleAttachmentDownload);
   }
 
   // Attach to chat panel (the entire left panel including input)
@@ -977,12 +1059,25 @@ if (elements.fileDropZone) {
 /**
  * Core file upload logic shared by all upload handlers
  * @param {File[]} files - Array of File objects to upload
+ * @param {Object} options - Optional configuration
+ * @param {string[]} options.mcpConfig - MCP server configuration
+ * @param {string[]} options.builtinToolsConfig - Built-in tools configuration
  * @returns {Promise<Array>} Upload results for each file
  */
-async function processFileUploads(files) {
+async function processFileUploads(files, options = {}) {
   if (!files || files.length === 0) {
     return [];
   }
+
+  // Extract configuration options (welcome page checkbox states)
+  const { mcpConfig = null, builtinToolsConfig = null } = options;
+
+  window.electronAPI.log("debug", "processFileUploads called with options", {
+    hasOptions: !!options,
+    optionsKeys: Object.keys(options),
+    mcpConfig,
+    builtinToolsConfig,
+  });
 
   // Show progress bar
   if (elements.uploadProgress) {
@@ -1022,6 +1117,8 @@ async function processFileUploads(files) {
         data: Array.from(uint8Array),
         size: file.size,
         type: file.type,
+        mcp_config: mcpConfig,
+        builtin_tools_config: builtinToolsConfig,
       });
 
       completed++;
@@ -1109,8 +1206,32 @@ async function handleFileDrop(e) {
     return;
   }
 
+  // Capture welcome page checkbox states if on welcome page
+  let options = {};
+  if (appState.ui.currentView === "welcome") {
+    const { getMcpConfig, getBuiltinToolsConfig } = await import("./ui/welcome-page.js");
+    const mcpConfig = getMcpConfig();
+    const builtinToolsConfig = getBuiltinToolsConfig();
+
+    window.electronAPI.log("debug", "Captured welcome page configs for file drop", {
+      currentView: appState.ui.currentView,
+      mcpConfig,
+      builtinToolsConfig,
+    });
+
+    options = {
+      mcpConfig,
+      builtinToolsConfig,
+    };
+  } else {
+    window.electronAPI.log("debug", "NOT capturing configs in file drop - not on welcome page", {
+      currentView: appState.ui?.currentView,
+      uiExists: !!appState.ui,
+    });
+  }
+
   // Process uploads using shared logic
-  await processFileUploads(files);
+  await processFileUploads(files, options);
 
   // Refresh the files panel after upload
   // Use session directory if available
@@ -1143,8 +1264,34 @@ export async function handleFileUploadWithSession(files, fromWelcome = false) {
     return;
   }
 
+  // Capture welcome page checkbox states if from welcome page
+  let options = {};
+  if (fromWelcome || appState.ui.currentView === "welcome") {
+    const { getMcpConfig, getBuiltinToolsConfig } = await import("./ui/welcome-page.js");
+    const mcpConfig = getMcpConfig();
+    const builtinToolsConfig = getBuiltinToolsConfig();
+
+    window.electronAPI.log("debug", "Captured welcome page configs for file upload", {
+      fromWelcome,
+      currentView: appState.ui.currentView,
+      mcpConfig,
+      builtinToolsConfig,
+    });
+
+    options = {
+      mcpConfig,
+      builtinToolsConfig,
+    };
+  } else {
+    window.electronAPI.log("debug", "NOT capturing configs - not on welcome page", {
+      fromWelcome,
+      currentView: appState.ui?.currentView,
+      uiExists: !!appState.ui,
+    });
+  }
+
   // Process uploads using shared logic
-  const results = await processFileUploads(files);
+  const results = await processFileUploads(files, options);
 
   // Show file section and display uploaded files in welcome page if on welcome page
   if (appState.ui.currentView === "welcome" || fromWelcome) {

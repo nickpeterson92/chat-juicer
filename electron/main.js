@@ -13,6 +13,7 @@ const {
   HEALTH_CHECK_INTERVAL,
   SIGTERM_DELAY,
   FILE_UPLOAD_TIMEOUT,
+  FILE_DOWNLOAD_TIMEOUT,
   SESSION_COMMAND_TIMEOUT,
   SUMMARIZE_COMMAND_TIMEOUT,
   WINDOW_DEFAULT_WIDTH,
@@ -152,7 +153,11 @@ async function startPythonBot() {
     let filteredOutput = output;
 
     // Check if output contains IPC response messages that should not go to renderer
-    if (output.includes('"type":"upload_response"') || output.includes('"type":"session_response"')) {
+    if (
+      output.includes('"type":"upload_response"') ||
+      output.includes('"type":"session_response"') ||
+      output.includes('"type":"download_response"')
+    ) {
       // Find and remove complete JSON messages that are IPC responses
       // Match pattern: __JSON__<content>__JSON__
       let result = output;
@@ -172,7 +177,11 @@ async function startPythonBot() {
           const message = JSON.parse(content);
 
           // If this is an IPC response message, remove it
-          if (message.type === "upload_response" || message.type === "session_response") {
+          if (
+            message.type === "upload_response" ||
+            message.type === "session_response" ||
+            message.type === "download_response"
+          ) {
             logger.trace("Filtering out IPC response message", { type: message.type });
             // Remove the entire message including both delimiters
             result = result.substring(0, start) + result.substring(end + JSON_DELIMITER_LENGTH);
@@ -364,7 +373,7 @@ app.whenReady().then(() => {
   });
 
   // IPC handler for file uploads
-  ipcMain.handle("upload-file", async (_event, { filename, data, size, type }) => {
+  ipcMain.handle("upload-file", async (_event, { filename, data, size, type, mcp_config, builtin_tools_config }) => {
     logger.info("File upload requested", { filename, size, type });
 
     if (!pythonProcess || pythonProcess.killed) {
@@ -373,8 +382,8 @@ app.whenReady().then(() => {
     }
 
     try {
-      // Send upload command to Python
-      const uploadData = { filename, data, size, type };
+      // Send upload command to Python (include mcp_config and builtin_tools_config)
+      const uploadData = { filename, data, size, type, mcp_config, builtin_tools_config };
       const dataJson = JSON.stringify(uploadData);
       const uploadCommand = `__UPLOAD__${dataJson}__\n`;
       pythonProcess.stdin.write(uploadCommand);
@@ -426,6 +435,66 @@ app.whenReady().then(() => {
       });
     } catch (error) {
       logger.error("File upload error", { error: error.message });
+      return { success: false, error: error.message };
+    }
+  });
+
+  // IPC handler for code interpreter file downloads
+  ipcMain.handle("download-code-file", async (_event, { fileId, filename, containerId, sessionId }) => {
+    logger.info("Code interpreter download requested", { fileId, filename, containerId, sessionId });
+
+    if (!pythonProcess || pythonProcess.killed) {
+      logger.error("Python process not running for file download");
+      return { success: false, error: "Backend not available" };
+    }
+
+    try {
+      const downloadRequest = { file_id: fileId, filename, container_id: containerId, session_id: sessionId };
+      const command = `__DOWNLOAD__${JSON.stringify(downloadRequest)}__\n`;
+      pythonProcess.stdin.write(command);
+
+      return await new Promise((resolve) => {
+        let buffer = "";
+
+        const timeout = setTimeout(() => {
+          logger.warn("File download timed out", { fileId });
+          pythonProcess.stdout.removeListener("data", responseHandler);
+          resolve({ success: false, error: "Download timed out" });
+        }, FILE_DOWNLOAD_TIMEOUT);
+
+        const responseHandler = (data) => {
+          buffer += data.toString("utf-8");
+
+          while (true) {
+            const jsonStart = buffer.indexOf(JSON_DELIMITER);
+            if (jsonStart === -1) break;
+
+            const jsonEnd = buffer.indexOf(JSON_DELIMITER, jsonStart + JSON_DELIMITER_LENGTH);
+            if (jsonEnd === -1) break;
+
+            try {
+              const jsonStr = buffer.substring(jsonStart + JSON_DELIMITER_LENGTH, jsonEnd);
+              const message = JSON.parse(jsonStr);
+
+              buffer = buffer.substring(jsonEnd + JSON_DELIMITER_LENGTH);
+
+              if (message.type === "download_response") {
+                clearTimeout(timeout);
+                pythonProcess.stdout.removeListener("data", responseHandler);
+                resolve(message.data);
+                return;
+              }
+            } catch (error) {
+              logger.error("Failed to parse message in download response handler", { error: error.message });
+              buffer = buffer.substring(jsonEnd + JSON_DELIMITER_LENGTH);
+            }
+          }
+        };
+
+        pythonProcess.stdout.on("data", responseHandler);
+      });
+    } catch (error) {
+      logger.error("File download error", { error: error.message, fileId });
       return { success: false, error: error.message };
     }
   });

@@ -184,13 +184,15 @@ export async function loadMoreSessions(api, onSuccess) {
  * @param {Object} elements - DOM elements
  * @param {string} title - Optional session title
  * @param {string[]} mcpConfig - Optional MCP server configuration
+ * @param {string[]} builtinToolsConfig - Optional built-in tools configuration
  * @returns {Promise<Object>} Result with success/error
  */
-export async function createNewSession(api, elements, title = null, mcpConfig = null) {
+export async function createNewSession(api, elements, title = null, mcpConfig = null, builtinToolsConfig = null) {
   try {
     const data = {};
     if (title) data.title = title;
     if (mcpConfig) data.mcp_config = mcpConfig;
+    if (builtinToolsConfig) data.builtin_tools_config = builtinToolsConfig;
 
     const response = await api.sessionCommand("new", data);
 

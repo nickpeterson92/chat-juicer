@@ -169,25 +169,27 @@ function attachWelcomePageListeners(elements, appState) {
     const message = welcomeInput.value.trim();
     if (!message || appState.connection.status !== "CONNECTED") return;
 
-    // Get MCP config from checkboxes
-    const { getMcpConfig } = await import("../ui/welcome-page.js");
+    // Get MCP config and built-in tools config from checkboxes
+    const { getMcpConfig, getBuiltinToolsConfig } = await import("../ui/welcome-page.js");
     const mcpConfig = getMcpConfig();
+    const builtinToolsConfig = getBuiltinToolsConfig();
 
     // Create new session only if one does not already exist (e.g., created by file upload)
     const { createNewSession, sessionState } = await import("../services/session-service.js");
     let sessionId = sessionState.currentSessionId;
 
     if (!sessionId) {
-      const result = await createNewSession(window.electronAPI, elements, null, mcpConfig);
+      const result = await createNewSession(window.electronAPI, elements, null, mcpConfig, builtinToolsConfig);
       if (!result.success) {
         window.electronAPI.log("error", "Failed to create session from welcome page", { error: result.error });
         return;
       }
       sessionId = result.data?.session_id || null;
 
-      window.electronAPI.log("info", "Session created with MCP config", {
+      window.electronAPI.log("info", "Session created with config", {
         session_id: sessionId,
         mcp_config: mcpConfig,
+        builtin_tools_config: builtinToolsConfig,
       });
     } else {
       window.electronAPI.log("info", "Reusing existing session for welcome message", {

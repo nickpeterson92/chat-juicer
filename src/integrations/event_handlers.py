@@ -8,7 +8,8 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import cast
+from typing import Any, cast
+from urllib.parse import quote
 
 from core.constants import (
     AGENT_UPDATED_STREAM_EVENT,
@@ -47,6 +48,14 @@ from models.sdk_models import (
 from utils.json_utils import json_compact as _json_builder
 from utils.logger import logger
 
+FILE_ANNOTATION_TYPES = {
+    "container_file_citation",
+    "file_citation",
+    "file_path",
+    "code_interpreter_file",
+    "code_interpreter_output",
+}
+
 
 @dataclass
 class CallTracker:
@@ -69,15 +78,170 @@ def handle_message_output(item: RunItem) -> str | None:
     if hasattr(item, "raw_item"):
         raw = item.raw_item
         content = raw.content or [] if isinstance(raw, RawMessageLike) else getattr(raw, "content", []) or []
+        combined_segments: list[str] = []
+
         for content_item in content:
-            if isinstance(content_item, ContentLike):
-                text = content_item.text or ""
-            else:
-                text = getattr(content_item, "text", "")
-            if text:
-                msg = AssistantMessage(type=MSG_TYPE_ASSISTANT_DELTA, content=text)
+            text = _extract_text_segment(content_item)
+            if not text:
+                continue
+
+            annotations = _extract_annotations(content_item)
+            if annotations:
+                text = _rewrite_annotation_links(text, annotations)
+
+            combined_segments.append(text)
+
+        if combined_segments:
+            full_message = "\n\n".join(s for s in combined_segments if s)
+            if full_message:
+                msg = AssistantMessage(type=MSG_TYPE_ASSISTANT_DELTA, content=full_message)
                 return msg.to_json()  # type: ignore[no-any-return]
     return None
+
+
+def _extract_text_segment(content_item: Any) -> str:  # noqa: PLR0911
+    """Safely extract text content from SDK content variants."""
+    if isinstance(content_item, ContentLike):
+        if isinstance(content_item.text, str):
+            return content_item.text
+        # Some SDK objects expose .text.value
+        text_obj = getattr(content_item, "text", None)
+        value = getattr(text_obj, "value", None)
+        if isinstance(value, str):
+            return value
+    if isinstance(content_item, dict):
+        text_value = content_item.get("text")
+        if isinstance(text_value, str):
+            return text_value
+        if isinstance(text_value, dict):
+            candidate = text_value.get("value") or text_value.get("text")
+            if isinstance(candidate, str):
+                return candidate
+    text_attr = getattr(content_item, "text", None)
+    if isinstance(text_attr, str):
+        return text_attr
+    if isinstance(text_attr, dict):
+        candidate = text_attr.get("value") or text_attr.get("text")
+        if isinstance(candidate, str):
+            return candidate
+    value = getattr(text_attr, "value", None)
+    return value if isinstance(value, str) else ""
+
+
+def _extract_annotations(content_item: Any) -> list[Any]:
+    """Extract annotation metadata in a normalized list."""
+    annotations = None
+
+    if isinstance(content_item, dict):
+        annotations = content_item.get("annotations")
+    else:
+        annotations = getattr(content_item, "annotations", None)
+
+    if annotations:
+        return list(annotations)
+
+    text_attr = getattr(content_item, "text", None)
+    if isinstance(text_attr, dict):
+        text_annotations = text_attr.get("annotations")
+        if text_annotations:
+            return list(text_annotations)
+    else:
+        text_annotations = getattr(text_attr, "annotations", None)
+        if text_annotations:
+            return list(text_annotations)
+
+    return []
+
+
+def _annotation_field(annotation: Any, field: str) -> Any:
+    """Helper to safely extract a field from annotation variants."""
+    if isinstance(annotation, dict):
+        return annotation.get(field)
+    return getattr(annotation, field, None)
+
+
+def _rewrite_annotation_links(text: str, annotations: list[Any]) -> str:
+    """Replace sandbox download links with internal handler URLs."""
+    if not annotations:
+        return text
+
+    # Sort annotations by start index to ensure deterministic replacements
+    sortable = []
+    for ann in annotations:
+        start_index = _annotation_field(ann, "start_index")
+        end_index = _annotation_field(ann, "end_index")
+        if start_index is None or end_index is None:
+            continue
+        ann_type = _annotation_field(ann, "type")
+        if ann_type not in FILE_ANNOTATION_TYPES:
+            continue
+        raw_file = (
+            _annotation_field(ann, "file_id")
+            or _annotation_field(ann, "id")
+            or _annotation_field(ann, "file")  # Some payloads wrap file metadata
+        )
+        filename = (
+            _annotation_field(ann, "filename") or _annotation_field(ann, "file_name") or _annotation_field(ann, "text")
+        )
+        container_id = _annotation_field(ann, "container_id")
+
+        # If nested file metadata present, unwrap
+        file_id = raw_file
+        if isinstance(raw_file, dict):
+            filename = filename or raw_file.get("filename") or raw_file.get("name")
+            file_id = raw_file.get("id") or raw_file.get("file_id")
+        if isinstance(filename, dict):
+            filename = filename.get("filename") or filename.get("name")
+
+        if not file_id:
+            continue
+
+        sortable.append(
+            {
+                "start": int(start_index),
+                "end": int(end_index),
+                "file_id": str(file_id),
+                "filename": str(filename) if filename else None,
+                "container_id": str(container_id) if container_id else None,
+            }
+        )
+
+    if not sortable:
+        return text
+
+    sortable.sort(key=lambda a: int(a["start"]))  # type: ignore[call-overload]
+
+    result = text
+    offset = 0
+
+    for info in sortable:
+        start = int(info["start"]) + offset  # type: ignore[call-overload]
+        end = int(info["end"]) + offset  # type: ignore[call-overload]
+        if start < 0 or end > len(result) or start >= end:
+            continue
+
+        file_id = str(info["file_id"])
+        filename = str(info["filename"]) if info["filename"] else file_id
+        container_id_val = info.get("container_id")
+        container_id = str(container_id_val) if container_id_val else None
+
+        params = [("file_id", file_id)]
+        if filename:
+            params.append(("filename", filename))
+        if container_id:
+            params.append(("container_id", container_id))
+
+        query = "&".join(f"{key}={quote(str(value))}" for key, value in params if value)
+        replacement = f"#download?{query}"
+
+        original_segment = result[start:end]
+        if original_segment == replacement:
+            continue
+
+        result = result[:start] + replacement + result[end:]
+        offset += len(replacement) - (end - start)
+
+    return result
 
 
 def handle_tool_call(item: RunItem, tracker: CallTracker) -> str | None:

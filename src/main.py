@@ -39,7 +39,6 @@ from core.constants import (
     get_settings,
 )
 from core.full_history import FullHistoryStore
-from core.prompts import SYSTEM_INSTRUCTIONS
 from core.session import TokenAwareSQLiteSession
 from core.session_commands import handle_session_command
 from core.session_manager import SessionManager
@@ -51,7 +50,7 @@ from models.sdk_models import StreamEvent
 from models.session_models import SessionUpdate
 from tools import AGENT_TOOLS
 from utils.client_factory import create_http_client, create_openai_client
-from utils.file_utils import save_uploaded_file
+from utils.file_utils import download_code_interpreter_file, save_uploaded_file
 from utils.ipc import IPCManager
 from utils.logger import logger
 
@@ -127,11 +126,17 @@ def handle_streaming_error(error: Exception) -> None:
     IPCManager.send_assistant_end()
 
 
-async def ensure_session_exists(app_state: AppState) -> tuple[TokenAwareSQLiteSession, bool]:
+async def ensure_session_exists(
+    app_state: AppState,
+    mcp_config: list[str] | None = None,
+    builtin_tools_config: list[str] | None = None,
+) -> tuple[TokenAwareSQLiteSession, bool]:
     """Ensure a session exists, creating one if needed (lazy initialization).
 
     Args:
         app_state: Application state container
+        mcp_config: List of enabled MCP server names (None = use defaults)
+        builtin_tools_config: List of enabled built-in tool names (None = use defaults)
 
     Returns:
         Tuple of (Active TokenAwareSQLiteSession instance, is_new_session flag)
@@ -145,8 +150,8 @@ async def ensure_session_exists(app_state: AppState) -> tuple[TokenAwareSQLiteSe
     if app_state.session_manager is None:
         raise RuntimeError("Session manager not initialized")
 
-    # Create new session metadata
-    session_meta = app_state.session_manager.create_session()
+    # Create new session metadata with configs from file upload or message
+    session_meta = app_state.session_manager.create_session(None, mcp_config, builtin_tools_config)
     logger.info(f"Created new session: {session_meta.session_id} - {session_meta.title}")
 
     # Create session-specific agent with workspace-isolated tools
@@ -157,12 +162,22 @@ async def ensure_session_exists(app_state: AppState) -> tuple[TokenAwareSQLiteSe
     logger.info(f"Created {len(session_tools)} session-aware tools for session: {session_meta.session_id}")
 
     # Use MCP servers from app_state, filtered by session's mcp_config
-    # Create new agent with isolated tools (instructions are global, tools are session-specific)
+    # Create new agent with isolated tools (instructions are dynamically generated based on config)
     from integrations.mcp_registry import filter_mcp_servers
 
     session_mcp_servers = filter_mcp_servers(app_state.mcp_servers, session_meta.mcp_config)
-    session_agent = create_agent(app_state.deployment, SYSTEM_INSTRUCTIONS, session_tools, session_mcp_servers)
-    logger.info(f"Session agent created with {len(session_mcp_servers)} MCP servers: {session_meta.mcp_config}")
+    session_agent = create_agent(
+        app_state.deployment,
+        session_tools,
+        session_mcp_servers,
+        builtin_tools_config=session_meta.builtin_tools_config,
+        mcp_server_names=session_meta.mcp_config,
+        session_file_ids=session_meta.uploaded_file_ids,
+    )
+    logger.info(
+        f"Session agent created with {len(session_mcp_servers)} MCP servers: {session_meta.mcp_config}, "
+        f"built-in tools: {session_meta.builtin_tools_config}"
+    )
     logger.info(f"Created session-specific agent with workspace isolation for: {session_meta.session_id}")
 
     # Create token-aware session with persistent storage and full history
@@ -342,9 +357,16 @@ async def main() -> None:
     # Set up MCP servers (initialize all available servers into a global pool)
     mcp_servers_dict = await initialize_all_mcp_servers()
 
-    # Create initial agent with all MCP servers for global context
+    # Create initial agent with all MCP servers for global context (no built-in tools by default)
     all_mcp_servers = list(mcp_servers_dict.values())
-    agent = create_agent(deployment, SYSTEM_INSTRUCTIONS, AGENT_TOOLS, all_mcp_servers)
+    all_mcp_server_names = list(mcp_servers_dict.keys())
+    agent = create_agent(
+        deployment,
+        AGENT_TOOLS,
+        all_mcp_servers,
+        builtin_tools_config=None,
+        mcp_server_names=all_mcp_server_names,
+    )
 
     # Display connection info based on provider
     if settings.api_provider == "azure":
@@ -432,14 +454,28 @@ async def main() -> None:
 
                     logger.info(f"Processing file upload: {upload_data.get('filename')}")
 
-                    # Ensure session exists (create if needed)
-                    session, is_new = await ensure_session_exists(_app_state)
+                    # Extract tool configs from upload (welcome page checkbox states)
+                    mcp_config = upload_data.get("mcp_config")
+                    builtin_tools_config = upload_data.get("builtin_tools_config")
+                    logger.info(f"File upload configs: mcp={mcp_config}, builtin_tools={builtin_tools_config}")
+
+                    # Ensure session exists (create if needed with tool configs)
+                    session, is_new = await ensure_session_exists(_app_state, mcp_config, builtin_tools_config)
                     session_id = _app_state.session_manager.current_session_id if _app_state.session_manager else None
 
                     # Process upload with session_id
                     result = save_uploaded_file(
                         filename=upload_data["filename"], data=upload_data["data"], session_id=session_id
                     )
+
+                    # If file was uploaded to OpenAI, store file_id in session metadata
+                    if result.get("file_id") and session_id and _app_state.session_manager:
+                        session_meta = _app_state.session_manager.get_session(session_id)
+                        if session_meta:
+                            # Add file_id to session's uploaded_file_ids
+                            session_meta.uploaded_file_ids.append(result["file_id"])
+                            _app_state.session_manager._save_metadata()
+                            logger.info(f"Added file_id {result['file_id']} to session {session_id}")
 
                     # If this is a new session, send session info to frontend
                     if is_new and session_id:
@@ -457,6 +493,48 @@ async def main() -> None:
                 except Exception as e:
                     logger.error(f"Upload command error: {e}", exc_info=True)
                     error_msg = {"type": "upload_response", "data": {"success": False, "error": str(e)}}
+                    IPCManager.send(error_msg)
+                continue
+
+            # Handle code interpreter file download commands
+            if raw_input.startswith("__DOWNLOAD__"):
+                try:
+                    json_start = raw_input.index("__DOWNLOAD__") + len("__DOWNLOAD__")
+                    json_end = raw_input.index("__", json_start)
+                    download_json = raw_input[json_start:json_end]
+                    download_data = json.loads(download_json)
+
+                    file_id = download_data.get("file_id")
+                    filename = download_data.get("filename")
+                    session_id = download_data.get("session_id")
+                    container_id = download_data.get("container_id")
+
+                    logger.info(
+                        "Processing code interpreter download",
+                        download_file_id=file_id,
+                        download_filename=filename,
+                        download_session=session_id,
+                        download_container=container_id,
+                    )
+
+                    result = download_code_interpreter_file(
+                        file_id=file_id or "",
+                        filename=filename,
+                        container_id=container_id,
+                        session_id=session_id,
+                    )
+
+                    response_msg = {"type": "download_response", "data": result}
+                    IPCManager.send(response_msg)
+                    logger.info(
+                        "Download response sent",
+                        download_success=result.get("success"),
+                        download_file_id=file_id,
+                        download_container=container_id,
+                    )
+                except Exception as e:  # - specific logging desired
+                    logger.error(f"Download command error: {e}", exc_info=True)
+                    error_msg = {"type": "download_response", "data": {"success": False, "error": str(e)}}
                     IPCManager.send(error_msg)
                 continue
 

@@ -14,6 +14,7 @@ const HEALTH_CHECK_INTERVAL = 300000; // 5 minutes - interval for process health
 
 // IPC operation timeouts
 const FILE_UPLOAD_TIMEOUT = 10000; // 10 seconds - timeout for file upload operations
+const FILE_DOWNLOAD_TIMEOUT = 15000; // 15 seconds - timeout for file download operations
 const SESSION_COMMAND_TIMEOUT = 5000; // 5 seconds - session commands (load/switch) with large message payloads
 const SUMMARIZE_COMMAND_TIMEOUT = 30000; // 30 seconds - LLM summarization needs longer timeout
 
@@ -37,6 +38,7 @@ module.exports = {
   SIGTERM_DELAY,
   HEALTH_CHECK_INTERVAL,
   FILE_UPLOAD_TIMEOUT,
+  FILE_DOWNLOAD_TIMEOUT,
   SESSION_COMMAND_TIMEOUT,
   SUMMARIZE_COMMAND_TIMEOUT,
   WINDOW_DEFAULT_WIDTH,

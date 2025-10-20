@@ -62,6 +62,19 @@ export function createWelcomePage(userName = "User") {
                 </svg>
               </button>
             </div>
+            <div class="builtin-tools-toggle-buttons">
+              <button class="builtin-tool-toggle-btn" data-tool="web_search" title="Web Search - Real-time web search powered by OpenAI">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                </svg>
+              </button>
+              <button class="builtin-tool-toggle-btn" data-tool="code_interpreter" title="Code Interpreter - Execute Python code in sandboxed environment">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="16 18 22 12 16 6"/>
+                  <polyline points="8 6 2 12 8 18"/>
+                </svg>
+              </button>
+            </div>
             <button id="welcome-send-btn" class="welcome-send-btn" title="Send message">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M5 12h14M12 5l7 7-7 7"/>
@@ -188,6 +201,16 @@ export function showWelcomePage(container, userName = "User") {
       btn.classList.toggle("active");
     });
   });
+
+  // Setup built-in tools toggle buttons
+  const builtinToolButtons = document.querySelectorAll(".builtin-tool-toggle-btn");
+  builtinToolButtons.forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      btn.classList.toggle("active");
+    });
+  });
 }
 
 /**
@@ -197,6 +220,15 @@ export function showWelcomePage(container, userName = "User") {
 export function getMcpConfig() {
   const activeButtons = document.querySelectorAll(".mcp-toggle-btn.active");
   return Array.from(activeButtons).map((btn) => btn.dataset.mcp);
+}
+
+/**
+ * Get built-in tools configuration from toggle buttons
+ * @returns {string[]} Array of enabled built-in tool keys
+ */
+export function getBuiltinToolsConfig() {
+  const activeButtons = document.querySelectorAll(".builtin-tool-toggle-btn.active");
+  return Array.from(activeButtons).map((btn) => btn.dataset.tool);
 }
 
 /**

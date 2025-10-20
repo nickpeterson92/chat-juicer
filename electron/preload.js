@@ -48,6 +48,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return await ipcRenderer.invoke("upload-file", fileData);
   },
 
+  // Download code interpreter file
+  downloadCodeFile: async ({ fileId, filename, containerId, sessionId }) => {
+    return await ipcRenderer.invoke("download-code-file", { fileId, filename, containerId, sessionId });
+  },
+
   // List directory contents
   listDirectory: async (dirPath) => {
     return await ipcRenderer.invoke("list-directory", dirPath);

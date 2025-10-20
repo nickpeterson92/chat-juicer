@@ -49,8 +49,22 @@ def _session_error(message: str) -> dict[str, str]:
     return {"error": message}
 
 
+def _delete_openai_file(client: Any, session_id: str, file_id: str) -> bool:
+    try:
+        client.files.delete(file_id)
+    except Exception as exc:
+        logger.warning(f"Failed to delete OpenAI file {file_id}: {exc}")
+        return False
+
+    logger.info(f"Deleted OpenAI file {file_id} for session {session_id}")
+    return True
+
+
 async def create_new_session(
-    app_state: AppStateProtocol, title: str | None = None, mcp_config: list[str] | None = None
+    app_state: AppStateProtocol,
+    title: str | None = None,
+    mcp_config: list[str] | None = None,
+    builtin_tools_config: list[str] | None = None,
 ) -> dict[str, Any]:
     """Create a new session and switch to it.
 
@@ -58,6 +72,7 @@ async def create_new_session(
         app_state: Application state containing session manager
         title: Title for the new session (defaults to datetime format)
         mcp_config: List of enabled MCP server names (None = use defaults)
+        builtin_tools_config: List of enabled built-in tool names (None = use defaults)
 
     Returns:
         Session metadata dictionary
@@ -66,7 +81,7 @@ async def create_new_session(
         return _session_error(ERROR_SESSION_MANAGER_NOT_INITIALIZED)
 
     # Create new session metadata (title defaults to datetime in create_session)
-    session_meta = app_state.session_manager.create_session(title, mcp_config)
+    session_meta = app_state.session_manager.create_session(title, mcp_config, builtin_tools_config)
 
     # Switch to the new session
     await switch_to_session(app_state, session_meta.session_id)
@@ -98,20 +113,29 @@ async def switch_to_session(app_state: AppStateProtocol, session_id: str) -> dic
 
     # Create session-specific agent with workspace-isolated tools
     from core.agent import create_agent
-    from core.prompts import SYSTEM_INSTRUCTIONS
     from tools.wrappers import create_session_aware_tools
 
     # Create session-aware tools that inject session_id for workspace isolation
     session_tools = create_session_aware_tools(session_id)
     logger.info(f"Created {len(session_tools)} session-aware tools for session switch: {session_id}")
 
-    # Create session-specific agent with isolated tools (instructions are global, tools are session-specific)
+    # Create session-specific agent with isolated tools (instructions are dynamically generated based on config)
     # Use MCP servers from app_state, filtered by session's mcp_config
     from integrations.mcp_registry import filter_mcp_servers
 
     session_mcp_servers = filter_mcp_servers(app_state.mcp_servers, session_meta.mcp_config)
-    session_agent = create_agent(app_state.deployment, SYSTEM_INSTRUCTIONS, session_tools, session_mcp_servers)
-    logger.info(f"Session agent created with {len(session_mcp_servers)} MCP servers: {session_meta.mcp_config}")
+    session_agent = create_agent(
+        app_state.deployment,
+        session_tools,
+        session_mcp_servers,
+        builtin_tools_config=session_meta.builtin_tools_config,
+        mcp_server_names=session_meta.mcp_config,
+        session_file_ids=session_meta.uploaded_file_ids,
+    )
+    logger.info(
+        f"Session agent created with {len(session_mcp_servers)} MCP servers: {session_meta.mcp_config}, "
+        f"built-in tools: {session_meta.builtin_tools_config}"
+    )
     logger.info(f"Created session-specific agent with workspace isolation for switch: {session_id}")
 
     # Create new session object with persistent storage and full history (using Builder pattern)
@@ -316,6 +340,25 @@ async def delete_session_by_id(app_state: AppStateProtocol, session_id: str) -> 
         app_state.current_session = None
         logger.info(f"Disconnected current session before deletion: {session_id}")
 
+    # Delete OpenAI files for this session
+    openai_files_deleted = 0
+    session_meta = app_state.session_manager.get_session(session_id)
+    if session_meta and session_meta.uploaded_file_ids:
+        try:
+            from openai import OpenAI
+
+        except Exception as e:
+            logger.warning(f"Failed to initialize OpenAI client for file deletion: {e}")
+        else:
+            client = OpenAI()  # Uses OPENAI_API_KEY from environment
+
+            for file_id in session_meta.uploaded_file_ids:
+                if _delete_openai_file(client, session_id, file_id):
+                    openai_files_deleted += 1
+
+    if openai_files_deleted > 0:
+        logger.info(f"Deleted {openai_files_deleted} OpenAI file(s) for session {session_id}")
+
     # Delete Layer 2 (full history) first
     layer2_success = True
     if app_state.full_history_store:
@@ -340,6 +383,7 @@ async def delete_session_by_id(app_state: AppStateProtocol, session_id: str) -> 
         "success": metadata_success,  # Overall success based on metadata deletion
         "layer1_cleaned": layer1_success,
         "layer2_cleaned": layer2_success,
+        "openai_files_deleted": openai_files_deleted,
     }
 
 
@@ -466,7 +510,9 @@ async def handle_session_command(app_state: AppStateProtocol, command: str, data
 
     # Command dispatch registry mapping command types to handlers
     command_handlers: dict[type, Any] = {
-        CreateSessionCommand: lambda cmd: create_new_session(app_state, cmd.title, cmd.mcp_config),
+        CreateSessionCommand: lambda cmd: create_new_session(
+            app_state, cmd.title, cmd.mcp_config, cmd.builtin_tools_config
+        ),
         SwitchSessionCommand: lambda cmd: switch_to_session(app_state, cmd.session_id),
         ListSessionsCommand: lambda cmd: list_all_sessions(app_state, cmd.offset, cmd.limit),
         DeleteSessionCommand: lambda cmd: delete_session_by_id(app_state, cmd.session_id),

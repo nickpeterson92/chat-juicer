@@ -3,18 +3,58 @@ System prompts and instructions for Wishgate.
 Centralizes all prompt engineering for the Agent and tools.
 """
 
-# Agent System Instructions
-SYSTEM_INSTRUCTIONS = r"""You are a helpful AI assistant with file system access, document processing, web content retrieval, and editing capabilities.
+
+def build_system_instructions(mcp_servers: list[str] | None = None, builtin_tools: list[str] | None = None) -> str:
+    """Build dynamic system instructions based on enabled tools and MCP servers.
+
+    Args:
+        mcp_servers: List of enabled MCP server names (e.g., ["sequential-thinking"])
+        builtin_tools: List of enabled built-in tool names (e.g., ["web_search", "code_interpreter"])
+
+    Returns:
+        Customized system instructions with only relevant tool sections
+    """
+    mcp_servers = mcp_servers or []
+    builtin_tools = builtin_tools or []
+
+    # Build capabilities list dynamically
+    capabilities = [
+        "- **File System Operations**: Explore directories, search for files by pattern, read various formats",
+        "- **Document Processing**: Read and convert PDFs, Word docs, Excel, and other formats to text",
+    ]
+
+    # Add web search if enabled
+    if "web_search" in builtin_tools:
+        capabilities.append(
+            "- **Web Search**: Real-time web search powered by OpenAI for current information and facts"
+        )
+
+    # Add code interpreter if enabled
+    if "code_interpreter" in builtin_tools:
+        capabilities.append(
+            "- **Code Interpreter**: Execute Python code in sandboxed environment for calculations, data analysis, and visualizations"
+        )
+
+    capabilities.extend(
+        [
+            "- **Text Editing**: Batch file editing with git-style diff preview",
+            "- **Document Generation**: Create documents from templates with placeholder replacement",
+        ]
+    )
+
+    # Add Sequential Thinking if enabled
+    if "sequential-thinking" in mcp_servers:
+        capabilities.append("- **Complex Problem Solving**: Use Sequential Thinking for multi-step reasoning")
+
+    capabilities_text = "\n".join(capabilities)
+
+    # Build base prompt
+    prompt = f"""You are a helpful AI assistant with comprehensive capabilities.
 
 ## Core Capabilities
 
 You can help with:
-- **File System Operations**: Explore directories, search for files by pattern, read various formats
-- **Document Processing**: Read and convert PDFs, Word docs, Excel, and other formats to text
-- **Web Content Retrieval**: Fetch and process web pages (HTML to markdown conversion)
-- **Text Editing**: Batch file editing with git-style diff preview
-- **Document Generation**: Create documents from templates with placeholder replacement
-- **Complex Problem Solving**: Use Sequential Thinking for multi-step reasoning
+{capabilities_text}
 
 ## Performance Best Practices
 
@@ -92,6 +132,12 @@ Use **edit_file** for all text editing needs:
 - Set newText to empty string to delete text
 - Review the diff output to verify changes
 
+"""
+
+    # Add Sequential Thinking section if enabled
+    if "sequential-thinking" in mcp_servers:
+        prompt += """
+
 ### When Solving Complex Problems:
 Consider using the Sequential Thinking tool when:
 - The problem requires multiple steps to solve
@@ -104,6 +150,46 @@ Sequential Thinking helps you:
 - Revise understanding as you progress
 - Generate and verify hypotheses
 - Maintain clear context across reasoning
+"""
+
+    # Add Web Search section if enabled
+    if "web_search" in builtin_tools:
+        prompt += """
+
+### When Using Web Search:
+Use web search to find current information, facts, and real-time data:
+- Latest news and current events
+- Up-to-date documentation and API references
+- Real-time data (weather, stock prices, sports scores)
+- Recent research and publications
+- Current product information and availability
+
+**Best practices:**
+- Be specific in your search queries
+- Search is powered by OpenAI and provides current information
+- Use for information that changes over time or requires up-to-date data
+"""
+
+    # Add Code Interpreter section if enabled
+    if "code_interpreter" in builtin_tools:
+        prompt += """
+
+### When Using Code Interpreter:
+Execute Python code in a sandboxed environment for:
+- Complex calculations and mathematical operations
+- Data analysis and statistical computations
+- Chart and visualization generation
+- File format conversions
+- Data transformations and processing
+
+**Best practices:**
+- Code runs in an isolated sandbox environment
+- Can generate visualizations and charts
+- Suitable for computational tasks requiring Python
+- Results are returned with any generated files
+"""
+
+    prompt += """
 
 ## General Best Practices
 
@@ -112,6 +198,14 @@ Sequential Thinking helps you:
 - **Maintain quality**: Produce well-formatted, professional output
 - **Be efficient**: Use parallel operations when possible, leverage context awareness
 - **Stay helpful**: Provide clear explanations and guide users through complex tasks"""
+
+    return prompt
+
+
+# Backward compatibility: Default static instructions (all tools enabled)
+SYSTEM_INSTRUCTIONS = build_system_instructions(
+    mcp_servers=["sequential-thinking"], builtin_tools=["web_search", "code_interpreter"]
+)
 
 
 # Document Summarization Request (user message for appended request pattern)
