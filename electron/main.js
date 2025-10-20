@@ -551,6 +551,35 @@ app.whenReady().then(() => {
     }
   });
 
+  // IPC handler for opening external URLs in system browser
+  ipcMain.handle("open-external-url", async (_event, url) => {
+    logger.info("External URL open requested", { url });
+
+    try {
+      // Security: Validate URL protocol
+      if (!url || typeof url !== "string") {
+        logger.error("Invalid URL provided", { url });
+        return { success: false, error: "Invalid URL" };
+      }
+
+      // Only allow http and https protocols
+      const urlLower = url.toLowerCase();
+      if (!urlLower.startsWith("http://") && !urlLower.startsWith("https://")) {
+        logger.error("Security: Rejected non-HTTP(S) URL", { url });
+        return { success: false, error: "Only HTTP and HTTPS URLs are allowed" };
+      }
+
+      // Open URL in system default browser
+      await shell.openExternal(url);
+
+      logger.info("External URL opened successfully", { url });
+      return { success: true };
+    } catch (error) {
+      logger.error("Failed to open external URL", { url, error: error.message });
+      return { success: false, error: error.message };
+    }
+  });
+
   // IPC handler for restart request
   ipcMain.on("restart-bot", () => {
     logger.info("Restart requested");

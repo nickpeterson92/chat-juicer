@@ -63,6 +63,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return await ipcRenderer.invoke("open-file", { dirPath, filename });
   },
 
+  // Open external URL in system default browser
+  openExternalUrl: async (url) => {
+    return await ipcRenderer.invoke("open-external-url", url);
+  },
+
   // Get system username
   getUsername: async () => {
     return await ipcRenderer.invoke("get-username");

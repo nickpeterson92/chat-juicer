@@ -78,10 +78,32 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
 
         # If session_id provided, enforce workspace boundaries
         if session_id:
+            # Normalize path separators and strip any session prefix
+            sanitized_path = file_path.replace("\\", "/")
+            session_prefix = f"data/files/{session_id}/"
+            if sanitized_path.startswith(session_prefix):
+                sanitized_path = sanitized_path[len(session_prefix) :]
+
+            if sanitized_path != ".":
+                while sanitized_path.startswith("./"):
+                    sanitized_path = sanitized_path[2:]
+            sanitized_path = sanitized_path.lstrip("/")
+
+            requested_path = Path(sanitized_path)
+
+            # Default to sources/ when no top-level directory explicitly provided
+            allowed_roots = {"sources", "templates", "output"}
+            if not requested_path.parts:
+                relative_request = Path(".")
+            elif requested_path.parts[0] in allowed_roots:
+                relative_request = requested_path
+            else:
+                relative_request = Path("sources") / requested_path
+
             # Build full path within session workspace (DON'T resolve yet)
             cwd = Path.cwd()
             session_dir = cwd / "data" / "files" / session_id
-            target_path = session_dir / file_path  # Unresolved path
+            target_path = session_dir / relative_request  # Unresolved path
 
             # Security check: ensure REQUESTED path is within session workspace
             # This allows symlinks (templates/, output/) as long as they're in the workspace
@@ -98,7 +120,7 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
             allowed_symlinks = {"templates", "output"}
 
             # Get first component of file_path to check if it's an allowed symlink
-            first_component = Path(file_path).parts[0] if Path(file_path).parts else ""
+            first_component = relative_request.parts[0] if relative_request.parts else ""
 
             # Security check: ensure resolved path is still within session workspace
             # UNLESS it's one of our allowed symlinks (templates/, output/)

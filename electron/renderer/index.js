@@ -866,6 +866,41 @@ function initializeEventListeners() {
   if (welcomePageContainer) {
     addManagedEventListener(welcomePageContainer, "click", closePanelsOnCanvasClick);
   }
+
+  // Link click handler - open external URLs in system browser
+  if (elements.chatContainer) {
+    addManagedEventListener(elements.chatContainer, "click", async (e) => {
+      // Check if clicked element is a link or inside a link
+      const link = e.target.closest("a");
+
+      if (link && link.href) {
+        // Prevent default navigation
+        e.preventDefault();
+
+        const url = link.href;
+
+        window.electronAPI.log("info", "Opening external URL", { url });
+
+        try {
+          const result = await window.electronAPI.openExternalUrl(url);
+
+          if (!result.success) {
+            window.electronAPI.log("error", "Failed to open URL", {
+              url,
+              error: result.error,
+            });
+            showToast(`Failed to open link: ${result.error}`, "error", 4000);
+          }
+        } catch (error) {
+          window.electronAPI.log("error", "Error opening external URL", {
+            url,
+            error: error.message,
+          });
+          showToast("Failed to open link", "error", 3000);
+        }
+      }
+    });
+  }
 }
 
 initializeEventListeners();
