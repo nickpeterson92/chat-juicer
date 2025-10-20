@@ -828,6 +828,44 @@ function initializeEventListeners() {
   if (elements.newSessionBtn) {
     addManagedEventListener(elements.newSessionBtn, "click", handleCreateNewSession);
   }
+
+  // Click-outside-to-close panels
+  // Close panels when clicking on canvas layers (chat container, chat panel, welcome page)
+  const closePanelsOnCanvasClick = (e) => {
+    // Don't close if clicking inside panels themselves
+    if (
+      elements.sidebar?.contains(e.target) ||
+      elements.filesPanel?.contains(e.target) ||
+      elements.sidebarToggle?.contains(e.target) ||
+      elements.openFilesBtn?.contains(e.target)
+    ) {
+      return;
+    }
+
+    // Close both panels by adding "collapsed" class
+    if (elements.sidebar && !elements.sidebar.classList.contains("collapsed")) {
+      elements.sidebar.classList.add("collapsed");
+    }
+    if (elements.filesPanel && !elements.filesPanel.classList.contains("collapsed")) {
+      elements.filesPanel.classList.add("collapsed");
+    }
+  };
+
+  // Attach to chat container (the scrollable chat area)
+  if (elements.chatContainer) {
+    addManagedEventListener(elements.chatContainer, "click", closePanelsOnCanvasClick);
+  }
+
+  // Attach to chat panel (the entire left panel including input)
+  if (elements.chatPanel) {
+    addManagedEventListener(elements.chatPanel, "click", closePanelsOnCanvasClick);
+  }
+
+  // Attach to welcome page container
+  const welcomePageContainer = document.getElementById("welcome-page-container");
+  if (welcomePageContainer) {
+    addManagedEventListener(welcomePageContainer, "click", closePanelsOnCanvasClick);
+  }
 }
 
 initializeEventListeners();
