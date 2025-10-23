@@ -72,7 +72,7 @@ export async function loadFiles(directory = "sources", container = null) {
     if (files.length === 0) {
       // Display directory-specific empty message
       const dirName = directory.includes("/output") ? "output/" : "sources/";
-      targetContainer.innerHTML = `<div class="files-empty">No files in ${dirName}</div>`;
+      targetContainer.innerHTML = `<div class="files-empty">${MSG_NO_FILES.replace("{directory}", dirName)}</div>`;
       return;
     }
 

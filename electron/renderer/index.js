@@ -8,7 +8,6 @@ import "highlight.js/styles/github-dark.css";
 import "katex/dist/katex.min.css";
 
 import {
-  BYTES_PER_KILOBYTE,
   CONNECTION_RESET_DELAY,
   DELETE_SESSION_CONFIRM_MESSAGE,
   JSON_DELIMITER,
@@ -18,19 +17,11 @@ import {
   MSG_BOT_RESTARTED,
   MSG_BOT_RESTARTING,
   MSG_BOT_SESSION_ENDED,
-  MSG_DELETE_FILE_CONFIRM,
   MSG_DELETE_SESSION_CONFIRM,
-  MSG_FILE_DELETE_ERROR,
-  MSG_FILE_DELETE_FAILED,
-  MSG_FILE_DELETED,
   MSG_FILE_UPLOAD_FAILED,
   MSG_FILE_UPLOAD_PARTIAL,
   MSG_FILE_UPLOADED,
-  MSG_FILES_ERROR,
-  MSG_FILES_LOAD_FAILED,
-  MSG_LOADING_FILES,
   MSG_NO_FILE_SELECTED,
-  MSG_NO_FILES,
   MSG_NO_FILES_DROPPED,
   MSG_NO_SESSION_SELECTED,
   MSG_NO_SESSIONS,
@@ -41,7 +32,6 @@ import {
   MSG_UPLOADING_FILE,
   OLD_CARD_THRESHOLD,
   SIDEBAR_COLLAPSE_DELAY,
-  SIZE_PRECISION_MULTIPLIER,
   UPLOAD_PROGRESS_HIDE_DELAY,
 } from "./config/constants.js";
 import { AppState } from "./core/state.js";
@@ -498,7 +488,8 @@ async function handleCreateNewSession() {
   await clearCurrentSession(window.electronAPI);
 
   // Show welcome page (defers session creation until first message)
-  showWelcomeView(elements, appState);
+  // IMPORTANT: Await to ensure config metadata loads before proceeding
+  await showWelcomeView(elements, appState);
 
   // Collapse sidebar to give welcome screen more space
   collapseSidebar();
@@ -580,7 +571,8 @@ async function handleDeleteSession(sessionIdToDelete) {
       await clearCurrentSession(window.electronAPI);
 
       // Show welcome page
-      showWelcomeView(elements, appState);
+      // IMPORTANT: Await to ensure config metadata loads before proceeding
+      await showWelcomeView(elements, appState);
 
       // Collapse sidebar for fresh start
       collapseSidebar();
@@ -1263,7 +1255,7 @@ if (elements.fileDropZone) {
 // Window Load Handler
 // ====================
 
-window.addEventListener("load", () => {
+window.addEventListener("load", async () => {
   if (Object.keys(elements).length === 0) {
     initializeElements();
     initializeEventListeners();
@@ -1283,18 +1275,19 @@ window.addEventListener("load", () => {
   titlebarInstance = initializeTitlebar();
 
   // Load sessions first, then handle file loading
-  loadSessions(window.electronAPI, updateSessionsList).then(() => {
-    // If there's an active session, load session files
-    if (sessionState.currentSessionId) {
-      const sessionDirectory = `data/files/${sessionState.currentSessionId}/sources`;
-      setActiveFilesDirectory(sessionDirectory);
-      loadFiles(sessionDirectory);
-    }
-    // No else needed - files only load when session is active
-  });
+  // CRITICAL: Await sessions to load before showing welcome view to avoid race conditions
+  await loadSessions(window.electronAPI, updateSessionsList);
 
-  // Show welcome page on startup
-  showWelcomeView(elements, appState);
+  // Now it's safe to show welcome view (sessions are loaded)
+  // IMPORTANT: Await to ensure config metadata loads before proceeding
+  await showWelcomeView(elements, appState);
+
+  // Load files if there's an active session
+  if (sessionState.currentSessionId) {
+    const sessionDirectory = `data/files/${sessionState.currentSessionId}/sources`;
+    setActiveFilesDirectory(sessionDirectory);
+    loadFiles(sessionDirectory);
+  }
 
   // Files panel toggle button is always visible in header (no initialization needed)
 });

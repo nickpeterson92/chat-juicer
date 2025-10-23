@@ -38,6 +38,23 @@ export async function showWelcomeView(elements, appState) {
   document.body.classList.add("view-welcome");
   document.body.classList.remove("view-chat");
 
+  // Load configuration metadata from backend
+  try {
+    const metadata = await window.electronAPI.sessionCommand("config_metadata", {});
+    if (metadata?.models) {
+      // Import and initialize model config UI
+      const { initializeModelConfig } = await import("../ui/welcome-page.js");
+      initializeModelConfig(metadata.models, metadata.reasoning_levels || []);
+      window.electronAPI.log("info", "Model configuration initialized", {
+        models: metadata.models.length,
+        reasoning_levels: metadata.reasoning_levels?.length || 0,
+      });
+    }
+  } catch (error) {
+    window.electronAPI.log("error", "Failed to load config metadata", { error: error.message });
+    // Continue with defaults - config UI will use default options
+  }
+
   // Attach welcome page event listeners after DOM is ready
   setTimeout(() => {
     attachWelcomePageListeners(elements, appState);
@@ -170,24 +187,34 @@ function attachWelcomePageListeners(elements, appState) {
     if (!message || appState.connection.status !== "CONNECTED") return;
 
     // Get MCP config from checkboxes
-    const { getMcpConfig } = await import("../ui/welcome-page.js");
+    const { getMcpConfig, getModelConfig } = await import("../ui/welcome-page.js");
     const mcpConfig = getMcpConfig();
+    const modelConfig = getModelConfig();
 
     // Create new session only if one does not already exist (e.g., created by file upload)
     const { createNewSession, sessionState } = await import("../services/session-service.js");
     let sessionId = sessionState.currentSessionId;
 
     if (!sessionId) {
-      const result = await createNewSession(window.electronAPI, elements, null, mcpConfig);
+      const result = await createNewSession(
+        window.electronAPI,
+        elements,
+        null,
+        mcpConfig,
+        modelConfig.model,
+        modelConfig.reasoning_effort
+      );
       if (!result.success) {
         window.electronAPI.log("error", "Failed to create session from welcome page", { error: result.error });
         return;
       }
       sessionId = result.data?.session_id || null;
 
-      window.electronAPI.log("info", "Session created with MCP config", {
+      window.electronAPI.log("info", "Session created with full configuration", {
         session_id: sessionId,
         mcp_config: mcpConfig,
+        model: modelConfig.model,
+        reasoning_effort: modelConfig.reasoning_effort,
       });
     } else {
       window.electronAPI.log("info", "Reusing existing session for welcome message", {

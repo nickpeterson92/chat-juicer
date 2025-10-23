@@ -424,6 +424,19 @@ INITIAL_SESSION_CHUNK_SIZE = 50
 MAX_MESSAGES_PER_CHUNK = 100
 
 # ============================================================================
+# Reasoning Effort Configuration
+# ============================================================================
+
+#: Human-readable labels for reasoning effort levels.
+#: Used by frontend to display user-friendly options in model selection UI.
+REASONING_EFFORT_OPTIONS: dict[str, str] = {
+    "minimal": "Minimal",
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+}
+
+# ============================================================================
 # Model Token Limits (Input Context Windows)
 # ============================================================================
 #

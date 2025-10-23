@@ -14,7 +14,13 @@ from core.constants import REASONING_MODELS, get_settings
 from utils.logger import logger
 
 
-def create_agent(deployment: str, instructions: str, tools: list[Any], mcp_servers: list[Any]) -> Agent:
+def create_agent(
+    deployment: str,
+    instructions: str,
+    tools: list[Any],
+    mcp_servers: list[Any],
+    reasoning_effort: str | None = None,
+) -> Agent:
     """Create and configure Wishgate Agent with tools and MCP servers.
 
     Args:
@@ -22,6 +28,8 @@ def create_agent(deployment: str, instructions: str, tools: list[Any], mcp_serve
         instructions: System instructions for the agent
         tools: List of function tools
         mcp_servers: List of initialized MCP servers
+        reasoning_effort: Optional reasoning effort level (minimal, low, medium, high).
+                         If None, uses global default from settings.
 
     Returns:
         Configured Agent instance
@@ -29,13 +37,16 @@ def create_agent(deployment: str, instructions: str, tools: list[Any], mcp_serve
     # Get settings for reasoning effort configuration
     settings = get_settings()
 
+    # Use session-specific reasoning_effort if provided, otherwise use global default
+    effort_level = reasoning_effort if reasoning_effort is not None else settings.reasoning_effort
+
     # Check if this is a reasoning model that supports reasoning_effort
     is_reasoning_model = any(deployment.startswith(model) for model in REASONING_MODELS)
 
     # Configure model settings with reasoning effort only for reasoning models
     if is_reasoning_model:
-        model_settings = ModelSettings(reasoning=Reasoning(effort=settings.reasoning_effort))
-        logger.info(f"Reasoning model detected - reasoning_effort set to '{settings.reasoning_effort}'")
+        model_settings = ModelSettings(reasoning=Reasoning(effort=effort_level))
+        logger.info(f"Reasoning model detected - reasoning_effort set to '{effort_level}'")
         # Create agent with reasoning configuration
         agent = Agent(
             name="Wishgate",

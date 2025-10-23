@@ -92,6 +92,16 @@ class SessionMetadata(BaseModel):
         default_factory=lambda: ["sequential", "fetch"],
         description="List of enabled MCP server names (sequential, fetch)",
     )
+    model: str = Field(
+        default_factory=lambda: __import__("core.constants", fromlist=["get_settings"])
+        .get_settings()
+        .azure_openai_deployment,
+        description="Model deployment name for this session",
+    )
+    reasoning_effort: str = Field(
+        default_factory=lambda: __import__("core.constants", fromlist=["get_settings"]).get_settings().reasoning_effort,
+        description="Reasoning effort level: minimal | low | medium | high",
+    )
 
     @field_validator("session_id")
     @classmethod
@@ -109,6 +119,15 @@ class SessionMetadata(BaseModel):
             datetime.fromisoformat(v)
         except ValueError as e:
             raise ValueError(f"Must be valid ISO format timestamp: {e}") from e
+        return v
+
+    @field_validator("reasoning_effort")
+    @classmethod
+    def validate_reasoning_effort(cls, v: str) -> str:
+        """Validate reasoning_effort parameter."""
+        valid_values = ["minimal", "low", "medium", "high"]
+        if v not in valid_values:
+            raise ValueError(f"reasoning_effort must be one of {valid_values}")
         return v
 
     def to_json(self, indent: int = 2) -> str:
@@ -161,6 +180,8 @@ class CreateSessionCommand(BaseModel):
     command: Literal["new"] = "new"
     title: str | None = Field(default=None, max_length=200)
     mcp_config: list[str] | None = Field(default=None, description="List of enabled MCP servers (None = use defaults)")
+    model: str | None = Field(default=None, description="Model deployment name (None = use default)")
+    reasoning_effort: str | None = Field(default=None, description="Reasoning effort level (None = use default)")
 
     def to_json(self) -> str:
         """Convert to JSON for IPC."""
@@ -298,6 +319,17 @@ class RenameSessionCommand(BaseModel):
         return json_str
 
 
+class ConfigMetadataCommand(BaseModel):
+    """Command to request available configuration options."""
+
+    command: Literal["config_metadata"] = "config_metadata"
+
+    def to_json(self) -> str:
+        """Convert to JSON for IPC."""
+        json_str: str = self.model_dump_json(exclude_none=True)
+        return json_str
+
+
 SessionCommand = (
     CreateSessionCommand
     | SwitchSessionCommand
@@ -307,6 +339,7 @@ SessionCommand = (
     | ClearSessionCommand
     | LoadMoreMessagesCommand
     | RenameSessionCommand
+    | ConfigMetadataCommand
 )
 
 
@@ -340,6 +373,8 @@ def parse_session_command(data: dict[str, Any]) -> SessionCommand:  # noqa: PLR0
         return LoadMoreMessagesCommand.model_validate(data)
     elif command_type == "rename":
         return RenameSessionCommand.model_validate(data)
+    elif command_type == "config_metadata":
+        return ConfigMetadataCommand.model_validate(data)
     else:
         raise ValueError(f"Unknown command type: {command_type}")
 
@@ -401,6 +436,7 @@ __all__ = [
     "AppStateProtocol",
     "AudioContent",
     "ClearSessionCommand",
+    "ConfigMetadataCommand",
     "ContentItem",
     "CreateSessionCommand",
     "DeleteSessionCommand",

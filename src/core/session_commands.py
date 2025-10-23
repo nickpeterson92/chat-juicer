@@ -18,12 +18,15 @@ from core.constants import (
     ERROR_SESSION_MANAGER_NOT_INITIALIZED,
     ERROR_SESSION_NOT_FOUND,
     INITIAL_SESSION_CHUNK_SIZE,
+    REASONING_EFFORT_OPTIONS,
+    get_settings,
 )
 from core.session import SessionBuilder
 from integrations.sdk_token_tracker import connect_session, disconnect_session
 from models.session_models import (
     AppStateProtocol,
     ClearSessionCommand,
+    ConfigMetadataCommand,
     CreateSessionCommand,
     DeleteSessionCommand,
     ListSessionsCommand,
@@ -50,7 +53,11 @@ def _session_error(message: str) -> dict[str, str]:
 
 
 async def create_new_session(
-    app_state: AppStateProtocol, title: str | None = None, mcp_config: list[str] | None = None
+    app_state: AppStateProtocol,
+    title: str | None = None,
+    mcp_config: list[str] | None = None,
+    model: str | None = None,
+    reasoning_effort: str | None = None,
 ) -> dict[str, Any]:
     """Create a new session and switch to it.
 
@@ -58,6 +65,8 @@ async def create_new_session(
         app_state: Application state containing session manager
         title: Title for the new session (defaults to datetime format)
         mcp_config: List of enabled MCP server names (None = use defaults)
+        model: Model deployment name (None = use default from settings)
+        reasoning_effort: Reasoning effort level (None = use default from settings)
 
     Returns:
         Session metadata dictionary
@@ -66,7 +75,7 @@ async def create_new_session(
         return _session_error(ERROR_SESSION_MANAGER_NOT_INITIALIZED)
 
     # Create new session metadata (title defaults to datetime in create_session)
-    session_meta = app_state.session_manager.create_session(title, mcp_config)
+    session_meta = app_state.session_manager.create_session(title, mcp_config, model, reasoning_effort)
 
     # Switch to the new session
     await switch_to_session(app_state, session_meta.session_id)
@@ -110,7 +119,14 @@ async def switch_to_session(app_state: AppStateProtocol, session_id: str) -> dic
     from integrations.mcp_registry import filter_mcp_servers
 
     session_mcp_servers = filter_mcp_servers(app_state.mcp_servers, session_meta.mcp_config)
-    session_agent = create_agent(app_state.deployment, SYSTEM_INSTRUCTIONS, session_tools, session_mcp_servers)
+    # Use session-specific model and reasoning_effort (not global defaults)
+    session_agent = create_agent(
+        session_meta.model,
+        SYSTEM_INSTRUCTIONS,
+        session_tools,
+        session_mcp_servers,
+        session_meta.reasoning_effort,
+    )
     logger.info(f"Session agent created with {len(session_mcp_servers)} MCP servers: {session_meta.mcp_config}")
     logger.info(f"Created session-specific agent with workspace isolation for switch: {session_id}")
 
@@ -119,7 +135,7 @@ async def switch_to_session(app_state: AppStateProtocol, session_id: str) -> dic
         SessionBuilder(session_id)
         .with_persistent_storage(CHAT_HISTORY_DB_PATH)
         .with_agent(session_agent)
-        .with_model(app_state.deployment)
+        .with_model(session_meta.model)  # Use session-specific model
         .with_threshold(CONVERSATION_SUMMARIZATION_THRESHOLD)
         .with_full_history(app_state.full_history_store)
         .with_session_manager(app_state.session_manager)
@@ -455,6 +471,54 @@ async def rename_session(app_state: AppStateProtocol, session_id: str, title: st
     }
 
 
+async def get_config_metadata(app_state: AppStateProtocol) -> dict[str, Any]:
+    """Return available configuration options for frontend.
+
+    Args:
+        app_state: Application state (not used but kept for consistency)
+
+    Returns:
+        Dictionary with available models and reasoning levels
+    """
+    settings = get_settings()
+
+    # Supported models (NO nano variants)
+    SUPPORTED_MODELS = [
+        "gpt-4.1",
+        "gpt-4.1-mini",
+        "gpt-5",
+        "gpt-5-codex",
+        "gpt-5-mini",
+        "gpt-5-pro",
+    ]
+
+    # Models that support reasoning effort configuration
+    # GPT-5 family has reasoning, GPT-4.1 family does not
+    REASONING_MODELS = ["gpt-5", "gpt-5-pro", "gpt-5-codex", "gpt-5-mini"]
+
+    return {
+        "success": True,
+        "models": [
+            {
+                "value": model,
+                "label": model,
+                "isDefault": model == settings.azure_openai_deployment,
+                "supportsReasoning": model in REASONING_MODELS,
+            }
+            for model in SUPPORTED_MODELS
+        ],
+        "reasoning_levels": [
+            {
+                "value": level,
+                "label": REASONING_EFFORT_OPTIONS[level],
+                "isDefault": level == settings.reasoning_effort,
+            }
+            for level in ["minimal", "low", "medium", "high"]
+        ],
+        "reasoning_models": sorted(REASONING_MODELS),
+    }
+
+
 async def handle_session_command(app_state: AppStateProtocol, command: str, data: dict[str, Any]) -> dict[str, Any]:
     """Handle session management commands from IPC with Pydantic validation.
 
@@ -470,7 +534,9 @@ async def handle_session_command(app_state: AppStateProtocol, command: str, data
 
     # Command dispatch registry mapping command types to handlers
     command_handlers: dict[type, Any] = {
-        CreateSessionCommand: lambda cmd: create_new_session(app_state, cmd.title, cmd.mcp_config),
+        CreateSessionCommand: lambda cmd: create_new_session(
+            app_state, cmd.title, cmd.mcp_config, cmd.model, cmd.reasoning_effort
+        ),
         SwitchSessionCommand: lambda cmd: switch_to_session(app_state, cmd.session_id),
         ListSessionsCommand: lambda cmd: list_all_sessions(app_state, cmd.offset, cmd.limit),
         DeleteSessionCommand: lambda cmd: delete_session_by_id(app_state, cmd.session_id),
@@ -478,6 +544,7 @@ async def handle_session_command(app_state: AppStateProtocol, command: str, data
         ClearSessionCommand: lambda _: clear_current_session(app_state),
         LoadMoreMessagesCommand: lambda cmd: load_more_messages(app_state, cmd.session_id, cmd.offset, cmd.limit),
         RenameSessionCommand: lambda cmd: rename_session(app_state, cmd.session_id, cmd.title),
+        ConfigMetadataCommand: lambda _: get_config_metadata(app_state),
     }
 
     try:

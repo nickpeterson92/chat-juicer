@@ -61,7 +61,7 @@ export const MSG_NO_FILES_DROPPED = "No files detected in drop.";
 
 // UI Messages - Loading states
 export const MSG_LOADING_FILES = "Loading files...";
-export const MSG_NO_FILES = "No files in sources/";
+export const MSG_NO_FILES = "No files in {directory}";
 export const MSG_NO_SESSIONS = "No sessions available";
 export const MSG_FILES_ERROR = "Error: {error}";
 export const MSG_FILES_LOAD_FAILED = "Failed to load files";

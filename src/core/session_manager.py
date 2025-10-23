@@ -79,7 +79,13 @@ class SessionManager:
         except Exception as e:
             logger.error(f"Failed to save session metadata: {e}", exc_info=True)
 
-    def create_session(self, title: str | None = None, mcp_config: list[str] | None = None) -> SessionMetadata:
+    def create_session(
+        self,
+        title: str | None = None,
+        mcp_config: list[str] | None = None,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
+    ) -> SessionMetadata:
         """Create a new session with secure directory structure.
 
         Creates session workspace with:
@@ -89,6 +95,8 @@ class SessionManager:
         Args:
             title: Initial title for the session (defaults to datetime format)
             mcp_config: List of enabled MCP server names (None = use defaults)
+            model: Model deployment name (None = use default from settings)
+            reasoning_effort: Reasoning effort level (None = use default from settings)
 
         Returns:
             Newly created session metadata
@@ -102,11 +110,19 @@ class SessionManager:
 
         session_id = f"chat_{uuid.uuid4().hex[:SESSION_ID_LENGTH]}"
 
-        # Create session metadata with mcp_config (defaults handled by SessionMetadata)
+        # Create session metadata with all parameters (defaults handled by SessionMetadata)
+        session_params = {
+            "session_id": session_id,
+            "title": title,
+        }
         if mcp_config is not None:
-            session = SessionMetadata(session_id=session_id, title=title, mcp_config=mcp_config)
-        else:
-            session = SessionMetadata(session_id=session_id, title=title)
+            session_params["mcp_config"] = mcp_config
+        if model is not None:
+            session_params["model"] = model
+        if reasoning_effort is not None:
+            session_params["reasoning_effort"] = reasoning_effort
+
+        session = SessionMetadata(**session_params)
 
         # Create secure session directory structure
         session_dir = Path(f"data/files/{session_id}")

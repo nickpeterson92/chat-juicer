@@ -62,6 +62,14 @@ export function createWelcomePage(userName = "User") {
                 </svg>
               </button>
             </div>
+            <div class="model-config-inline">
+              <select id="welcome-model-select" class="inline-select">
+                <!-- Options populated by initializeModelConfig() -->
+              </select>
+              <select id="welcome-reasoning-select" class="inline-select" style="display: none;">
+                <!-- Options populated by initializeModelConfig() -->
+              </select>
+            </div>
             <button id="welcome-send-btn" class="welcome-send-btn" title="Send message">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M5 12h14M12 5l7 7-7 7"/>
@@ -197,6 +205,98 @@ export function showWelcomePage(container, userName = "User") {
 export function getMcpConfig() {
   const activeButtons = document.querySelectorAll(".mcp-toggle-btn.active");
   return Array.from(activeButtons).map((btn) => btn.dataset.mcp);
+}
+
+/**
+ * Get model configuration from inline selects
+ * @returns {{model: string, reasoning_effort?: string}} Model configuration object
+ */
+export function getModelConfig() {
+  const modelSelect = document.getElementById("welcome-model-select");
+  const reasoningSelect = document.getElementById("welcome-reasoning-select");
+
+  const model = modelSelect?.value || "gpt-5-mini";
+  const config = { model };
+
+  // Only include reasoning_effort for reasoning models (when selector is visible)
+  if (reasoningSelect && reasoningSelect.style.display !== "none") {
+    config.reasoning_effort = reasoningSelect.value || "medium";
+  }
+
+  return config;
+}
+
+/**
+ * Update reasoning selector visibility based on selected model
+ */
+function updateReasoningVisibility() {
+  const modelSelect = document.getElementById("welcome-model-select");
+  const reasoningSelect = document.getElementById("welcome-reasoning-select");
+
+  if (!modelSelect || !reasoningSelect) return;
+
+  const selectedModel = modelSelect.value;
+
+  // IMPORTANT: Only GPT-5 series models support reasoning effort
+  // GPT-5 family: gpt-5, gpt-5-pro, gpt-5-codex, gpt-5-mini (reasoning ✅)
+  // GPT-4.1 family: gpt-4.1, gpt-4.1-mini (reasoning ❌)
+  const isReasoningModel = selectedModel.startsWith("gpt-5");
+
+  reasoningSelect.style.display = isReasoningModel ? "" : "none";
+}
+
+/**
+ * Initialize model configuration selects (called after backend metadata loaded)
+ * @param {Array} models - Available models from backend
+ * @param {Array} reasoningLevels - Available reasoning levels from backend
+ */
+export function initializeModelConfig(models = [], reasoningLevels = []) {
+  const modelSelect = document.getElementById("welcome-model-select");
+  const reasoningSelect = document.getElementById("welcome-reasoning-select");
+
+  if (!modelSelect) return;
+
+  // Preserve current selection if user has already chosen something (only if options exist)
+  const currentModelSelection = modelSelect.options.length > 0 ? modelSelect.value : null;
+  const currentReasoningSelection = reasoningSelect?.options.length > 0 ? reasoningSelect.value : null;
+
+  // Populate model options
+  modelSelect.innerHTML = "";
+  models.forEach(({ value, label, isDefault }) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    // Use current selection if it exists and matches, otherwise use backend default
+    if (currentModelSelection && currentModelSelection === value) {
+      option.selected = true;
+    } else if (!currentModelSelection && isDefault) {
+      option.selected = true;
+    }
+    modelSelect.appendChild(option);
+  });
+
+  // Populate reasoning options if provided
+  if (reasoningSelect && reasoningLevels.length > 0) {
+    reasoningSelect.innerHTML = "";
+    reasoningLevels.forEach(({ value, label, isDefault }) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      // Use current selection if it exists and matches, otherwise use backend default
+      if (currentReasoningSelection && currentReasoningSelection === value) {
+        option.selected = true;
+      } else if (!currentReasoningSelection && isDefault) {
+        option.selected = true;
+      }
+      reasoningSelect.appendChild(option);
+    });
+  }
+
+  // Listen for model changes to show/hide reasoning
+  modelSelect.addEventListener("change", updateReasoningVisibility);
+
+  // Initialize visibility
+  updateReasoningVisibility();
 }
 
 /**
