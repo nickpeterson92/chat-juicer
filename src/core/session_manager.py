@@ -15,7 +15,7 @@ from typing import cast
 from agents import Agent, Runner, TResponseInputItem
 
 from core.constants import DEFAULT_SESSION_METADATA_PATH, SESSION_ID_LENGTH
-from models.session_models import SessionMetadata, SessionUpdate
+from models.session_models import SessionMetadata, SessionMetadataParams, SessionUpdate
 from utils.logger import logger
 
 
@@ -111,7 +111,7 @@ class SessionManager:
         session_id = f"chat_{uuid.uuid4().hex[:SESSION_ID_LENGTH]}"
 
         # Create session metadata with all parameters (defaults handled by SessionMetadata)
-        session_params = {
+        session_params: SessionMetadataParams = {
             "session_id": session_id,
             "title": title,
         }

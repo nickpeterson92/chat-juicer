@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -76,6 +76,22 @@ class AppStateProtocol(Protocol):
     agent: Agent | None
     deployment: str
     full_history_store: FullHistoryStore | None
+
+
+class SessionMetadataParams(TypedDict, total=False):
+    """Parameters for creating SessionMetadata instances.
+
+    Used when dynamically building kwargs for SessionMetadata(**kwargs).
+    All fields optional except session_id and title (which have required values).
+
+    Note: Links to SessionMetadata Pydantic model - keep in sync when fields change.
+    """
+
+    session_id: str  # Required - always provided
+    title: str  # Required - always provided (or has default)
+    mcp_config: list[str]  # Optional - has default_factory
+    model: str  # Optional - has default_factory
+    reasoning_effort: str  # Optional - has default_factory
 
 
 class SessionMetadata(BaseModel):
@@ -450,6 +466,7 @@ __all__ = [
     "RenameSessionCommand",
     "SessionCommand",
     "SessionMetadata",
+    "SessionMetadataParams",
     "SessionUpdate",
     "SummarizeSessionCommand",
     "SwitchSessionCommand",

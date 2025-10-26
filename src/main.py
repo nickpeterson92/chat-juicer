@@ -1,16 +1,15 @@
 """
 Wishgate - Azure OpenAI Agent with MCP Server Support
 Using Agent/Runner pattern for native MCP integration
+
+Main entry point - orchestrates application lifecycle through bootstrap and runtime modules.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
-import os
 import sys
-
-from datetime import datetime
 
 # Force UTF-8 encoding for stdout/stdin on all platforms
 # This must be done before any print() calls
@@ -20,398 +19,53 @@ if sys.stdout.encoding != "utf-8":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8", errors="replace")
 
-from dataclasses import dataclass, field
-from typing import Any
-
-from agents import Agent, set_default_openai_client, set_tracing_disabled
-from dotenv import load_dotenv
-from openai import APIConnectionError, APIStatusError, RateLimitError
-
-from core.agent import create_agent
-from core.constants import (
-    CHAT_HISTORY_DB_PATH,
-    CONVERSATION_SUMMARIZATION_THRESHOLD,
-    DEFAULT_SESSION_METADATA_PATH,
-    LOG_PREVIEW_LENGTH,
-    MAX_CONVERSATION_TURNS,
-    MESSAGE_OUTPUT_ITEM,
-    RUN_ITEM_STREAM_EVENT,
-    get_settings,
+from app.bootstrap import initialize_application
+from app.runtime import (
+    ensure_session_exists,
+    handle_file_upload,
+    handle_session_command_wrapper,
+    process_user_input,
+    send_session_created_event,
+    update_session_metadata,
 )
-from core.full_history import FullHistoryStore
-from core.prompts import SYSTEM_INSTRUCTIONS
-from core.session import TokenAwareSQLiteSession
-from core.session_commands import handle_session_command
-from core.session_manager import SessionManager
-from integrations.event_handlers import CallTracker, build_event_handlers
-from integrations.mcp_registry import initialize_all_mcp_servers
-from integrations.sdk_token_tracker import connect_session, disconnect_session, patch_sdk_for_auto_tracking
+from integrations.sdk_token_tracker import disconnect_session
 from models.event_models import UserInput
-from models.sdk_models import StreamEvent
-from models.session_models import SessionUpdate
-from tools import AGENT_TOOLS
-from utils.client_factory import create_http_client, create_openai_client
-from utils.file_utils import save_uploaded_file
 from utils.ipc import IPCManager
 from utils.logger import logger
 
 
-@dataclass
-class AppState:
-    """Application state container - single source of truth for app-wide state.
-
-    Replaces module-level globals with explicit state management.
-    """
-
-    session_manager: SessionManager | None = None
-    current_session: TokenAwareSQLiteSession | None = None
-    agent: Agent | None = None
-    deployment: str = ""
-    full_history_store: FullHistoryStore | None = None
-    mcp_servers: dict[str, Any] = field(default_factory=dict)
-
-
-# Module-level application state instance
-_app_state = AppState()
-
-
-async def handle_electron_ipc(event: StreamEvent, tracker: CallTracker) -> str | None:
-    """Convert Agent/Runner events to Electron IPC format using a typed registry."""
-    handlers = build_event_handlers(tracker)
-    handler = handlers.get(event.type)
-    if handler:
-        result: str | None = handler(event)
-        return result
-    return None
-
-
-def handle_streaming_error(error: Exception) -> None:
-    """Handle streaming errors with appropriate user messages
-
-    Args:
-        error: The exception that occurred during streaming
-    """
-
-    # Define error handlers for different exception types
-    def handle_rate_limit(e: RateLimitError) -> dict[str, str]:
-        logger.error(f"Rate limit error during streaming: {e}")
-        return {"type": "error", "message": "Rate limit reached. Please wait a moment and try your request again."}
-
-    def handle_connection_error(e: APIConnectionError) -> dict[str, str]:
-        logger.error(f"Connection error during streaming: {e}")
-        return {"type": "error", "message": "Connection interrupted. Please try your request again."}
-
-    def handle_api_status(e: APIStatusError) -> dict[str, str]:
-        logger.error(f"API status error during streaming: {e}")
-        return {"type": "error", "message": f"API error (status {e.status_code}). Please try your request again."}
-
-    def handle_generic(e: Exception) -> dict[str, str]:
-        logger.error(f"Unexpected error during streaming: {e}")
-        return {"type": "error", "message": "An error occurred. Please try your request again."}
-
-    # Map exception types to handlers
-    error_handlers: dict[type[Exception], Any] = {
-        RateLimitError: handle_rate_limit,
-        APIConnectionError: handle_connection_error,
-        APIStatusError: handle_api_status,
-    }
-
-    # Get the appropriate handler or use generic
-    handler = error_handlers.get(type(error), handle_generic)
-    error_msg = handler(error)
-
-    # Send error message to UI
-    IPCManager.send(error_msg)
-
-    # Send assistant_end to properly close the stream
-    IPCManager.send_assistant_end()
-
-
-async def ensure_session_exists(app_state: AppState) -> tuple[TokenAwareSQLiteSession, bool]:
-    """Ensure a session exists, creating one if needed (lazy initialization).
-
-    Args:
-        app_state: Application state container
-
-    Returns:
-        Tuple of (Active TokenAwareSQLiteSession instance, is_new_session flag)
-    """
-    if app_state.current_session is not None:
-        return app_state.current_session, False
-
-    logger.info("No active session - creating new session on first message")
-
-    # Type guard: session_manager must exist
-    if app_state.session_manager is None:
-        raise RuntimeError("Session manager not initialized")
-
-    # Create new session metadata
-    session_meta = app_state.session_manager.create_session()
-    logger.info(f"Created new session: {session_meta.session_id} - {session_meta.title}")
-
-    # Create session-specific agent with workspace-isolated tools
-    from tools.wrappers import create_session_aware_tools
-
-    # Create session-aware tools that inject session_id for workspace isolation
-    session_tools = create_session_aware_tools(session_meta.session_id)
-    logger.info(f"Created {len(session_tools)} session-aware tools for session: {session_meta.session_id}")
-
-    # Use MCP servers from app_state, filtered by session's mcp_config
-    # Create new agent with isolated tools (instructions are global, tools are session-specific)
-    from integrations.mcp_registry import filter_mcp_servers
-
-    session_mcp_servers = filter_mcp_servers(app_state.mcp_servers, session_meta.mcp_config)
-    session_agent = create_agent(app_state.deployment, SYSTEM_INSTRUCTIONS, session_tools, session_mcp_servers)
-    logger.info(f"Session agent created with {len(session_mcp_servers)} MCP servers: {session_meta.mcp_config}")
-    logger.info(f"Created session-specific agent with workspace isolation for: {session_meta.session_id}")
-
-    # Create token-aware session with persistent storage and full history
-    app_state.current_session = TokenAwareSQLiteSession(
-        session_id=session_meta.session_id,
-        db_path=CHAT_HISTORY_DB_PATH,
-        agent=session_agent,
-        model=app_state.deployment,
-        threshold=CONVERSATION_SUMMARIZATION_THRESHOLD,
-        full_history_store=app_state.full_history_store,
-        session_manager=app_state.session_manager,
-    )
-
-    # Restore token counts from stored items (if any)
-    items = await app_state.current_session.get_items()
-    if items:
-        app_state.current_session.total_tokens = app_state.current_session._calculate_total_tokens(items)
-        logger.info(f"Restored session with {len(items)} items, {app_state.current_session.total_tokens} tokens")
-
-    logger.info(f"Session ready with id: {app_state.current_session.session_id}")
-
-    # Connect session to SDK token tracker for automatic tracking
-    connect_session(app_state.current_session)
-
-    # Return session and flag indicating this is a newly created session
-    # Session creation event will be sent AFTER first message completes
-    return app_state.current_session, True
-
-
-async def process_user_input(session: TokenAwareSQLiteSession, user_input: str) -> None:
-    """Process a single user input using token-aware SQLite session.
-
-    Args:
-        session: TokenAwareSQLiteSession instance
-        user_input: User's message
-
-    Returns:
-        None (session manages all state internally)
-    """
-
-    # Send start message for Electron
-    IPCManager.send_assistant_start()
-
-    response_text = ""
-    tracker = CallTracker()  # Track function call IDs
-
-    # No retry logic - fail fast on errors
-    try:
-        # Use the new session's convenience method that handles auto-summarization
-        # This returns a RunResultStreaming object
-        result = await session.run_with_auto_summary(session.agent, user_input, max_turns=MAX_CONVERSATION_TURNS)
-
-        # Stream the events (SDK tracker handles token counting automatically)
-        async for event in result.stream_events():
-            # Convert to Electron IPC format with call_id tracking
-            ipc_msg = await handle_electron_ipc(event, tracker)
-            if ipc_msg:
-                IPCManager.send_raw(ipc_msg)
-
-            # Accumulate response text for logging
-            if (
-                event.type == RUN_ITEM_STREAM_EVENT
-                and hasattr(event, "item")
-                and event.item
-                and event.item.type == MESSAGE_OUTPUT_ITEM
-                and hasattr(event.item, "raw_item")
-            ):
-                content = getattr(event.item.raw_item, "content", []) or []  # Ensure we always have a list
-                for content_item in content:
-                    text = getattr(content_item, "text", "")
-                    if text:
-                        response_text += text
-
-    except Exception as e:
-        handle_streaming_error(e)
-        return
-
-    # Send end message
-    IPCManager.send_assistant_end()
-
-    # Log response
-    if response_text:
-        file_msg = f"AI: {response_text[:LOG_PREVIEW_LENGTH]}{'...' if len(response_text) > LOG_PREVIEW_LENGTH else ''}"
-        logger.info(f"AI: {response_text}", extra={"file_message": file_msg})
-
-    # SDK token tracker handles all token updates automatically
-    # Just update conversation tokens from items
-    items = await session.get_items()
-    items_tokens = session.calculate_items_tokens(items)
-    session.total_tokens = items_tokens + session.accumulated_tool_tokens
-
-    # Log current token usage (SDK tracker already updated tool tokens)
-    logger.info(
-        f"Token usage: {session.total_tokens}/{session.trigger_tokens} "
-        f"({int(session.total_tokens / session.trigger_tokens * 100)}%)"
-    )
-
-    # CRITICAL FIX: Check if we need to summarize AFTER the run
-    # This catches cases where tool tokens pushed us over the threshold
-    if await session.should_summarize():
-        logger.info(f"Post-run summarization triggered: {session.total_tokens}/{session.trigger_tokens} tokens")
-        await session.summarize_with_agent()
-
-        # Log new token count after summarization
-        logger.info(
-            f"Token usage after summarization: {session.total_tokens}/{session.trigger_tokens} "
-            f"({int(session.total_tokens / session.trigger_tokens * 100)}%)"
-        )
-
-
 async def main() -> None:
-    """Main entry point for Wishgate with Agent/Runner pattern"""
+    """Main entry point for Wishgate - pure orchestration of application lifecycle.
 
-    # Load environment variables from src/.env
-    env_path = os.path.join(os.path.dirname(__file__), ".env")
-    load_dotenv(env_path)
+    Phases:
+    1. Bootstrap: Initialize application state (config, clients, MCP servers, session manager)
+    2. Main Loop: Process user inputs (chat messages, session commands, file uploads)
+    3. Cleanup: Disconnect SDK tracker and close MCP servers gracefully
+    """
 
-    # Load and validate settings at startup
-    try:
-        settings = get_settings()
+    # ============================================================================
+    # BOOTSTRAP PHASE: Initialize application
+    # ============================================================================
+    app_state = await initialize_application()
 
-        # Configure client based on API provider
-        if settings.api_provider == "azure":
-            # Azure OpenAI configuration
-            api_key = settings.azure_openai_api_key
-            endpoint = settings.azure_endpoint_str
-            deployment = settings.azure_openai_deployment
-
-            logger.info(f"Settings loaded successfully for Azure deployment: {deployment}")
-
-            http_client = create_http_client(enable_logging=settings.http_request_logging)
-            if http_client:
-                logger.info("HTTP request/response logging enabled")
-            client = create_openai_client(api_key, base_url=endpoint, http_client=http_client)
-
-        elif settings.api_provider == "openai":
-            # Base OpenAI configuration
-            api_key = settings.openai_api_key
-            deployment = settings.openai_model
-
-            logger.info(f"Settings loaded successfully for OpenAI model: {deployment}")
-
-            http_client = create_http_client(enable_logging=settings.http_request_logging)
-            if http_client:
-                logger.info("HTTP request/response logging enabled")
-            client = create_openai_client(api_key, http_client=http_client)
-
-        else:
-            raise ValueError(f"Unknown API provider: {settings.api_provider}")
-
-    except Exception as e:
-        print(f"Error: Configuration validation failed: {e}")
-        print("Please check your .env file has required variables:")
-        if hasattr(settings, "api_provider") and settings.api_provider == "openai":
-            print("  API_PROVIDER=openai")
-            print("  OPENAI_API_KEY")
-            print("  OPENAI_MODEL")
-        else:
-            print("  API_PROVIDER=azure (default)")
-            print("  AZURE_OPENAI_API_KEY")
-            print("  AZURE_OPENAI_ENDPOINT")
-            print("  AZURE_OPENAI_DEPLOYMENT")
-        sys.exit(1)
-
-    # Set as default client for Agent/Runner
-    set_default_openai_client(client)
-
-    # Disable tracing to avoid 401 errors with Azure
-    set_tracing_disabled(True)
-
-    # Enable SDK-level automatic token tracking
-    if patch_sdk_for_auto_tracking():
-        logger.info("SDK-level token tracking enabled")
-    else:
-        logger.warning("SDK-level token tracking not available, using manual tracking")
-
-    # Set up MCP servers (initialize all available servers into a global pool)
-    mcp_servers_dict = await initialize_all_mcp_servers()
-
-    # Create initial agent with all MCP servers for global context
-    all_mcp_servers = list(mcp_servers_dict.values())
-    agent = create_agent(deployment, SYSTEM_INSTRUCTIONS, AGENT_TOOLS, all_mcp_servers)
-
-    # Display connection info based on provider
-    if settings.api_provider == "azure":
-        print("Connected to Azure OpenAI")
-        print(f"Using deployment: {deployment}")
-    else:
-        print("Connected to OpenAI")
-        print(f"Using model: {deployment}")
-
-    if mcp_servers_dict:
-        server_names = ", ".join(mcp_servers_dict.keys())
-        print(f"MCP Servers: {server_names}")
-
-    # Initialize application state for session management
-    _app_state.agent = agent
-    _app_state.deployment = deployment
-    _app_state.mcp_servers = mcp_servers_dict
-
-    # Initialize full history store for layered persistence
-    _app_state.full_history_store = FullHistoryStore(db_path=CHAT_HISTORY_DB_PATH)
-    logger.info("Full history store initialized")
-
-    # SAFEGUARD: Validate session integrity on startup
-    from utils.session_integrity import validate_and_repair_all_sessions
-
-    validation_results = validate_and_repair_all_sessions(
-        full_history_store=_app_state.full_history_store, db_path=CHAT_HISTORY_DB_PATH, auto_repair=True
-    )
-
-    if validation_results["orphaned_count"] > 0:
-        logger.warning(
-            f"Session integrity check: Found {validation_results['orphaned_count']} orphaned sessions. "
-            f"Repaired: {validation_results['repaired_count']}, Failed: {validation_results['repair_failed_count']}"
-        )
-    else:
-        logger.info(f"Session integrity check: All {validation_results['healthy_count']} sessions are healthy")
-
-    # Initialize session manager
-    _app_state.session_manager = SessionManager(metadata_path=DEFAULT_SESSION_METADATA_PATH)
-    logger.info("Session manager initialized")
-
-    # Cleanup empty sessions on startup (prevent orphaned sessions from file uploads)
-    deleted_count = _app_state.session_manager.cleanup_empty_sessions(max_age_hours=24)
-    if deleted_count > 0:
-        logger.info(f"Startup cleanup: removed {deleted_count} empty sessions")
-
-    # LAZY INITIALIZATION: No session created on startup
-    # Session will be created on first user message or when switching to existing session
-    _app_state.current_session = None
-    logger.info("App initialized - session will be created on first message")
-
-    # Main chat loop
-    # Session manages all conversation state internally
+    # ============================================================================
+    # MAIN LOOP: Process user inputs
+    # ============================================================================
     while True:
         try:
             # Get user input (synchronously from stdin)
             raw_input = await asyncio.get_event_loop().run_in_executor(None, input)
 
-            # Check for session management commands
+            # ========================================================================
+            # Session Management Commands
+            # ========================================================================
             if IPCManager.is_session_command(raw_input):
                 try:
                     parsed = IPCManager.parse_session_command(raw_input)
                     if parsed:
                         command, data = parsed
                         logger.info(f"Processing session command: {command}")
-                        result = await handle_session_command(_app_state, command, data)
-                        logger.info(f"Session command result keys: {result.keys()}")
+                        result = await handle_session_command_wrapper(app_state, command, data)
                         IPCManager.send_session_response(result)
                         logger.info(f"Session response sent for command: {command}")
                     else:
@@ -421,7 +75,9 @@ async def main() -> None:
                     IPCManager.send_session_response({"error": str(e)})
                 continue
 
-            # Handle file upload commands
+            # ========================================================================
+            # File Upload Commands
+            # ========================================================================
             if raw_input.startswith("__UPLOAD__"):
                 try:
                     # Parse upload command: __UPLOAD__<json>__
@@ -430,24 +86,8 @@ async def main() -> None:
                     upload_json = raw_input[json_start:json_end]
                     upload_data = json.loads(upload_json)
 
-                    logger.info(f"Processing file upload: {upload_data.get('filename')}")
-
-                    # Ensure session exists (create if needed)
-                    session, is_new = await ensure_session_exists(_app_state)
-                    session_id = _app_state.session_manager.current_session_id if _app_state.session_manager else None
-
-                    # Process upload with session_id
-                    result = save_uploaded_file(
-                        filename=upload_data["filename"], data=upload_data["data"], session_id=session_id
-                    )
-
-                    # If this is a new session, send session info to frontend
-                    if is_new and session_id:
-                        session_meta = _app_state.session_manager.get_session(session_id)
-                        if session_meta:
-                            session_info = {"type": "session_created", "session": session_meta.model_dump()}
-                            IPCManager.send(session_info)
-                            logger.info(f"New session created for upload: {session_id}")
+                    # Process upload through runtime
+                    result = await handle_file_upload(app_state, upload_data)
 
                     # Send upload response back to Electron
                     response_msg = {"type": "upload_response", "data": result}
@@ -459,6 +99,10 @@ async def main() -> None:
                     error_msg = {"type": "upload_response", "data": {"success": False, "error": str(e)}}
                     IPCManager.send(error_msg)
                 continue
+
+            # ========================================================================
+            # Chat Messages
+            # ========================================================================
 
             # Validate user input with Pydantic
             try:
@@ -474,59 +118,23 @@ async def main() -> None:
                 break
 
             # Log user input
+            from core.constants import LOG_PREVIEW_LENGTH
+
             file_msg = f"User: {user_input[:LOG_PREVIEW_LENGTH]}{'...' if len(user_input) > LOG_PREVIEW_LENGTH else ''}"
             logger.info(f"User: {user_input}", extra={"file_message": file_msg})
 
             # Ensure session exists (lazy initialization on first message)
-            session, is_new_session = await ensure_session_exists(_app_state)
+            session, is_new_session = await ensure_session_exists(app_state)
 
             # Process user input through session (handles summarization automatically)
             await process_user_input(session, user_input)
 
             # Update session metadata after each message
-            # At this point, both session_manager and current_session are guaranteed to exist
-            # (ensure_session_exists would have raised otherwise)
-            # Using the session variable from ensure_session_exists for type safety
-            items = await session.get_items()
-            updates = SessionUpdate(
-                last_used=datetime.now().isoformat(),
-                message_count=len(items),
-                accumulated_tool_tokens=session.accumulated_tool_tokens,
-            )
-            # Type narrowing: we know session_manager exists from ensure_session_exists
-            if _app_state.session_manager is not None:
-                _app_state.session_manager.update_session(session.session_id, updates)
-
-            # Auto-generate session title after N user messages (non-blocking)
-            if _app_state.session_manager is not None:
-                from core.constants import SESSION_NAMING_TRIGGER_MESSAGES
-
-                session_meta = _app_state.session_manager.get_session(session.session_id)
-                if session_meta and not session_meta.is_named:
-                    # Count only USER messages (not assistant responses)
-                    user_message_count = sum(1 for item in items if item.get("role") == "user")
-
-                    if user_message_count == SESSION_NAMING_TRIGGER_MESSAGES:
-                        logger.info(
-                            f"Naming trigger reached for session {session.session_id} "
-                            f"({user_message_count} user messages) - starting background title generation"
-                        )
-                        # Pass ALL items to Agent/Runner (SDK handles filtering)
-                        # This ensures tool calls/results have proper context
-                        # Fire and forget - non-blocking background task
-                        asyncio.create_task(  # noqa: RUF006
-                            _app_state.session_manager.generate_session_title(session.session_id, items)
-                        )
+            await update_session_metadata(app_state, session)
 
             # Send session creation event AFTER first message completes
-            # This ensures the session has messages and updated metadata before frontend loads it
             if is_new_session:
-                session_meta = _app_state.session_manager.get_session(session.session_id)
-                if session_meta:
-                    IPCManager.send(
-                        {"type": "session_created", "session_id": session_meta.session_id, "title": session_meta.title}
-                    )
-                    logger.info(f"Sent session_created event for {session.session_id} after first message")
+                send_session_created_event(app_state, session.session_id)
 
         except KeyboardInterrupt:
             logger.info("Keyboard interrupt received")
@@ -540,11 +148,15 @@ async def main() -> None:
             logger.error(f"Unexpected error in main loop: {e}")
             IPCManager.send_error("An unexpected error occurred.")
 
+    # ============================================================================
+    # CLEANUP PHASE: Shutdown gracefully
+    # ============================================================================
+
     # Disconnect SDK token tracker
     disconnect_session()
 
     # Clean up MCP servers
-    for server in mcp_servers_dict.values():
+    for server in app_state.mcp_servers.values():
         try:
             # Use asyncio.wait_for with a timeout to prevent hanging
             await asyncio.wait_for(server.__aexit__(None, None, None), timeout=2.0)

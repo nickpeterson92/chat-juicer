@@ -46,7 +46,11 @@ wishgate/
 │   ├── wishgate-logo-real.svg  # Application logo
 │   └── smoke-loading.svg       # Loading animation
 ├── src/              # Python backend (modular architecture)
-│   ├── main.py       # Application entry point and async event loop management
+│   ├── main.py       # Application orchestrator (174 lines, pure coordination)
+│   ├── app/          # Application modules (orchestrator pattern)
+│   │   ├── state.py          # AppState dataclass (single source of truth)
+│   │   ├── bootstrap.py      # Application initialization and configuration
+│   │   └── runtime.py        # Core runtime operations (session, message handling)
 │   ├── core/         # Core business logic
 │   │   ├── agent.py            # Agent/Runner implementation with MCP support
 │   │   ├── session.py          # TokenAwareSQLiteSession with auto-summarization (20% threshold - Layer 1)
@@ -108,6 +112,41 @@ wishgate/
 ```
 
 ## Key Architectural Concepts
+
+### Orchestrator Pattern (Main Application)
+The Python backend uses a clean orchestrator pattern for maintainability:
+
+**src/app/state.py** (41 lines):
+- `AppState` dataclass - single source of truth for application state
+- Explicit state passing (no hidden global variables)
+- Type-safe state management with full mypy compliance
+
+**src/app/bootstrap.py** (170 lines):
+- `initialize_application() -> AppState` - complete application setup
+- Environment loading, settings validation, client creation
+- MCP server initialization and agent creation
+- Session manager setup and integrity validation
+- Returns fully populated AppState ready for main loop
+
+**src/app/runtime.py** (369 lines):
+- 8 core runtime functions for message processing
+- `ensure_session_exists` - lazy session creation with workspace isolation
+- `process_user_input` - message streaming and token management
+- `handle_session_command_wrapper` - session command dispatch
+- `handle_file_upload` - file uploads with session isolation
+- All functions receive AppState as explicit parameter
+
+**src/main.py** (174 lines - 69% reduction from 557):
+- Pure orchestrator - no business logic, only coordination
+- Three phases: Bootstrap → Main Loop → Cleanup
+- Command dispatch router (session commands, file uploads, chat messages)
+- Graceful shutdown with MCP server cleanup
+
+**Benefits**:
+- Clear separation of concerns (state, bootstrap, runtime, orchestrator)
+- Improved testability (can test each module independently)
+- Better maintainability (changes localized to specific modules)
+- Explicit state management (no hidden global mutations)
 
 ### Agent/Runner Pattern with MCP
 The application uses OpenAI's Agent/Runner pattern which provides:

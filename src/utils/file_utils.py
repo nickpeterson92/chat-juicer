@@ -21,6 +21,7 @@ from core.constants import (
     ERROR_SYMLINK_ESCAPE,
 )
 from models.api_models import TextEditResponse
+from models.ipc_models import UploadResult
 from utils.json_utils import json_pretty
 
 
@@ -368,9 +369,8 @@ async def file_operation(
 
 def save_uploaded_file(
     filename: str, data: list[int], session_id: str | None = None, target_dir: str = "sources"
-) -> dict[str, Any]:
-    """
-    Save uploaded file data to session-specific or general directory.
+) -> UploadResult:
+    """Save uploaded file data to session-specific or general directory.
 
     Args:
         filename: Name of the file to save
@@ -379,7 +379,7 @@ def save_uploaded_file(
         target_dir: Target directory if no session_id (default: "sources")
 
     Returns:
-        Dictionary with success status and metadata
+        UploadResult with success status and metadata (success + file info or error)
     """
     try:
         # Validate filename (prevent directory traversal)
