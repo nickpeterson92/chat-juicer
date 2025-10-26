@@ -282,8 +282,11 @@ app.whenReady().then(() => {
     logger.logUserInteraction("chat-input", { messageLength: message.length });
 
     if (pythonProcess && !pythonProcess.killed) {
-      pythonProcess.stdin.write(`${message}\n`);
-      logger.debug("Sent input to Python process");
+      // Encode newlines in the message to support multi-line input
+      // Python's input() function only reads one line at a time, so we use a placeholder
+      const encodedMessage = message.replace(/\n/g, "__NEWLINE__");
+      pythonProcess.stdin.write(`${encodedMessage}\n`);
+      logger.debug("Sent input to Python process", { hasNewlines: message.includes("\n") });
     } else {
       logger.error("Python process is not running");
       event.reply("bot-error", "Python process is not running");

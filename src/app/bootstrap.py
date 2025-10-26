@@ -88,14 +88,14 @@ async def initialize_application() -> AppState:
         print(f"Error: Configuration validation failed: {e}")
         print("Please check your .env file has required variables:")
         if hasattr(settings, "api_provider") and settings.api_provider == "openai":
-            print("  API_PROVIDER=openai")
-            print("  OPENAI_API_KEY")
-            print("  OPENAI_MODEL")
+            print("API_PROVIDER=openai")
+            print("OPENAI_API_KEY")
+            print("OPENAI_MODEL")
         else:
-            print("  API_PROVIDER=azure (default)")
-            print("  AZURE_OPENAI_API_KEY")
-            print("  AZURE_OPENAI_ENDPOINT")
-            print("  AZURE_OPENAI_DEPLOYMENT")
+            print("API_PROVIDER=azure (default)")
+            print("AZURE_OPENAI_API_KEY")
+            print("AZURE_OPENAI_ENDPOINT")
+            print("AZURE_OPENAI_DEPLOYMENT")
         sys.exit(1)
 
     # Set as default client for Agent/Runner

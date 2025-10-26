@@ -56,6 +56,10 @@ async def main() -> None:
             # Get user input (synchronously from stdin)
             raw_input = await asyncio.get_event_loop().run_in_executor(None, input)
 
+            # Decode newlines for multi-line message support
+            # The frontend encodes newlines as __NEWLINE__ since input() only reads one line
+            raw_input = raw_input.replace("__NEWLINE__", "\n")
+
             # ========================================================================
             # Session Management Commands
             # ========================================================================

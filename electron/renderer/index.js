@@ -150,12 +150,36 @@ function sendMessage() {
   // Clear input
   elements.userInput.value = "";
 
+  // Reset textarea height after clearing
+  if (elements.userInput.tagName === "TEXTAREA") {
+    elements.userInput.style.height = "auto";
+  }
+
   // Reset assistant message state
   appState.setState("message.currentAssistant", null);
   appState.setState("message.assistantBuffer", "");
 
   // Send to main process
   window.electronAPI.sendUserInput(message);
+}
+
+/**
+ * Auto-resize textarea as user types
+ * @param {HTMLTextAreaElement} textarea - The textarea element to resize
+ */
+function autoResizeTextarea(textarea) {
+  if (!textarea) return;
+
+  // Reset height to auto to get the correct scrollHeight
+  textarea.style.height = "auto";
+
+  // Set height to match content, with a max height
+  const maxHeight = 200; // Maximum height in pixels (about 8-10 lines)
+  const newHeight = Math.min(textarea.scrollHeight, maxHeight);
+  textarea.style.height = `${newHeight}px`;
+
+  // Show scrollbar if content exceeds max height
+  textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
 }
 
 // ====================
@@ -738,14 +762,24 @@ function initializeEventListeners() {
     addManagedEventListener(elements.sendBtn, "click", sendMessage);
   }
 
-  // Enter key to send
+  // Enter key to send (Shift+Enter for new line)
   if (elements.userInput) {
-    addManagedEventListener(elements.userInput, "keypress", (e) => {
+    addManagedEventListener(elements.userInput, "keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         sendMessage();
       }
     });
+
+    // Auto-resize textarea as user types
+    if (elements.userInput.tagName === "TEXTAREA") {
+      addManagedEventListener(elements.userInput, "input", () => {
+        autoResizeTextarea(elements.userInput);
+      });
+
+      // Initialize height on load
+      autoResizeTextarea(elements.userInput);
+    }
   }
 
   // Restart button

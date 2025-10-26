@@ -82,9 +82,21 @@ export function showChatView(elements, appState) {
   document.body.classList.remove("view-welcome");
   document.body.classList.add("view-chat");
 
-  // Focus chat input
+  // Focus chat input and ensure proper sizing
   if (elements.userInput) {
     elements.userInput.focus();
+
+    // Initialize textarea height properly (for textarea elements)
+    if (elements.userInput.tagName === "TEXTAREA") {
+      // Use requestAnimationFrame to ensure the view transition is complete
+      requestAnimationFrame(() => {
+        elements.userInput.style.height = "auto";
+        const maxHeight = 200;
+        const newHeight = Math.min(elements.userInput.scrollHeight, maxHeight);
+        elements.userInput.style.height = `${newHeight}px`;
+        elements.userInput.style.overflowY = elements.userInput.scrollHeight > maxHeight ? "auto" : "hidden";
+      });
+    }
   }
 }
 

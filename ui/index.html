@@ -126,17 +126,17 @@
             </div>
           </div>
 
-          <div class="p-5 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-600 flex gap-2.5">
+          <div class="p-5 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-600 flex items-end gap-2.5">
             <div class="flex-1 relative">
-              <input
-                type="text"
+              <textarea
                 id="user-input"
-                placeholder="Type your message here..."
+                placeholder="Reply..."
                 autocomplete="off"
-                class="w-full py-3 px-4 border-2 border-gray-200 dark:border-gray-600 rounded-3xl text-base outline-none transition-colors bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:border-gray-400 dark:focus:border-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              />
+                rows="1"
+                class="w-full py-3 px-4 border-2 border-gray-200 dark:border-gray-600 rounded-3xl text-base outline-none transition-colors bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:border-gray-400 dark:focus:border-gray-500 disabled:opacity-50 disabled:cursor-not-allowed resize-none overflow-hidden min-h-[48px]"
+              ></textarea>
             </div>
-            <button class="py-3 px-6 bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900 border-none rounded-3xl text-base font-semibold cursor-pointer transition-all duration-200 hover:bg-gray-700 dark:hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed" id="send-btn">Send</button>
+            <button class="py-3 px-6 bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900 border-none rounded-3xl text-base font-semibold cursor-pointer transition-all duration-200 hover:bg-gray-700 dark:hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0" id="send-btn">Send</button>
           </div>
         </div>
 
