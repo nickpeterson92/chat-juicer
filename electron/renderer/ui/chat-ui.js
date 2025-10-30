@@ -6,7 +6,7 @@
 import smokeAnimationData from "../../../ui/Smoke.json";
 import { MAX_MESSAGES } from "../config/constants.js";
 import { initLottieWithColor } from "../utils/lottie-color.js";
-import { processMermaidDiagrams, renderMarkdown } from "../utils/markdown-renderer.js";
+import { initializeCodeCopyButtons, processMermaidDiagrams, renderMarkdown } from "../utils/markdown-renderer.js";
 import { scheduleScroll } from "../utils/scroll-utils.js";
 
 // Message cache for O(1) message management (replaces O(n) querySelectorAll)
@@ -52,11 +52,14 @@ export function addMessage(chatContainer, content, type = "assistant") {
   // Render markdown for assistant messages, plain text for others
   if (type === "assistant") {
     contentDiv.innerHTML = renderMarkdown(content, true); // isComplete = true for static messages
-    // Process Mermaid diagrams asynchronously after DOM insertion
+    // Process Mermaid diagrams and initialize copy buttons asynchronously after DOM insertion
     setTimeout(() => {
-      processMermaidDiagrams(contentDiv).catch((err) =>
-        window.electronAPI.log("error", "Mermaid processing error", { error: err.message })
-      );
+      // CRITICAL: Initialize copy buttons AFTER Mermaid processing completes
+      processMermaidDiagrams(contentDiv)
+        .catch((err) => window.electronAPI.log("error", "Mermaid processing error", { error: err.message }))
+        .finally(() => {
+          initializeCodeCopyButtons(contentDiv);
+        });
     }, 0);
   } else {
     contentDiv.textContent = content;

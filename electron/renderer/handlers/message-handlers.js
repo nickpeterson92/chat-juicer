@@ -16,7 +16,7 @@ import {
   updateFunctionArguments,
   updateFunctionCallStatus,
 } from "../ui/function-card-ui.js";
-import { processMermaidDiagrams } from "../utils/markdown-renderer.js";
+import { initializeCodeCopyButtons, processMermaidDiagrams } from "../utils/markdown-renderer.js";
 
 /**
  * Handle assistant_start message
@@ -79,15 +79,20 @@ function handleAssistantEnd(_message, context) {
   // Pending requestIdleCallback could fire after Mermaid rendering and destroy SVGs
   cancelPendingRender();
 
-  // Process Mermaid diagrams after streaming is complete
+  // Process Mermaid diagrams and initialize copy buttons after streaming is complete
   // Uses atomic innerHTML replacement to prevent race conditions
   if (currentAssistantElement && document.body.contains(currentAssistantElement)) {
     // Navigate to parent .message-content div which contains all rendered markdown
     const messageContentDiv = currentAssistantElement.closest(".message-content");
     if (messageContentDiv) {
-      processMermaidDiagrams(messageContentDiv).catch((err) =>
-        window.electronAPI.log("error", "Mermaid processing error", { error: err.message })
-      );
+      // CRITICAL: Initialize copy buttons AFTER Mermaid processing completes
+      // processMermaidDiagrams does atomic innerHTML replacement which would destroy event listeners
+      processMermaidDiagrams(messageContentDiv)
+        .catch((err) => window.electronAPI.log("error", "Mermaid processing error", { error: err.message }))
+        .finally(() => {
+          // Attach copy button listeners after DOM is stable
+          initializeCodeCopyButtons(messageContentDiv);
+        });
     }
   }
 }
