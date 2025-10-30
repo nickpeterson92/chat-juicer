@@ -15,7 +15,7 @@ import {
 import { addMessage, clearChat } from "../ui/chat-ui.js";
 import { clearFunctionCards } from "../ui/function-card-ui.js";
 import { clearParseCache } from "../utils/json-cache.js";
-import { processMermaidDiagrams, renderMarkdown } from "../utils/markdown-renderer.js";
+import { initializeCodeCopyButtons, processMermaidDiagrams, renderMarkdown } from "../utils/markdown-renderer.js";
 import { scheduleScroll } from "../utils/scroll-utils.js";
 import { showToast } from "../utils/toast.js";
 
@@ -99,6 +99,9 @@ function createMessageElement(msg) {
     // Render markdown for assistant messages, plain text for user messages
     if (role === "assistant") {
       contentDiv.innerHTML = renderMarkdown(content, true);
+      // Note: Session history doesn't need Mermaid processing (done during pagination)
+      // So we can safely initialize copy buttons immediately
+      setTimeout(() => initializeCodeCopyButtons(contentDiv), 0);
     } else {
       contentDiv.textContent = content;
     }

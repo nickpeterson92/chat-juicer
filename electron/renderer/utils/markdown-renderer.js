@@ -176,17 +176,31 @@ renderer.code = (token) => {
   }
 
   // Syntax highlighting for other languages
+  let highlightedCode;
+  const languageLabel = language || "text";
+
   if (language && hljs.getLanguage(language)) {
     try {
       const highlighted = hljs.highlight(code, { language }).value;
-      return `<pre><code class="hljs language-${language}">${highlighted}</code></pre>`;
+      highlightedCode = `<code class="hljs language-${language}">${highlighted}</code>`;
     } catch (_err) {
       // Fall through to plain code on error
+      highlightedCode = `<code class="hljs">${escapeHtml(code)}</code>`;
     }
+  } else {
+    // Fallback to plain code
+    highlightedCode = `<code class="hljs">${escapeHtml(code)}</code>`;
   }
 
-  // Fallback to plain code
-  return `<pre><code class="hljs">${escapeHtml(code)}</code></pre>`;
+  // Wrap in code-block-wrapper with overlaid copy button inside pre
+  return `<div class="code-block-wrapper">
+    <pre><button class="code-copy-btn" title="Copy code" data-code="${escapeHtml(code).replace(/"/g, "&quot;")}">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+      </svg>
+    </button>${highlightedCode}</pre>
+  </div>`;
 };
 
 // Configure marked with renderer and extensions (without footnotes for streaming safety)
@@ -311,6 +325,8 @@ export function renderMarkdown(markdown, isComplete = false) {
       "img",
       // Task lists
       "input",
+      // Code copy button
+      "button",
       // Extended markdown elements
       "dl",
       "dt",
@@ -378,6 +394,8 @@ export function renderMarkdown(markdown, isComplete = false) {
       "type",
       "checked",
       "disabled",
+      // Button attributes (for code copy button)
+      "data-code",
       // Table attributes
       "align",
       "colspan",
@@ -548,4 +566,66 @@ export function hasMarkdown(text) {
   ];
 
   return markdownPatterns.some((pattern) => pattern.test(text));
+}
+
+/**
+ * Initialize copy buttons for code blocks
+ * Call this after rendering markdown to attach event listeners
+ * @param {HTMLElement} container - Container element with rendered markdown
+ */
+export function initializeCodeCopyButtons(container) {
+  if (!container) return;
+
+  const copyButtons = container.querySelectorAll(".code-copy-btn");
+
+  copyButtons.forEach((button) => {
+    // Remove any existing listeners to avoid duplicates
+    const newButton = button.cloneNode(true);
+    button.parentNode.replaceChild(newButton, button);
+
+    newButton.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const btn = e.currentTarget;
+      const code = btn.getAttribute("data-code");
+
+      if (!code) return;
+
+      try {
+        // Decode HTML entities for proper copy
+        const textarea = document.createElement("textarea");
+        textarea.innerHTML = code;
+        const decodedCode = textarea.value;
+
+        await navigator.clipboard.writeText(decodedCode);
+
+        // Visual feedback - change icon to checkmark
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>`;
+        btn.classList.add("copied");
+
+        // Reset after 2 seconds
+        setTimeout(() => {
+          btn.innerHTML = originalHTML;
+          btn.classList.remove("copied");
+        }, 2000);
+      } catch (err) {
+        console.error("[COPY] Failed to copy code:", err);
+
+        // Fallback visual feedback on error
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>`;
+
+        setTimeout(() => {
+          btn.innerHTML = originalHTML;
+        }, 2000);
+      }
+    });
+  });
 }

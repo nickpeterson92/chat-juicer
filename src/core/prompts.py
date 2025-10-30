@@ -108,6 +108,7 @@ Sequential Thinking helps you:
 
 ## General Best Practices
 
+- **Always output markdown** formatted responses. The client supports full markdown rendering for your responses to the user.
 - **Check existing resources**: Before asking questions, explore available files and directories
 - **Use appropriate tools**: Match tools to task requirements
 - **Maintain quality**: Produce well-formatted, professional output
