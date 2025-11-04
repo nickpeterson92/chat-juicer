@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 from core.constants import (
     MSG_TYPE_ASSISTANT_END,
@@ -29,6 +29,7 @@ class IPCManager:
     Protocol Specification:
         - JSON messages: ``__JSON__<payload>__JSON__``
         - Session commands: ``__SESSION__<command>__<json_data>__``
+        - File uploads: ``__UPLOAD__<json_data>__``
 
     All IPC constants and helper methods are centralized here
     to maintain a single source of truth for the protocol.
@@ -39,6 +40,9 @@ class IPCManager:
 
     #: Prefix for session management commands
     SESSION_PREFIX: ClassVar[str] = "__SESSION__"
+
+    #: Prefix for file upload commands
+    UPLOAD_PREFIX: ClassVar[str] = "__UPLOAD__"
 
     #: Index of command name in parsed session command
     SESSION_CMD_INDEX: ClassVar[int] = 2
@@ -168,3 +172,50 @@ class IPCManager:
             return (command, data)
         except json.JSONDecodeError:
             return None
+
+    @staticmethod
+    def is_upload_command(raw_input: str) -> bool:
+        """Check if input is a file upload command.
+
+        Args:
+            raw_input: Raw input string from stdin
+
+        Returns:
+            True if input is an upload command
+        """
+        return raw_input.startswith(IPCManager.UPLOAD_PREFIX)
+
+    @staticmethod
+    def parse_upload_command(raw_input: str) -> dict[str, Any] | None:
+        """Parse file upload command from raw input.
+
+        Protocol format: ``__UPLOAD__<json_data>__``
+
+        Args:
+            raw_input: Raw input string from stdin
+
+        Returns:
+            Upload data dict if valid, None if invalid
+
+        Example:
+            >>> IPCManager.parse_upload_command("__UPLOAD__{'file': 'test.txt'}__")
+            {'file': 'test.txt'}
+        """
+        try:
+            # Find JSON payload between delimiters
+            json_start = raw_input.index(IPCManager.UPLOAD_PREFIX) + len(IPCManager.UPLOAD_PREFIX)
+            json_end = raw_input.index("__", json_start)
+            upload_json = raw_input[json_start:json_end]
+            return cast(dict[str, Any], json.loads(upload_json))
+        except (ValueError, json.JSONDecodeError, IndexError):
+            return None
+
+    @staticmethod
+    def send_upload_response(data: dict[str, Any]) -> None:
+        """Send a file upload response.
+
+        Args:
+            data: Response data dict (success/error info)
+        """
+        response = {"type": "upload_response", "data": data}
+        IPCManager.send(response)
