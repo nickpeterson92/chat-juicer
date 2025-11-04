@@ -8,7 +8,6 @@ Main entry point - orchestrates application lifecycle through bootstrap and runt
 from __future__ import annotations
 
 import asyncio
-import json
 import sys
 
 # Force UTF-8 encoding for stdout/stdin on all platforms
@@ -82,26 +81,19 @@ async def main() -> None:
             # ========================================================================
             # File Upload Commands
             # ========================================================================
-            if raw_input.startswith("__UPLOAD__"):
+            if IPCManager.is_upload_command(raw_input):
                 try:
-                    # Parse upload command: __UPLOAD__<json>__
-                    json_start = raw_input.index("__UPLOAD__") + len("__UPLOAD__")
-                    json_end = raw_input.index("__", json_start)
-                    upload_json = raw_input[json_start:json_end]
-                    upload_data = json.loads(upload_json)
-
-                    # Process upload through runtime
-                    result = await handle_file_upload(app_state, upload_data)
-
-                    # Send upload response back to Electron
-                    response_msg = {"type": "upload_response", "data": result}
-                    IPCManager.send(response_msg)
-                    logger.info(f"Upload response sent: {result.get('success')}")
-
+                    upload_data = IPCManager.parse_upload_command(raw_input)
+                    if upload_data:
+                        logger.info("Processing file upload command")
+                        result = await handle_file_upload(app_state, upload_data)
+                        IPCManager.send_upload_response(result)
+                        logger.info(f"Upload response sent: {result.get('success')}")
+                    else:
+                        IPCManager.send_upload_response({"success": False, "error": "Invalid upload command format"})
                 except Exception as e:
-                    logger.error(f"Upload command error: {e}", exc_info=True)
-                    error_msg = {"type": "upload_response", "data": {"success": False, "error": str(e)}}
-                    IPCManager.send(error_msg)
+                    logger.error(f"Error handling upload command: {e}", exc_info=True)
+                    IPCManager.send_upload_response({"success": False, "error": str(e)})
                 continue
 
             # ========================================================================
