@@ -683,14 +683,7 @@ async function stopPythonBot() {
     if (pythonProcess && !pythonProcess.killed) {
       logger.info("Attempting graceful Python process shutdown");
 
-      // Send quit command through stdin first
-      try {
-        pythonProcess.stdin.write("quit\n");
-      } catch (_e) {
-        // Stdin might be closed
-      }
-
-      // Then send SIGTERM
+      // Send SIGTERM to gracefully terminate
       setTimeout(() => {
         if (pythonProcess && !pythonProcess.killed) {
           if (platformConfig.isWindows()) {

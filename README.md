@@ -312,8 +312,7 @@ make help               # Show all available commands
 ### Chat Commands
 
 - Type your message and press Enter to send
-- Type `quit`, `exit`, or `bye` to end the conversation
-- Use Ctrl+C to force quit if needed
+- Use standard window controls to close the application
 
 ## Project Structure
 

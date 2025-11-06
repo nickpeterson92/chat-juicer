@@ -299,7 +299,6 @@ window.electronAPI.onBotOutput((output) => {
         line.includes("Connected to") ||
         line.includes("Using deployment:") ||
         line.includes("Using model:") ||
-        line.includes("Type 'quit'") ||
         line.includes("====") ||
         line.includes("Enter your message"))
     ) {
