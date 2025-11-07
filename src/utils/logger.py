@@ -1,5 +1,5 @@
 """
-Professional logging setup for Wishgate using Python's standard logging
+Professional logging setup for Chat Juicer using Python's standard logging
 with JSON formatting for structured logs.
 
 Log destinations:
@@ -60,7 +60,7 @@ class ErrorFilter(logging.Filter):
         return record.levelno >= logging.ERROR
 
 
-def setup_logging(name: str = "wishgate", debug: bool | None = None) -> logging.Logger:
+def setup_logging(name: str = "chat-juicer", debug: bool | None = None) -> logging.Logger:
     """
     Set up professional logging with multiple handlers.
 
@@ -146,11 +146,11 @@ def setup_logging(name: str = "wishgate", debug: bool | None = None) -> logging.
 
 class ChatLogger:
     """
-    High-level logging interface for Wishgate.
+    High-level logging interface for Chat Juicer.
     Wraps standard Python logging with convenience methods.
     """
 
-    def __init__(self, name: str = "wishgate"):
+    def __init__(self, name: str = "chat-juicer"):
         self.logger = setup_logging(name)
         self.session_id = str(uuid.uuid4())[:SESSION_ID_LENGTH]
 

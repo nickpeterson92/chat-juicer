@@ -1,5 +1,5 @@
 """
-API response models for Wishgate functions.
+API response models for Chat Juicer functions.
 Provides standardized response schemas for tool outputs.
 """
 

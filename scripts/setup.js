@@ -3,7 +3,7 @@
 /**
  * Universal Setup Script
  *
- * Cross-platform setup automation for Wishgate.
+ * Cross-platform setup automation for Chat Juicer.
  * Replaces platform-specific setup.sh and Makefile.
  */
 
@@ -339,7 +339,7 @@ async function validateSetup() {
  */
 async function main() {
   console.log(colorize("\n╔══════════════════════════════════════════════════════════════╗", "blue"));
-  console.log(colorize("║              Wishgate - Universal Setup               ║", "blue"));
+  console.log(colorize("║              Chat Juicer - Universal Setup               ║", "blue"));
   console.log(colorize("╚══════════════════════════════════════════════════════════════╝\n", "blue"));
 
   console.log("Platform:", colorize(platformConfig.getPlatformName(), "bright"));
@@ -357,7 +357,7 @@ async function main() {
     await validateSetup();
 
     printHeader("Setup Complete!");
-    printSuccess("Wishgate is ready to use!");
+    printSuccess("Chat Juicer is ready to use!");
     console.log("\nQuick start commands:");
     console.log("  npm start        - Start the application");
     console.log("  npm run dev      - Start in development mode (with DevTools)");

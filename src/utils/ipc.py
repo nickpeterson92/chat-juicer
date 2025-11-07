@@ -1,5 +1,5 @@
 """
-IPC (Inter-Process Communication) utilities for Wishgate.
+IPC (Inter-Process Communication) utilities for Chat Juicer.
 Manages communication between Electron frontend and Python backend.
 
 This module centralizes all IPC protocol constants and methods.

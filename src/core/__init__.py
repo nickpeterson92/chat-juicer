@@ -2,7 +2,7 @@
 Core Application Layer - Agent Orchestration and Session Management
 ====================================================================
 
-Provides the core business logic for Wishgate's Agent/Runner implementation.
+Provides the core business logic for Chat Juicer's Agent/Runner implementation.
 
 Modules:
     agent: Agent creation and configuration with tools and MCP servers

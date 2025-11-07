@@ -1,5 +1,5 @@
 """
-Tool registry for Wishgate Agent.
+Tool registry for Chat Juicer Agent.
 Defines all available tools and their metadata for the Agent/Runner framework.
 """
 

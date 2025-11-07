@@ -1,4 +1,4 @@
-# Wishgate Requirements
+# Chat Juicer Requirements
 # Python 3.13+ required for all dependencies
 
 # Core AI Libraries (REQUIRED)

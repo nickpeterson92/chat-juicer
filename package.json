@@ -1,7 +1,7 @@
 {
-  "name": "wishgate-electron",
+  "name": "chat-juicer-electron",
   "version": "1.0.0",
-  "description": "Electron wrapper for Wishgate Azure OpenAI bot",
+  "description": "Electron wrapper for Chat Juicer Azure OpenAI bot",
   "main": "electron/main.js",
   "scripts": {
     "prestart": "node scripts/validate.js",

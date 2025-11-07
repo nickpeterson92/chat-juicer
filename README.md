@@ -16,7 +16,7 @@
         "Putting the 'Juice' in 'Chatbot'"
 ```
 
-# Wishgate
+# Chat Juicer
 
 An Electron + Python desktop application for Azure OpenAI chat interactions using the **Agent/Runner pattern** with native **MCP (Model Context Protocol) server support**, advanced **token-aware session management** with automatic summarization, and sophisticated document generation capabilities.
 
@@ -74,7 +74,7 @@ make health             # Check system configuration
 
 ## Architecture
 
-Wishgate uses OpenAI's **Agent/Runner pattern** with a **two-layer persistence architecture**:
+Chat Juicer uses OpenAI's **Agent/Runner pattern** with a **two-layer persistence architecture**:
 - **Native MCP Server Integration**: Direct support for Model Context Protocol servers
 - **Automatic Tool Orchestration**: Framework handles function calling automatically
 - **Layered Persistence**: Separates LLM context (Layer 1) from UI display (Layer 2)
@@ -121,8 +121,8 @@ The easiest way to get started is using the automated setup:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/wishgate.git
-cd wishgate
+git clone https://github.com/yourusername/chat-juicer.git
+cd chat-juicer
 
 # Run automated setup (works on all platforms)
 npm run setup
@@ -148,8 +148,8 @@ If you prefer manual installation or encounter issues:
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/wishgate.git
-   cd wishgate
+   git clone https://github.com/yourusername/chat-juicer.git
+   cd chat-juicer
    ```
 
 2. **Install Node dependencies**
@@ -206,7 +206,7 @@ npm run inspect         # Debug mode with Node.js inspector
 
 ### Makefile Commands (macOS/Linux)
 
-Wishgate includes a comprehensive Makefile for convenience on Unix systems. Windows users should use npm scripts or install Git Bash/WSL.
+Chat Juicer includes a comprehensive Makefile for convenience on Unix systems. Windows users should use npm scripts or install Git Bash/WSL.
 
 Run `make help` or `make` to see all available commands.
 
@@ -296,7 +296,7 @@ make clean-cache        # Clean development cache directories (mypy, ruff, pytes
 make clean-venv         # Remove .juicer virtual environment
 make clean-all          # Deep clean (logs + cache + venv + node_modules)
 make reset              # Complete reset (clean-all + remove .env)
-make kill               # Kill all Wishgate processes (nuclear option)
+make kill               # Kill all Chat Juicer processes (nuclear option)
 make restart            # Quick restart (kill + sleep + dev)
 make update-deps        # Update dependencies (Node.js and Python) + health check
 ```
@@ -317,7 +317,7 @@ make help               # Show all available commands
 ## Project Structure
 
 ```
-wishgate/
+chat-juicer/
 ├── electron/          # Electron main process and utilities
 │   ├── main.js       # Electron main process, IPC handlers, health monitoring
 │   ├── preload.js    # Preload script for secure context-isolated IPC
@@ -349,7 +349,7 @@ wishgate/
 ├── ui/               # Frontend static assets
 │   ├── index.html    # Main chat UI (loads renderer/index.js as ES6 module)
 │   ├── input.css     # Tailwind CSS source
-│   ├── wishgate-logo-real.svg  # Application logo
+│   ├── chat-juicer-logo-real.svg  # Application logo
 │   └── smoke-loading.svg       # Loading animation
 ├── src/              # Python backend (modular architecture)
 │   ├── main.py       # Application entry point
@@ -846,27 +846,8 @@ make setup              # Fresh installation
 make run                # Test the application
 ```
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
 ## Acknowledgments
 
 - Built with [Electron](https://www.electronjs.org/)
 - Powered by [Azure OpenAI](https://azure.microsoft.com/en-us/products/ai-services/openai-service)
 - Uses the OpenAI Agents library for streaming support
-
-## Support
-
-For issues and questions:
-- Open an issue on GitHub
-- Check existing issues for solutions
-- Review logs in `logs/` directory for debugging

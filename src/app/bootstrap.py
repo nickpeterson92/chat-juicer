@@ -1,4 +1,4 @@
-"""Application initialization and configuration for Wishgate.
+"""Application initialization and configuration for Chat Juicer.
 
 This module handles all bootstrap operations required before entering the main
 event loop: environment loading, settings validation, client creation, MCP
@@ -28,7 +28,7 @@ from utils.session_integrity import validate_and_repair_all_sessions
 
 
 async def initialize_application() -> AppState:
-    """Initialize Wishgate application and return populated state.
+    """Initialize Chat Juicer application and return populated state.
 
     This function performs all bootstrap operations required before entering
     the main event loop:

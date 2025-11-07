@@ -1,9 +1,9 @@
-Wishgate API Documentation
+Chat Juicer API Documentation
 ==============================
 
-Welcome to Wishgate's API documentation. This documentation is automatically generated from the Python source code and docstrings.
+Welcome to Chat Juicer's API documentation. This documentation is automatically generated from the Python source code and docstrings.
 
-Wishgate is a production-grade Electron + Python desktop application that provides a chat interface for Azure OpenAI using the Agent/Runner pattern with native MCP (Model Context Protocol) server support.
+Chat Juicer is a production-grade Electron + Python desktop application that provides a chat interface for Azure OpenAI using the Agent/Runner pattern with native MCP (Model Context Protocol) server support.
 
 Contents
 --------

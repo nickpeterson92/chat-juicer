@@ -1,5 +1,5 @@
 /**
- * Wishgate Renderer - Main Entry Point
+ * Chat Juicer Renderer - Main Entry Point
  * Modular architecture with ES6 modules
  */
 
@@ -294,7 +294,7 @@ window.electronAPI.onBotOutput((output) => {
     // Skip the initial connection message from Python bot
     if (
       appState.connection.isInitial &&
-      (line.includes("Welcome to Wishgate!") ||
+      (line.includes("Welcome to Chat Juicer!") ||
         line.includes("Connected to") ||
         line.includes("Using deployment:") ||
         line.includes("Using model:") ||

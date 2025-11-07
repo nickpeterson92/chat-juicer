@@ -1,5 +1,5 @@
 /**
- * Configuration constants for Wishgate renderer
+ * Configuration constants for Chat Juicer renderer
  */
 
 // Memory management limits

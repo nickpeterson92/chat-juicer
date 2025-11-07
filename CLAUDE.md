@@ -6,12 +6,12 @@ This file provides guidance to you (Claude) when working with code in this repos
 
 ## Project Overview
 
-Wishgate is a production-grade Electron + Python desktop application that provides a chat interface for Azure OpenAI using the **Agent/Runner pattern** with native **MCP (Model Context Protocol) server support**. The application features advanced reasoning capabilities through Sequential Thinking, sophisticated document generation, enterprise-grade logging, and comprehensive type safety.
+Chat Juicer is a production-grade Electron + Python desktop application that provides a chat interface for Azure OpenAI using the **Agent/Runner pattern** with native **MCP (Model Context Protocol) server support**. The application features advanced reasoning capabilities through Sequential Thinking, sophisticated document generation, enterprise-grade logging, and comprehensive type safety.
 
 ## Current Architecture (Agent/Runner Pattern)
 
 ```
-wishgate/
+chat-juicer/
 ├── electron/          # Electron main process and utilities
 │   ├── main.js       # Electron main process, IPC handlers, health monitoring (5-min intervals)
 │   ├── preload.js    # Preload script for secure context-isolated IPC
@@ -43,7 +43,7 @@ wishgate/
 ├── ui/               # Frontend static assets
 │   ├── index.html    # Main chat UI (loads renderer/index.js as ES6 module)
 │   ├── input.css     # Tailwind CSS source
-│   ├── wishgate-logo-real.svg  # Application logo
+│   ├── chat-juicer-logo-real.svg  # Application logo
 │   └── smoke-loading.svg       # Loading animation
 ├── src/              # Python backend (modular architecture)
 │   ├── main.py       # Application orchestrator (174 lines, pure coordination)
@@ -233,7 +233,7 @@ The renderer process uses a modular architecture for maintainability:
 ### Agent Configuration
 ```python
 agent = Agent(
-    name="Wishgate",
+    name="Chat Juicer",
     model=deployment,
     instructions=SYSTEM_INSTRUCTIONS,
     tools=TOOLS,
@@ -243,7 +243,7 @@ agent = Agent(
 ```
 
 ### Reasoning Effort Configuration
-Wishgate supports configurable reasoning effort for reasoning models (GPT-5, O1, O3):
+Chat Juicer supports configurable reasoning effort for reasoning models (GPT-5, O1, O3):
 
 - **Purpose**: Controls the computational intensity of reasoning operations
 - **Trade-offs**: Speed vs. thoroughness vs. cost (reasoning tokens are billed)
@@ -343,7 +343,7 @@ make clean-cache        # Clean development cache directories (mypy, ruff, pytes
 make clean-venv         # Remove .juicer virtual environment
 make clean-all          # Deep clean (logs + cache + venv + node_modules)
 make reset              # Complete reset (clean-all + remove .env)
-make kill               # Kill all Wishgate processes (nuclear option)
+make kill               # Kill all Chat Juicer processes (nuclear option)
 make restart            # Quick restart (kill + sleep + dev)
 make update-deps        # Update dependencies (Node.js and Python) + health check
 ```
@@ -546,7 +546,7 @@ The project has been fully migrated from the Responses API to Agent/Runner patte
 
 ## Summary
 
-Wishgate is a production-grade application leveraging the modern Agent/Runner pattern with native MCP server integration, providing:
+Chat Juicer is a production-grade application leveraging the modern Agent/Runner pattern with native MCP server integration, providing:
 
 Key strengths:
 - **Sequential Thinking**: Advanced reasoning capabilities with revision and hypothesis testing

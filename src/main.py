@@ -1,5 +1,5 @@
 """
-Wishgate - Azure OpenAI Agent with MCP Server Support
+Chat Juicer - Azure OpenAI Agent with MCP Server Support
 Using Agent/Runner pattern for native MCP integration
 
 Main entry point - orchestrates application lifecycle through bootstrap and runtime modules.
@@ -34,7 +34,7 @@ from utils.logger import logger
 
 
 async def main() -> None:
-    """Main entry point for Wishgate - pure orchestration of application lifecycle.
+    """Main entry point for Chat Juicer - pure orchestration of application lifecycle.
 
     Phases:
     1. Bootstrap: Initialize application state (config, clients, MCP servers, session manager)
@@ -158,7 +158,7 @@ async def main() -> None:
         except Exception as e:
             logger.warning(f"Error closing MCP server: {e}")
 
-    logger.info("Wishgate shutdown complete")
+    logger.info("Chat Juicer shutdown complete")
 
 
 if __name__ == "__main__":

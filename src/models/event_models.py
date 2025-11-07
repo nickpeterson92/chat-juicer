@@ -1,5 +1,5 @@
 """
-IPC event models for Wishgate.
+IPC event models for Chat Juicer.
 Provides validation for messages sent between Electron and Python backend.
 """
 

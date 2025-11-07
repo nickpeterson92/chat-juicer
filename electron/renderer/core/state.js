@@ -1,5 +1,5 @@
 /**
- * State management for Wishgate renderer
+ * State management for Chat Juicer renderer
  */
 
 import { MAX_FUNCTION_BUFFERS, MAX_FUNCTION_CALLS } from "../config/constants.js";

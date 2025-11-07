@@ -1,5 +1,5 @@
 """
-Text editing tools for Wishgate.
+Text editing tools for Chat Juicer.
 Provides unified file editing with diff preview and batch operations.
 """
 

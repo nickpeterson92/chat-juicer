@@ -1,5 +1,5 @@
 """
-File operation tools for Wishgate.
+File operation tools for Chat Juicer.
 Provides directory listing and file reading capabilities.
 """
 

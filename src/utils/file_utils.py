@@ -1,5 +1,5 @@
 """
-File operation utilities for Wishgate.
+File operation utilities for Chat Juicer.
 Provides safe, validated file and directory operations with async support.
 """
 

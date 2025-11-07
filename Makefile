@@ -47,11 +47,11 @@ install-mcp: ## Install MCP servers (Sequential Thinking via npm, Fetch via Pyth
 ##@ Running the Application
 
 run: ## Start the application (production mode)
-	@echo "$(BLUE)Starting Wishgate...$(NC)"
+	@echo "$(BLUE)Starting Chat Juicer...$(NC)"
 	@npm start
 
 dev: ## Start in development mode (with DevTools and hot reload)
-	@echo "$(BLUE)Starting Wishgate in development mode...$(NC)"
+	@echo "$(BLUE)Starting Chat Juicer in development mode...$(NC)"
 	@npm run dev
 
 backend-only: ## Run Python backend only (for testing)
@@ -319,8 +319,8 @@ update-deps: ## Update dependencies (Node.js and Python)
 	@echo "$(BLUE)→ Running health check...$(NC)"
 	@$(MAKE) health
 
-kill: ## Kill all Wishgate processes (nuclear option for when things go wrong)
-	@echo "$(BLUE)Killing all Wishgate processes...$(NC)"
+kill: ## Kill all Chat Juicer processes (nuclear option for when things go wrong)
+	@echo "$(BLUE)Killing all Chat Juicer processes...$(NC)"
 	@echo "$(YELLOW)→ Killing Vite dev server (port 5173)...$(NC)"
 	@lsof -ti:5173 | xargs kill -9 2>/dev/null && echo "  $(GREEN)✓ Vite killed$(NC)" || echo "  $(YELLOW)○ No Vite process$(NC)"
 	@echo "$(YELLOW)→ Killing Python backend processes...$(NC)"
@@ -328,10 +328,10 @@ kill: ## Kill all Wishgate processes (nuclear option for when things go wrong)
 	@echo "$(YELLOW)→ Killing Electron processes...$(NC)"
 	@pkill -9 -f "electron.*main.js" 2>/dev/null && echo "  $(GREEN)✓ Electron killed$(NC)" || echo "  $(YELLOW)○ No Electron process$(NC)"
 	@pkill -9 -f "launch.js" 2>/dev/null && echo "  $(GREEN)✓ Launch script killed$(NC)" || echo "  $(YELLOW)○ No launch script$(NC)"
-	@echo "$(GREEN)✓ All Wishgate processes terminated$(NC)"
+	@echo "$(GREEN)✓ All Chat Juicer processes terminated$(NC)"
 
 restart: kill ## Quick restart (kill processes + restart in dev mode)
-	@echo "$(BLUE)Restarting Wishgate...$(NC)"
+	@echo "$(BLUE)Restarting Chat Juicer...$(NC)"
 	@sleep 1
 	@$(MAKE) dev
 
@@ -392,7 +392,7 @@ status: health ## Alias for health check
 
 help: ## Show this help message
 	@echo "$(BLUE)╔══════════════════════════════════════════════════════════════╗$(NC)"
-	@echo "$(BLUE)║                     Wishgate Makefile                     ║$(NC)"
+	@echo "$(BLUE)║                     Chat Juicer Makefile                     ║$(NC)"
 	@echo "$(BLUE)╚══════════════════════════════════════════════════════════════╝$(NC)"
 	@echo ""
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\n  make $(YELLOW)<target>$(NC)\n\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  $(GREEN)%-18s$(NC) %s\n", $$1, $$2 } /^##@/ { printf "\n$(BLUE)%s$(NC)\n", substr($$0, 5) } ' $(MAKEFILE_LIST)

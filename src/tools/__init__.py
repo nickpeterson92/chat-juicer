@@ -1,5 +1,5 @@
 """
-Tools Module - Function Calling Capabilities for Wishgate Agent
+Tools Module - Function Calling Capabilities for Chat Juicer Agent
 ===================================================================
 
 Provides function calling tools for document generation, file operations, and text editing.

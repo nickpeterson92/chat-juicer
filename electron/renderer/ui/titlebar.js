@@ -30,7 +30,7 @@ export function initializeTitlebar() {
   // Create titlebar content
   titlebar.innerHTML = `
     <div class="titlebar-drag-region">
-      <div class="titlebar-title">Wishgate</div>
+      <div class="titlebar-title">Chat Juicer</div>
     </div>
     <div class="titlebar-controls">
       <button class="titlebar-button titlebar-minimize" id="titlebar-minimize" title="Minimize" aria-label="Minimize">

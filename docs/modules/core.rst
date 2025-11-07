@@ -1,7 +1,7 @@
 Core Module
 ===========
 
-The core module contains the main business logic for Wishgate.
+The core module contains the main business logic for Chat Juicer.
 
 Agent
 -----

@@ -1,4 +1,4 @@
-"""Core runtime operations for Wishgate.
+"""Core runtime operations for Chat Juicer.
 
 This module contains all business logic executed during the main event loop:
 event handling, session management, message processing, and command/file handling.

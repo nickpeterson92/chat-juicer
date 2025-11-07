@@ -1,4 +1,4 @@
-"""Application state management for Wishgate.
+"""Application state management for Chat Juicer.
 
 This module provides the central AppState container that serves as the single
 source of truth for application-wide state. State is passed explicitly to
