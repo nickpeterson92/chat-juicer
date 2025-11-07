@@ -1,6 +1,8 @@
 /**
  * Welcome Page Component
  * Displays on app startup and when creating new sessions
+ *
+ * Architecture: Composable template functions for maintainability
  */
 
 // Inline SVG logo (needed for color override with currentColor)
@@ -13,157 +15,116 @@ const LOGO_SVG = `<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
 </svg>`;
 
 /**
+ * Model metadata with display names and descriptions
+ */
+const MODEL_METADATA = {
+  "gpt-5-pro": {
+    displayName: "GPT-5 Pro",
+    description: "Most capable for complex tasks",
+    isPrimary: true,
+  },
+  "gpt-5": {
+    displayName: "GPT-5",
+    description: "Deep reasoning for hard problems",
+    isPrimary: true,
+  },
+  "gpt-5-mini": {
+    displayName: "GPT-5 Mini",
+    description: "Smart and fast for everyday use",
+    isPrimary: true,
+  },
+  "gpt-5-codex": {
+    displayName: "GPT-5 Codex",
+    description: "Optimized for code generation",
+    isPrimary: false,
+  },
+  "gpt-4.1": {
+    displayName: "GPT-4.1",
+    description: "Previous generation, still capable",
+    isPrimary: false,
+  },
+  "gpt-4.1-mini": {
+    displayName: "GPT-4.1 Mini",
+    description: "Faster responses for simple tasks",
+    isPrimary: false,
+  },
+};
+
+// ============================================================================
+// TEMPLATE FUNCTIONS - Composable UI sections
+// ============================================================================
+
+/**
  * Get time-based greeting
  * @returns {string} Greeting text (Morning, Afternoon, Evening)
  */
 function getTimeBasedGreeting() {
   const hour = new Date().getHours();
-
   if (hour < 12) return "Morning";
   if (hour < 17) return "Afternoon";
   return "Evening";
 }
 
 /**
- * Create welcome page HTML
- * @param {string} userName - User's name for personalized greeting
- * @returns {string} HTML string for welcome page
+ * Create welcome header with logo and greeting
  */
-export function createWelcomePage(userName = "User") {
-  const greeting = getTimeBasedGreeting();
-
+function createWelcomeHeader(userName, greeting) {
   return `
-    <div class="welcome-container">
-      <div class="welcome-content">
-        <div class="welcome-header">
-          <div class="welcome-logo">${LOGO_SVG}</div>
-          <h1 class="welcome-greeting">${greeting}, ${userName}</h1>
-        </div>
+    <div class="welcome-header">
+      <div class="welcome-logo">${LOGO_SVG}</div>
+      <h1 class="welcome-greeting">${greeting}, ${userName}</h1>
+    </div>
+  `;
+}
 
-        <div class="welcome-input-section">
-          <textarea
-            id="welcome-input"
-            class="welcome-input"
-            placeholder="How can I help you today?"
-            rows="1"
-          ></textarea>
-          <div class="welcome-input-footer">
-            <div class="mcp-toggle-buttons">
-              <button class="mcp-toggle-btn active" data-mcp="sequential" title="Sequential Thinking">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="3"/>
-                  <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"/>
-                </svg>
-              </button>
-              <button class="mcp-toggle-btn active" data-mcp="fetch" title="Web Fetch">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"/>
-                  <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
-                </svg>
-              </button>
-            </div>
-            <div class="model-config-inline">
-              <button id="model-selector-trigger" class="model-selector-trigger">
-                <span id="selected-model-label">GPT-5 Mini</span>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M4 6L8 10L12 6" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </button>
-              <div id="model-selector-dropdown" class="model-selector-dropdown" style="display: none;">
-                <div class="model-selector-content">
-                  <div id="main-models" class="model-cards">
-                    <!-- Populated by initializeModelConfig() -->
-                  </div>
-                  <button id="more-models-toggle" class="more-models-toggle">
-                    <span>More models</span>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </button>
-                <div id="more-models-section" class="more-models-section" style="display: none;">
-                  <!-- Populated by initializeModelConfig() -->
-                </div>
-                </div>
-              </div>
-            </div>
-            <button id="welcome-send-btn" class="welcome-send-btn" title="Send message">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M5 12h14M12 5l7 7-7 7"/>
-              </svg>
-            </button>
-          </div>
-        </div>
+/**
+ * Create MCP toggle buttons
+ */
+function createMcpToggles() {
+  return `
+    <div class="mcp-toggle-buttons">
+      <button class="mcp-toggle-btn active" data-mcp="sequential" title="Sequential Thinking">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"/>
+        </svg>
+      </button>
+      <button class="mcp-toggle-btn active" data-mcp="fetch" title="Web Fetch">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
+        </svg>
+      </button>
+    </div>
+  `;
+}
 
-        <div class="welcome-files-section" id="welcome-files-section" style="display: none;">
-          <div class="welcome-files-header">
-            <span class="welcome-files-title flex items-center gap-1.5">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-              </svg>
-              Session Files
-            </span>
-            <button id="welcome-files-refresh" class="welcome-files-refresh-btn" title="Refresh files">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M1 4v6h6M23 20v-6h-6"/>
-                <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
-              </svg>
-            </button>
+/**
+ * Create model selector dropdown structure
+ */
+function createModelSelector() {
+  return `
+    <div class="model-config-inline">
+      <button id="model-selector-trigger" class="model-selector-trigger">
+        <span id="selected-model-label">GPT-5 Mini</span>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 6L8 10L12 6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <div id="model-selector-dropdown" class="model-selector-dropdown" style="display: none;">
+        <div class="model-selector-content">
+          <div id="main-models" class="model-cards">
+            <!-- Populated by initializeModelConfig() -->
           </div>
-          <div id="welcome-files-container" class="welcome-files-list">
-            <div class="welcome-empty-state">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="opacity-30 mb-3">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-              </svg>
-              <p class="text-sm text-gray-500 dark:text-gray-400">Drag and drop files here</p>
-              <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Files will be uploaded to this session</p>
-            </div>
+          <button id="more-models-toggle" class="more-models-toggle">
+            <span>More models</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <div id="more-models-section" class="more-models-section" style="display: none;">
+            <!-- Populated by initializeModelConfig() -->
           </div>
-        </div>
-
-        <div class="suggestion-pills">
-          <button class="suggestion-pill" data-category="generate">
-            <span class="pill-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <path d="M14 2v6h6M16 13H8m8 4H8"/>
-              </svg>
-            </span>
-            Generate
-          </button>
-          <button class="suggestion-pill" data-category="analyze">
-            <span class="pill-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8"/>
-                <path d="M21 21l-4.35-4.35"/>
-              </svg>
-            </span>
-            Analyze
-          </button>
-          <button class="suggestion-pill" data-category="edit">
-            <span class="pill-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-              </svg>
-            </span>
-            Edit
-          </button>
-          <button class="suggestion-pill" data-category="research">
-            <span class="pill-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 3v18h18"/>
-                <path d="M18 17V9l-5 5-5-5v8"/>
-              </svg>
-            </span>
-            Research
-          </button>
-          <button class="suggestion-pill" data-category="code">
-            <span class="pill-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/>
-              </svg>
-            </span>
-            Code
-          </button>
         </div>
       </div>
     </div>
@@ -171,7 +132,166 @@ export function createWelcomePage(userName = "User") {
 }
 
 /**
- * Show welcome page
+ * Create send button
+ */
+function createSendButton() {
+  return `
+    <button id="welcome-send-btn" class="welcome-send-btn" title="Send message">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M5 12h14M12 5l7 7-7 7"/>
+      </svg>
+    </button>
+  `;
+}
+
+/**
+ * Create input section with textarea and footer controls
+ */
+function createInputSection() {
+  return `
+    <div class="welcome-input-section">
+      <textarea
+        id="welcome-input"
+        class="welcome-input"
+        placeholder="How can I help you today?"
+        rows="1"
+      ></textarea>
+      <div class="welcome-input-footer">
+        ${createMcpToggles()}
+        ${createModelSelector()}
+        ${createSendButton()}
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Create files section for session file management
+ */
+function createFilesSection() {
+  return `
+    <div class="welcome-files-section" id="welcome-files-section" style="display: none;">
+      <div class="welcome-files-header">
+        <span class="welcome-files-title flex items-center gap-1.5">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          </svg>
+          Session Files
+        </span>
+        <button id="welcome-files-refresh" class="welcome-files-refresh-btn" title="Refresh files">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 4v6h6M23 20v-6h-6"/>
+            <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+          </svg>
+        </button>
+      </div>
+      <div id="welcome-files-container" class="welcome-files-list">
+        <div class="welcome-empty-state">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="opacity-30 mb-3">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          </svg>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Drag and drop files here</p>
+          <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Files will be uploaded to this session</p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Create suggestion pill button
+ */
+function createSuggestionPill(category, icon, label) {
+  return `
+    <button class="suggestion-pill" data-category="${category}">
+      <span class="pill-icon">
+        ${icon}
+      </span>
+      ${label}
+    </button>
+  `;
+}
+
+/**
+ * Create all suggestion pills
+ */
+function createSuggestionPills() {
+  const pills = [
+    {
+      category: "generate",
+      label: "Generate",
+      icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <path d="M14 2v6h6M16 13H8m8 4H8"/>
+      </svg>`,
+    },
+    {
+      category: "analyze",
+      label: "Analyze",
+      icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/>
+        <path d="M21 21l-4.35-4.35"/>
+      </svg>`,
+    },
+    {
+      category: "edit",
+      label: "Edit",
+      icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+      </svg>`,
+    },
+    {
+      category: "research",
+      label: "Research",
+      icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 3v18h18"/>
+        <path d="M18 17V9l-5 5-5-5v8"/>
+      </svg>`,
+    },
+    {
+      category: "code",
+      label: "Code",
+      icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/>
+      </svg>`,
+    },
+  ];
+
+  return `
+    <div class="suggestion-pills">
+      ${pills.map(({ category, icon, label }) => createSuggestionPill(category, icon, label)).join("")}
+    </div>
+  `;
+}
+
+// ============================================================================
+// PUBLIC API
+// ============================================================================
+
+/**
+ * Create complete welcome page HTML
+ * Orchestrates all template sections
+ *
+ * @param {string} userName - User's name for personalized greeting
+ * @returns {string} Complete HTML string for welcome page
+ */
+export function createWelcomePage(userName = "User") {
+  const greeting = getTimeBasedGreeting();
+
+  return `
+    <div class="welcome-container">
+      <div class="welcome-content">
+        ${createWelcomeHeader(userName, greeting)}
+        ${createInputSection()}
+        ${createFilesSection()}
+        ${createSuggestionPills()}
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Show welcome page and setup event listeners
  * @param {HTMLElement} container - Container element
  * @param {string} userName - User's name
  */
@@ -215,6 +335,15 @@ export function showWelcomePage(container, userName = "User") {
 }
 
 /**
+ * Hide welcome page
+ * @param {HTMLElement} container - Container element
+ */
+export function hideWelcomePage(container) {
+  if (!container) return;
+  container.innerHTML = "";
+}
+
+/**
  * Get MCP configuration from toggle buttons
  * @returns {string[]} Array of enabled MCP server keys
  */
@@ -246,40 +375,25 @@ export function getModelConfig() {
 }
 
 /**
- * Model metadata with display names and descriptions
+ * Get suggestion prompts for each category
+ * @param {string} category - Category name
+ * @returns {string} Prompt text
  */
-const MODEL_METADATA = {
-  "gpt-5-pro": {
-    displayName: "GPT-5 Pro",
-    description: "Most capable for complex tasks",
-    isPrimary: true,
-  },
-  "gpt-5": {
-    displayName: "GPT-5",
-    description: "Deep reasoning for hard problems",
-    isPrimary: true,
-  },
-  "gpt-5-mini": {
-    displayName: "GPT-5 Mini",
-    description: "Smart and fast for everyday use",
-    isPrimary: true,
-  },
-  "gpt-5-codex": {
-    displayName: "GPT-5 Codex",
-    description: "Optimized for code generation",
-    isPrimary: false,
-  },
-  "gpt-4.1": {
-    displayName: "GPT-4.1",
-    description: "Previous generation, still capable",
-    isPrimary: false,
-  },
-  "gpt-4.1-mini": {
-    displayName: "GPT-4.1 Mini",
-    description: "Faster responses for simple tasks",
-    isPrimary: false,
-  },
-};
+export function getSuggestionPrompt(category) {
+  const prompts = {
+    generate: "Generate a technical specification document",
+    analyze: "Analyze this document and extract key insights",
+    edit: "Help me refine this business proposal",
+    research: "Research best practices for API documentation",
+    code: "Review this code and suggest improvements",
+  };
+
+  return prompts[category] || "";
+}
+
+// ============================================================================
+// MODEL CONFIGURATION - Dynamic model card creation and management
+// ============================================================================
 
 /**
  * Create a model card element
@@ -599,30 +713,4 @@ export function initializeModelConfig(models = [], reasoningLevels = []) {
       label.textContent = metadata.displayName;
     }
   }
-}
-
-/**
- * Hide welcome page
- * @param {HTMLElement} container - Container element
- */
-export function hideWelcomePage(container) {
-  if (!container) return;
-  container.innerHTML = "";
-}
-
-/**
- * Get suggestion prompts for each category
- * @param {string} category - Category name
- * @returns {string} Prompt text
- */
-export function getSuggestionPrompt(category) {
-  const prompts = {
-    generate: "Generate a technical specification document",
-    analyze: "Analyze this document and extract key insights",
-    edit: "Help me refine this business proposal",
-    research: "Research best practices for API documentation",
-    code: "Review this code and suggest improvements",
-  };
-
-  return prompts[category] || "";
 }

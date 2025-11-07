@@ -179,8 +179,8 @@ async def switch_to_session(app_state: AppStateProtocol, session_id: str) -> dic
                 + (f" (has_more={has_more})" if has_more else "")
             )
         else:
-            # Layer 2 empty/missing - fallback to Layer 1 (old sessions)
-            logger.warning(f"No Layer 2 data for session {session_id}, falling back to Layer 1 (agent_messages)")
+            # Layer 2 empty/missing - fallback to Layer 1 (new sessions or old sessions without full_history)
+            logger.info(f"No Layer 2 data for session {session_id}, falling back to Layer 1 (agent_messages)")
 
             # Convert Layer 1 items to message format (filter SDK internals)
             for item in items:

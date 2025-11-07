@@ -430,6 +430,10 @@ class TokenAwareSQLiteSession(SQLiteSession):
         This method encapsulates the SQL table deletion logic that should not
         be exposed to higher-level code. Use only when permanently deleting a session.
 
+        CRITICAL FIX: OpenAI Agents SDK uses SHARED tables (agent_sessions, agent_messages)
+        with foreign keys, NOT per-session tables. We must delete from agent_sessions,
+        which triggers CASCADE delete of agent_messages via foreign key constraint.
+
         Note: This only deletes Layer 1 storage. Layer 2 (full_history_store)
         should be cleaned separately via full_history_store.clear_session().
 
@@ -439,13 +443,6 @@ class TokenAwareSQLiteSession(SQLiteSession):
         try:
             import sqlite3
 
-            from core.constants import SESSION_TABLE_PREFIX
-            from utils.validation import sanitize_session_id
-
-            # Validate session_id for SQL safety
-            safe_id = sanitize_session_id(self.session_id)
-            table_name = f"{SESSION_TABLE_PREFIX}{safe_id}"
-
             # Get db_path from parent SQLiteSession
             db_path = self.db_path if self.db_path != ":memory:" else None
 
@@ -454,10 +451,32 @@ class TokenAwareSQLiteSession(SQLiteSession):
                 return True
 
             with sqlite3.connect(db_path) as conn:
-                conn.execute(f"DROP TABLE IF EXISTS {table_name}")
+                # CRITICAL: Enable foreign key constraints (disabled by default in SQLite)
+                # Without this, ON DELETE CASCADE won't work!
+                conn.execute("PRAGMA foreign_keys = ON;")
+
+                # CORRECT: Delete from shared agent_sessions table (FK CASCADE handles agent_messages)
+                # The schema has: FOREIGN KEY (session_id) REFERENCES agent_sessions (session_id) ON DELETE CASCADE
+                cursor = conn.execute("DELETE FROM agent_sessions WHERE session_id = ?", (self.session_id,))
+                deleted_count = cursor.rowcount
+
+                # Also verify agent_messages were cascaded (should be 0 remaining)
+                cursor = conn.execute("SELECT COUNT(*) FROM agent_messages WHERE session_id = ?", (self.session_id,))
+                remaining_messages = cursor.fetchone()[0]
+
                 conn.commit()
 
-            logger.info(f"Deleted Layer 1 storage for session {self.session_id}")
+            logger.info(
+                f"Deleted Layer 1 storage for session {self.session_id}: "
+                f"{deleted_count} session record(s), {remaining_messages} remaining messages (expected 0)"
+            )
+
+            if remaining_messages > 0:
+                logger.warning(
+                    f"CASCADE delete may have failed: {remaining_messages} messages still exist for {self.session_id}"
+                )
+                return False
+
             return True
 
         except Exception as e:
