@@ -108,11 +108,6 @@ async def main() -> None:
                 # Skip invalid input (empty after stripping)
                 continue
 
-            # Handle quit command
-            if user_input.lower() in ["quit", "exit"]:
-                logger.info("Quit command received, shutting down gracefully")
-                break
-
             # Log user input
             from core.constants import LOG_PREVIEW_LENGTH
 

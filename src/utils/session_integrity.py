@@ -10,33 +10,33 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from core.constants import CHAT_HISTORY_DB_PATH, FULL_HISTORY_TABLE_PREFIX, SESSION_TABLE_PREFIX
+from core.constants import CHAT_HISTORY_DB_PATH, FULL_HISTORY_TABLE_PREFIX
 from utils.logger import logger
 from utils.validation import sanitize_session_id
 
 
 def get_all_session_ids_from_layer1(db_path: str | Path = CHAT_HISTORY_DB_PATH) -> set[str]:
-    """Get all session IDs that have Layer 1 tables.
+    """Get all session IDs that have Layer 1 data.
+
+    Note: OpenAI Agents SDK uses shared tables (agent_sessions, agent_messages)
+    rather than per-session tables. Query the actual SDK tables.
 
     Args:
         db_path: Path to SQLite database
 
     Returns:
-        Set of session IDs with Layer 1 tables
+        Set of session IDs with Layer 1 data
     """
     session_ids = set()
     try:
         with sqlite3.connect(db_path) as conn:
+            # Query the actual agent_sessions table used by openai-agents SDK
             cursor = conn.execute(
                 """
-                SELECT name FROM sqlite_master
-                WHERE type='table' AND name LIKE ?
-                """,
-                (f"{SESSION_TABLE_PREFIX}%",),
+                SELECT DISTINCT session_id FROM agent_sessions
+                """
             )
-            for (table_name,) in cursor.fetchall():
-                # Extract session_id from table name (remove prefix)
-                session_id = table_name[len(SESSION_TABLE_PREFIX) :]
+            for (session_id,) in cursor.fetchall():
                 session_ids.add(session_id)
 
     except Exception as e:
@@ -122,24 +122,21 @@ def get_session_message_counts(session_id: str, db_path: str | Path = CHAT_HISTO
         Dictionary with counts: {"layer1": int, "layer2": int}
     """
     safe_id = sanitize_session_id(session_id)
-    layer1_table = f"{SESSION_TABLE_PREFIX}{safe_id}"
     layer2_table = f"{FULL_HISTORY_TABLE_PREFIX}{safe_id}"
 
     counts = {"layer1": 0, "layer2": 0}
 
     try:
         with sqlite3.connect(db_path) as conn:
-            # Check Layer 1
+            # Check Layer 1 (agent_messages table with session_id filter)
             cursor = conn.execute(
                 """
-                SELECT name FROM sqlite_master
-                WHERE type='table' AND name=?
+                SELECT COUNT(*) FROM agent_messages
+                WHERE session_id = ?
                 """,
-                (layer1_table,),
+                (session_id,),
             )
-            if cursor.fetchone():
-                cursor = conn.execute(f"SELECT COUNT(*) FROM {layer1_table}")
-                counts["layer1"] = cursor.fetchone()[0]
+            counts["layer1"] = cursor.fetchone()[0]
 
             # Check Layer 2
             cursor = conn.execute(
@@ -175,16 +172,15 @@ def repair_orphaned_session_from_layer1(
         True if repair succeeded, False otherwise
     """
     try:
-        safe_id = sanitize_session_id(session_id)
-        layer1_table = f"{SESSION_TABLE_PREFIX}{safe_id}"
-
-        # Read all messages from Layer 1
+        # Read all messages from Layer 1 (agent_messages table)
         with sqlite3.connect(db_path) as conn:
             cursor = conn.execute(
-                f"""
-                SELECT message_data FROM {layer1_table}
-                ORDER BY rowid ASC
                 """
+                SELECT message_data FROM agent_messages
+                WHERE session_id = ?
+                ORDER BY created_at ASC
+                """,
+                (session_id,),
             )
 
             import json

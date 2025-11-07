@@ -433,7 +433,7 @@ app.whenReady().then(() => {
     }
   });
 
-  // IPC handler for listing directory contents
+  // IPC handler for listing directory contents (recursive)
   ipcMain.handle("list-directory", async (_event, dirPath) => {
     logger.info("Directory list requested", { dirPath });
 
@@ -442,23 +442,37 @@ app.whenReady().then(() => {
       const projectRoot = path.join(__dirname, "..");
       const absolutePath = path.join(projectRoot, dirPath);
 
-      // Read directory contents
-      const entries = await fs.readdir(absolutePath, { withFileTypes: true });
+      // Recursive function to get all files in directory and subdirectories
+      async function getFilesRecursively(dir, baseDir = dir) {
+        const entries = await fs.readdir(dir, { withFileTypes: true });
+        const files = [];
 
-      // Get file stats for each entry (exclude hidden files like .DS_Store)
-      const files = await Promise.all(
-        entries
-          .filter((entry) => entry.isFile() && !entry.name.startsWith(HIDDEN_FILE_PREFIX))
-          .map(async (entry) => {
-            const filePath = path.join(absolutePath, entry.name);
-            const stats = await fs.stat(filePath);
-            return {
-              name: entry.name,
+        for (const entry of entries) {
+          // Skip hidden files
+          if (entry.name.startsWith(HIDDEN_FILE_PREFIX)) continue;
+
+          const fullPath = path.join(dir, entry.name);
+
+          if (entry.isFile()) {
+            // Calculate relative path from base directory for display
+            const relativePath = path.relative(baseDir, fullPath);
+            const stats = await fs.stat(fullPath);
+            files.push({
+              name: relativePath,
               size: stats.size,
               modified: stats.mtime,
-            };
-          })
-      );
+            });
+          } else if (entry.isDirectory()) {
+            // Recursively get files from subdirectory
+            const subFiles = await getFilesRecursively(fullPath, baseDir);
+            files.push(...subFiles);
+          }
+        }
+
+        return files;
+      }
+
+      const files = await getFilesRecursively(absolutePath);
 
       logger.debug("Directory listed successfully", { dirPath, fileCount: files.length });
       return { success: true, files };
@@ -683,14 +697,7 @@ async function stopPythonBot() {
     if (pythonProcess && !pythonProcess.killed) {
       logger.info("Attempting graceful Python process shutdown");
 
-      // Send quit command through stdin first
-      try {
-        pythonProcess.stdin.write("quit\n");
-      } catch (_e) {
-        // Stdin might be closed
-      }
-
-      // Then send SIGTERM
+      // Send SIGTERM to gracefully terminate
       setTimeout(() => {
         if (pythonProcess && !pythonProcess.killed) {
           if (platformConfig.isWindows()) {
