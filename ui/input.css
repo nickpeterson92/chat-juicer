@@ -2,12 +2,8 @@
 
 @variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-/* Tailwind v4 Theme - Simplified to essentials only */
+/* Tailwind v4 Theme - Keyframe animations only */
 @theme {
-  /* Custom brand color */
-  --color-brand-bg: #f8f8f6;
-  --color-dark-bg: #1e2432;
-
   /* Keyframe animations that Tailwind doesn't provide */
   @keyframes slideIn {
     from {
@@ -1146,23 +1142,15 @@
     background: #1f2937;
   }
 
-  /* Placeholder text for empty states (files, sessions) */
+  /* Placeholder text for empty states */
   .files-loading,
   .files-empty,
-  .files-error,
   .sessions-loading {
     @apply p-4 text-center text-sm text-gray-400;
   }
 
-  [data-theme="dark"] .files-loading,
-  [data-theme="dark"] .files-empty,
-  [data-theme="dark"] .files-error,
-  [data-theme="dark"] .sessions-loading {
-    @apply text-gray-400;
-  }
-
   .files-error {
-    @apply text-red-500;
+    @apply p-4 text-center text-sm text-red-500;
   }
 
   [data-theme="dark"] .files-error {
