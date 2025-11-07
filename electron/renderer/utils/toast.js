@@ -4,12 +4,10 @@
  * Includes full accessibility support (ARIA, keyboard, screen readers)
  */
 
-import { TOAST_FADE_DURATION, TOAST_PULSE_DURATION } from "../config/constants.js";
-
 // Track active toasts for deduplication and limits
 const activeToasts = new Map(); // message -> toast element
 const MAX_CONCURRENT_TOASTS = 5;
-const DEDUP_WINDOW_MS = 1000; // Don't show same message within 1 second
+const _DEDUP_WINDOW_MS = 1000; // Don't show same message within 1 second
 
 /**
  * Show a toast notification

@@ -53,7 +53,6 @@ import {
 import { addMessage, clearChat, clearMessageCache } from "./ui/chat-ui.js";
 import { clearFunctionCards } from "./ui/function-card-ui.js";
 import { cleanupTitlebar, initializeTitlebar } from "./ui/titlebar.js";
-import { getSuggestionPrompt, hideWelcomePage, showWelcomePage } from "./ui/welcome-page.js";
 import { clearParseCache } from "./utils/json-cache.js";
 // Module imports
 import { showToast } from "./utils/toast.js";
@@ -898,7 +897,7 @@ function initializeEventListeners() {
       // Check if clicked element is a link or inside a link
       const link = e.target.closest("a");
 
-      if (link && link.href) {
+      if (link?.href) {
         // Prevent default navigation
         e.preventDefault();
 
@@ -1263,7 +1262,7 @@ export async function handleFileUploadWithSession(files, fromWelcome = false) {
  * @param {DragEvent} e - Drop event
  * @param {boolean} fromWelcome - Whether upload is from welcome page
  */
-export async function handleFileDropWithSession(e, fromWelcome = false) {
+export async function handleFileDropWithSession(e, _fromWelcome = false) {
   // Note: fromWelcome parameter kept for backwards compatibility but no longer
   // triggers auto-session creation. Session will be created on first user message.
 

@@ -179,7 +179,7 @@ async function startPythonBot() {
             // Don't advance startIdx - check same position again
             continue;
           }
-        } catch (e) {
+        } catch (_e) {
           // Not valid JSON, skip this message
         }
 

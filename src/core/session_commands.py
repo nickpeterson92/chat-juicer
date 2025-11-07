@@ -482,14 +482,48 @@ async def get_config_metadata(app_state: AppStateProtocol) -> dict[str, Any]:
     """
     settings = get_settings()
 
+    # Model metadata with display names and descriptions
+    MODEL_INFO = {
+        "gpt-5-pro": {
+            "displayName": "GPT-5 Pro",
+            "description": "Most capable for complex tasks",
+            "isPrimary": True,
+        },
+        "gpt-5": {
+            "displayName": "GPT-5",
+            "description": "Deep reasoning for hard problems",
+            "isPrimary": True,
+        },
+        "gpt-5-mini": {
+            "displayName": "GPT-5 Mini",
+            "description": "Smart and fast for everyday use",
+            "isPrimary": True,
+        },
+        "gpt-5-codex": {
+            "displayName": "GPT-5 Codex",
+            "description": "Optimized for code generation",
+            "isPrimary": False,
+        },
+        "gpt-4.1": {
+            "displayName": "GPT-4.1",
+            "description": "Previous generation, still capable",
+            "isPrimary": False,
+        },
+        "gpt-4.1-mini": {
+            "displayName": "GPT-4.1 Mini",
+            "description": "Faster responses for simple tasks",
+            "isPrimary": False,
+        },
+    }
+
     # Supported models (NO nano variants)
     SUPPORTED_MODELS = [
+        "gpt-5-pro",
+        "gpt-5",
+        "gpt-5-mini",
+        "gpt-5-codex",
         "gpt-4.1",
         "gpt-4.1-mini",
-        "gpt-5",
-        "gpt-5-codex",
-        "gpt-5-mini",
-        "gpt-5-pro",
     ]
 
     # Models that support reasoning effort configuration
@@ -501,7 +535,9 @@ async def get_config_metadata(app_state: AppStateProtocol) -> dict[str, Any]:
         "models": [
             {
                 "value": model,
-                "label": model,
+                "label": MODEL_INFO[model]["displayName"],
+                "description": MODEL_INFO[model]["description"],
+                "isPrimary": MODEL_INFO[model]["isPrimary"],
                 "isDefault": model == settings.azure_openai_deployment,
                 "supportsReasoning": model in REASONING_MODELS,
             }

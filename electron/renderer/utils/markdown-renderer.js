@@ -177,7 +177,7 @@ renderer.code = (token) => {
 
   // Syntax highlighting for other languages
   let highlightedCode;
-  const languageLabel = language || "text";
+  const _languageLabel = language || "text";
 
   if (language && hljs.getLanguage(language)) {
     try {

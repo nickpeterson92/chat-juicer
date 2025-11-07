@@ -307,7 +307,7 @@ function handleSessionCreated(message, context) {
 /**
  * Handle session_response message (replies to session commands)
  */
-function handleSessionResponse(message, context) {
+function handleSessionResponse(message, _context) {
   // Session command responses are handled by main process IPC handlers
   // This is just a placeholder for any edge cases
   window.electronAPI.log("debug", "session_response received in renderer", message);
@@ -316,11 +316,11 @@ function handleSessionResponse(message, context) {
 /**
  * Handle session_updated message (spontaneous updates like title generation)
  */
-function handleSessionUpdated(message, context) {
+function handleSessionUpdated(message, _context) {
   window.electronAPI.log("info", "session_updated received", message);
 
   // Delta update: only update the specific session that changed
-  if (message.data && message.data.success && message.data.session) {
+  if (message.data?.success && message.data.session) {
     import("../services/session-service.js").then(({ sessionState }) => {
       // Find and update the specific session (in-place for reactivity)
       const session = sessionState.sessions.find((s) => s.session_id === message.data.session.session_id);

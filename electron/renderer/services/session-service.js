@@ -12,7 +12,7 @@ import {
   PAGINATION_RETRY_DELAY_BASE,
   PAGINATION_THROTTLE_DELAY,
 } from "../config/constants.js";
-import { addMessage, clearChat } from "../ui/chat-ui.js";
+import { clearChat } from "../ui/chat-ui.js";
 import { clearFunctionCards } from "../ui/function-card-ui.js";
 import { clearParseCache } from "../utils/json-cache.js";
 import { initializeCodeCopyButtons, processMermaidDiagrams, renderMarkdown } from "../utils/markdown-renderer.js";
@@ -341,7 +341,7 @@ export async function switchSession(api, elements, appState, sessionId) {
               }
 
               // Replace placeholder
-              if (placeholder && placeholder.parentNode) {
+              if (placeholder?.parentNode) {
                 placeholder.replaceWith(historicalFragment);
               }
 
@@ -400,7 +400,7 @@ export async function switchSession(api, elements, appState, sessionId) {
  * @param {string} sessionId - Session ID to delete
  * @returns {Promise<Object>} Result with success/error
  */
-export async function deleteSession(api, elements, sessionId) {
+export async function deleteSession(api, _elements, sessionId) {
   if (!sessionId) {
     return { success: false, error: "No session ID provided" };
   }
@@ -433,7 +433,7 @@ export async function deleteSession(api, elements, sessionId) {
  * @param {Object} elements - DOM elements
  * @returns {Promise<Object>} Result with success/error
  */
-export async function summarizeCurrentSession(api, elements) {
+export async function summarizeCurrentSession(api, _elements) {
   try {
     const response = await api.sessionCommand("summarize", {});
 
