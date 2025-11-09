@@ -65,7 +65,7 @@ async def generate_document(
             logger.info(f"Created backup: {backup_created}")
 
         # Write the content using helper
-        error = await write_file_content(output_path, content)
+        _, error = await write_file_content(output_path, content)
         if error:
             return DocumentGenerateResponse(success=False, output_file=str(output_path), error=error).to_json()  # type: ignore[no-any-return]
 

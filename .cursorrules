@@ -1,0 +1,480 @@
+# Chat Juicer - Cursor AI Rules
+
+**Project**: Chat Juicer - Production-grade Electron + Python desktop application with Azure OpenAI Agent/Runner pattern and native MCP server support.
+
+## Project Architecture
+
+### Core Patterns
+- **Orchestrator Pattern**: `main.py` is pure coordination (174 lines), business logic in modules
+- **Agent/Runner Framework**: OpenAI's Agent/Runner with native MCP server integration
+- **Explicit State Management**: `AppState` dataclass passed to all functions (no globals)
+- **Full Async Architecture**: All Python functions use async/await consistently
+- **Type Safety**: Full mypy strict compliance + Pydantic runtime validation
+- **Dual-Layer History**: Layer 1 (LLM context with auto-summarization) + Layer 2 (full UI display)
+
+### Directory Structure
+```
+src/
+├── main.py              # Pure orchestrator (bootstrap → loop → cleanup)
+├── app/                 # Application modules
+│   ├── state.py        # AppState dataclass (single source of truth)
+│   ├── bootstrap.py    # Application initialization
+│   └── runtime.py      # Core runtime operations
+├── core/               # Business logic
+│   ├── agent.py        # Agent/Runner configuration
+│   ├── session.py      # TokenAwareSQLiteSession (Layer 1)
+│   ├── full_history.py # FullHistoryStore (Layer 2)
+│   ├── session_manager.py
+│   ├── session_commands.py
+│   ├── prompts.py
+│   └── constants.py
+├── models/             # Pydantic models
+│   ├── api_models.py
+│   ├── event_models.py
+│   ├── sdk_models.py
+│   └── session_models.py
+├── tools/              # Function calling tools
+│   ├── file_operations.py
+│   ├── document_generation.py
+│   ├── text_editing.py
+│   ├── wrappers.py
+│   └── registry.py
+├── integrations/       # External integrations
+│   ├── mcp_servers.py  # MCP server management
+│   ├── event_handlers.py
+│   └── sdk_token_tracker.py
+└── utils/              # Utilities
+    ├── logger.py       # Enterprise JSON logging
+    ├── ipc.py          # IPC manager
+    ├── token_utils.py
+    ├── file_utils.py
+    ├── document_processor.py
+    ├── json_utils.py
+    ├── http_logger.py
+    ├── client_factory.py
+    ├── validation.py
+    └── session_integrity.py
+```
+
+## Python Code Style & Conventions
+
+### Type Annotations (Strict)
+- **ALL functions** must have complete type annotations (args + return)
+- Use `from __future__ import annotations` for forward references
+- Prefer modern union syntax: `str | None` over `Optional[str]`
+- Use Literal types for string constants: `Literal["minimal", "low", "medium", "high"]`
+- Use Protocol for duck typing interfaces
+- Return type must be explicit, including `None` when no value returned
+
+```python
+# ✅ Correct
+from __future__ import annotations
+
+def process_message(content: str, session_id: str | None = None) -> dict[str, Any]:
+    """Process incoming message."""
+    return {"status": "ok"}
+
+async def handle_tool_call(tool_name: str, args: dict[str, Any]) -> str | None:
+    """Handle tool execution."""
+    if tool_name == "unknown":
+        return None
+    return "result"
+
+# ❌ Wrong - missing annotations
+def process_message(content, session_id=None):
+    return {"status": "ok"}
+```
+
+### Async/Await (Mandatory)
+- ALL backend functions are async (no sync functions in src/)
+- Use `asyncio.run()` only in `__main__` entry point
+- Use `await` for all I/O operations (file, network, database)
+- Use `asyncio.gather()` for concurrent operations
+
+```python
+# ✅ Correct
+async def read_session(session_id: str) -> Session | None:
+    """Read session from database."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT * FROM sessions WHERE id = ?", (session_id,))
+        row = await cursor.fetchone()
+        return Session.from_row(row) if row else None
+
+# ❌ Wrong - sync I/O
+def read_session(session_id: str) -> Session | None:
+    with sqlite3.connect(DB_PATH) as db:
+        cursor = db.execute("SELECT * FROM sessions WHERE id = ?", (session_id,))
+        return Session.from_row(cursor.fetchone())
+```
+
+### State Management
+- Pass `AppState` explicitly to functions (no module-level globals)
+- Use dataclasses for state containers with default_factory for mutable defaults
+- Initialize state in `bootstrap.py`, use in `runtime.py`, orchestrate in `main.py`
+
+```python
+# ✅ Correct - explicit state passing
+from app.state import AppState
+
+async def process_input(app_state: AppState, message: str) -> None:
+    """Process user input with explicit state."""
+    session = app_state.current_session
+    agent = app_state.agent
+    # ... process
+
+# ❌ Wrong - module-level global
+_current_session: Session | None = None
+
+async def process_input(message: str) -> None:
+    global _current_session
+    # ... process
+```
+
+### Pydantic Models
+- Use Pydantic BaseModel for all data validation (IPC, API, configuration)
+- Use `Field()` for constraints and descriptions
+- Implement `@field_validator` for complex validation
+- Use `model_dump()` and `model_dump_json()` for serialization
+
+```python
+# ✅ Correct
+from pydantic import BaseModel, Field, field_validator
+
+class ToolCallNotification(BaseModel):
+    """Tool call notification."""
+    type: str = Field(default="function_detected")
+    name: str
+    arguments: str | dict[str, Any]
+    call_id: str | None = None
+
+    @field_validator("arguments")
+    @classmethod
+    def validate_args(cls, v: Any) -> str | dict[str, Any]:
+        if isinstance(v, str):
+            return json.loads(v)
+        return v
+```
+
+### Error Handling
+- Use specific exception types (ValueError, TypeError, RuntimeError)
+- Include context in error messages
+- Use try/except at boundaries (IPC, file I/O, network)
+- Log errors with `logger.error()` including `exc_info=True`
+
+```python
+# ✅ Correct
+try:
+    result = await process_tool_call(tool_name, args)
+except ValueError as e:
+    logger.error(f"Invalid tool arguments: {e}", exc_info=True)
+    IPCManager.send_error(f"Tool validation failed: {e}")
+except Exception as e:
+    logger.error(f"Unexpected error in tool processing: {e}", exc_info=True)
+    IPCManager.send_error("An unexpected error occurred")
+```
+
+### Logging
+- Use `from utils.logger import logger` (ChatLogger singleton)
+- Include session context in all logs (automatically injected)
+- Log at appropriate levels: DEBUG (verbose), INFO (normal flow), ERROR (failures)
+- Use structured extra data for JSON logs
+
+```python
+# ✅ Correct
+from utils.logger import logger
+
+logger.info(f"Processing message", extra={"user_id": user_id, "tokens": token_count})
+logger.error(f"Failed to process: {e}", exc_info=True)
+
+# ❌ Wrong - print statements
+print(f"Processing message")
+```
+
+### Imports
+- Use `from __future__ import annotations` at top of every file
+- Group imports: future → stdlib → third-party → first-party → local
+- Use explicit imports: `from agents import Agent` not `import agents`
+- Known first-party: `app`, `core`, `integrations`, `models`, `tools`, `utils`
+
+```python
+# ✅ Correct order
+from __future__ import annotations
+
+import asyncio
+import json
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field
+
+from app.state import AppState
+from core.session import TokenAwareSQLiteSession
+from utils.logger import logger
+```
+
+### Docstrings
+- Use Google-style docstrings for all public functions/classes
+- Include Args, Returns, Raises sections when applicable
+- First line: brief description (imperative mood: "Process...", "Create...")
+- Detailed description in second paragraph if needed
+
+```python
+# ✅ Correct
+async def create_session(app_state: AppState, title: str | None = None) -> str:
+    """Create new session and initialize workspace.
+
+    Creates a new session with optional custom title and sets up the session
+    workspace for file operations and tool executions.
+
+    Args:
+        app_state: Application state container
+        title: Optional custom session title (default: auto-generated timestamp)
+
+    Returns:
+        New session ID
+
+    Raises:
+        RuntimeError: If session creation fails
+    """
+```
+
+### Code Organization
+- Keep functions focused (single responsibility)
+- Extract complex logic into helper functions
+- Use descriptive names: `create_agent_with_mcp_servers()` not `setup()`
+- Prefer explicit over implicit: `send_error_to_frontend()` not `handle_error()`
+- Module size: ~200-400 lines ideal, split if exceeding 500
+
+### Constants
+- Define in `core/constants.py` using Pydantic Settings
+- Use SCREAMING_SNAKE_CASE for module-level constants
+- Group related constants together
+- Document units and constraints in comments
+
+```python
+# ✅ Correct
+from pydantic_settings import BaseSettings
+
+class Settings(BaseSettings):
+    """Application settings with environment variable support."""
+    azure_openai_api_key: str
+    azure_openai_endpoint: str
+    azure_openai_deployment: str
+    reasoning_effort: Literal["minimal", "low", "medium", "high"] = "medium"
+
+# Module-level constants
+MAX_TOKEN_LIMIT: int = 272_000  # GPT-5 context limit
+SUMMARIZATION_THRESHOLD: float = 0.2  # Trigger at 20% of limit
+SESSION_ID_LENGTH: int = 8
+```
+
+## Frontend Architecture (Electron)
+
+### Modular ES6 Structure
+```
+electron/renderer/
+├── index.js                    # Main entry point
+├── config/constants.js         # Configuration constants
+├── core/state.js               # BoundedMap + AppState pub/sub
+├── ui/                         # UI components
+│   ├── chat-ui.js
+│   ├── function-card-ui.js
+│   ├── welcome-page.js
+│   └── titlebar.js
+├── handlers/message-handlers.js # Event handler registry
+├── services/session-service.js  # Session CRUD operations
+├── managers/                    # UI state managers
+│   ├── theme-manager.js
+│   ├── view-manager.js
+│   ├── dom-manager.js
+│   └── file-manager.js
+└── utils/                       # Utilities
+    ├── markdown-renderer.js
+    ├── scroll-utils.js
+    ├── json-cache.js
+    ├── toast.js
+    └── file-utils.js
+```
+
+### JavaScript/TypeScript Conventions
+- Use ES6 modules with explicit imports/exports
+- Prefer `const` over `let`, never use `var`
+- Use arrow functions for callbacks: `() => {}`
+- Use template literals for strings: `` `Message: ${msg}` ``
+- Use optional chaining: `obj?.prop?.method?.()`
+- Use nullish coalescing: `value ?? defaultValue`
+
+## Testing Guidelines
+
+### Test Structure
+```
+tests/
+├── __init__.py
+├── conftest.py              # Pytest fixtures
+├── app/
+│   ├── test_state.py
+│   └── __init__.py
+├── core/
+│   ├── test_agent.py
+│   ├── test_session.py
+│   ├── test_full_history.py
+│   └── __init__.py
+├── models/
+│   ├── test_event_models.py
+│   ├── test_api_models.py
+│   └── __init__.py
+└── utils/
+    ├── test_validation.py
+    ├── test_token_utils.py
+    └── __init__.py
+```
+
+### Test Conventions
+- Use pytest for all tests
+- Use descriptive test names: `test_create_session_with_custom_title`
+- Use fixtures for common setup (defined in conftest.py)
+- Mock external dependencies (Azure OpenAI, MCP servers)
+- Test edge cases and error conditions
+
+## Tool Configuration
+
+### Ruff (Linter & Formatter)
+- Line length: 120 characters
+- Target: Python 3.10+
+- Quote style: double quotes
+- Enabled rules: E, W, F, I, B, C4, UP, SIM, RUF, G, PLC, PLE, PLR, PLW, PERF, FA
+- See pyproject.toml for complete configuration
+
+### Mypy (Type Checker)
+- Strict mode enabled
+- Python version: 3.13
+- All functions require complete type annotations
+- No implicit optionals
+- See pyproject.toml for overrides
+
+### Black (Formatter)
+- Line length: 120
+- Target: Python 3.10+
+- Quote style: double (via Ruff)
+
+## Development Workflow
+
+### Before Committing
+```bash
+make quality    # Run format + lint + typecheck
+make test       # Validate syntax
+make precommit  # Comprehensive pre-commit checks
+```
+
+### Key Commands
+```bash
+make run        # Production mode
+make dev        # Development with DevTools
+make logs       # View conversation logs
+make db-explore # Database inspection
+make health     # System health check
+```
+
+## Critical Rules
+
+1. **No Module Globals**: Pass AppState explicitly to all functions
+2. **All Functions Async**: Use async/await consistently in backend
+3. **Complete Type Annotations**: Every function must have full types
+4. **Pydantic Validation**: Use BaseModel for all data validation
+5. **Explicit State**: No hidden global state or singletons (except logger)
+6. **Error Boundaries**: Try/except at IPC, I/O, and network boundaries
+7. **Structured Logging**: Use logger with extra data for JSON logs
+8. **Import Order**: future → stdlib → third-party → first-party → local
+9. **Docstrings Required**: All public functions need Google-style docs
+10. **MCP Integration**: Use Agent/Runner pattern for tool orchestration
+
+## Anti-Patterns to Avoid
+
+❌ **Don't**: Use module-level globals for state
+✅ **Do**: Pass AppState explicitly
+
+❌ **Don't**: Mix sync and async code (use `asyncio.run()` only in main)
+✅ **Do**: Make all backend functions async
+
+❌ **Don't**: Use bare except clauses
+✅ **Do**: Catch specific exceptions with context
+
+❌ **Don't**: Print to stdout/stderr directly
+✅ **Do**: Use structured logger
+
+❌ **Don't**: Use implicit type annotations (rely on inference)
+✅ **Do**: Explicitly annotate all function signatures
+
+❌ **Don't**: Mutate default arguments (`def func(items=[]): ...`)
+✅ **Do**: Use None and initialize: `def func(items: list[str] | None = None): items = items or []`
+
+## Project-Specific Patterns
+
+### Agent/Runner Pattern
+```python
+# Create agent with MCP servers
+agent = Agent(
+    name="Chat Juicer",
+    model=deployment,
+    instructions=system_instructions,
+    tools=native_tools,
+    mcp_servers=[seq_thinking_server, fetch_server],
+    model_settings=ModelSettings(reasoning=Reasoning(effort="medium")),
+)
+
+# Run agent with streaming
+async with agent.run_stream(user_input) as stream:
+    async for event in stream:
+        # Handle streaming events
+        pass
+```
+
+### Session Management
+```python
+# Layer 1: Token-aware context (LLM sees this)
+session = TokenAwareSQLiteSession(session_id=session_id, db_path=DB_PATH)
+await session.add_item(user_message)
+
+# Layer 2: Full history (UI sees this)
+full_history_store = FullHistoryStore(db_path=DB_PATH)
+await full_history_store.add_item(session_id, user_message)
+```
+
+### IPC Communication
+```python
+# Backend → Frontend
+IPCManager.send_message(content)
+IPCManager.send_error(message)
+IPCManager.send_function_call(name, args, call_id)
+IPCManager.send_tool_result(name, result, call_id)
+
+# Frontend → Backend (JSON protocol)
+{"type": "session_command", "command": "create", "data": {...}}
+{"type": "upload", "data": {...}}
+```
+
+## Environment Variables
+
+Required in `src/.env`:
+```env
+AZURE_OPENAI_API_KEY=your-key
+AZURE_OPENAI_ENDPOINT=https://resource.openai.azure.com/
+AZURE_OPENAI_DEPLOYMENT=gpt-5-mini
+
+# Optional
+REASONING_EFFORT=medium  # minimal, low, medium, high
+DEBUG=false
+```
+
+## Documentation References
+
+- Agent/Runner: OpenAI Agents SDK docs
+- MCP Servers: Model Context Protocol specification
+- Electron IPC: Electron documentation
+- Pydantic: Pydantic v2 documentation
+- Type Hints: Python typing documentation
+
+---
+
+**When making changes**: Always run `make quality` and `make test` before committing.
+**When adding features**: Follow the orchestrator pattern (bootstrap → runtime → main orchestration).
+**When debugging**: Check `make logs` and `make logs-errors` for structured JSON logs.

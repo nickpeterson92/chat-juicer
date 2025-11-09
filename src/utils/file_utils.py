@@ -211,7 +211,7 @@ async def read_file_content(target_path: Path) -> tuple[str, str | None]:
         return "", f"Failed to read file: {e!s}"
 
 
-async def write_file_content(target_path: Path, content: str) -> str | None:
+async def write_file_content(target_path: Path, content: str) -> tuple[None, str | None]:
     """
     Write text content to a file asynchronously.
 
@@ -220,14 +220,16 @@ async def write_file_content(target_path: Path, content: str) -> str | None:
         content: Text content to write
 
     Returns:
-        Error message if failed, None if successful
+        Tuple of (None, error_message)
+        If error_message is None, write was successful
+        Returns (None, None) on success, (None, error_msg) on failure
     """
     try:
         async with aiofiles.open(target_path, "w", encoding="utf-8") as f:
             await f.write(content)
-        return None
+        return None, None
     except Exception as e:
-        return f"Failed to write file: {e!s}"
+        return None, f"Failed to write file: {e!s}"
 
 
 def validate_directory_path(
@@ -345,7 +347,7 @@ async def file_operation(
                     response = json_response(success=True, **result_data)
                 else:
                     # Write back and check for write errors
-                    write_error = await write_file_content(target_path, new_content)
+                    _, write_error = await write_file_content(target_path, new_content)
                     if write_error:
                         response = TextEditResponse(
                             success=False, file_path=str(target_path), error=write_error

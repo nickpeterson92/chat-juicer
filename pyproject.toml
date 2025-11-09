@@ -138,8 +138,8 @@ max-statements = 50
 # Specify the Python version
 python_version = "3.13"
 
-# Discover Python files in the src directory
-files = ["src/"]
+# Discover Python files in the src and tests directories
+files = ["src/", "tests/"]
 
 # Strict mode options (gradually enable these)
 strict = true  # Enforce comprehensive type checking
@@ -179,10 +179,6 @@ strict_optional = true
 
 # Per-module options (for gradual adoption)
 [[tool.mypy.overrides]]
-module = "tests.*"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
 module = "agents.*"
 ignore_missing_imports = true
 
@@ -205,6 +201,51 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = "integrations.mcp_registry"
 warn_unused_ignores = false
+
+[tool.pytest.ini_options]
+# Add src directory to Python path so tests can import modules
+pythonpath = ["src"]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+# Show extra test summary info
+addopts = [
+    "-ra",  # Show summary of all test outcomes
+    "--strict-markers",  # Raise error on unknown markers
+    "--strict-config",  # Raise error on config issues
+    "--tb=short",  # Shorter traceback format
+]
+
+[tool.coverage.run]
+# Disable parallel mode to avoid database issues
+parallel = false
+# Use a single data file
+data_file = ".coverage"
+# Source packages to measure
+source = ["src"]
+# Omit test files from coverage
+omit = [
+    "tests/*",
+    "**/__pycache__/*",
+    "**/conftest.py",
+]
+
+[tool.coverage.report]
+# Fail if coverage is below this percentage
+fail_under = 0
+# Show lines that weren't covered
+show_missing = true
+# Skip files with no executable code
+skip_empty = true
+# Precision for coverage percentage
+precision = 2
+
+[tool.coverage.html]
+# Directory for HTML coverage report
+directory = "htmlcov"
 
 [tool.black]
 line-length = 120

@@ -34,6 +34,12 @@ env/
 venv/
 .venv
 
+# Testing & Coverage
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+
 # Electron
 dist/
 out/
