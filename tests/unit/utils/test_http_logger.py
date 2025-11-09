@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import httpx
 import pytest
@@ -120,9 +120,7 @@ class TestHTTPLogger:
         mock_request.url = httpx.URL("https://api.example.com/chat")
         mock_request.headers = {}
         # Make content decode raise an exception
-        mock_request.content.decode.side_effect = UnicodeDecodeError(
-            "utf-8", b"", 0, 1, "test error"
-        )
+        mock_request.content.decode.side_effect = UnicodeDecodeError("utf-8", b"", 0, 1, "test error")
 
         with patch("utils.http_logger.logger") as mock_logger:
             await logger.log_request(mock_request)

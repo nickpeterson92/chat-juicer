@@ -5,9 +5,8 @@ Tests settings loading and constant values.
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import patch
-
-import pytest
 
 from core.constants import (
     CHAT_HISTORY_DB_PATH,
@@ -102,6 +101,7 @@ class TestGetSettings:
         """Test loading settings with Azure provider."""
         # Clear pydantic-settings cache to avoid test order dependencies
         from core.constants import Settings
+
         Settings.model_config["validate_assignment"] = True  # Force revalidation
 
         # Azure API keys are 32-character hex strings

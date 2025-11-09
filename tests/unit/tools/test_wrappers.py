@@ -5,10 +5,6 @@ Tests session-aware tool wrappers.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, Mock, patch
-
-import pytest
-
 from tools.wrappers import create_session_aware_tools
 
 
@@ -26,6 +22,7 @@ class TestCreateSessionAwareTools:
 
         # Each tool should be a FunctionTool from agents SDK
         from agents import FunctionTool
+
         for tool in wrapped_tools:
             assert isinstance(tool, FunctionTool)
             assert hasattr(tool, "name")

@@ -5,6 +5,7 @@ Tests automatic token tracking integration.
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from typing import Any
 from unittest.mock import Mock, patch
 
@@ -106,8 +107,10 @@ class TestSDKTokenTracker:
         mock_session = Mock()
         tracker.set_session(mock_session)
 
-        with patch("integrations.sdk_token_tracker.count_tokens") as mock_count, \
-             patch("integrations.sdk_token_tracker.json_safe") as mock_json:
+        with (
+            patch("integrations.sdk_token_tracker.count_tokens") as mock_count,
+            patch("integrations.sdk_token_tracker.json_safe") as mock_json,
+        ):
             mock_count.return_value = {"exact_tokens": 30}
             mock_json.return_value = '{"key": "value"}'
 
@@ -382,7 +385,7 @@ class TestCreateTrackingStreamWrapper:
     async def test_create_wrapper(self) -> None:
         """Test creating tracking stream wrapper."""
 
-        async def mock_stream():
+        async def mock_stream() -> AsyncGenerator[Mock, None]:
             yield Mock()
             yield Mock()
 
@@ -392,9 +395,7 @@ class TestCreateTrackingStreamWrapper:
         assert callable(wrapped)
 
         # Should yield events
-        events = []
-        async for event in wrapped():
-            events.append(event)
+        events = [event async for event in wrapped()]
 
         assert len(events) == 2
 
@@ -435,6 +436,7 @@ class TestPatchSDKForAutoTracking:
     @patch("integrations.sdk_token_tracker.Runner")
     def test_patch_sdk_exception_logged(self, mock_runner: Mock, mock_logger: Mock) -> None:
         """Test patching SDK logs exception."""
+
         # Make hasattr raise an exception (simulate unexpected error)
         def raise_exception(*args: Any) -> bool:
             raise RuntimeError("Unexpected error during patching")

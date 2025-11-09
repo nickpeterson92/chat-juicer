@@ -5,7 +5,7 @@ Tests document conversion and summarization functionality.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -21,11 +21,12 @@ class TestSummarizeContent:
         mock_result = Mock()
         mock_result.final_output = "This is a summary of the document."
 
-        with patch("utils.document_processor.Agent") as mock_agent, \
-             patch("utils.document_processor.Runner") as mock_runner, \
-             patch("utils.document_processor.get_settings") as mock_settings, \
-             patch("utils.document_processor.count_tokens") as mock_count_tokens:
-
+        with (
+            patch("utils.document_processor.Agent") as mock_agent,
+            patch("utils.document_processor.Runner") as mock_runner,
+            patch("utils.document_processor.get_settings") as mock_settings,
+            patch("utils.document_processor.count_tokens") as mock_count_tokens,
+        ):
             # Setup mocks
             mock_settings.return_value.azure_openai_deployment = "gpt-5-mini"
             mock_runner.run = AsyncMock(return_value=mock_result)
@@ -44,11 +45,12 @@ class TestSummarizeContent:
         mock_result = Mock()
         mock_result.final_output = ""
 
-        with patch("utils.document_processor.Agent"), \
-             patch("utils.document_processor.Runner") as mock_runner, \
-             patch("utils.document_processor.get_settings") as mock_settings, \
-             patch("utils.document_processor.count_tokens"):
-
+        with (
+            patch("utils.document_processor.Agent"),
+            patch("utils.document_processor.Runner") as mock_runner,
+            patch("utils.document_processor.get_settings") as mock_settings,
+            patch("utils.document_processor.count_tokens"),
+        ):
             mock_settings.return_value.azure_openai_deployment = "gpt-5-mini"
             mock_runner.run = AsyncMock(return_value=mock_result)
 
@@ -64,11 +66,12 @@ class TestSummarizeContent:
         mock_result = Mock()
         mock_result.final_output = None
 
-        with patch("utils.document_processor.Agent"), \
-             patch("utils.document_processor.Runner") as mock_runner, \
-             patch("utils.document_processor.get_settings") as mock_settings, \
-             patch("utils.document_processor.count_tokens"):
-
+        with (
+            patch("utils.document_processor.Agent"),
+            patch("utils.document_processor.Runner") as mock_runner,
+            patch("utils.document_processor.get_settings") as mock_settings,
+            patch("utils.document_processor.count_tokens"),
+        ):
             mock_settings.return_value.azure_openai_deployment = "gpt-5-mini"
             mock_runner.run = AsyncMock(return_value=mock_result)
 
@@ -95,11 +98,12 @@ class TestSummarizeContent:
         mock_result = Mock()
         mock_result.final_output = "Summary"
 
-        with patch("utils.document_processor.Agent"), \
-             patch("utils.document_processor.Runner") as mock_runner, \
-             patch("utils.document_processor.get_settings") as mock_settings, \
-             patch("utils.document_processor.count_tokens") as mock_count_tokens:
-
+        with (
+            patch("utils.document_processor.Agent"),
+            patch("utils.document_processor.Runner") as mock_runner,
+            patch("utils.document_processor.get_settings") as mock_settings,
+            patch("utils.document_processor.count_tokens") as mock_count_tokens,
+        ):
             mock_settings.return_value.azure_openai_deployment = "custom-model"
             mock_runner.run = AsyncMock(return_value=mock_result)
             mock_count_tokens.return_value = {"exact_tokens": 500}
@@ -116,15 +120,17 @@ class TestGetMarkitdownConverter:
         """Test that converter is cached after first call."""
         # Clear cache first
         from utils.document_processor import _converter_cache
+
         _converter_cache.clear()
 
         mock_converter = Mock()
 
-        with patch("utils.document_processor._MarkItDownAvailable", True), \
-             patch("utils.document_processor._MarkItDown") as mock_markitdown, \
-             patch("utils.document_processor.get_settings") as mock_settings, \
-             patch("utils.document_processor.create_sync_openai_client"):
-
+        with (
+            patch("utils.document_processor._MarkItDownAvailable", True),
+            patch("utils.document_processor._MarkItDown") as mock_markitdown,
+            patch("utils.document_processor.get_settings") as mock_settings,
+            patch("utils.document_processor.create_sync_openai_client"),
+        ):
             mock_settings.return_value.api_provider = "azure"
             mock_settings.return_value.azure_openai_api_key = "test-key"
             mock_settings.return_value.azure_endpoint_str = "https://test.openai.azure.com/"
@@ -144,6 +150,7 @@ class TestGetMarkitdownConverter:
     def test_get_converter_not_available(self) -> None:
         """Test when MarkItDown is not installed."""
         from utils.document_processor import _converter_cache
+
         _converter_cache.clear()
 
         with patch("utils.document_processor._MarkItDownAvailable", False):
@@ -153,15 +160,17 @@ class TestGetMarkitdownConverter:
     def test_get_converter_azure_provider(self) -> None:
         """Test converter initialization with Azure provider."""
         from utils.document_processor import _converter_cache
+
         _converter_cache.clear()
 
         mock_converter = Mock()
 
-        with patch("utils.document_processor._MarkItDownAvailable", True), \
-             patch("utils.document_processor._MarkItDown") as mock_markitdown, \
-             patch("utils.document_processor.get_settings") as mock_settings, \
-             patch("utils.document_processor.create_sync_openai_client") as mock_client:
-
+        with (
+            patch("utils.document_processor._MarkItDownAvailable", True),
+            patch("utils.document_processor._MarkItDown") as mock_markitdown,
+            patch("utils.document_processor.get_settings") as mock_settings,
+            patch("utils.document_processor.create_sync_openai_client") as mock_client,
+        ):
             mock_settings.return_value.api_provider = "azure"
             mock_settings.return_value.azure_openai_api_key = "azure-key"
             mock_settings.return_value.azure_endpoint_str = "https://azure.openai.azure.com/"
@@ -177,15 +186,17 @@ class TestGetMarkitdownConverter:
     def test_get_converter_openai_provider(self) -> None:
         """Test converter initialization with OpenAI provider."""
         from utils.document_processor import _converter_cache
+
         _converter_cache.clear()
 
         mock_converter = Mock()
 
-        with patch("utils.document_processor._MarkItDownAvailable", True), \
-             patch("utils.document_processor._MarkItDown") as mock_markitdown, \
-             patch("utils.document_processor.get_settings") as mock_settings, \
-             patch("utils.document_processor.create_sync_openai_client") as mock_client:
-
+        with (
+            patch("utils.document_processor._MarkItDownAvailable", True),
+            patch("utils.document_processor._MarkItDown") as mock_markitdown,
+            patch("utils.document_processor.get_settings") as mock_settings,
+            patch("utils.document_processor.create_sync_openai_client") as mock_client,
+        ):
             mock_settings.return_value.api_provider = "openai"
             mock_settings.return_value.openai_api_key = "openai-key"
             mock_settings.return_value.openai_model = "gpt-4"
@@ -199,11 +210,13 @@ class TestGetMarkitdownConverter:
     def test_get_converter_unknown_provider(self) -> None:
         """Test converter with unknown API provider."""
         from utils.document_processor import _converter_cache
+
         _converter_cache.clear()
 
-        with patch("utils.document_processor._MarkItDownAvailable", True), \
-             patch("utils.document_processor.get_settings") as mock_settings:
-
+        with (
+            patch("utils.document_processor._MarkItDownAvailable", True),
+            patch("utils.document_processor.get_settings") as mock_settings,
+        ):
             mock_settings.return_value.api_provider = "unknown"
 
             result = get_markitdown_converter()
@@ -213,13 +226,15 @@ class TestGetMarkitdownConverter:
     def test_get_converter_initialization_error(self) -> None:
         """Test converter initialization with exception."""
         from utils.document_processor import _converter_cache
+
         _converter_cache.clear()
 
-        with patch("utils.document_processor._MarkItDownAvailable", True), \
-             patch("utils.document_processor._MarkItDown") as mock_markitdown, \
-             patch("utils.document_processor.get_settings") as mock_settings, \
-             patch("utils.document_processor.create_sync_openai_client"):
-
+        with (
+            patch("utils.document_processor._MarkItDownAvailable", True),
+            patch("utils.document_processor._MarkItDown") as mock_markitdown,
+            patch("utils.document_processor.get_settings") as mock_settings,
+            patch("utils.document_processor.create_sync_openai_client"),
+        ):
             mock_settings.return_value.api_provider = "azure"
             mock_settings.return_value.azure_openai_api_key = "key"
             mock_settings.return_value.azure_endpoint_str = "endpoint"

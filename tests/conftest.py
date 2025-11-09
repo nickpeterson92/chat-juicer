@@ -9,12 +9,12 @@ from __future__ import annotations
 import sqlite3
 import tempfile
 
+from collections.abc import Generator
 from pathlib import Path
-from typing import Any, AsyncGenerator, Generator
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
-
 
 # ============================================================================
 # Mock External Dependencies

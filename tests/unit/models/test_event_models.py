@@ -7,8 +7,6 @@ from __future__ import annotations
 
 import json
 
-from typing import Any
-
 import pytest
 
 from pydantic import ValidationError
@@ -210,7 +208,7 @@ class TestSessionItem:
     def test_list_content(self) -> None:
         """Test creating item with list content."""
         content_items = [{"text": "Part 1"}, {"text": "Part 2"}]
-        item = SessionItem(role="assistant", content=content_items)  # type: ignore
+        item = SessionItem(role="assistant", content=content_items)
         assert item.content == content_items
 
     def test_to_dict(self) -> None:

@@ -7,8 +7,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 from models.api_models import (
     DirectoryListResponse,
     DocumentGenerateResponse,

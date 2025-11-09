@@ -7,8 +7,6 @@ from __future__ import annotations
 
 from unittest.mock import Mock
 
-import pytest
-
 from models.sdk_models import (
     ContentLike,
     EventHandler,
@@ -121,6 +119,7 @@ class TestEventHandler:
 
     def test_event_handler_returns_string(self) -> None:
         """Test event handler that returns a string."""
+
         def handler(event: Mock) -> str | None:
             return "__JSON__test__JSON__"
 
@@ -130,6 +129,7 @@ class TestEventHandler:
 
     def test_event_handler_returns_none(self) -> None:
         """Test event handler that returns None."""
+
         def handler(event: Mock) -> str | None:
             return None
 
@@ -139,6 +139,7 @@ class TestEventHandler:
 
     def test_callable_conformance(self) -> None:
         """Test that callable objects can be event handlers."""
+
         class HandlerClass:
             def __call__(self, event: Mock) -> str | None:
                 return "handled"

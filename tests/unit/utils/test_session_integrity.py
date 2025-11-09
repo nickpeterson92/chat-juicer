@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import json
 import sqlite3
+
 from pathlib import Path
+from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
@@ -29,60 +31,64 @@ def temp_integrity_db(tmp_path: Path) -> Path:
 
     with sqlite3.connect(db_path) as conn:
         # Create Layer 1 tables (OpenAI Agents SDK structure)
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TABLE agent_sessions (
                 session_id TEXT PRIMARY KEY,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """)
+        """
+        )
 
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TABLE agent_messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 session_id TEXT NOT NULL,
                 message_data TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """)
+        """
+        )
 
         # Add test data
         # Session 1: Has both Layer 1 and Layer 2
         conn.execute("INSERT INTO agent_sessions (session_id) VALUES ('chat_both')")
         conn.execute(
             "INSERT INTO agent_messages (session_id, message_data) VALUES (?, ?)",
-            ("chat_both", json.dumps({"role": "user", "content": "Hello"}))
+            ("chat_both", json.dumps({"role": "user", "content": "Hello"})),
         )
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TABLE full_history_chat_both (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 role TEXT,
                 content TEXT,
                 metadata TEXT
             )
-        """)
-        conn.execute(
-            "INSERT INTO full_history_chat_both (role, content) VALUES ('user', 'Hello')"
+        """
         )
+        conn.execute("INSERT INTO full_history_chat_both (role, content) VALUES ('user', 'Hello')")
 
         # Session 2: Layer 1 only (orphaned)
         conn.execute("INSERT INTO agent_sessions (session_id) VALUES ('chat_layer1')")
         conn.execute(
             "INSERT INTO agent_messages (session_id, message_data) VALUES (?, ?)",
-            ("chat_layer1", json.dumps({"role": "assistant", "content": "Response"}))
+            ("chat_layer1", json.dumps({"role": "assistant", "content": "Response"})),
         )
 
         # Session 3: Layer 2 only (orphaned)
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TABLE full_history_chat_layer2 (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 role TEXT,
                 content TEXT,
                 metadata TEXT
             )
-        """)
-        conn.execute(
-            "INSERT INTO full_history_chat_layer2 (role, content) VALUES ('user', 'Test')"
+        """
         )
+        conn.execute("INSERT INTO full_history_chat_layer2 (role, content) VALUES ('user', 'Test')")
 
         conn.commit()
 
@@ -236,9 +242,7 @@ class TestRepairOrphanedSessionFromLayer1:
         mock_full_history = Mock()
         mock_full_history.save_message.return_value = True
 
-        success = repair_orphaned_session_from_layer1(
-            "chat_layer1", mock_full_history, temp_integrity_db
-        )
+        success = repair_orphaned_session_from_layer1("chat_layer1", mock_full_history, temp_integrity_db)
 
         assert success is True
         mock_full_history.save_message.assert_called_once()
@@ -252,29 +256,33 @@ class TestRepairOrphanedSessionFromLayer1:
         db_path = tmp_path / "repair_test.db"
 
         with sqlite3.connect(db_path) as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 CREATE TABLE agent_sessions (
                     session_id TEXT PRIMARY KEY,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
-            """)
-            conn.execute("""
+            """
+            )
+            conn.execute(
+                """
                 CREATE TABLE agent_messages (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     session_id TEXT NOT NULL,
                     message_data TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
-            """)
+            """
+            )
 
             # Add messages with and without roles
             conn.execute(
                 "INSERT INTO agent_messages (session_id, message_data) VALUES (?, ?)",
-                ("chat_test", json.dumps({"role": "user", "content": "Good"}))
+                ("chat_test", json.dumps({"role": "user", "content": "Good"})),
             )
             conn.execute(
                 "INSERT INTO agent_messages (session_id, message_data) VALUES (?, ?)",
-                ("chat_test", json.dumps({"type": "internal", "data": "Skip this"}))
+                ("chat_test", json.dumps({"type": "internal", "data": "Skip this"})),
             )
             conn.commit()
 
@@ -292,23 +300,25 @@ class TestRepairOrphanedSessionFromLayer1:
         db_path = tmp_path / "invalid_json.db"
 
         with sqlite3.connect(db_path) as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 CREATE TABLE agent_sessions (
                     session_id TEXT PRIMARY KEY,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
-            """)
-            conn.execute("""
+            """
+            )
+            conn.execute(
+                """
                 CREATE TABLE agent_messages (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     session_id TEXT NOT NULL,
                     message_data TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
-            """)
-            conn.execute(
-                "INSERT INTO agent_messages (session_id, message_data) VALUES ('chat_bad', 'not valid json')"
+            """
             )
+            conn.execute("INSERT INTO agent_messages (session_id, message_data) VALUES ('chat_bad', 'not valid json')")
             conn.commit()
 
         mock_full_history = Mock()
@@ -327,9 +337,7 @@ class TestValidateAndRepairAllSessions:
         """Test validation without auto-repair."""
         mock_full_history = Mock()
 
-        results = validate_and_repair_all_sessions(
-            mock_full_history, temp_integrity_db, auto_repair=False
-        )
+        results = validate_and_repair_all_sessions(mock_full_history, temp_integrity_db, auto_repair=False)
 
         assert results["healthy_count"] == 1
         assert results["orphaned_count"] == 2
@@ -343,9 +351,7 @@ class TestValidateAndRepairAllSessions:
         mock_full_history = Mock()
         mock_full_history.save_message.return_value = True
 
-        results = validate_and_repair_all_sessions(
-            mock_full_history, temp_integrity_db, auto_repair=True
-        )
+        results = validate_and_repair_all_sessions(mock_full_history, temp_integrity_db, auto_repair=True)
 
         assert results["healthy_count"] == 1
         assert results["orphaned_count"] == 2
@@ -366,9 +372,7 @@ class TestValidateAndRepairAllSessions:
         with patch("utils.session_integrity.repair_orphaned_session_from_layer1") as mock_repair:
             mock_repair.return_value = False
 
-            results = validate_and_repair_all_sessions(
-                mock_full_history, temp_integrity_db, auto_repair=True
-            )
+            results = validate_and_repair_all_sessions(mock_full_history, temp_integrity_db, auto_repair=True)
 
         assert results["repaired_count"] == 0
         assert results["repair_failed_count"] == 1
@@ -384,9 +388,7 @@ class TestValidateAndRepairAllSessions:
 
         mock_full_history = Mock()
 
-        results = validate_and_repair_all_sessions(
-            mock_full_history, db_path, auto_repair=True
-        )
+        results = validate_and_repair_all_sessions(mock_full_history, db_path, auto_repair=True)
 
         assert results["healthy_count"] == 1
         assert results["orphaned_count"] == 0

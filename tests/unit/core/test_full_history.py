@@ -107,7 +107,7 @@ class TestFullHistoryStore:
         # Should raise ValueError for invalid session_id
         try:
             store._get_table_name("chat_'; DROP TABLE users; --")
-            assert False, "Should have raised ValueError"
+            raise AssertionError("Should have raised ValueError")
         except ValueError:
             pass  # Expected
 
@@ -172,8 +172,6 @@ class TestFullHistoryStore:
 
     def test_save_message_database_error(self, temp_db_path: Path) -> None:
         """Test error handling when database write fails."""
-        from unittest.mock import patch
-        import sqlite3
 
         store = FullHistoryStore(db_path=temp_db_path)
 

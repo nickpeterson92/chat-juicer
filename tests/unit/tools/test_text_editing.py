@@ -6,8 +6,8 @@ Tests agent tools for text manipulation.
 from __future__ import annotations
 
 import json
+
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -168,9 +168,7 @@ class TestEditFile:
 
         edits = [EditOperation(oldText="world", newText="universe")]
         result = await edit_file(
-            file_path="test.txt",  # Will be resolved to output/test.txt
-            edits=edits,
-            session_id=None
+            file_path="test.txt", edits=edits, session_id=None  # Will be resolved to output/test.txt
         )
 
         data = json.loads(result)
@@ -189,15 +187,8 @@ class TestEditFile:
 
         monkeypatch.chdir(tmp_path)
 
-        edits = [
-            EditOperation(oldText="world", newText="universe"),
-            EditOperation(oldText="1.0", newText="2.0")
-        ]
-        result = await edit_file(
-            file_path="test.txt",
-            edits=edits,
-            session_id=None
-        )
+        edits = [EditOperation(oldText="world", newText="universe"), EditOperation(oldText="1.0", newText="2.0")]
+        result = await edit_file(file_path="test.txt", edits=edits, session_id=None)
 
         data = json.loads(result)
         assert data["success"] is True
@@ -217,11 +208,7 @@ class TestEditFile:
         monkeypatch.chdir(tmp_path)
 
         edits = [EditOperation(oldText="missing text", newText="replacement")]
-        result = await edit_file(
-            file_path="test.txt",
-            edits=edits,
-            session_id=None
-        )
+        result = await edit_file(file_path="test.txt", edits=edits, session_id=None)
 
         data = json.loads(result)
         assert data["success"] is False
@@ -237,11 +224,7 @@ class TestEditFile:
 
         monkeypatch.chdir(tmp_path)
 
-        result = await edit_file(
-            file_path="test.txt",
-            edits=[],
-            session_id=None
-        )
+        result = await edit_file(file_path="test.txt", edits=[], session_id=None)
 
         data = json.loads(result)
         assert data["success"] is False
@@ -258,11 +241,7 @@ class TestEditFile:
         monkeypatch.chdir(tmp_path)
 
         edits = [EditOperation(oldText="Hello world", newText="Hello universe")]  # Single space
-        result = await edit_file(
-            file_path="test.txt",
-            edits=edits,
-            session_id=None
-        )
+        result = await edit_file(file_path="test.txt", edits=edits, session_id=None)
 
         data = json.loads(result)
         assert data["success"] is True
@@ -279,11 +258,7 @@ class TestEditFile:
         monkeypatch.chdir(tmp_path)
 
         edits = [EditOperation(oldText="Original", newText="Modified")]
-        result = await edit_file(
-            file_path="test.txt",
-            edits=edits,
-            session_id="chat_test"
-        )
+        result = await edit_file(file_path="test.txt", edits=edits, session_id="chat_test")
 
         data = json.loads(result)
         assert data["success"] is True

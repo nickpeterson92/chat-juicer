@@ -6,7 +6,7 @@ Tests file operations with validation, sandboxing, and security checks.
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import AsyncMock, Mock, mock_open, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -61,19 +61,19 @@ class TestValidateSessionPath:
 
     def test_path_traversal_blocked(self) -> None:
         """Test that path traversal attempts are blocked."""
-        resolved, error = validate_session_path("../etc/passwd", "chat_test123")
+        _resolved, error = validate_session_path("../etc/passwd", "chat_test123")
         assert error is not None
         assert "traversal" in error.lower()
 
     def test_absolute_path_blocked(self) -> None:
         """Test that absolute paths are blocked."""
-        resolved, error = validate_session_path("/etc/passwd", "chat_test123")
+        _resolved, error = validate_session_path("/etc/passwd", "chat_test123")
         assert error is not None
         assert "traversal" in error.lower()
 
     def test_null_byte_blocked(self) -> None:
         """Test that null bytes are blocked."""
-        resolved, error = validate_session_path("test\0.txt", "chat_test123")
+        _resolved, error = validate_session_path("test\0.txt", "chat_test123")
         assert error is not None
         assert "null byte" in error.lower()
 
@@ -93,7 +93,7 @@ class TestValidateSessionPath:
         session_id = session_workspace.name
         monkeypatch.chdir(session_workspace.parent.parent.parent)
 
-        resolved, error = validate_session_path("output/doc.pdf", session_id)
+        _resolved, error = validate_session_path("output/doc.pdf", session_id)
         assert error is None
 
     def test_templates_directory_allowed(self, session_workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -101,7 +101,7 @@ class TestValidateSessionPath:
         session_id = session_workspace.name
         monkeypatch.chdir(session_workspace.parent.parent.parent)
 
-        resolved, error = validate_session_path("templates/template.md", session_id)
+        _resolved, error = validate_session_path("templates/template.md", session_id)
         assert error is None
 
     def test_implicit_sources_directory(self, session_workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -131,7 +131,7 @@ class TestValidateFilePath:
         monkeypatch.chdir(temp_dir)
         nonexistent = "nonexistent.txt"
 
-        resolved, error = validate_file_path(nonexistent, check_exists=True)
+        _resolved, error = validate_file_path(nonexistent, check_exists=True)
         assert error is not None
         assert "not found" in error.lower() or "does not exist" in error.lower()
 
@@ -139,7 +139,7 @@ class TestValidateFilePath:
         """Test validating non-existent file without existence check."""
         nonexistent = temp_dir / "future_file.txt"
         with patch("pathlib.Path.cwd", return_value=temp_dir.parent):
-            resolved, error = validate_file_path(str(nonexistent), check_exists=False)
+            _resolved, error = validate_file_path(str(nonexistent), check_exists=False)
             # Should pass validation even if doesn't exist
             assert error is None or "not found" not in error.lower()
 
@@ -150,7 +150,7 @@ class TestValidateFilePath:
         test_subdir.mkdir()
         monkeypatch.chdir(temp_dir)
 
-        resolved, error = validate_file_path("testdir", check_exists=True)
+        _resolved, error = validate_file_path("testdir", check_exists=True)
         assert error is not None
         assert "not a file" in error.lower() or "directory" in error.lower()
 
@@ -159,7 +159,7 @@ class TestValidateFilePath:
         session_id = session_workspace.name
         monkeypatch.chdir(session_workspace.parent.parent.parent)
 
-        resolved, error = validate_file_path(
+        _resolved, error = validate_file_path(
             "sources/test.txt",
             session_id=session_id,
             check_exists=False,
@@ -185,7 +185,7 @@ class TestValidateDirectoryPath:
         monkeypatch.chdir(temp_dir)
         nonexistent = "nonexistent_dir"
 
-        resolved, error = validate_directory_path(nonexistent, check_exists=True)
+        _resolved, error = validate_directory_path(nonexistent, check_exists=True)
         assert error is not None
         assert "not found" in error.lower() or "does not exist" in error.lower()
 
@@ -193,7 +193,7 @@ class TestValidateDirectoryPath:
         """Test that file is rejected when expecting directory."""
         monkeypatch.chdir(temp_file.parent)
 
-        resolved, error = validate_directory_path(temp_file.name, check_exists=True)
+        _resolved, error = validate_directory_path(temp_file.name, check_exists=True)
         assert error is not None
         assert "not a directory" in error.lower() or "file" in error.lower()
 
@@ -202,7 +202,7 @@ class TestValidateDirectoryPath:
         session_id = session_workspace.name
         monkeypatch.chdir(session_workspace.parent.parent.parent)
 
-        resolved, error = validate_directory_path(
+        _resolved, error = validate_directory_path(
             "sources",
             session_id=session_id,
             check_exists=True,
@@ -262,7 +262,7 @@ class TestReadFileContent:
         """Test reading a non-existent file returns error."""
         nonexistent = temp_dir / "nonexistent.txt"
 
-        result, error = await read_file_content(nonexistent)
+        _result, error = await read_file_content(nonexistent)
         assert error is not None
         assert "Failed to read file" in error or "No such file" in error
 

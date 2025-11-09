@@ -53,11 +53,13 @@ class TestSessionBuilder:
 
     def test_builder_fluent_chaining(self, mock_agent: Mock) -> None:
         """Test fluent method chaining."""
-        builder = (SessionBuilder("chat_test")
-                  .with_in_memory_storage()
-                  .with_agent(mock_agent)
-                  .with_model("gpt-4o")
-                  .with_threshold(0.8))
+        builder = (
+            SessionBuilder("chat_test")
+            .with_in_memory_storage()
+            .with_agent(mock_agent)
+            .with_model("gpt-4o")
+            .with_threshold(0.8)
+        )
         assert builder._session_id == "chat_test"
         assert builder._agent == mock_agent
 
@@ -65,7 +67,7 @@ class TestSessionBuilder:
     def test_builder_build(self, mock_session_class: Mock) -> None:
         """Test building session instance."""
         builder = SessionBuilder("chat_test").with_model("gpt-4o")
-        session = builder.build()
+        _session = builder.build()
         # Verify TokenAwareSQLiteSession was instantiated
         mock_session_class.assert_called_once()
 
@@ -93,9 +95,7 @@ class TestTokenAwareSQLiteSession:
     @patch("core.session.SQLiteSession.__init__", return_value=None)
     @patch("core.session.SQLiteSession.get_items", new_callable=AsyncMock)
     @patch("core.session.count_tokens")
-    def test_calculate_total_tokens(
-        self, mock_count_tokens: Mock, mock_get_items: AsyncMock, mock_init: Mock
-    ) -> None:
+    def test_calculate_total_tokens(self, mock_count_tokens: Mock, mock_get_items: AsyncMock, mock_init: Mock) -> None:
         """Test calculating total tokens from items."""
         mock_get_items.return_value = []
         mock_count_tokens.return_value = {"exact_tokens": 10}
@@ -173,9 +173,7 @@ class TestTokenAwareSQLiteSession:
 
     @patch("core.session.SQLiteSession.__init__", return_value=None)
     @patch("core.session.SQLiteSession.get_items", new_callable=AsyncMock)
-    async def test_add_items_without_full_history_raises(
-        self, mock_get_items: AsyncMock, mock_init: Mock
-    ) -> None:
+    async def test_add_items_without_full_history_raises(self, mock_get_items: AsyncMock, mock_init: Mock) -> None:
         """Test that adding items without full_history_store raises error."""
         mock_get_items.return_value = []
         session = TokenAwareSQLiteSession(
@@ -192,7 +190,7 @@ class TestTokenAwareSQLiteSession:
         # Should raise RuntimeError
         try:
             await session.add_items(items)
-            assert False, "Should have raised RuntimeError"
+            raise AssertionError("Should have raised RuntimeError")
         except RuntimeError as e:
             assert "CRITICAL" in str(e)
 
@@ -276,7 +274,7 @@ class TestTokenAwareSQLiteSession:
         with session._skip_full_history_context():
             assert session._skip_full_history is True
 
-        assert session._skip_full_history is False
+        assert session._skip_full_history is False  # type: ignore[unreachable]
 
 
 class TestTokenCounting:
@@ -321,9 +319,7 @@ class TestTokenCounting:
         item = {
             "role": "assistant",
             "content": "Let me check that",
-            "tool_calls": [
-                {"function": {"name": "read_file", "arguments": '{"path": "test.txt"}'}}
-            ],
+            "tool_calls": [{"function": {"name": "read_file", "arguments": '{"path": "test.txt"}'}}],
         }
         tokens = session._count_item_tokens(item)
         assert tokens > 0
@@ -350,9 +346,7 @@ class TestSummarization:
         mock_init: Mock,
     ) -> None:
         """Test summarization with agent."""
-        mock_get_items.return_value = [
-            {"role": "user", "content": f"Message {i}"} for i in range(20)
-        ]
+        mock_get_items.return_value = [{"role": "user", "content": f"Message {i}"} for i in range(20)]
 
         # Mock count_tokens to return simple dict
         mock_count_tokens.return_value = {"exact_tokens": 100}

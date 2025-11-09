@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 
 from pathlib import Path
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -35,9 +35,7 @@ class TestListDirectory:
         assert len(data["items"]) >= 2
 
     @patch("tools.file_operations.validate_directory_path")
-    def test_list_directory_with_session_isolation(
-        self, mock_validate: Mock, session_workspace: Path
-    ) -> None:
+    def test_list_directory_with_session_isolation(self, mock_validate: Mock, session_workspace: Path) -> None:
         """Test listing directory with session isolation."""
         mock_validate.return_value = (session_workspace / "sources", None)
 
@@ -220,9 +218,7 @@ class TestSearchFiles:
 
     @pytest.mark.asyncio
     @patch("tools.file_operations.validate_directory_path")
-    async def test_search_files_success(
-        self, mock_validate: Mock, temp_dir: Path
-    ) -> None:
+    async def test_search_files_success(self, mock_validate: Mock, temp_dir: Path) -> None:
         """Test searching files successfully."""
         # Create test files
         (temp_dir / "test1.py").touch()
@@ -239,9 +235,7 @@ class TestSearchFiles:
 
     @pytest.mark.asyncio
     @patch("tools.file_operations.validate_directory_path")
-    async def test_search_files_with_max_results(
-        self, mock_validate: Mock, temp_dir: Path
-    ) -> None:
+    async def test_search_files_with_max_results(self, mock_validate: Mock, temp_dir: Path) -> None:
         """Test search files respects max_results."""
         # Create many files
         for i in range(20):
@@ -258,9 +252,7 @@ class TestSearchFiles:
 
     @pytest.mark.asyncio
     @patch("tools.file_operations.validate_directory_path")
-    async def test_search_files_no_matches(
-        self, mock_validate: Mock, temp_dir: Path
-    ) -> None:
+    async def test_search_files_no_matches(self, mock_validate: Mock, temp_dir: Path) -> None:
         """Test search files with no matches."""
         mock_validate.return_value = (temp_dir, None)
 
@@ -273,9 +265,7 @@ class TestSearchFiles:
 
     @pytest.mark.asyncio
     @patch("tools.file_operations.validate_directory_path")
-    async def test_search_files_with_session_id(
-        self, mock_validate: Mock, session_workspace: Path
-    ) -> None:
+    async def test_search_files_with_session_id(self, mock_validate: Mock, session_workspace: Path) -> None:
         """Test search files with session isolation."""
         mock_validate.return_value = (session_workspace / "sources", None)
 

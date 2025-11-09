@@ -37,18 +37,22 @@ class TestHandleSessionCommand:
         mock_app_state.mcp_servers = {}
 
         # Mock switch_to_session dependencies (imported inside function)
-        with patch("tools.wrappers.create_session_aware_tools", return_value=[]), \
-             patch("integrations.mcp_registry.filter_mcp_servers", return_value=[]), \
-             patch("core.agent.create_agent"), \
-             patch("integrations.sdk_token_tracker.connect_session"), \
-             patch("core.session_commands.SessionBuilder") as mock_builder:
+        with (
+            patch("tools.wrappers.create_session_aware_tools", return_value=[]),
+            patch("integrations.mcp_registry.filter_mcp_servers", return_value=[]),
+            patch("core.agent.create_agent"),
+            patch("integrations.sdk_token_tracker.connect_session"),
+            patch("core.session_commands.SessionBuilder") as mock_builder,
+        ):
             # Mock SessionBuilder chain - session needs async get_items()
             mock_session_instance = Mock()
             mock_session_instance.get_items = AsyncMock(return_value=[])
             mock_session_instance.items = []
             mock_session_instance.total_tokens = 0
             mock_session_instance.accumulated_tool_tokens = 0
-            mock_builder.return_value.with_persistent_storage.return_value.with_agent.return_value.with_model.return_value.with_threshold.return_value.with_full_history.return_value.with_session_manager.return_value.build.return_value = mock_session_instance
+            mock_builder.return_value.with_persistent_storage.return_value.with_agent.return_value.with_model.return_value.with_threshold.return_value.with_full_history.return_value.with_session_manager.return_value.build.return_value = (
+                mock_session_instance
+            )
 
             result = await handle_session_command(mock_app_state, "new", {})
 
@@ -111,18 +115,22 @@ class TestHandleSessionCommand:
         mock_app_state.mcp_servers = {}
 
         # Mock switch_to_session dependencies (imported inside function)
-        with patch("tools.wrappers.create_session_aware_tools", return_value=[]), \
-             patch("integrations.mcp_registry.filter_mcp_servers", return_value=[]), \
-             patch("core.agent.create_agent"), \
-             patch("integrations.sdk_token_tracker.connect_session"), \
-             patch("core.session_commands.SessionBuilder") as mock_builder:
+        with (
+            patch("tools.wrappers.create_session_aware_tools", return_value=[]),
+            patch("integrations.mcp_registry.filter_mcp_servers", return_value=[]),
+            patch("core.agent.create_agent"),
+            patch("integrations.sdk_token_tracker.connect_session"),
+            patch("core.session_commands.SessionBuilder") as mock_builder,
+        ):
             # Mock SessionBuilder chain - session needs async get_items()
             mock_session_instance = Mock()
             mock_session_instance.get_items = AsyncMock(return_value=[])
             mock_session_instance.items = []
             mock_session_instance.total_tokens = 0
             mock_session_instance.accumulated_tool_tokens = 0
-            mock_builder.return_value.with_persistent_storage.return_value.with_agent.return_value.with_model.return_value.with_threshold.return_value.with_full_history.return_value.with_session_manager.return_value.build.return_value = mock_session_instance
+            mock_builder.return_value.with_persistent_storage.return_value.with_agent.return_value.with_model.return_value.with_threshold.return_value.with_full_history.return_value.with_session_manager.return_value.build.return_value = (
+                mock_session_instance
+            )
 
             result = await handle_session_command(
                 mock_app_state,

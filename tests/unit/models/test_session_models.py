@@ -8,15 +8,12 @@ from __future__ import annotations
 import json
 
 from datetime import datetime
-from typing import Any
-from unittest.mock import Mock, patch
 
 import pytest
 
 from pydantic import ValidationError
 
 from models.session_models import (
-    ContentItem,
     CreateSessionCommand,
     DeleteSessionCommand,
     ListSessionsCommand,
@@ -270,7 +267,7 @@ class TestSwitchSessionCommand:
     def test_switch_command_requires_session_id(self) -> None:
         """Test that session_id is required."""
         with pytest.raises(ValidationError):
-            SwitchSessionCommand()  # type: ignore
+            SwitchSessionCommand()
 
 
 class TestDeleteSessionCommand:
@@ -285,7 +282,7 @@ class TestDeleteSessionCommand:
     def test_delete_command_requires_session_id(self) -> None:
         """Test that session_id is required."""
         with pytest.raises(ValidationError):
-            DeleteSessionCommand()  # type: ignore
+            DeleteSessionCommand()
 
 
 class TestListSessionsCommand:
@@ -331,7 +328,7 @@ class TestRenameSessionCommand:
     def test_rename_command_requires_fields(self) -> None:
         """Test that required fields must be provided."""
         with pytest.raises(ValidationError):
-            RenameSessionCommand()  # type: ignore
+            RenameSessionCommand()
 
     def test_rename_title_validation(self) -> None:
         """Test title validation on rename."""

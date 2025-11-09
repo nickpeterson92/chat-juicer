@@ -6,6 +6,7 @@ Tests event handling and IPC conversion.
 from __future__ import annotations
 
 import json
+
 from unittest.mock import Mock
 
 from integrations.event_handlers import (

@@ -7,8 +7,6 @@ from __future__ import annotations
 
 from unittest.mock import Mock, patch
 
-import pytest
-
 from utils.client_factory import (
     create_http_client,
     create_openai_client,
@@ -66,10 +64,7 @@ class TestCreateOpenAIClient:
             mock_client = Mock()
             mock_async_openai.return_value = mock_client
 
-            result = create_openai_client(
-                api_key="test-key",
-                base_url="https://api.example.com"
-            )
+            result = create_openai_client(api_key="test-key", base_url="https://api.example.com")
 
             assert result is mock_client
             call_kwargs = mock_async_openai.call_args[1]
@@ -83,10 +78,7 @@ class TestCreateOpenAIClient:
             mock_http_client = Mock()
             mock_async_openai.return_value = mock_client
 
-            result = create_openai_client(
-                api_key="test-key",
-                http_client=mock_http_client
-            )
+            result = create_openai_client(api_key="test-key", http_client=mock_http_client)
 
             assert result is mock_client
             call_kwargs = mock_async_openai.call_args[1]
@@ -100,9 +92,7 @@ class TestCreateOpenAIClient:
             mock_async_openai.return_value = mock_client
 
             result = create_openai_client(
-                api_key="test-key",
-                base_url="https://api.example.com",
-                http_client=mock_http_client
+                api_key="test-key", base_url="https://api.example.com", http_client=mock_http_client
             )
 
             assert result is mock_client
@@ -134,10 +124,7 @@ class TestCreateSyncOpenAIClient:
             mock_client = Mock()
             mock_openai.return_value = mock_client
 
-            result = create_sync_openai_client(
-                api_key="test-key",
-                base_url="https://azure.openai.azure.com/"
-            )
+            result = create_sync_openai_client(api_key="test-key", base_url="https://azure.openai.azure.com/")
 
             assert result is mock_client
             call_kwargs = mock_openai.call_args[1]

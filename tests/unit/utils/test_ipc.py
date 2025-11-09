@@ -7,11 +7,6 @@ from __future__ import annotations
 
 import json
 
-from typing import Any
-from unittest.mock import Mock
-
-import pytest
-
 from utils.ipc import IPCManager
 
 
@@ -137,7 +132,7 @@ class TestIPCManagerSessionCommands:
         result = IPCManager.parse_session_command(raw_input)
 
         assert result is not None
-        command, data = result
+        command, _data = result
         assert command == "delete"
 
     def test_parse_session_command_list(self) -> None:
@@ -146,7 +141,7 @@ class TestIPCManagerSessionCommands:
         result = IPCManager.parse_session_command(raw_input)
 
         assert result is not None
-        command, data = result
+        command, _data = result
         assert command == "list"
 
     def test_parse_session_command_invalid_json(self) -> None:

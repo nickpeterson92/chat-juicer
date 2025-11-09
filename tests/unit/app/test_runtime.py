@@ -5,6 +5,8 @@ Tests runtime operations and event loop handling.
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
+from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -95,7 +97,7 @@ class TestProcessUserInput:
         mock_session.trigger_tokens = 10000
 
         # Create an async generator for stream_events
-        async def mock_stream():
+        async def mock_stream() -> AsyncGenerator[Any, None]:
             return
             yield  # Make this an async generator (unreachable yield)
 
@@ -111,9 +113,7 @@ class TestProcessUserInput:
     @pytest.mark.asyncio
     @patch("app.runtime.IPCManager")
     @patch("app.runtime.handle_streaming_error")
-    async def test_process_user_input_error(
-        self, mock_handle_error: Mock, mock_ipc: Mock
-    ) -> None:
+    async def test_process_user_input_error(self, mock_handle_error: Mock, mock_ipc: Mock) -> None:
         """Test processing user input with error."""
         mock_session = Mock()
         mock_session.agent = Mock()
@@ -240,10 +240,12 @@ class TestUpdateSessionMetadata:
         mock_session = Mock()
         mock_session.session_id = "chat_test"
         mock_session.accumulated_tool_tokens = 50
-        mock_session.get_items = AsyncMock(return_value=[
-            {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": "Hi"},
-        ])
+        mock_session.get_items = AsyncMock(
+            return_value=[
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi"},
+            ]
+        )
 
         mock_app_state = Mock()
         mock_app_state.session_manager = Mock()

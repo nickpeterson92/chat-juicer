@@ -16,7 +16,7 @@ class TestCreateAgent:
     @patch("core.agent.Agent")
     def test_create_agent_basic(self, mock_agent_class: Mock, mock_env: dict[str, str]) -> None:
         """Test creating agent with basic configuration."""
-        agent = create_agent(
+        _agent = create_agent(
             deployment="gpt-4o",
             instructions="Test instructions",
             tools=[],
@@ -30,7 +30,7 @@ class TestCreateAgent:
         self, mock_model_settings: Mock, mock_agent_class: Mock, mock_env: dict[str, str]
     ) -> None:
         """Test creating agent with reasoning model (o1-preview)."""
-        agent = create_agent(
+        _agent = create_agent(
             deployment="o1-preview",
             instructions="Test instructions",
             tools=[],
@@ -45,7 +45,7 @@ class TestCreateAgent:
     @patch("core.agent.Agent")
     def test_create_agent_with_non_reasoning_model(self, mock_agent_class: Mock, mock_env: dict[str, str]) -> None:
         """Test creating agent with non-reasoning model (gpt-4o)."""
-        agent = create_agent(
+        _agent = create_agent(
             deployment="gpt-4o",
             instructions="Test instructions",
             tools=[],
@@ -54,7 +54,7 @@ class TestCreateAgent:
         )
         mock_agent_class.assert_called_once()
         # Should NOT have model_settings for non-reasoning model
-        call_args = mock_agent_class.call_args
+        _call_args = mock_agent_class.call_args
         # Verify model_settings not passed or is None
 
     @patch("core.agent.Agent")
@@ -74,7 +74,7 @@ class TestCreateAgent:
     @patch("core.agent.Agent")
     def test_reasoning_effort_defaults(self, mock_agent_class: Mock, mock_env: dict[str, str]) -> None:
         """Test that reasoning effort defaults from settings."""
-        agent = create_agent(
+        _agent = create_agent(
             deployment="o1-preview",
             instructions="Test",
             tools=[],
@@ -86,7 +86,7 @@ class TestCreateAgent:
     @patch("core.agent.Agent")
     def test_invalid_reasoning_effort(self, mock_agent_class: Mock, mock_env: dict[str, str]) -> None:
         """Test that invalid reasoning effort falls back to default."""
-        agent = create_agent(
+        _agent = create_agent(
             deployment="o1-preview",
             instructions="Test",
             tools=[],
@@ -100,7 +100,7 @@ class TestCreateAgent:
     def test_agent_with_tools(self, mock_agent_class: Mock, mock_env: dict[str, str]) -> None:
         """Test creating agent with tools."""
         mock_tools = [Mock(), Mock(), Mock()]
-        agent = create_agent(
+        _agent = create_agent(
             deployment="gpt-4o",
             instructions="Test",
             tools=mock_tools,
@@ -114,7 +114,7 @@ class TestCreateAgent:
     def test_agent_with_mcp_servers(self, mock_agent_class: Mock, mock_env: dict[str, str]) -> None:
         """Test creating agent with MCP servers."""
         mock_mcp_servers = [Mock(), Mock()]
-        agent = create_agent(
+        _agent = create_agent(
             deployment="gpt-4o",
             instructions="Test",
             tools=[],
@@ -128,7 +128,7 @@ class TestCreateAgent:
     def test_agent_name_and_instructions(self, mock_agent_class: Mock, mock_env: dict[str, str]) -> None:
         """Test that agent is created with correct name and instructions."""
         instructions = "You are a helpful assistant"
-        agent = create_agent(
+        _agent = create_agent(
             deployment="gpt-4o",
             instructions=instructions,
             tools=[],

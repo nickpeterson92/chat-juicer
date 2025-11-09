@@ -71,14 +71,17 @@ class TestCountTokens:
 
         assert "exact_tokens" in result
 
-    @pytest.mark.parametrize("model_name", [
-        "gpt-4o",
-        "gpt-4o-mini",
-        "gpt-4-turbo",
-        "gpt-3.5-turbo",
-        "o1-preview",
-        "o1-mini",
-    ])
+    @pytest.mark.parametrize(
+        "model_name",
+        [
+            "gpt-4o",
+            "gpt-4o-mini",
+            "gpt-4-turbo",
+            "gpt-3.5-turbo",
+            "o1-preview",
+            "o1-mini",
+        ],
+    )
     def test_count_tokens_different_models(self, model_name: str, mock_tiktoken: Mock) -> None:
         """Test counting tokens with different model names."""
         text = "Test text"
@@ -165,9 +168,10 @@ def hello_world():
     def test_count_tokens_unknown_model_fallback(self) -> None:
         """Test that unknown model falls back to cl100k_base encoding."""
         # Mock tiktoken to simulate unknown model
-        with patch("utils.token_utils.tiktoken.encoding_for_model") as mock_encoding_for_model, \
-             patch("utils.token_utils.tiktoken.get_encoding") as mock_get_encoding:
-
+        with (
+            patch("utils.token_utils.tiktoken.encoding_for_model") as mock_encoding_for_model,
+            patch("utils.token_utils.tiktoken.get_encoding") as mock_get_encoding,
+        ):
             # Simulate KeyError for unknown model
             mock_encoding_for_model.side_effect = KeyError("Unknown model")
 

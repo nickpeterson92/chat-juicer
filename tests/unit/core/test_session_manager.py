@@ -123,7 +123,7 @@ class TestSessionManager:
             manager = SessionManager(metadata_path=metadata_path)
 
             # Create a session
-            session = manager.create_session(title="Empty Session")
+            _session = manager.create_session(title="Empty Session")
 
             # Cleanup (should remove sessions with message_count=0 and old enough)
             deleted = manager.cleanup_empty_sessions(max_age_hours=0)
@@ -133,9 +133,7 @@ class TestSessionManager:
 
     @pytest.mark.asyncio
     @patch("core.session_manager.Runner.run", new_callable=AsyncMock)
-    async def test_generate_session_title(
-        self, mock_runner_run: AsyncMock, temp_dir: Path
-    ) -> None:
+    async def test_generate_session_title(self, mock_runner_run: AsyncMock, temp_dir: Path) -> None:
         """Test generating session title with Agent."""
         with patch("pathlib.Path.cwd", return_value=temp_dir):
             metadata_path = temp_dir / "sessions.json"

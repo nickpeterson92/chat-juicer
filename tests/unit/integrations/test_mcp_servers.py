@@ -124,6 +124,7 @@ class TestMCPServersConfiguration:
         """Test that MCP servers module exists."""
         try:
             import integrations.mcp_servers
+
             assert integrations.mcp_servers is not None
         except ImportError:
             # Module may not have much testable content

@@ -11,8 +11,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import pytest
-
 from utils.json_utils import json_compact, json_pretty, json_safe, safe_json_dumps
 
 
@@ -116,6 +114,7 @@ class TestJsonSafe:
 
     def test_custom_object_with_str(self) -> None:
         """Test handling of custom objects with __str__."""
+
         class CustomObject:
             def __str__(self) -> str:
                 return "CustomObject"
@@ -270,6 +269,7 @@ class TestSafeJsonDumps:
 
     def test_safe_json_dumps_with_default_func(self) -> None:
         """Test safe_json_dumps with custom default function."""
+
         def custom_default(obj: Any) -> str:
             return f"CUSTOM:{obj}"
 
@@ -281,6 +281,7 @@ class TestSafeJsonDumps:
 
     def test_safe_json_dumps_error_handling(self) -> None:
         """Test safe_json_dumps error handling with unserializable object."""
+
         # Create an object that will fail even with str() fallback
         # by raising an exception in __str__
         class BadObject:
