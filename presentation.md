@@ -1,4 +1,4 @@
-# AI Agents & Wishgate
+# AI Agents & Chat Juicer
 ## From Fundamentals to Production Implementation
 
 ---
@@ -267,11 +267,11 @@ graph TD
 
 ---
 
-## Part 2: Wishgate Architecture
+## Part 2: Chat Juicer Architecture
 
 ---
 
-### What Is Wishgate?
+### What Is Chat Juicer?
 
 **Production-Grade Desktop AI Assistant**
 
@@ -582,7 +582,7 @@ mcp_servers = await setup_mcp_servers()
 
 # Agent creation with MCP
 agent = Agent(
-    name="Wishgate",
+    name="Chat Juicer",
     model=deployment,
     instructions=SYSTEM_INSTRUCTIONS,
     tools=NATIVE_TOOLS,
@@ -789,7 +789,7 @@ make db-shell      # Interactive SQLite shell
 
 ---
 
-### Wishgate Innovations
+### Chat Juicer Innovations
 
 1. **Layered Persistence**: Solves LLM optimization vs UX tradeoff
 2. **Token-Aware Sessions**: Automatic summarization at 20% threshold
@@ -821,7 +821,7 @@ make db-shell      # Interactive SQLite shell
 
 **Documentation**: README, architecture guides, API docs
 
-**Code**: https://github.com/yourusername/wishgate
+**Code**: https://github.com/yourusername/chat-juicer
 
 **Contact**: [Your contact info]
 
@@ -838,7 +838,7 @@ make db-shell      # Interactive SQLite shell
 - Tool calling best practices
 - MCP server development
 
-**Wishgate Documentation**:
+**Chat Juicer Documentation**:
 - `docs/agent-runner-migration-analysis.md`
 - `docs/layered-persistence-architecture.md`
 - `docs/token-streaming-implementation.md`

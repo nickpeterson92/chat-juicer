@@ -72,6 +72,37 @@ test: ## Run syntax validation and tests
 	@python3 -m compileall src/ || python -m compileall src/
 	@echo "$(GREEN)✓ All tests passed$(NC)"
 
+test-unit: ## Run unit tests with coverage
+	@echo "$(BLUE)Running unit tests with coverage...$(NC)"
+	@if [ -f ".juicer/bin/pytest" ]; then \
+		.juicer/bin/pytest tests/ -v; \
+	else \
+		echo "$(YELLOW)⚠ Pytest not installed in .juicer venv$(NC)"; \
+		echo "$(BLUE)Run: make install-dev$(NC)"; \
+		exit 1; \
+	fi
+
+test-unit-fast: ## Run unit tests without coverage (faster)
+	@echo "$(BLUE)Running unit tests (fast mode)...$(NC)"
+	@if [ -f ".juicer/bin/pytest" ]; then \
+		.juicer/bin/pytest tests/ -v --no-cov; \
+	else \
+		echo "$(YELLOW)⚠ Pytest not installed in .juicer venv$(NC)"; \
+		echo "$(BLUE)Run: make install-dev$(NC)"; \
+		exit 1; \
+	fi
+
+test-coverage: ## Generate coverage report
+	@echo "$(BLUE)Generating coverage report...$(NC)"
+	@if [ -f ".juicer/bin/pytest" ]; then \
+		.juicer/bin/pytest tests/ --cov=src --cov-report=html --cov-report=term; \
+		echo "$(GREEN)✓ Coverage report generated at htmlcov/index.html$(NC)"; \
+	else \
+		echo "$(YELLOW)⚠ Pytest not installed in .juicer venv$(NC)"; \
+		echo "$(BLUE)Run: make install-dev$(NC)"; \
+		exit 1; \
+	fi
+
 lint: ## Run ruff linter on Python code
 	@echo "$(BLUE)Running ruff linter...$(NC)"
 	@if [ -f ".juicer/bin/ruff" ]; then \

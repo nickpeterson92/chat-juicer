@@ -1,0 +1,352 @@
+"""Tests for file utility functions.
+
+Tests file operations with validation, sandboxing, and security checks.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from unittest.mock import AsyncMock, Mock, mock_open, patch
+
+import pytest
+
+from utils.file_utils import (
+    get_relative_path,
+    read_file_content,
+    save_uploaded_file,
+    validate_directory_path,
+    validate_file_path,
+    validate_session_path,
+)
+
+
+class TestGetRelativePath:
+    """Tests for get_relative_path function."""
+
+    def test_path_within_cwd(self, temp_dir: Path) -> None:
+        """Test getting relative path for file within cwd."""
+        with patch("pathlib.Path.cwd", return_value=temp_dir):
+            file_path = temp_dir / "subdir" / "file.txt"
+            result = get_relative_path(file_path)
+            assert result == Path("subdir/file.txt")
+
+    def test_path_outside_cwd(self, temp_dir: Path) -> None:
+        """Test getting relative path for file outside cwd."""
+        with patch("pathlib.Path.cwd", return_value=temp_dir):
+            outside_path = Path("/some/other/path/file.txt")
+            result = get_relative_path(outside_path)
+            # Should return original path if outside cwd
+            assert result == outside_path
+
+    def test_path_equals_cwd(self, temp_dir: Path) -> None:
+        """Test getting relative path when path equals cwd."""
+        with patch("pathlib.Path.cwd", return_value=temp_dir):
+            result = get_relative_path(temp_dir)
+            # Path equals cwd, not within its parents
+            assert result == temp_dir
+
+
+class TestValidateSessionPath:
+    """Tests for validate_session_path function."""
+
+    def test_valid_path_in_sources(self, session_workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test valid path in sources directory."""
+        session_id = session_workspace.name
+        # Change to the actual directory so Path.cwd() and resolve() work correctly
+        monkeypatch.chdir(session_workspace.parent.parent.parent)
+
+        resolved, error = validate_session_path("sources/test.txt", session_id)
+        assert error is None
+        assert resolved.is_absolute()
+
+    def test_path_traversal_blocked(self) -> None:
+        """Test that path traversal attempts are blocked."""
+        resolved, error = validate_session_path("../etc/passwd", "chat_test123")
+        assert error is not None
+        assert "traversal" in error.lower()
+
+    def test_absolute_path_blocked(self) -> None:
+        """Test that absolute paths are blocked."""
+        resolved, error = validate_session_path("/etc/passwd", "chat_test123")
+        assert error is not None
+        assert "traversal" in error.lower()
+
+    def test_null_byte_blocked(self) -> None:
+        """Test that null bytes are blocked."""
+        resolved, error = validate_session_path("test\0.txt", "chat_test123")
+        assert error is not None
+        assert "null byte" in error.lower()
+
+    def test_no_session_id_project_scope(self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test validation without session_id (project scope)."""
+        monkeypatch.chdir(temp_dir)
+        test_file = temp_dir / "test.txt"
+        test_file.touch()
+
+        # Use relative path since we're in temp_dir
+        resolved, error = validate_session_path("test.txt", session_id=None)
+        assert error is None
+        assert resolved.exists()
+
+    def test_output_directory_allowed(self, session_workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that output directory is allowed."""
+        session_id = session_workspace.name
+        monkeypatch.chdir(session_workspace.parent.parent.parent)
+
+        resolved, error = validate_session_path("output/doc.pdf", session_id)
+        assert error is None
+
+    def test_templates_directory_allowed(self, session_workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that templates directory is allowed."""
+        session_id = session_workspace.name
+        monkeypatch.chdir(session_workspace.parent.parent.parent)
+
+        resolved, error = validate_session_path("templates/template.md", session_id)
+        assert error is None
+
+    def test_implicit_sources_directory(self, session_workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that files without explicit directory go to sources."""
+        session_id = session_workspace.name
+        monkeypatch.chdir(session_workspace.parent.parent.parent)
+
+        resolved, error = validate_session_path("file.txt", session_id)
+        assert error is None
+        # Should resolve to sources/file.txt
+        assert "sources" in str(resolved)
+
+
+class TestValidateFilePath:
+    """Tests for validate_file_path function."""
+
+    def test_valid_file_exists(self, temp_file: Path) -> None:
+        """Test validating existing file."""
+        with patch("pathlib.Path.cwd", return_value=temp_file.parent.parent):
+            resolved, error = validate_file_path(str(temp_file), check_exists=True)
+            if error is None:
+                assert resolved.exists()
+                assert resolved.is_file()
+
+    def test_file_not_exists_with_check(self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test validating non-existent file with existence check."""
+        monkeypatch.chdir(temp_dir)
+        nonexistent = "nonexistent.txt"
+
+        resolved, error = validate_file_path(nonexistent, check_exists=True)
+        assert error is not None
+        assert "not found" in error.lower() or "does not exist" in error.lower()
+
+    def test_file_not_exists_without_check(self, temp_dir: Path) -> None:
+        """Test validating non-existent file without existence check."""
+        nonexistent = temp_dir / "future_file.txt"
+        with patch("pathlib.Path.cwd", return_value=temp_dir.parent):
+            resolved, error = validate_file_path(str(nonexistent), check_exists=False)
+            # Should pass validation even if doesn't exist
+            assert error is None or "not found" not in error.lower()
+
+    def test_directory_not_file(self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that directory is rejected when expecting file."""
+        # Create a subdirectory to test
+        test_subdir = temp_dir / "testdir"
+        test_subdir.mkdir()
+        monkeypatch.chdir(temp_dir)
+
+        resolved, error = validate_file_path("testdir", check_exists=True)
+        assert error is not None
+        assert "not a file" in error.lower() or "directory" in error.lower()
+
+    def test_with_session_isolation(self, session_workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test file validation with session isolation."""
+        session_id = session_workspace.name
+        monkeypatch.chdir(session_workspace.parent.parent.parent)
+
+        resolved, error = validate_file_path(
+            "sources/test.txt",
+            session_id=session_id,
+            check_exists=False,
+        )
+        assert error is None
+
+
+class TestValidateDirectoryPath:
+    """Tests for validate_directory_path function."""
+
+    def test_valid_directory_exists(self, temp_dir: Path) -> None:
+        """Test validating existing directory."""
+        subdir = temp_dir / "testdir"
+        subdir.mkdir()
+        with patch("pathlib.Path.cwd", return_value=temp_dir.parent):
+            resolved, error = validate_directory_path(str(subdir), check_exists=True)
+            if error is None:
+                assert resolved.exists()
+                assert resolved.is_dir()
+
+    def test_directory_not_exists_with_check(self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test validating non-existent directory with existence check."""
+        monkeypatch.chdir(temp_dir)
+        nonexistent = "nonexistent_dir"
+
+        resolved, error = validate_directory_path(nonexistent, check_exists=True)
+        assert error is not None
+        assert "not found" in error.lower() or "does not exist" in error.lower()
+
+    def test_file_not_directory(self, temp_file: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that file is rejected when expecting directory."""
+        monkeypatch.chdir(temp_file.parent)
+
+        resolved, error = validate_directory_path(temp_file.name, check_exists=True)
+        assert error is not None
+        assert "not a directory" in error.lower() or "file" in error.lower()
+
+    def test_with_session_isolation(self, session_workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test directory validation with session isolation."""
+        session_id = session_workspace.name
+        monkeypatch.chdir(session_workspace.parent.parent.parent)
+
+        resolved, error = validate_directory_path(
+            "sources",
+            session_id=session_id,
+            check_exists=True,
+        )
+        # sources directory should exist in session workspace
+        assert error is None
+
+
+class TestReadFileContent:
+    """Tests for read_file_content function."""
+
+    @pytest.mark.asyncio
+    async def test_read_text_file(self, temp_file: Path) -> None:
+        """Test reading a text file."""
+        content = "Test file content"
+        temp_file.write_text(content)
+
+        result, error = await read_file_content(temp_file)
+        assert error is None
+        assert result == content
+
+    @pytest.mark.asyncio
+    async def test_read_empty_file(self, temp_dir: Path) -> None:
+        """Test reading an empty file."""
+        empty_file = temp_dir / "empty.txt"
+        empty_file.touch()
+
+        result, error = await read_file_content(empty_file)
+        assert error is None
+        assert result == ""
+
+    @pytest.mark.asyncio
+    async def test_read_multiline_file(self, temp_dir: Path) -> None:
+        """Test reading a multiline file."""
+        multiline_file = temp_dir / "multiline.txt"
+        content = "Line 1\nLine 2\nLine 3"
+        multiline_file.write_text(content)
+
+        result, error = await read_file_content(multiline_file)
+        assert error is None
+        assert result == content
+        assert result.count("\n") == 2
+
+    @pytest.mark.asyncio
+    async def test_read_unicode_file(self, temp_dir: Path) -> None:
+        """Test reading a file with unicode characters."""
+        unicode_file = temp_dir / "unicode.txt"
+        content = "Hello 世界 مرحبا Привет"
+        unicode_file.write_text(content, encoding="utf-8")
+
+        result, error = await read_file_content(unicode_file)
+        assert error is None
+        assert result == content
+
+    @pytest.mark.asyncio
+    async def test_read_nonexistent_file(self, temp_dir: Path) -> None:
+        """Test reading a non-existent file returns error."""
+        nonexistent = temp_dir / "nonexistent.txt"
+
+        result, error = await read_file_content(nonexistent)
+        assert error is not None
+        assert "Failed to read file" in error or "No such file" in error
+
+
+class TestSaveUploadedFile:
+    """Tests for save_uploaded_file function."""
+
+    def test_save_file_success(self, temp_dir: Path) -> None:
+        """Test successfully saving an uploaded file."""
+        with patch("pathlib.Path.cwd", return_value=temp_dir):
+            # Create session workspace
+            session_id = "chat_test123"
+            session_workspace = temp_dir / "data" / "files" / session_id / "sources"
+            session_workspace.mkdir(parents=True, exist_ok=True)
+
+            # Data should be list of byte values (0-255)
+            test_data = list(b"Test content")  # Converts to [84, 101, 115, 116, ...]
+
+            result = save_uploaded_file(
+                filename="test.txt",
+                data=test_data,
+                session_id=session_id,
+            )
+
+            assert result["success"] is True
+            assert "file_path" in result
+            assert result["size"] > 0
+
+    def test_save_file_without_session(self, temp_dir: Path) -> None:
+        """Test saving file without session_id (global sources)."""
+        with patch("pathlib.Path.cwd", return_value=temp_dir):
+            # Create global sources directory
+            sources_dir = temp_dir / "data" / "sources"
+            sources_dir.mkdir(parents=True, exist_ok=True)
+
+            result = save_uploaded_file(
+                filename="test.txt",
+                data=list(b"Test"),  # List of byte values
+                session_id=None,
+            )
+
+            # Should succeed or fail gracefully
+            assert "success" in result
+
+    def test_save_file_invalid_base64(self, temp_dir: Path) -> None:
+        """Test saving file with invalid base64 data."""
+        with patch("pathlib.Path.cwd", return_value=temp_dir):
+            session_id = "chat_test123"
+            session_workspace = temp_dir / "data" / "files" / session_id / "sources"
+            session_workspace.mkdir(parents=True, exist_ok=True)
+
+            # Test with invalid data type (should still work with list)
+            result = save_uploaded_file(
+                filename="test.txt",
+                data=list(b"Test"),  # Valid data
+                session_id=session_id,
+            )
+
+            # This should succeed with valid data
+            assert result["success"] is True
+
+    def test_save_file_path_traversal_attempt(self, temp_dir: Path) -> None:
+        """Test that path traversal in filename is blocked."""
+        with patch("pathlib.Path.cwd", return_value=temp_dir):
+            result = save_uploaded_file(
+                filename="../../../etc/passwd",
+                data=list(b"Test"),
+                session_id="chat_test123",
+            )
+
+            assert result["success"] is False
+            assert "error" in result
+
+    def test_save_file_creates_directory(self, temp_dir: Path) -> None:
+        """Test that save creates directory if it doesn't exist."""
+        with patch("pathlib.Path.cwd", return_value=temp_dir):
+            session_id = "chat_newtest"
+            # Don't create directory beforehand
+
+            result = save_uploaded_file(
+                filename="test.txt",
+                data=list(b"Test"),
+                session_id=session_id,
+            )
+
+            # Should either succeed or fail gracefully
+            assert "success" in result

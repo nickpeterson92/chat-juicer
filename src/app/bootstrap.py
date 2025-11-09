@@ -87,11 +87,19 @@ async def initialize_application() -> AppState:
     except Exception as e:
         print(f"Error: Configuration validation failed: {e}")
         print("Please check your .env file has required variables:")
-        if hasattr(settings, "api_provider") and settings.api_provider == "openai":
-            print("API_PROVIDER=openai")
-            print("OPENAI_API_KEY")
-            print("OPENAI_MODEL")
-        else:
+        # Try to access settings, but if it's undefined, show default Azure instructions
+        try:
+            if settings.api_provider == "openai":
+                print("API_PROVIDER=openai")
+                print("OPENAI_API_KEY")
+                print("OPENAI_MODEL")
+            else:
+                print("API_PROVIDER=azure (default)")
+                print("AZURE_OPENAI_API_KEY")
+                print("AZURE_OPENAI_ENDPOINT")
+                print("AZURE_OPENAI_DEPLOYMENT")
+        except (NameError, UnboundLocalError):
+            # If settings is not defined, show default Azure instructions
             print("API_PROVIDER=azure (default)")
             print("AZURE_OPENAI_API_KEY")
             print("AZURE_OPENAI_ENDPOINT")

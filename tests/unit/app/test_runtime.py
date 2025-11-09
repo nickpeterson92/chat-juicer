@@ -1,0 +1,312 @@
+"""Tests for application runtime module.
+
+Tests runtime operations and event loop handling.
+"""
+
+from __future__ import annotations
+
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
+
+from app.runtime import (
+    ensure_session_exists,
+    handle_electron_ipc,
+    handle_file_upload,
+    handle_streaming_error,
+    process_user_input,
+    send_session_created_event,
+    update_session_metadata,
+)
+
+
+class TestEnsureSessionExists:
+    """Tests for ensure_session_exists function."""
+
+    @pytest.mark.asyncio
+    async def test_ensure_session_when_exists(self) -> None:
+        """Test ensure_session_exists when session already exists."""
+        mock_session = Mock()
+        mock_app_state = Mock()
+        mock_app_state.current_session = mock_session
+
+        session, is_new = await ensure_session_exists(mock_app_state)
+
+        assert session == mock_session
+        assert is_new is False
+
+    @pytest.mark.asyncio
+    @patch("app.runtime.create_session_aware_tools")
+    @patch("app.runtime.filter_mcp_servers")
+    @patch("core.agent.create_agent")  # Imported inside function
+    @patch("app.runtime.TokenAwareSQLiteSession")
+    @patch("app.runtime.connect_session")
+    async def test_ensure_session_creates_new(
+        self,
+        mock_connect: Mock,
+        mock_session_class: Mock,
+        mock_create_agent: Mock,
+        mock_filter_mcp: Mock,
+        mock_create_tools: Mock,
+    ) -> None:
+        """Test ensure_session_exists creates new session when none exists."""
+        mock_app_state = Mock()
+        mock_app_state.current_session = None
+        mock_app_state.session_manager = Mock()
+        mock_app_state.deployment = "gpt-4o"
+        mock_app_state.full_history_store = Mock()
+        mock_app_state.mcp_servers = {}
+
+        mock_session_meta = Mock()
+        mock_session_meta.session_id = "chat_new123"
+        mock_session_meta.mcp_config = []
+        mock_app_state.session_manager.create_session.return_value = mock_session_meta
+
+        mock_create_tools.return_value = []
+        mock_filter_mcp.return_value = []
+        mock_create_agent.return_value = Mock()
+        mock_session_instance = Mock()
+        mock_session_instance.get_items = AsyncMock(return_value=[])
+        mock_session_instance.total_tokens = 0
+        mock_session_instance._calculate_total_tokens.return_value = 0
+        mock_session_class.return_value = mock_session_instance
+
+        session, is_new = await ensure_session_exists(mock_app_state)
+
+        assert session is not None
+        assert is_new is True
+        mock_connect.assert_called_once()
+
+
+class TestProcessUserInput:
+    """Tests for process_user_input function."""
+
+    @pytest.mark.asyncio
+    @patch("app.runtime.IPCManager")
+    async def test_process_user_input_success(self, mock_ipc: Mock) -> None:
+        """Test processing user input successfully."""
+        mock_session = Mock()
+        mock_session.agent = Mock()
+        mock_session.should_summarize = AsyncMock(return_value=False)
+        mock_session.get_items = AsyncMock(return_value=[])
+        mock_session.calculate_items_tokens.return_value = 100
+        mock_session.accumulated_tool_tokens = 0
+        mock_session.total_tokens = 0
+        mock_session.trigger_tokens = 10000
+
+        # Create an async generator for stream_events
+        async def mock_stream():
+            return
+            yield  # Make this an async generator (unreachable yield)
+
+        mock_result = Mock()
+        mock_result.stream_events = mock_stream
+        mock_session.run_with_auto_summary = AsyncMock(return_value=mock_result)
+
+        await process_user_input(mock_session, "Test input")
+
+        mock_ipc.send_assistant_start.assert_called_once()
+        mock_ipc.send_assistant_end.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("app.runtime.IPCManager")
+    @patch("app.runtime.handle_streaming_error")
+    async def test_process_user_input_error(
+        self, mock_handle_error: Mock, mock_ipc: Mock
+    ) -> None:
+        """Test processing user input with error."""
+        mock_session = Mock()
+        mock_session.agent = Mock()
+        mock_session.should_summarize = AsyncMock(side_effect=Exception("Test error"))
+
+        await process_user_input(mock_session, "Test input")
+
+        mock_handle_error.assert_called_once()
+
+
+class TestHandleElectronIPC:
+    """Tests for handle_electron_ipc function."""
+
+    @pytest.mark.asyncio
+    async def test_handle_electron_ipc(self) -> None:
+        """Test handling Electron IPC events."""
+        mock_event = Mock()
+        mock_event.type = "test_event"
+        mock_tracker = Mock()
+
+        with patch("app.runtime.build_event_handlers") as mock_build:
+            mock_handlers = {"test_event": Mock(return_value="__JSON__test__JSON__")}
+            mock_build.return_value = mock_handlers
+
+            result = await handle_electron_ipc(mock_event, mock_tracker)
+
+            assert result == "__JSON__test__JSON__"
+
+    @pytest.mark.asyncio
+    async def test_handle_electron_ipc_no_handler(self) -> None:
+        """Test handling event with no handler."""
+        mock_event = Mock()
+        mock_event.type = "unknown_event"
+        mock_tracker = Mock()
+
+        with patch("app.runtime.build_event_handlers") as mock_build:
+            mock_build.return_value = {}
+
+            result = await handle_electron_ipc(mock_event, mock_tracker)
+
+            assert result is None
+
+
+class TestHandleStreamingError:
+    """Tests for handle_streaming_error function."""
+
+    @patch("app.runtime.IPCManager")
+    def test_handle_rate_limit_error(self, mock_ipc: Mock) -> None:
+        """Test handling rate limit error."""
+        from openai import RateLimitError
+
+        error = RateLimitError("Rate limit exceeded", response=Mock(), body=None)
+        handle_streaming_error(error)
+
+        mock_ipc.send.assert_called()
+        mock_ipc.send_assistant_end.assert_called_once()
+
+    @patch("app.runtime.IPCManager")
+    def test_handle_connection_error(self, mock_ipc: Mock) -> None:
+        """Test handling connection error."""
+        from openai import APIConnectionError
+
+        error = APIConnectionError(request=Mock())
+        handle_streaming_error(error)
+
+        mock_ipc.send.assert_called()
+        mock_ipc.send_assistant_end.assert_called_once()
+
+    @patch("app.runtime.IPCManager")
+    def test_handle_generic_error(self, mock_ipc: Mock) -> None:
+        """Test handling generic error."""
+        error = Exception("Generic error")
+        handle_streaming_error(error)
+
+        mock_ipc.send.assert_called()
+        mock_ipc.send_assistant_end.assert_called_once()
+
+
+class TestHandleFileUpload:
+    """Tests for handle_file_upload function."""
+
+    @pytest.mark.asyncio
+    @patch("app.runtime.ensure_session_exists")
+    @patch("app.runtime.save_uploaded_file")
+    @patch("app.runtime.IPCManager")
+    async def test_handle_file_upload_success(
+        self,
+        mock_ipc: Mock,
+        mock_save_file: Mock,
+        mock_ensure_session: AsyncMock,
+    ) -> None:
+        """Test handling file upload successfully."""
+        mock_session = Mock()
+        mock_ensure_session.return_value = (mock_session, False)
+
+        mock_app_state = Mock()
+        mock_app_state.session_manager = Mock()
+        mock_app_state.session_manager.current_session_id = "chat_test123"
+
+        mock_save_file.return_value = {
+            "success": True,
+            "file_path": "/test/file.txt",
+            "size": 1024,
+            "message": "Saved",
+        }
+
+        upload_data = {
+            "filename": "test.txt",
+            "data": "base64data",
+        }
+
+        result = await handle_file_upload(mock_app_state, upload_data)
+
+        assert result["success"] is True
+        mock_save_file.assert_called_once()
+
+
+class TestUpdateSessionMetadata:
+    """Tests for update_session_metadata function."""
+
+    @pytest.mark.asyncio
+    async def test_update_session_metadata(self) -> None:
+        """Test updating session metadata."""
+        mock_session = Mock()
+        mock_session.session_id = "chat_test"
+        mock_session.accumulated_tool_tokens = 50
+        mock_session.get_items = AsyncMock(return_value=[
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi"},
+        ])
+
+        mock_app_state = Mock()
+        mock_app_state.session_manager = Mock()
+        mock_app_state.session_manager.get_session.return_value = Mock(is_named=True)
+
+        await update_session_metadata(mock_app_state, mock_session)
+
+        mock_app_state.session_manager.update_session.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_update_session_metadata_with_title_generation(self) -> None:
+        """Test updating metadata triggers title generation."""
+        mock_session = Mock()
+        mock_session.session_id = "chat_test"
+        mock_session.accumulated_tool_tokens = 0
+
+        # Create items with enough user messages to trigger naming
+        items = []
+        for i in range(3):  # SESSION_NAMING_TRIGGER_MESSAGES = 3
+            items.append({"role": "user", "content": f"Message {i}"})
+            items.append({"role": "assistant", "content": f"Response {i}"})
+
+        mock_session.get_items = AsyncMock(return_value=items)
+
+        mock_app_state = Mock()
+        mock_app_state.session_manager = Mock()
+        mock_app_state.session_manager.get_session.return_value = Mock(is_named=False)
+        mock_app_state.session_manager.generate_session_title = AsyncMock()
+
+        await update_session_metadata(mock_app_state, mock_session)
+
+        # Title generation should be triggered in background
+        mock_app_state.session_manager.update_session.assert_called_once()
+
+
+class TestSendSessionCreatedEvent:
+    """Tests for send_session_created_event function."""
+
+    @patch("app.runtime.IPCManager")
+    def test_send_session_created_event(self, mock_ipc: Mock) -> None:
+        """Test sending session created event."""
+        mock_app_state = Mock()
+        mock_app_state.session_manager = Mock()
+        mock_app_state.session_manager.get_session.return_value = Mock(
+            session_id="chat_new",
+            title="New Session",
+        )
+
+        send_session_created_event(mock_app_state, "chat_new")
+
+        mock_ipc.send.assert_called_once()
+        call_args = mock_ipc.send.call_args[0][0]
+        assert call_args["type"] == "session_created"
+        assert call_args["session_id"] == "chat_new"
+
+    @patch("app.runtime.IPCManager")
+    def test_send_session_created_event_no_session(self, mock_ipc: Mock) -> None:
+        """Test sending event when session doesn't exist."""
+        mock_app_state = Mock()
+        mock_app_state.session_manager = Mock()
+        mock_app_state.session_manager.get_session.return_value = None
+
+        send_session_created_event(mock_app_state, "chat_nonexistent")
+
+        # Should not send if session not found
+        mock_ipc.send.assert_not_called()
