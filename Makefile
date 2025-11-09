@@ -64,26 +64,40 @@ backend-only: ## Run Python backend only (for testing)
 		exit 1; \
 	fi
 
-##@ Development & Quality
+##@ Testing
 
-test: ## Run syntax validation and tests
-	@echo "$(BLUE)Running tests...$(NC)"
-	@python3 -m py_compile src/main.py || python -m py_compile src/main.py
-	@python3 -m compileall src/ || python -m compileall src/
-	@echo "$(GREEN)✓ All tests passed$(NC)"
-
-test-unit: ## Run unit tests with coverage
-	@echo "$(BLUE)Running unit tests with coverage...$(NC)"
+test: ## Run all tests (unit + integration) with coverage summary
+	@echo "$(BLUE)Running all tests with coverage...$(NC)"
 	@if [ -f ".juicer/bin/pytest" ]; then \
-		.juicer/bin/pytest tests/ -v; \
+		./scripts/run-tests.sh; \
 	else \
 		echo "$(YELLOW)⚠ Pytest not installed in .juicer venv$(NC)"; \
 		echo "$(BLUE)Run: make install-dev$(NC)"; \
 		exit 1; \
 	fi
 
-test-unit-fast: ## Run unit tests without coverage (faster)
-	@echo "$(BLUE)Running unit tests (fast mode)...$(NC)"
+test-unit: ## Run only unit tests
+	@echo "$(BLUE)Running unit tests...$(NC)"
+	@if [ -f ".juicer/bin/pytest" ]; then \
+		.juicer/bin/pytest tests/unit/ -v --no-cov; \
+	else \
+		echo "$(YELLOW)⚠ Pytest not installed in .juicer venv$(NC)"; \
+		echo "$(BLUE)Run: make install-dev$(NC)"; \
+		exit 1; \
+	fi
+
+test-integration: ## Run only integration tests
+	@echo "$(BLUE)Running integration tests...$(NC)"
+	@if [ -f ".juicer/bin/pytest" ]; then \
+		.juicer/bin/pytest tests/integration/ -v --no-cov; \
+	else \
+		echo "$(YELLOW)⚠ Pytest not installed in .juicer venv$(NC)"; \
+		echo "$(BLUE)Run: make install-dev$(NC)"; \
+		exit 1; \
+	fi
+
+test-fast: ## Run all tests without coverage (faster)
+	@echo "$(BLUE)Running all tests (fast mode)...$(NC)"
 	@if [ -f ".juicer/bin/pytest" ]; then \
 		.juicer/bin/pytest tests/ -v --no-cov; \
 	else \
@@ -92,16 +106,25 @@ test-unit-fast: ## Run unit tests without coverage (faster)
 		exit 1; \
 	fi
 
-test-coverage: ## Generate coverage report
-	@echo "$(BLUE)Generating coverage report...$(NC)"
+test-coverage: ## Generate detailed HTML coverage report
+	@echo "$(BLUE)Generating detailed coverage report...$(NC)"
 	@if [ -f ".juicer/bin/pytest" ]; then \
-		.juicer/bin/pytest tests/ --cov=src --cov-report=html --cov-report=term; \
+		COVERAGE_FILE=.coverage .juicer/bin/coverage run --source=src --omit='tests/*,**/__pycache__/*' -m pytest tests/ -q; \
+		.juicer/bin/coverage html; \
+		.juicer/bin/coverage report --skip-empty; \
 		echo "$(GREEN)✓ Coverage report generated at htmlcov/index.html$(NC)"; \
 	else \
 		echo "$(YELLOW)⚠ Pytest not installed in .juicer venv$(NC)"; \
 		echo "$(BLUE)Run: make install-dev$(NC)"; \
 		exit 1; \
 	fi
+
+test-validate: ## Validate Python syntax (compilation check)
+	@echo "$(BLUE)Validating Python syntax...$(NC)"
+	@python3 -m compileall src/ tests/ || python -m compileall src/ tests/
+	@echo "$(GREEN)✓ Syntax validation passed$(NC)"
+
+##@ Development & Quality
 
 lint: ## Run ruff linter on Python code
 	@echo "$(BLUE)Running ruff linter...$(NC)"
@@ -168,7 +191,7 @@ install-dev: ## Install development dependencies (linters, formatters, etc.)
 quality: format lint typecheck ## Run all quality checks (format, lint, typecheck)
 	@echo "$(GREEN)✓ All quality checks complete$(NC)"
 
-validate: test ## Validate Python code syntax
+validate: test-validate ## Validate Python code syntax
 	@echo "$(GREEN)✓ Validation complete$(NC)"
 
 fix: ## Auto-fix all fixable issues (format + lint with auto-fix)
@@ -189,7 +212,7 @@ fix: ## Auto-fix all fixable issues (format + lint with auto-fix)
 	fi
 	@echo "$(GREEN)✓ All fixable issues resolved$(NC)"
 
-check: ## Pre-commit validation gate (format check + lint + typecheck + test)
+check: ## Pre-commit validation gate (format check + lint + typecheck + tests)
 	@echo "$(BLUE)Running pre-commit validation checks...$(NC)"
 	@echo "$(BLUE)→ Checking code format...$(NC)"
 	@if [ -f ".juicer/bin/black" ]; then \
@@ -209,9 +232,12 @@ check: ## Pre-commit validation gate (format check + lint + typecheck + test)
 	else \
 		echo "$(YELLOW)⚠ Mypy not installed, skipping type check$(NC)"; \
 	fi
-	@echo "$(BLUE)→ Running syntax validation...$(NC)"
-	@python3 -m py_compile src/main.py || python -m py_compile src/main.py || (echo "$(RED)✗ Syntax validation failed$(NC)" && exit 1)
-	@python3 -m compileall src/ tests/ || python -m compileall src/ tests/ || (echo "$(RED)✗ Syntax validation failed$(NC)" && exit 1)
+	@echo "$(BLUE)→ Running tests...$(NC)"
+	@if [ -f ".juicer/bin/pytest" ]; then \
+		.juicer/bin/pytest tests/ -q --tb=short || (echo "$(RED)✗ Tests failed. Run: make test$(NC)" && exit 1); \
+	else \
+		echo "$(YELLOW)⚠ Pytest not installed, skipping tests$(NC)"; \
+	fi
 	@echo "$(GREEN)✓ All validation checks passed$(NC)"
 
 ##@ Documentation

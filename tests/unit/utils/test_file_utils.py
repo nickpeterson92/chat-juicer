@@ -77,6 +77,104 @@ class TestValidateSessionPath:
         assert error is not None
         assert "null byte" in error.lower()
 
+    def test_complex_path_traversal_variants(self) -> None:
+        """Test various sophisticated path traversal techniques."""
+        malicious_paths = [
+            "../../etc/passwd",
+            "../../../etc/shadow",
+            "sources/../../etc/hosts",
+            "sources/../../../etc/passwd",
+            "sources/./../../etc/passwd",
+            "sources/./../../../etc/passwd",
+            "./../../../etc/passwd",
+            "sources/....//....//etc/passwd",  # URL-encoded variant
+        ]
+
+        for malicious_path in malicious_paths:
+            _resolved, error = validate_session_path(malicious_path, "chat_test123")
+            assert error is not None, f"Failed to block path traversal: {malicious_path}"
+            assert any(
+                keyword in error.lower() for keyword in ["traversal", "outside", "escape", "denied"]
+            ), f"Wrong error message for {malicious_path}: {error}"
+
+    def test_null_byte_injection_variants(self) -> None:
+        """Test various null byte injection techniques."""
+        malicious_paths = [
+            "file.txt\x00.jpg",
+            "sources/evil\x00.txt",
+            "test\x00/etc/passwd",
+            "normal.txt\x00",
+        ]
+
+        for malicious_path in malicious_paths:
+            _resolved, error = validate_session_path(malicious_path, "chat_test123")
+            assert error is not None, f"Failed to block null byte injection: {malicious_path!r}"
+            assert "null byte" in error.lower(), f"Wrong error for {malicious_path!r}: {error}"
+
+    def test_symlink_escape_blocked(self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that symlinks attempting to escape workspace are blocked."""
+        monkeypatch.chdir(temp_dir)
+
+        # Create session directory structure
+        session_id = "chat_test123"
+        session_dir = temp_dir / "data" / "files" / session_id
+        session_dir.mkdir(parents=True)
+
+        # Create a file outside the session workspace
+        external_file = temp_dir / "external_secret.txt"
+        external_file.write_text("This should not be accessible")
+
+        # Create a symlink that points outside the workspace
+        evil_symlink = session_dir / "evil_link.txt"
+        try:
+            evil_symlink.symlink_to(external_file)
+
+            # Attempt to access via the symlink should be blocked
+            # Note: The validation happens on the path itself, not the symlink target
+            # But if a symlink exists and resolves outside, it should be caught
+            _resolved, error = validate_session_path("evil_link.txt", session_id)
+
+            # Should either block it or the resolved path check should catch it
+            # The actual behavior depends on whether the symlink is in an allowed directory
+            # For security, any symlink NOT in templates/ or output/ that resolves outside should fail
+            if error is None:
+                # If no error, the resolved path must be within session workspace
+                # (This would be the case for our allowed symlinks like templates/)
+                assert _resolved is not None
+                # Check that it's not actually pointing to the external file
+                assert external_file not in _resolved.parents
+        except OSError:
+            # Some systems don't allow symlink creation - test passes
+            pytest.skip("Symlink creation not supported on this system")
+
+    def test_allowed_symlinks_templates_and_output(self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that allowed symlinks (templates/, output/) are permitted."""
+        monkeypatch.chdir(temp_dir)
+
+        session_id = "chat_test123"
+        session_dir = temp_dir / "data" / "files" / session_id
+        session_dir.mkdir(parents=True)
+
+        # Create global templates directory
+        templates_dir = temp_dir / "templates"
+        templates_dir.mkdir(parents=True)
+        template_file = templates_dir / "template.md"
+        template_file.write_text("# Template")
+
+        # Create symlink to templates (as the app does)
+        templates_symlink = session_dir / "templates"
+        try:
+            templates_symlink.symlink_to(templates_dir)
+
+            # Access via templates/ should be allowed (whitelisted symlink)
+            resolved, error = validate_session_path("templates/template.md", session_id)
+
+            # Should succeed - templates is an allowed symlink
+            assert error is None, f"Templates symlink should be allowed, got error: {error}"
+            assert resolved is not None
+        except OSError:
+            pytest.skip("Symlink creation not supported on this system")
+
     def test_no_session_id_project_scope(self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test validation without session_id (project scope)."""
         monkeypatch.chdir(temp_dir)

@@ -218,13 +218,34 @@ addopts = [
     "--strict-config",  # Raise error on config issues
     "--tb=short",  # Shorter traceback format
 ]
-# Markers for categorizing tests
-markers = [
-    "asyncio: marks tests as async (automatically detected)",
-    "unit: marks tests as unit tests",
-    "integration: marks tests as integration tests",
-    "slow: marks tests as slow running",
+
+[tool.coverage.run]
+# Disable parallel mode to avoid database issues
+parallel = false
+# Use a single data file
+data_file = ".coverage"
+# Source packages to measure
+source = ["src"]
+# Omit test files from coverage
+omit = [
+    "tests/*",
+    "**/__pycache__/*",
+    "**/conftest.py",
 ]
+
+[tool.coverage.report]
+# Fail if coverage is below this percentage
+fail_under = 0
+# Show lines that weren't covered
+show_missing = true
+# Skip files with no executable code
+skip_empty = true
+# Precision for coverage percentage
+precision = 2
+
+[tool.coverage.html]
+# Directory for HTML coverage report
+directory = "htmlcov"
 
 [tool.black]
 line-length = 120
