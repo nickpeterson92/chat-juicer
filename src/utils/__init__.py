@@ -91,7 +91,9 @@ Example:
 
         path, error = validate_file_path("output/doc.md", check_exists=False)
         if not error:
-            await write_file_content(path, "Content here")
+            _, write_error = await write_file_content(path, "Content here")
+            if write_error:
+                print(f"Failed to write: {write_error}")
 
 See Also:
     :mod:`core.constants`: Configuration values for logging and token limits

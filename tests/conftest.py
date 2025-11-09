@@ -17,6 +17,54 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 import pytest
 
 # ============================================================================
+# Test Isolation: Cache Management
+# ============================================================================
+
+
+@pytest.fixture(autouse=True)
+def clear_token_cache() -> Generator[None, None, None]:
+    """Clear token count caches between tests to ensure isolation.
+
+    This prevents cache pollution when integration tests exercise real token
+    counting, which would otherwise interfere with unit tests that mock the
+    token counting behavior.
+    """
+    # Clear caches BEFORE test runs (so mocks can take effect)
+    try:
+        from utils import token_utils
+
+        if hasattr(token_utils, "_count_tokens_cached"):
+            token_utils._count_tokens_cached.cache_clear()
+
+        if hasattr(token_utils, "_hash_to_count_cache"):
+            token_utils._hash_to_count_cache.clear()
+
+        if hasattr(token_utils, "_encoder_cache"):
+            token_utils._encoder_cache.clear()
+
+    except (ImportError, AttributeError):
+        pass
+
+    yield  # Run test
+
+    # Clear again after test completes (cleanup)
+    try:
+        from utils import token_utils
+
+        if hasattr(token_utils, "_count_tokens_cached"):
+            token_utils._count_tokens_cached.cache_clear()
+
+        if hasattr(token_utils, "_hash_to_count_cache"):
+            token_utils._hash_to_count_cache.clear()
+
+        if hasattr(token_utils, "_encoder_cache"):
+            token_utils._encoder_cache.clear()
+
+    except (ImportError, AttributeError):
+        pass
+
+
+# ============================================================================
 # Mock External Dependencies
 # ============================================================================
 

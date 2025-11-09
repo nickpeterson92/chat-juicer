@@ -202,6 +202,30 @@ ignore_missing_imports = true
 module = "integrations.mcp_registry"
 warn_unused_ignores = false
 
+[tool.pytest.ini_options]
+# Add src directory to Python path so tests can import modules
+pythonpath = ["src"]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+# Show extra test summary info
+addopts = [
+    "-ra",  # Show summary of all test outcomes
+    "--strict-markers",  # Raise error on unknown markers
+    "--strict-config",  # Raise error on config issues
+    "--tb=short",  # Shorter traceback format
+]
+# Markers for categorizing tests
+markers = [
+    "asyncio: marks tests as async (automatically detected)",
+    "unit: marks tests as unit tests",
+    "integration: marks tests as integration tests",
+    "slow: marks tests as slow running",
+]
+
 [tool.black]
 line-length = 120
 target-version = ['py310']  # Python 3.10+ required for match statements

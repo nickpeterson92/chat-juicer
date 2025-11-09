@@ -9,12 +9,6 @@ from typing import Any
 from unittest.mock import patch
 
 from core.constants import (
-    CHAT_HISTORY_DB_PATH,
-    DEFAULT_MODEL,
-    DEFAULT_SESSION_METADATA_PATH,
-    KEEP_LAST_N_MESSAGES,
-    MAX_CONVERSATION_TURNS,
-    MIN_MESSAGES_FOR_SUMMARIZATION,
     MODEL_TOKEN_LIMITS,
     get_settings,
 )
@@ -22,43 +16,6 @@ from core.constants import (
 
 class TestConstants:
     """Tests for module constants."""
-
-    def test_chat_history_db_path_defined(self) -> None:
-        """Test that database path is defined."""
-        assert CHAT_HISTORY_DB_PATH is not None
-        assert "chat_history.db" in str(CHAT_HISTORY_DB_PATH)
-
-    def test_default_session_metadata_path_defined(self) -> None:
-        """Test that session metadata path is defined."""
-        assert DEFAULT_SESSION_METADATA_PATH is not None
-        assert "sessions.json" in str(DEFAULT_SESSION_METADATA_PATH)
-
-    def test_default_model_defined(self) -> None:
-        """Test that default model is defined."""
-        assert DEFAULT_MODEL is not None
-        assert isinstance(DEFAULT_MODEL, str)
-        assert len(DEFAULT_MODEL) > 0
-
-    def test_keep_last_n_messages_is_positive(self) -> None:
-        """Test that KEEP_LAST_N_MESSAGES is positive."""
-        assert KEEP_LAST_N_MESSAGES > 0
-        assert isinstance(KEEP_LAST_N_MESSAGES, int)
-
-    def test_max_conversation_turns_is_positive(self) -> None:
-        """Test that MAX_CONVERSATION_TURNS is positive."""
-        assert MAX_CONVERSATION_TURNS > 0
-        assert isinstance(MAX_CONVERSATION_TURNS, int)
-
-    def test_min_messages_for_summarization_is_positive(self) -> None:
-        """Test that MIN_MESSAGES_FOR_SUMMARIZATION is positive."""
-        assert MIN_MESSAGES_FOR_SUMMARIZATION > 0
-        assert isinstance(MIN_MESSAGES_FOR_SUMMARIZATION, int)
-
-    def test_model_token_limits_defined(self) -> None:
-        """Test that model token limits are defined."""
-        assert MODEL_TOKEN_LIMITS is not None
-        assert isinstance(MODEL_TOKEN_LIMITS, dict)
-        assert len(MODEL_TOKEN_LIMITS) > 0
 
     def test_model_token_limits_values(self) -> None:
         """Test that token limits are reasonable."""

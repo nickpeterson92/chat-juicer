@@ -160,7 +160,7 @@ class TestGenerateDocument:
         output_dir.mkdir()
 
         with patch("tools.document_generation.write_file_content") as mock_write:
-            mock_write.return_value = "Write failed"
+            mock_write.return_value = (None, "Write failed")
 
             result = await generate_document("content", "test.md")
 
