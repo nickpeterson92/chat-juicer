@@ -22,7 +22,6 @@ from core.constants import (
     MESSAGE_STRUCTURE_TOKEN_OVERHEAD,
     MIN_MESSAGES_FOR_SUMMARIZATION,
     MODEL_TOKEN_LIMITS,
-    get_settings,
 )
 from core.session_manager import SessionManager
 from models.event_models import FunctionEventMessage
@@ -734,8 +733,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
         logger.info(f"Summarizing {len(items)} messages ({self.total_tokens} tokens)")
 
         # Get settings and deployment
-        settings = get_settings()
-        deployment = settings.azure_openai_deployment
+        deployment = DEFAULT_MODEL
 
         # Create a one-off summarization agent with generic instructions
         summary_agent = Agent(

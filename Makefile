@@ -66,8 +66,21 @@ backend-only: ## Run Python backend only (for testing)
 
 ##@ Testing
 
-test: ## Run all tests (unit + integration) with coverage summary
-	@echo "$(BLUE)Running all tests with coverage...$(NC)"
+test: test-all ## Run all tests (backend + frontend) - alias for test-all
+
+test-all: ## Run all tests (backend + frontend) with coverage
+	@echo "$(BLUE)╔══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(BLUE)║              Running Full Test Suite                         ║$(NC)"
+	@echo "$(BLUE)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@$(MAKE) test-backend
+	@echo ""
+	@$(MAKE) test-frontend
+	@echo ""
+	@echo "$(GREEN)✓ All tests completed$(NC)"
+
+test-backend: ## Run Python backend tests (unit + integration)
+	@echo "$(BLUE)Running Python backend tests...$(NC)"
 	@if [ -f ".juicer/bin/pytest" ]; then \
 		./scripts/run-tests.sh; \
 	else \
@@ -76,40 +89,50 @@ test: ## Run all tests (unit + integration) with coverage summary
 		exit 1; \
 	fi
 
-test-unit: ## Run only unit tests
-	@echo "$(BLUE)Running unit tests...$(NC)"
+test-frontend: ## Run JavaScript frontend tests (vitest)
+	@echo "$(BLUE)Running JavaScript frontend tests...$(NC)"
+	@npm test
+
+test-backend-unit: ## Run Python unit tests only
+	@echo "$(BLUE)Running Python unit tests...$(NC)"
 	@if [ -f ".juicer/bin/pytest" ]; then \
-		.juicer/bin/pytest tests/unit/ -v --no-cov; \
+		.juicer/bin/pytest tests/backend/unit/ -v --no-cov; \
 	else \
 		echo "$(YELLOW)⚠ Pytest not installed in .juicer venv$(NC)"; \
 		echo "$(BLUE)Run: make install-dev$(NC)"; \
 		exit 1; \
 	fi
 
-test-integration: ## Run only integration tests
-	@echo "$(BLUE)Running integration tests...$(NC)"
+test-backend-integration: ## Run Python integration tests only
+	@echo "$(BLUE)Running Python integration tests...$(NC)"
 	@if [ -f ".juicer/bin/pytest" ]; then \
-		.juicer/bin/pytest tests/integration/ -v --no-cov; \
+		.juicer/bin/pytest tests/backend/integration/ -v --no-cov; \
 	else \
 		echo "$(YELLOW)⚠ Pytest not installed in .juicer venv$(NC)"; \
 		echo "$(BLUE)Run: make install-dev$(NC)"; \
 		exit 1; \
 	fi
 
-test-fast: ## Run all tests without coverage (faster)
-	@echo "$(BLUE)Running all tests (fast mode)...$(NC)"
-	@if [ -f ".juicer/bin/pytest" ]; then \
-		.juicer/bin/pytest tests/ -v --no-cov; \
-	else \
-		echo "$(YELLOW)⚠ Pytest not installed in .juicer venv$(NC)"; \
-		echo "$(BLUE)Run: make install-dev$(NC)"; \
-		exit 1; \
-	fi
+test-frontend-unit: ## Run JavaScript unit tests only
+	@echo "$(BLUE)Running JavaScript unit tests...$(NC)"
+	@npm run test:unit
 
-test-coverage: ## Generate detailed HTML coverage report
-	@echo "$(BLUE)Generating detailed coverage report...$(NC)"
+test-frontend-integration: ## Run JavaScript integration tests only
+	@echo "$(BLUE)Running JavaScript integration tests...$(NC)"
+	@npm run test:integration
+
+test-frontend-watch: ## Run JavaScript tests in watch mode
+	@echo "$(BLUE)Running JavaScript tests in watch mode...$(NC)"
+	@npm run test:watch
+
+test-frontend-ui: ## Run JavaScript tests with UI
+	@echo "$(BLUE)Opening Vitest UI...$(NC)"
+	@npm run test:ui
+
+test-coverage-backend: ## Generate Python backend coverage report
+	@echo "$(BLUE)Generating Python coverage report...$(NC)"
 	@if [ -f ".juicer/bin/pytest" ]; then \
-		COVERAGE_FILE=.coverage .juicer/bin/coverage run --source=src --omit='tests/*,**/__pycache__/*' -m pytest tests/ -q; \
+		COVERAGE_FILE=.coverage .juicer/bin/coverage run --source=src --omit='tests/*,**/__pycache__/*' -m pytest tests/backend/ -q; \
 		.juicer/bin/coverage html; \
 		.juicer/bin/coverage report --skip-empty; \
 		echo "$(GREEN)✓ Coverage report generated at htmlcov/index.html$(NC)"; \
@@ -118,6 +141,19 @@ test-coverage: ## Generate detailed HTML coverage report
 		echo "$(BLUE)Run: make install-dev$(NC)"; \
 		exit 1; \
 	fi
+
+test-coverage-frontend: ## Generate JavaScript frontend coverage report
+	@echo "$(BLUE)Generating JavaScript coverage report...$(NC)"
+	@npm run test:coverage
+	@echo "$(GREEN)✓ Coverage report generated at coverage/index.html$(NC)"
+
+test-coverage-all: ## Generate coverage reports for both backend and frontend
+	@echo "$(BLUE)Generating all coverage reports...$(NC)"
+	@$(MAKE) test-coverage-backend
+	@$(MAKE) test-coverage-frontend
+	@echo "$(GREEN)✓ All coverage reports generated$(NC)"
+	@echo "$(BLUE)  Backend: htmlcov/index.html$(NC)"
+	@echo "$(BLUE)  Frontend: coverage/index.html$(NC)"
 
 test-validate: ## Validate Python syntax (compilation check)
 	@echo "$(BLUE)Validating Python syntax...$(NC)"
@@ -233,11 +269,7 @@ check: ## Pre-commit validation gate (format check + lint + typecheck + tests)
 		echo "$(YELLOW)⚠ Mypy not installed, skipping type check$(NC)"; \
 	fi
 	@echo "$(BLUE)→ Running tests...$(NC)"
-	@if [ -f ".juicer/bin/pytest" ]; then \
-		.juicer/bin/pytest tests/ -q --tb=short || (echo "$(RED)✗ Tests failed. Run: make test$(NC)" && exit 1); \
-	else \
-		echo "$(YELLOW)⚠ Pytest not installed, skipping tests$(NC)"; \
-	fi
+	@$(MAKE) test-all || (echo "$(RED)✗ Tests failed. Run: make test$(NC)" && exit 1)
 	@echo "$(GREEN)✓ All validation checks passed$(NC)"
 
 ##@ Documentation
@@ -462,4 +494,10 @@ help: ## Show this help message
 	@echo "$(BLUE)Setup Options:$(NC)"
 	@echo "  make setup      - Essential dependencies only"
 	@echo "  make setup-dev  - Includes linters, formatters, pre-commit hooks"
+	@echo ""
+	@echo "$(BLUE)Testing:$(NC)"
+	@echo "  make test              - Run all tests (backend + frontend)"
+	@echo "  make test-backend      - Run only Python tests"
+	@echo "  make test-frontend     - Run only JavaScript tests"
+	@echo "  make test-frontend-ui  - Open interactive Vitest UI"
 	@echo ""

@@ -349,9 +349,10 @@ SUMMARY_MAX_COMPLETION_TOKENS = 3000
 # Agent/Runner Configuration
 # ============================================================================
 
-#: Default model name for fallback scenarios and temporary sessions.
-#: Used when agent model is not specified or during session cleanup operations.
-DEFAULT_MODEL = "gpt-5-mini"
+#: Default model name for fallback scenarios and initial agent setup.
+#: Used when agent model is not specified or during bootstrap.
+#: Sessions will override this with their own per-session model selection.
+DEFAULT_MODEL = "gpt-5"
 
 #: Models that support reasoning_effort parameter.
 #: Only these models can use the reasoning.effort configuration.
@@ -489,7 +490,6 @@ class Settings(BaseSettings):
     # Azure OpenAI settings (required if provider=azure)
     azure_openai_api_key: str | None = Field(default=None, description="Azure OpenAI API key for authentication")
     azure_openai_endpoint: HttpUrl | None = Field(default=None, description="Azure OpenAI endpoint URL")
-    azure_openai_deployment: str = Field(default="gpt-5-mini", description="Azure OpenAI deployment name")
 
     # Base OpenAI settings (required if provider=openai)
     openai_api_key: str | None = Field(default=None, description="OpenAI API key for authentication")
@@ -497,14 +497,6 @@ class Settings(BaseSettings):
 
     # Optional debug setting
     debug: bool = Field(default=False, description="Enable debug logging")
-
-    # Reasoning effort for reasoning models (gpt-5, o1, o3)
-    reasoning_effort: str = Field(
-        default="medium",
-        description="Reasoning effort level: 'minimal', 'low', 'medium', or 'high'. "
-        "Controls reasoning token generation for reasoning models. "
-        "Lower values = faster responses with fewer reasoning tokens.",
-    )
 
     # HTTP request/response logging (for debugging Azure OpenAI issues)
     http_request_logging: bool = Field(default=False, description="Enable HTTP request/response logging")
@@ -549,15 +541,6 @@ class Settings(BaseSettings):
         """Basic validation of OpenAI API key format."""
         if v is not None and (not v or len(v) < 10):
             raise ValueError("Invalid OpenAI API key format")
-        return v
-
-    @field_validator("reasoning_effort")
-    @classmethod
-    def validate_reasoning_effort(cls, v: str) -> str:
-        """Validate reasoning effort parameter."""
-        valid_values = ["minimal", "low", "medium", "high"]
-        if v not in valid_values:
-            raise ValueError(f"reasoning_effort must be one of {valid_values}")
         return v
 
     def model_post_init(self, __context: Any) -> None:

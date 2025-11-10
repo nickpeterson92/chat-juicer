@@ -1,0 +1,139 @@
+name: Test Suite
+
+on:
+  push:
+    branches: [main, develop, test-suite-js]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  backend-tests:
+    name: Backend Tests (Python)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Create virtual environment
+        run: python -m venv .juicer
+
+      - name: Install dependencies
+        run: |
+          .juicer/bin/pip install --upgrade pip
+          .juicer/bin/pip install -r src/requirements.txt
+          .juicer/bin/pip install -r requirements-dev.txt
+
+      - name: Run backend tests with coverage
+        run: |
+          .juicer/bin/pytest tests/backend/ --cov=src --cov-report=xml --cov-report=term
+
+      - name: Upload backend coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          flags: backend
+          name: backend-coverage
+          fail_ci_if_error: false
+
+  frontend-tests:
+    name: Frontend Tests (JavaScript)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run frontend tests with coverage
+        run: npm run test:coverage
+
+      - name: Upload frontend coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage/coverage-final.json
+          flags: frontend
+          name: frontend-coverage
+          fail_ci_if_error: false
+
+  quality-checks:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Python dependencies
+        run: |
+          python -m venv .juicer
+          .juicer/bin/pip install --upgrade pip
+          .juicer/bin/pip install -r src/requirements.txt
+          .juicer/bin/pip install -r requirements-dev.txt
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Run Python quality checks
+        run: |
+          echo "Running Black formatter check..."
+          .juicer/bin/black --check src/ tests/
+
+          echo "Running Ruff linter..."
+          .juicer/bin/ruff check src/ tests/
+
+          echo "Running Mypy type checker..."
+          .juicer/bin/mypy src/ tests/
+
+      - name: Run JavaScript quality checks
+        run: |
+          echo "Running Biome linter..."
+          npx @biomejs/biome check electron/ scripts/
+
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests, quality-checks]
+    if: always()
+
+    steps:
+      - name: Check test results
+        run: |
+          echo "✅ Backend Tests: ${{ needs.backend-tests.result }}"
+          echo "✅ Frontend Tests: ${{ needs.frontend-tests.result }}"
+          echo "✅ Quality Checks: ${{ needs.quality-checks.result }}"
+
+          if [ "${{ needs.backend-tests.result }}" != "success" ] || \
+             [ "${{ needs.frontend-tests.result }}" != "success" ] || \
+             [ "${{ needs.quality-checks.result }}" != "success" ]; then
+            echo "💥 Some tests failed"
+            exit 1
+          fi
+
+          echo "🎉 All tests passed!"

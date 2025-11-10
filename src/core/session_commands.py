@@ -19,7 +19,6 @@ from core.constants import (
     ERROR_SESSION_NOT_FOUND,
     INITIAL_SESSION_CHUNK_SIZE,
     REASONING_EFFORT_OPTIONS,
-    get_settings,
 )
 from core.session import SessionBuilder
 from integrations.sdk_token_tracker import connect_session, disconnect_session
@@ -480,7 +479,6 @@ async def get_config_metadata(app_state: AppStateProtocol) -> dict[str, Any]:
     Returns:
         Dictionary with available models and reasoning levels
     """
-    settings = get_settings()
 
     # Model metadata with display names and descriptions
     MODEL_INFO = {
@@ -538,7 +536,7 @@ async def get_config_metadata(app_state: AppStateProtocol) -> dict[str, Any]:
                 "label": MODEL_INFO[model]["displayName"],
                 "description": MODEL_INFO[model]["description"],
                 "isPrimary": MODEL_INFO[model]["isPrimary"],
-                "isDefault": model == settings.azure_openai_deployment,
+                "isDefault": model == "gpt-5",
                 "supportsReasoning": model in REASONING_MODELS,
             }
             for model in SUPPORTED_MODELS
@@ -547,7 +545,7 @@ async def get_config_metadata(app_state: AppStateProtocol) -> dict[str, Any]:
             {
                 "value": level,
                 "label": REASONING_EFFORT_OPTIONS[level],
-                "isDefault": level == settings.reasoning_effort,
+                "isDefault": level == "medium",
             }
             for level in ["minimal", "low", "medium", "high"]
         ],

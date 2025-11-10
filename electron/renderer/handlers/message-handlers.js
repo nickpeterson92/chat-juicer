@@ -122,9 +122,14 @@ function handleError(message, context) {
  * Handle function_detected message
  */
 function handleFunctionDetected(message, context) {
-  const { appState, elements } = context;
+  const { appState, elements, services } = context;
 
   window.electronAPI.log("debug", "Function detected", message);
+
+  // Use FunctionCallService if available, otherwise fall back to legacy
+  if (services?.functionCallService) {
+    services.functionCallService.createCall(message.call_id, message.name, message.arguments || {});
+  }
 
   createFunctionCallCard(
     elements.chatContainer,
@@ -146,9 +151,17 @@ function handleFunctionDetected(message, context) {
  * Handle function_executing message
  */
 function handleFunctionExecuting(message, context) {
-  const { appState } = context;
+  const { appState, services } = context;
 
   window.electronAPI.log("debug", "Function executing", message);
+
+  // Use FunctionCallService if available
+  if (services?.functionCallService) {
+    services.functionCallService.updateCallStatus(message.call_id, "streaming");
+    if (message.arguments) {
+      services.functionCallService.appendArgumentsDelta(message.call_id, JSON.stringify(message.arguments));
+    }
+  }
 
   updateFunctionCallStatus(appState.functions.activeCalls, message.call_id, "executing...", {
     arguments: message.arguments,
@@ -159,9 +172,20 @@ function handleFunctionExecuting(message, context) {
  * Handle function_completed message
  */
 function handleFunctionCompleted(message, context) {
-  const { appState } = context;
+  const { appState, services } = context;
 
   window.electronAPI.log("debug", "Function completed", message);
+
+  // Use FunctionCallService if available
+  if (services?.functionCallService) {
+    if (message.success) {
+      const result = message.result || message.output || "Success";
+      services.functionCallService.setCallResult(message.call_id, result);
+    } else {
+      const error = message.error || message.result || message.output || "Unknown error";
+      services.functionCallService.setCallError(message.call_id, error);
+    }
+  }
 
   if (message.success) {
     const result = message.result || message.output || "Success";
@@ -243,7 +267,16 @@ function handleFunctionCallReady(message, context) {
  * Handle function_executed message
  */
 function handleFunctionExecuted(message, context) {
-  const { appState } = context;
+  const { appState, services } = context;
+
+  // Use FunctionCallService if available
+  if (services?.functionCallService) {
+    if (message.success) {
+      services.functionCallService.setCallResult(message.call_id, message.result_preview || "Success");
+    } else {
+      services.functionCallService.setCallError(message.call_id, message.error || "Unknown error");
+    }
+  }
 
   if (message.success) {
     updateFunctionCallStatus(appState.functions.activeCalls, message.call_id, "completed", {

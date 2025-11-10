@@ -1,33 +1,80 @@
 # Chat Juicer Test Suite
 
-This directory contains comprehensive unit tests for the Chat Juicer Python backend, targeting 85% code coverage.
+Comprehensive test suite for both backend (Python) and frontend (JavaScript) with 1,100+ tests and 85%+ coverage.
 
-## Test Structure
+## Overview
+
+| Component | Tests | Coverage | Status |
+|-----------|-------|----------|--------|
+| **Backend (Python)** | 614 | 85.57% | ✅ Passing |
+| **Frontend (JavaScript)** | 583 | 90%+ | ✅ Passing |
+| **Total** | **1,197** | **87%+** | ✅ **Passing** |
+
+**Quick Links**:
+- [Backend Test Guide](#backend-tests-python) (this document)
+- [Frontend Test Guide](frontend/README.md) (detailed guide)
+
+---
+
+## Backend Tests (Python)
+
+Comprehensive unit and integration tests for the Chat Juicer Python backend, targeting 85% code coverage.
+
+### Test Structure
 
 ```
 tests/
-├── conftest.py           # Shared fixtures and test configuration
-├── app/                  # Tests for app module (bootstrap, runtime, state)
-├── core/                 # Tests for core module (session, agent, commands)
-├── integrations/         # Tests for integrations module (MCP, SDK tracker)
-├── models/              # Tests for Pydantic models
-├── tools/               # Tests for agent tools
-└── utils/               # Tests for utility functions
+├── backend/              # Backend test suite
+│   ├── unit/            # Unit tests (614 tests)
+│   │   ├── app/        # Application bootstrap and runtime
+│   │   ├── core/       # Core business logic
+│   │   ├── models/     # Pydantic models
+│   │   ├── tools/      # Agent tools
+│   │   └── utils/      # Utility functions
+│   └── integration/    # Integration tests
+│       └── ...
+├── frontend/            # Frontend test suite (see frontend/README.md)
+│   ├── unit/           # Unit tests (440+ tests)
+│   ├── integration/    # Integration tests (60+ tests)
+│   ├── performance/    # Performance tests (19 tests)
+│   └── helpers/        # Test utilities and mocks
+└── conftest.py         # Shared test fixtures
 ```
 
-## Running Tests
+---
 
-### Quick Start
+## Running All Tests
+
+### Quick Start (All Tests)
 
 ```bash
-# Run all unit tests with coverage
-make test-unit
+# Run both backend and frontend tests
+make test-all
 
-# Run tests without coverage (faster)
-make test-unit-fast
+# Run backend tests only
+make test-backend
 
-# Generate detailed coverage report
-make test-coverage
+# Run frontend tests only
+make test-frontend
+
+# Run with coverage reports for both
+make test-coverage-all
+```
+
+### Backend Tests Only
+
+```bash
+# Run all backend tests with coverage
+make test-backend
+
+# Run backend unit tests only
+make test-backend-unit
+
+# Run backend integration tests only
+make test-backend-integration
+
+# Generate backend coverage report
+make test-coverage-backend
 ```
 
 ### Direct pytest Commands

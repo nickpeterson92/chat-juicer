@@ -39,13 +39,13 @@ Example:
     Creating an agent with token-aware session::
 
         from core.agent import create_agent
-        from core.constants import get_settings
+        from core.constants import DEFAULT_MODEL, get_settings
         from core.prompts import SYSTEM_INSTRUCTIONS
         from core.session import TokenAwareSQLiteSession
 
         settings = get_settings()
         agent = create_agent(
-            deployment=settings.azure_openai_deployment,
+            deployment=DEFAULT_MODEL,
             instructions=SYSTEM_INSTRUCTIONS,
             tools=AGENT_TOOLS,
             mcp_servers=mcp_servers
@@ -54,7 +54,7 @@ Example:
         session = TokenAwareSQLiteSession(
             session_id="session_123",
             agent=agent,
-            model=settings.azure_openai_deployment,
+            model=DEFAULT_MODEL,
             threshold=0.2  # Summarize at 20% of token limit
         )
 

@@ -38,6 +38,7 @@ venv/
 .coverage
 .coverage.*
 htmlcov/
+coverage/
 .pytest_cache/
 
 # Electron

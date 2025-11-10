@@ -105,13 +105,13 @@ export async function loadFiles(directory = "sources", container = null) {
       deleteBtn.title = "Delete file";
       deleteBtn.onclick = (e) => {
         e.stopPropagation();
-        handleDeleteFile(file.name, activeFilesDirectory);
+        handleDeleteFile(file.name, directory, targetContainer); // Use directory param, not global
       };
 
       // Click handler to open file
       fileItem.onclick = async () => {
         try {
-          const result = await window.electronAPI.openFile(activeFilesDirectory, file.name);
+          const result = await window.electronAPI.openFile(directory, file.name); // Use directory param, not global
           if (!result.success) {
             showToast(`Failed to open file: ${result.error}`, "error", 4000);
           }
@@ -138,8 +138,9 @@ export async function loadFiles(directory = "sources", container = null) {
  * Handle file deletion
  * @param {string} filename - Name of file to delete
  * @param {string} directory - Directory containing the file
+ * @param {HTMLElement} container - Container element to refresh after deletion
  */
-async function handleDeleteFile(filename, directory = "sources") {
+async function handleDeleteFile(filename, directory = "sources", container = null) {
   if (!filename) {
     showToast(MSG_NO_FILE_SELECTED, "error", 3000);
     return;
@@ -154,13 +155,36 @@ async function handleDeleteFile(filename, directory = "sources") {
 
     if (result.success) {
       showToast(MSG_FILE_DELETED.replace("{filename}", filename), "success", 3000);
-      // Refresh the files list
-      loadFiles(directory);
+      // Refresh the files list with the correct container
+      if (container) {
+        loadFiles(directory, container);
+      }
     } else {
-      showToast(MSG_FILE_DELETE_FAILED.replace("{filename}", filename).replace("{error}", result.error), "error", 4000);
+      // If file doesn't exist (ENOENT), just refresh the list without error
+      if (result.error?.includes("ENOENT")) {
+        console.log(`File ${filename} already deleted, refreshing list`);
+        if (container) {
+          loadFiles(directory, container);
+        }
+      } else {
+        showToast(
+          MSG_FILE_DELETE_FAILED.replace("{filename}", filename).replace("{error}", result.error),
+          "error",
+          4000
+        );
+      }
     }
   } catch (error) {
     window.electronAPI.log("error", "Failed to delete file", { filename, error: error.message });
-    showToast(MSG_FILE_DELETE_ERROR.replace("{filename}", filename), "error", 4000);
+
+    // If file doesn't exist, just refresh the list without error
+    if (error.message?.includes("ENOENT")) {
+      console.log(`File ${filename} already deleted, refreshing list`);
+      if (container) {
+        loadFiles(directory, container);
+      }
+    } else {
+      showToast(MSG_FILE_DELETE_ERROR.replace("{filename}", filename), "error", 4000);
+    }
   }
 }

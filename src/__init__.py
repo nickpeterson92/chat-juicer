@@ -29,7 +29,7 @@ Example:
     Basic agent setup::
 
         from core.agent import create_agent
-        from core.constants import get_settings
+        from core.constants import DEFAULT_MODEL, get_settings
         from core.session import TokenAwareSQLiteSession
         from tools.registry import AGENT_TOOLS
         from integrations.mcp_servers import setup_mcp_servers
@@ -40,7 +40,7 @@ Example:
         # Create agent with tools and MCP servers
         settings = get_settings()
         agent = create_agent(
-            deployment=settings.azure_openai_deployment,
+            deployment=DEFAULT_MODEL,
             instructions=SYSTEM_INSTRUCTIONS,
             tools=AGENT_TOOLS,
             mcp_servers=mcp_servers
@@ -50,7 +50,7 @@ Example:
         session = TokenAwareSQLiteSession(
             session_id="session_123",
             agent=agent,
-            model=settings.azure_openai_deployment
+            model=DEFAULT_MODEL
         )
 
 See Also:
