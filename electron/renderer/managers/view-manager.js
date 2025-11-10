@@ -282,7 +282,9 @@ function attachWelcomePageListeners(elements, appState, services = {}) {
           isProcessing = false; // Reset guard before returning
           return;
         }
-        sessionId = result.data?.session_id || null;
+
+        // SessionService returns { success, sessionId, title } (not wrapped in .data)
+        sessionId = result.sessionId || null;
 
         window.electronAPI.log("info", "Session created with full configuration", {
           session_id: sessionId,
@@ -290,6 +292,21 @@ function attachWelcomePageListeners(elements, appState, services = {}) {
           model: modelConfig.model,
           reasoning_effort: modelConfig.reasoning_effort,
         });
+
+        // Update session state to mark this as the current session
+        const { sessionState } = await import("../services/session-service.js");
+        sessionState.currentSessionId = sessionId;
+
+        // Dispatch session-created event to update the session list
+        window.dispatchEvent(
+          new CustomEvent("session-created", {
+            detail: {
+              session_id: sessionId,
+              title: result.title || null,
+              source: "welcome_page",
+            },
+          })
+        );
       } else {
         window.electronAPI.log("info", "Reusing existing session for welcome message", {
           session_id: sessionId,

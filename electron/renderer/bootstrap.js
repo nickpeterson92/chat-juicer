@@ -669,6 +669,12 @@ export async function bootstrapSimple() {
   window.addEventListener("session-created", async (event) => {
     console.log("🎉 Session created event received:", event.detail);
 
+    // Set the newly created session as current
+    if (event.detail?.session_id) {
+      sessionState.currentSessionId = event.detail.session_id;
+      console.log("✅ Set current session:", event.detail.session_id);
+    }
+
     // Reload sessions list to show the new session
     try {
       const result = await sessionService.loadSessions();
@@ -730,6 +736,12 @@ export async function bootstrapSimple() {
       title: session.title,
       created_at: session.created_at || session.last_used,
     }));
+
+    console.log("🎯 Rendering sessions with current:", sessionState.currentSessionId);
+    console.log(
+      "🎯 Session IDs:",
+      transformedSessions.map((s) => s.id)
+    );
 
     // Use Phase 3 renderer
     const fragment = renderSessionList(transformedSessions, sessionState.currentSessionId, domAdapter);
