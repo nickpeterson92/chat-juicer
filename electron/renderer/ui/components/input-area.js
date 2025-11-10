@@ -1,53 +1,23 @@
 /**
  * InputArea - UI component for message input
- * Self-contained component that manages its own DOM
+ * Wraps existing DOM elements and manages input behavior
  */
 
 export class InputArea {
   /**
+   * @param {HTMLElement} textarea - Existing textarea element (#user-input)
+   * @param {HTMLElement} sendButton - Existing send button element (#send-btn)
    * @param {Function} onSendCallback - Callback for send action
-   * @param {Object} domAdapter - DOM adapter for rendering
    */
-  constructor(onSendCallback, domAdapter) {
-    this.onSendCallback = onSendCallback;
-    this.dom = domAdapter;
-    this.element = null;
-    this.textarea = null;
-    this.sendButton = null;
-    this.isEnabled = true;
-  }
-
-  /**
-   * Render the input area component
-   *
-   * @returns {HTMLElement} The rendered element
-   */
-  render() {
-    const container = this.dom.createElement("div");
-    this.dom.addClass(container, "input-area");
-
-    // Create textarea
-    const textarea = this.dom.createElement("textarea");
-    this.dom.setAttribute(textarea, "placeholder", "Type a message... (Enter to send, Shift+Enter for new line)");
-    this.dom.setAttribute(textarea, "rows", "1");
-    this.dom.addClass(textarea, "input-textarea");
-    this.dom.appendChild(container, textarea);
-
-    // Create send button
-    const sendBtn = this.dom.createElement("button");
-    this.dom.addClass(sendBtn, "send-button");
-    this.dom.setTextContent(sendBtn, "Send");
-    this.dom.appendChild(container, sendBtn);
-
-    // Store references
-    this.element = container;
+  constructor(textarea, sendButton, onSendCallback) {
+    if (!textarea || !sendButton) {
+      throw new Error("InputArea requires existing textarea and button elements");
+    }
     this.textarea = textarea;
-    this.sendButton = sendBtn;
-
-    // Setup event listeners
+    this.sendButton = sendButton;
+    this.onSendCallback = onSendCallback;
+    this.isEnabled = true;
     this.setupEventListeners();
-
-    return container;
   }
 
   /**
@@ -55,20 +25,18 @@ export class InputArea {
    * @private
    */
   setupEventListeners() {
-    if (!this.textarea || !this.sendButton) return;
-
     // Send button click
-    this.dom.addEventListener(this.sendButton, "click", () => {
+    this.sendButton.addEventListener("click", () => {
       this.handleSend();
     });
 
     // Enter key (Shift+Enter for new line)
-    this.dom.addEventListener(this.textarea, "keydown", (e) => {
+    this.textarea.addEventListener("keydown", (e) => {
       this.handleKeyDown(e);
     });
 
     // Auto-resize on input
-    this.dom.addEventListener(this.textarea, "input", () => {
+    this.textarea.addEventListener("input", () => {
       this.adjustHeight();
     });
   }
@@ -108,7 +76,7 @@ export class InputArea {
     if (!this.textarea) return;
 
     // Reset height to recalculate
-    this.dom.setStyle(this.textarea, "height", "auto");
+    this.textarea.style.height = "auto";
 
     // Get scroll height and apply constraints
     const scrollHeight = this.textarea.scrollHeight || 40;
@@ -116,7 +84,7 @@ export class InputArea {
     const maxHeight = 200;
     const newHeight = Math.max(minHeight, Math.min(scrollHeight, maxHeight));
 
-    this.dom.setStyle(this.textarea, "height", `${newHeight}px`);
+    this.textarea.style.height = `${newHeight}px`;
   }
 
   /**
@@ -125,7 +93,7 @@ export class InputArea {
    * @returns {string} Current input value
    */
   getValue() {
-    return this.textarea ? this.dom.getValue(this.textarea) || "" : "";
+    return this.textarea ? this.textarea.value || "" : "";
   }
 
   /**
@@ -135,7 +103,7 @@ export class InputArea {
    */
   setValue(value) {
     if (this.textarea) {
-      this.dom.setValue(this.textarea, value);
+      this.textarea.value = value;
       this.adjustHeight();
     }
   }
@@ -152,7 +120,7 @@ export class InputArea {
    */
   focus() {
     if (this.textarea) {
-      this.dom.focus(this.textarea);
+      this.textarea.focus();
     }
   }
 
@@ -163,11 +131,11 @@ export class InputArea {
     this.isEnabled = true;
 
     if (this.textarea) {
-      this.dom.removeAttribute(this.textarea, "disabled");
+      this.textarea.removeAttribute("disabled");
     }
 
     if (this.sendButton) {
-      this.dom.removeAttribute(this.sendButton, "disabled");
+      this.sendButton.removeAttribute("disabled");
     }
   }
 
@@ -178,11 +146,11 @@ export class InputArea {
     this.isEnabled = false;
 
     if (this.textarea) {
-      this.dom.setAttribute(this.textarea, "disabled", "true");
+      this.textarea.setAttribute("disabled", "true");
     }
 
     if (this.sendButton) {
-      this.dom.setAttribute(this.sendButton, "disabled", "true");
+      this.sendButton.setAttribute("disabled", "true");
     }
   }
 
@@ -193,19 +161,25 @@ export class InputArea {
    */
   setPlaceholder(text) {
     if (this.textarea) {
-      this.dom.setAttribute(this.textarea, "placeholder", text);
+      this.textarea.setAttribute("placeholder", text);
     }
   }
 
   /**
-   * Destroy the component and remove from DOM
+   * Get textarea element
+   *
+   * @returns {HTMLElement} The textarea element
    */
-  destroy() {
-    if (this.element) {
-      this.dom.remove(this.element);
-      this.element = null;
-      this.textarea = null;
-      this.sendButton = null;
-    }
+  getTextarea() {
+    return this.textarea;
+  }
+
+  /**
+   * Get send button element
+   *
+   * @returns {HTMLElement} The send button element
+   */
+  getSendButton() {
+    return this.sendButton;
   }
 }

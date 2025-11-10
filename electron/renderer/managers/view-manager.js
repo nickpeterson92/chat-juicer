@@ -115,8 +115,11 @@ export function showChatView(elements, appState) {
   document.body.classList.remove("view-welcome");
   document.body.classList.add("view-chat");
 
-  // Focus chat input and ensure proper sizing
-  if (elements.userInput) {
+  // Focus chat input (Phase 7: use InputArea component if available)
+  if (window.components?.inputArea) {
+    window.components.inputArea.focus();
+  } else if (elements.userInput) {
+    // Fallback to direct manipulation if component not available
     elements.userInput.focus();
 
     // Initialize textarea height properly (for textarea elements)
@@ -326,8 +329,12 @@ function attachWelcomePageListeners(elements, appState, services = {}) {
         window.electronAPI.log("debug", "Sidebar collapsed after starting chat from welcome page");
       }
 
-      // Add user message to chat
-      addMessage(elements.chatContainer, message, "user");
+      // Add user message to chat (Phase 7: use ChatContainer component if available)
+      if (window.components?.chatContainer) {
+        window.components.chatContainer.addUserMessage(message);
+      } else {
+        addMessage(elements.chatContainer, message, "user");
+      }
 
       // Reset assistant message state
       appState.setState("message.currentAssistant", null);

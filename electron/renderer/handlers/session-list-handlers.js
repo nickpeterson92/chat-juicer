@@ -196,13 +196,25 @@ async function handleDelete(sessionId, sessionService, sessionState, updateSessi
         console.log("🏠 Deleted active session, navigating to welcome page");
         sessionState.currentSessionId = null;
 
-        // Clear chat UI
-        const { clearChat } = await import("../ui/chat-ui.js");
-        const { clearFunctionCards } = await import("../ui/function-card-ui.js");
-        const chatContainer = document.getElementById("chat-container");
-        if (chatContainer) {
-          clearChat(chatContainer);
-          clearFunctionCards(chatContainer);
+        // Clear FilePanel component FIRST (Phase 7 - release file handles!)
+        if (window.components?.filePanel) {
+          window.components.filePanel.setSession(null);
+          window.components.filePanel.clear();
+          console.log("✅ FilePanel cleared before deletion");
+        }
+
+        // Clear chat UI (Phase 7: use component)
+        if (window.components?.chatContainer) {
+          window.components.chatContainer.clear();
+        } else {
+          // Fallback to direct calls
+          const { clearChat } = await import("../ui/chat-ui.js");
+          const { clearFunctionCards } = await import("../ui/function-card-ui.js");
+          const chatContainer = document.getElementById("chat-container");
+          if (chatContainer) {
+            clearChat(chatContainer);
+            clearFunctionCards(chatContainer);
+          }
         }
 
         // Show welcome view (pass services for session creation)

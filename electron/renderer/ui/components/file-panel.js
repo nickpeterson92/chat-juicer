@@ -1,278 +1,220 @@
 /**
  * FilePanel - UI component for file management
- * Self-contained component that manages file list display and interactions
+ * Wraps existing DOM structure and integrates with file-manager.js
  */
 
-import { findFileElement, renderFileList, updateFileStatus } from "../renderers/file-list-renderer.js";
+import { loadFiles, setActiveFilesDirectory } from "../../managers/file-manager.js";
 
 export class FilePanel {
   /**
-   * @param {Object} fileService - File service for file operations
-   * @param {Object} domAdapter - DOM adapter for rendering
+   * @param {HTMLElement} panelElement - Existing files panel element (#files-panel)
+   * @param {HTMLElement} toggleButton - Panel toggle button (#open-files-btn)
+   * @param {HTMLElement} filesContainer - Files list container (#files-container)
+   * @param {HTMLElement} refreshButton - Refresh button (#refresh-files-btn)
+   * @param {HTMLElement} sourcesTab - Sources tab button (#tab-sources)
+   * @param {HTMLElement} outputTab - Output tab button (#tab-output)
    */
-  constructor(fileService, domAdapter) {
-    this.fileService = fileService;
-    this.dom = domAdapter;
-    this.element = null;
-    this.fileListContainer = null;
-    this.files = [];
-    this.isVisible = true;
-  }
+  constructor(panelElement, toggleButton, filesContainer, refreshButton, sourcesTab, outputTab) {
+    if (!panelElement || !filesContainer) {
+      throw new Error("FilePanel requires panel and container elements");
+    }
 
-  /**
-   * Render the file panel component
-   *
-   * @returns {HTMLElement} The rendered element
-   */
-  render() {
-    const container = this.dom.createElement("div");
-    this.dom.addClass(container, "file-panel");
+    this.panel = panelElement;
+    this.toggleButton = toggleButton;
+    this.filesContainer = filesContainer;
+    this.refreshButton = refreshButton;
+    this.sourcesTab = sourcesTab;
+    this.outputTab = outputTab;
+    this.currentSessionId = null;
 
-    // Header with title and toggle
-    const header = this.dom.createElement("div");
-    this.dom.addClass(header, "file-panel-header");
-
-    const title = this.dom.createElement("h3");
-    this.dom.setTextContent(title, "Session Files");
-    this.dom.appendChild(header, title);
-
-    const toggleBtn = this.dom.createElement("button");
-    this.dom.addClass(toggleBtn, "file-panel-toggle");
-    this.dom.setTextContent(toggleBtn, "▼");
-    this.dom.setAttribute(toggleBtn, "aria-label", "Toggle file panel");
-    this.dom.appendChild(header, toggleBtn);
-
-    this.dom.appendChild(container, header);
-
-    // File list container
-    const listContainer = this.dom.createElement("div");
-    this.dom.addClass(listContainer, "file-list-container");
-    this.dom.appendChild(container, listContainer);
-
-    // Upload button
-    const uploadBtn = this.dom.createElement("button");
-    this.dom.addClass(uploadBtn, "file-upload-button");
-    this.dom.setTextContent(uploadBtn, "+ Upload Files");
-    this.dom.appendChild(container, uploadBtn);
-
-    // Store references
-    this.element = container;
-    this.fileListContainer = listContainer;
-
-    // Setup event listeners
-    this.setupEventListeners(toggleBtn, uploadBtn);
-
-    return container;
+    this.setupEventListeners();
   }
 
   /**
    * Setup event listeners
    * @private
    */
-  setupEventListeners(toggleBtn, uploadBtn) {
-    if (toggleBtn) {
-      this.dom.addEventListener(toggleBtn, "click", () => {
-        this.toggleVisibility();
+  setupEventListeners() {
+    // Toggle panel collapse/expand
+    if (this.toggleButton) {
+      this.toggleButton.addEventListener("click", () => {
+        this.toggle();
       });
     }
 
-    if (uploadBtn) {
-      this.dom.addEventListener(uploadBtn, "click", async () => {
-        await this.handleUpload();
+    // Refresh files
+    if (this.refreshButton) {
+      this.refreshButton.addEventListener("click", () => {
+        this.refresh();
       });
     }
 
-    // File item actions (using event delegation)
-    if (this.fileListContainer) {
-      this.dom.addEventListener(this.fileListContainer, "click", (event) => {
-        const target = event.target;
-        const action = this.dom.getAttribute(target, "data-action");
-        const fileId = this.dom.getAttribute(target, "data-file-id");
-
-        if (action === "remove" && fileId) {
-          this.handleRemoveFile(fileId);
-        } else if (action === "open" && fileId) {
-          this.handleOpenFile(fileId);
-        }
+    // Tab switching
+    const tabs = [this.sourcesTab, this.outputTab].filter(Boolean);
+    for (const tab of tabs) {
+      tab.addEventListener("click", () => {
+        this.switchTab(tab);
       });
-    }
-  }
-
-  /**
-   * Set file list
-   *
-   * @param {Array<Object>} files - Array of file objects
-   */
-  setFiles(files) {
-    this.files = files || [];
-    this.renderFileList();
-  }
-
-  /**
-   * Add file to list
-   *
-   * @param {Object} file - File object
-   */
-  addFile(file) {
-    this.files.push(file);
-    this.renderFileList();
-  }
-
-  /**
-   * Remove file from list
-   *
-   * @param {string} fileId - File ID
-   */
-  removeFile(fileId) {
-    this.files = this.files.filter((f) => f.id !== fileId);
-    this.renderFileList();
-  }
-
-  /**
-   * Update file status
-   *
-   * @param {string} fileId - File ID
-   * @param {string} status - New status
-   */
-  updateFile(fileId, status) {
-    const file = this.files.find((f) => f.id === fileId);
-    if (file) {
-      file.status = status;
-
-      // Update DOM element directly for better performance
-      const fileElement = findFileElement(this.fileListContainer, fileId, this.dom);
-      if (fileElement) {
-        updateFileStatus(fileElement, status, this.dom);
-      }
-    }
-  }
-
-  /**
-   * Render file list
-   * @private
-   */
-  renderFileList() {
-    if (!this.fileListContainer) return;
-
-    // Clear existing content
-    this.dom.setInnerHTML(this.fileListContainer, "");
-
-    if (this.files.length === 0) {
-      // Show empty state
-      const emptyDiv = this.dom.createElement("div");
-      this.dom.addClass(emptyDiv, "file-list-empty");
-      this.dom.setTextContent(emptyDiv, "No files uploaded");
-      this.dom.appendChild(this.fileListContainer, emptyDiv);
-    } else {
-      // Render file list
-      const fragment = renderFileList(this.files, this.dom);
-      this.dom.appendChild(this.fileListContainer, fragment);
-    }
-  }
-
-  /**
-   * Handle file upload
-   * @private
-   */
-  async handleUpload() {
-    try {
-      const files = await this.fileService.selectFiles();
-      if (files && files.length > 0) {
-        for (const file of files) {
-          this.addFile(file);
-        }
-      }
-    } catch (error) {
-      console.error("Failed to upload files:", error);
-    }
-  }
-
-  /**
-   * Handle file removal
-   * @private
-   */
-  async handleRemoveFile(fileId) {
-    try {
-      await this.fileService.removeFile(fileId);
-      this.removeFile(fileId);
-    } catch (error) {
-      console.error("Failed to remove file:", error);
-    }
-  }
-
-  /**
-   * Handle file open
-   * @private
-   */
-  async handleOpenFile(fileId) {
-    try {
-      await this.fileService.openFile(fileId);
-    } catch (error) {
-      console.error("Failed to open file:", error);
     }
   }
 
   /**
    * Toggle panel visibility
    */
-  toggleVisibility() {
-    this.isVisible = !this.isVisible;
+  toggle() {
+    const wasCollapsed = this.panel.classList.contains("collapsed");
+    this.panel.classList.toggle("collapsed");
 
-    if (this.fileListContainer) {
-      this.dom.setStyle(this.fileListContainer, "display", this.isVisible ? "block" : "none");
-    }
-
-    // Update toggle button
-    const toggleBtn = this.dom.querySelector(this.element, ".file-panel-toggle");
-    if (toggleBtn) {
-      this.dom.setTextContent(toggleBtn, this.isVisible ? "▼" : "▶");
+    // Auto-refresh when opening
+    if (wasCollapsed && this.currentSessionId) {
+      this.refresh();
     }
   }
 
   /**
-   * Show the panel
+   * Show panel
    */
   show() {
-    if (this.element) {
-      this.dom.setStyle(this.element, "display", "block");
-    }
+    this.panel.classList.remove("collapsed");
   }
 
   /**
-   * Hide the panel
+   * Hide panel
    */
   hide() {
-    if (this.element) {
-      this.dom.setStyle(this.element, "display", "none");
+    this.panel.classList.add("collapsed");
+  }
+
+  /**
+   * Check if panel is visible
+   *
+   * @returns {boolean} True if visible
+   */
+  isVisible() {
+    return !this.panel.classList.contains("collapsed");
+  }
+
+  /**
+   * Switch tab (sources/output)
+   *
+   * @param {HTMLElement} tab - Tab element to activate
+   */
+  switchTab(tab) {
+    const tabs = [this.sourcesTab, this.outputTab].filter(Boolean);
+    let directory = tab.dataset.directory;
+
+    // Update active tab styling
+    for (const t of tabs) {
+      t.classList.remove("active");
+    }
+    tab.classList.add("active");
+
+    // Only load files if there's an active session
+    if (!this.currentSessionId) {
+      console.log(`📂 Tab switched to ${tab.dataset.directory} (no session, not loading files)`);
+      return;
+    }
+
+    // Use session-specific directories
+    if (directory === "sources") {
+      directory = `data/files/${this.currentSessionId}/sources`;
+    } else if (directory === "output") {
+      directory = `data/files/${this.currentSessionId}/output`;
+    }
+
+    // Update active directory and load files
+    console.log(`📂 Switching to ${tab.dataset.directory} tab, directory: ${directory}`);
+    setActiveFilesDirectory(directory);
+    loadFiles(directory, this.filesContainer);
+  }
+
+  /**
+   * Set current session and update file paths
+   *
+   * @param {string|null} sessionId - Session ID (null to clear)
+   */
+  setSession(sessionId) {
+    this.currentSessionId = sessionId;
+
+    // Refresh current tab with new session context
+    if (sessionId) {
+      const activeTab = this.getActiveTab();
+      if (activeTab) {
+        this.switchTab(activeTab);
+      }
     }
   }
 
   /**
-   * Clear all files
+   * Get currently active tab
+   * @private
+   *
+   * @returns {HTMLElement|null} Active tab element
+   */
+  getActiveTab() {
+    return [this.sourcesTab, this.outputTab].find((tab) => tab?.classList.contains("active")) || this.sourcesTab;
+  }
+
+  /**
+   * Refresh files in current directory
+   */
+  refresh() {
+    if (!this.currentSessionId) return;
+
+    const activeTab = this.getActiveTab();
+    const dirType = activeTab?.dataset.directory || "sources";
+    const directory = `data/files/${this.currentSessionId}/${dirType}`;
+
+    console.log(`🔄 Refreshing files panel (${dirType} tab)`);
+    loadFiles(directory, this.filesContainer);
+  }
+
+  /**
+   * Load files for current session
+   */
+  loadSessionFiles() {
+    if (!this.currentSessionId) return;
+
+    const activeTab = this.getActiveTab();
+    const dirType = activeTab?.dataset.directory || "sources";
+    const directory = `data/files/${this.currentSessionId}/${dirType}`;
+
+    loadFiles(directory, this.filesContainer);
+  }
+
+  /**
+   * Clear files list
    */
   clear() {
-    this.files = [];
-    this.renderFileList();
-  }
-
-  /**
-   * Get current files
-   *
-   * @returns {Array<Object>} Current file list
-   */
-  getFiles() {
-    return [...this.files];
-  }
-
-  /**
-   * Destroy the component and remove from DOM
-   */
-  destroy() {
-    if (this.element) {
-      this.dom.remove(this.element);
-      this.element = null;
-      this.fileListContainer = null;
-      this.files = [];
+    if (this.filesContainer) {
+      this.filesContainer.innerHTML = "";
     }
+  }
+
+  /**
+   * Get panel element
+   *
+   * @returns {HTMLElement} The panel element
+   */
+  getPanel() {
+    return this.panel;
+  }
+
+  /**
+   * Get files container element
+   *
+   * @returns {HTMLElement} The files container element
+   */
+  getFilesContainer() {
+    return this.filesContainer;
+  }
+
+  /**
+   * Get current session ID
+   *
+   * @returns {string|null} Current session ID
+   */
+  getCurrentSession() {
+    return this.currentSessionId;
   }
 }

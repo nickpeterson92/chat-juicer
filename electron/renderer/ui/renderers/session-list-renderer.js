@@ -6,37 +6,7 @@
  * Output: DOM elements via DOMAdapter
  */
 
-/**
- * Format timestamp for display
- * @private
- */
-function formatTimestamp(createdAt) {
-  if (!createdAt) return "";
-
-  try {
-    const date = new Date(createdAt);
-    const now = new Date();
-    const diff = now - date;
-    const seconds = Math.floor(diff / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-
-    if (days > 7) {
-      return date.toLocaleDateString();
-    } else if (days > 0) {
-      return `${days}d ago`;
-    } else if (hours > 0) {
-      return `${hours}h ago`;
-    } else if (minutes > 0) {
-      return `${minutes}m ago`;
-    } else {
-      return "just now";
-    }
-  } catch (_e) {
-    return "";
-  }
-}
+import { formatTimestamp, truncateSessionTitle } from "../../viewmodels/session-viewmodel.js";
 
 /**
  * Render a single session list item
