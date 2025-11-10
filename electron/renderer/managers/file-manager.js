@@ -56,9 +56,25 @@ export async function loadFiles(directory = "sources", container = null) {
     const files = result.files || [];
 
     if (files.length === 0) {
-      // Display directory-specific empty message
+      // Display directory-specific empty message with drag-and-drop hint
       const dirName = directory.includes("/output") ? "output/" : "sources/";
-      targetContainer.innerHTML = `<div class="files-empty">${MSG_NO_FILES.replace("{directory}", dirName)}</div>`;
+      const isWelcomePage = targetContainer.id === "welcome-files-container";
+
+      if (isWelcomePage) {
+        // Show drag-and-drop friendly empty state on welcome page
+        targetContainer.innerHTML = `
+          <div class="welcome-empty-state">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="opacity-30 mb-3">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Drag and drop files here</p>
+            <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Files will be uploaded to this session</p>
+          </div>
+        `;
+      } else {
+        // Simpler message for chat view file panel
+        targetContainer.innerHTML = `<div class="files-empty">${MSG_NO_FILES.replace("{directory}", dirName)}</div>`;
+      }
       return;
     }
 
