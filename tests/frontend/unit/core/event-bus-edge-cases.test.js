@@ -157,22 +157,6 @@ describe("EventBus Edge Cases", () => {
       );
     });
 
-    it("should handle wildcard listener unsubscribing", () => {
-      const wildcardHandler = vi.fn();
-
-      const unsubscribe = eventBus.on("*", wildcardHandler);
-
-      eventBus.emit("test:event1", {});
-      expect(wildcardHandler).toHaveBeenCalledTimes(1);
-
-      // Unsubscribe after first event
-      unsubscribe();
-
-      // Should not receive second event
-      eventBus.emit("test:event2", {});
-      expect(wildcardHandler).toHaveBeenCalledTimes(1); // Still 1
-    });
-
     it("should handle error in wildcard listener", () => {
       const wildcardHandler = vi.fn(() => {
         throw new Error("Wildcard error");

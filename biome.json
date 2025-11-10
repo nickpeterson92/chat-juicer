@@ -6,6 +6,9 @@
       "recommended": true,
       "suspicious": {
         "noConsole": "off"
+      },
+      "complexity": {
+        "noStaticOnlyClass": "off"
       }
     }
   },
