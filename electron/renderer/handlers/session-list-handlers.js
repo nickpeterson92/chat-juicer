@@ -1,0 +1,379 @@
+/**
+ * Session List Event Handlers
+ *
+ * Centralized event delegation for session list interactions
+ */
+
+/**
+ * Setup event handlers for session list using event delegation
+ *
+ * @param {HTMLElement} sessionsList - Sessions list container
+ * @param {Object} sessionService - Session service instance
+ * @param {Object} sessionState - Session state object
+ * @param {Function} updateSessionsList - Function to refresh sessions list
+ * @param {Object} elements - DOM elements
+ * @param {Object} appState - Application state
+ */
+export function setupSessionListHandlers(
+  sessionsList,
+  sessionService,
+  sessionState,
+  updateSessionsList,
+  elements,
+  appState
+) {
+  // Click handler for session switching and actions
+  sessionsList.addEventListener("click", async (e) => {
+    const target = e.target;
+    const sessionItem = target.closest(".session-item");
+
+    if (!sessionItem) return;
+
+    const sessionId = sessionItem.dataset.sessionId;
+    if (!sessionId) return;
+
+    // Handle action buttons
+    const action = target.dataset?.action || target.closest("[data-action]")?.dataset?.action;
+
+    if (action === "summarize") {
+      await handleSummarize(sessionId, sessionService, sessionState);
+      e.stopPropagation();
+      return;
+    }
+
+    if (action === "rename") {
+      await handleRename(sessionItem, sessionId, sessionService, updateSessionsList);
+      e.stopPropagation();
+      return;
+    }
+
+    if (action === "delete") {
+      await handleDelete(sessionId, sessionService, sessionState, updateSessionsList, elements, appState);
+      e.stopPropagation();
+      return;
+    }
+
+    // If clicking on rename input, don't switch session
+    if (target.classList.contains("session-title-input")) {
+      e.stopPropagation();
+      return;
+    }
+
+    // Otherwise, switch to this session (only if different)
+    if (sessionId !== sessionState.currentSessionId) {
+      await handleSwitch(sessionId, sessionService, sessionState, updateSessionsList, elements, appState);
+    } else {
+      // Already in this session - do nothing (better UX, no popup)
+      console.log("Already in session:", sessionId);
+    }
+  });
+
+  console.log("✅ Session list event handlers attached (delegation)");
+}
+
+/**
+ * Handle session summarize
+ */
+async function handleSummarize(sessionId, sessionService, sessionState) {
+  // Only summarize if this is the current session
+  if (sessionId !== sessionState.currentSessionId) {
+    alert("Please switch to this session first to summarize it.");
+    return;
+  }
+
+  try {
+    console.log("Summarizing session:", sessionId);
+    const result = await sessionService.summarizeSession(sessionId);
+    if (result.success) {
+      console.log("✅ Session summarized successfully");
+    } else {
+      throw new Error(result.error);
+    }
+  } catch (error) {
+    console.error("Error summarizing session:", error);
+    alert(`Error summarizing session: ${error.message}`);
+  }
+}
+
+/**
+ * Handle session rename
+ */
+async function handleRename(sessionItem, sessionId, sessionService, _updateSessionsList) {
+  const titleDiv = sessionItem.querySelector(".session-title");
+  if (!titleDiv) return;
+
+  const currentTitle = titleDiv.textContent;
+
+  // Create inline input for renaming
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = currentTitle;
+  input.className = "session-title-input";
+  input.style.cssText =
+    "width: 100%; padding: 4px; font-size: 13px; border: 1px solid #4a9eff; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary);";
+
+  // Replace title with input
+  titleDiv.style.display = "none";
+  titleDiv.parentNode.insertBefore(input, titleDiv.nextSibling);
+  input.focus();
+  input.select();
+
+  const saveRename = async () => {
+    const newTitle = input.value.trim();
+
+    // Remove input
+    input.remove();
+    titleDiv.style.display = "";
+
+    if (!newTitle || newTitle === currentTitle) return;
+
+    try {
+      console.log("Renaming session:", sessionId, "to:", newTitle);
+      const result = await sessionService.renameSession(sessionId, newTitle);
+
+      if (result.success) {
+        console.log("✅ Session renamed successfully");
+        titleDiv.textContent = newTitle;
+      } else {
+        console.error("Failed to rename session:", result.error);
+        alert(`Failed to rename session: ${result.error}`);
+      }
+    } catch (error) {
+      console.error("Error renaming session:", error);
+      alert(`Error renaming session: ${error.message}`);
+    }
+  };
+
+  input.addEventListener("blur", saveRename);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      saveRename();
+    } else if (e.key === "Escape") {
+      input.remove();
+      titleDiv.style.display = "";
+    }
+  });
+}
+
+/**
+ * Handle session delete
+ */
+async function handleDelete(sessionId, sessionService, sessionState, updateSessionsList, elements, appState) {
+  // Get session title for confirmation
+  const sessionItem = document.querySelector(`[data-session-id="${sessionId}"]`);
+  const titleDiv = sessionItem?.querySelector(".session-title");
+  const sessionTitle = titleDiv?.textContent || "Untitled Conversation";
+
+  const confirmDelete = confirm(`Delete session "${sessionTitle}"?`);
+  if (!confirmDelete) return;
+
+  try {
+    console.log("Deleting session:", sessionId);
+
+    // Check which view we're on BEFORE deleting (to decide sidebar auto-close behavior)
+    const wasOnWelcomePage = document.body.classList.contains("view-welcome");
+
+    const result = await sessionService.deleteSession(sessionId);
+
+    if (result.success) {
+      console.log("✅ Session deleted successfully");
+
+      // Reload sessions list
+      const sessions = await sessionService.loadSessions();
+      if (sessions.success) {
+        updateSessionsList(sessions.sessions || []);
+      }
+
+      // If we deleted the current session, clear and show welcome page
+      console.log("🗑️ Delete check:", {
+        deletedSessionId: sessionId,
+        currentSessionId: sessionState.currentSessionId,
+        match: sessionId === sessionState.currentSessionId,
+      });
+
+      if (sessionId === sessionState.currentSessionId) {
+        console.log("🏠 Deleted active session, navigating to welcome page");
+        sessionState.currentSessionId = null;
+
+        // Clear chat UI
+        const { clearChat } = await import("../ui/chat-ui.js");
+        const { clearFunctionCards } = await import("../ui/function-card-ui.js");
+        const chatContainer = document.getElementById("chat-container");
+        if (chatContainer) {
+          clearChat(chatContainer);
+          clearFunctionCards(chatContainer);
+        }
+
+        // Show welcome view
+        const { showWelcomeView } = await import("../managers/view-manager.js");
+        await showWelcomeView(elements, appState);
+      }
+
+      // Close sidebar after delete (better UX) - but only if we were on chat view
+      // Keep sidebar open if we were on welcome page so user can manage multiple sessions
+      if (!wasOnWelcomePage) {
+        const sidebar = document.getElementById("sidebar");
+        if (sidebar && !sidebar.classList.contains("collapsed")) {
+          sidebar.classList.add("collapsed");
+        }
+      }
+    } else {
+      console.error("Failed to delete session:", result.error);
+      alert(`Failed to delete session: ${result.error}`);
+    }
+  } catch (error) {
+    console.error("Error deleting session:", error);
+    alert(`Error deleting session: ${error.message}`);
+  }
+}
+
+/**
+ * Handle session switch
+ */
+async function handleSwitch(sessionId, sessionService, sessionState, updateSessionsList, elements, appState) {
+  console.log("Switching to session:", sessionId);
+
+  // Double-check: don't switch if already in this session
+  if (sessionId === sessionState.currentSessionId) {
+    console.log("Already in this session, skipping switch");
+    return;
+  }
+
+  try {
+    const result = await sessionService.switchSession(sessionId);
+
+    if (result.success) {
+      console.log("✅ Switched to session:", sessionId);
+
+      // Update session state
+      sessionState.currentSessionId = sessionId;
+
+      // Clear current chat UI
+      const { clearChat } = await import("../ui/chat-ui.js");
+      const { clearFunctionCards } = await import("../ui/function-card-ui.js");
+      const chatContainer = elements.chatContainer || document.getElementById("chat-container");
+
+      if (chatContainer) {
+        clearChat(chatContainer);
+        clearFunctionCards(chatContainer);
+      }
+
+      // Reset app state
+      if (appState) {
+        appState.setState("message.currentAssistant", null);
+        appState.setState("message.assistantBuffer", "");
+        if (appState.functions) {
+          appState.functions.activeCalls?.clear();
+          appState.functions.argumentsBuffer?.clear();
+        }
+      }
+
+      // Render messages from backend response
+      const messages = result.fullHistory || [];
+      if (messages.length > 0 && chatContainer) {
+        const { addMessage } = await import("../ui/chat-ui.js");
+
+        console.log(`📨 Rendering ${messages.length} messages for session ${sessionId}`);
+
+        for (const msg of messages) {
+          console.log("Processing message:", {
+            role: msg.role,
+            contentType: typeof msg.content,
+            isArray: Array.isArray(msg.content),
+          });
+
+          if (msg.role && msg.content) {
+            let content = msg.content;
+            const originalContent = content;
+
+            // Handle different content formats
+            if (Array.isArray(content)) {
+              console.log("Content is array, length:", content.length);
+              // Direct array (multipart message)
+              // Handle both 'text' and 'output_text' types
+              content = content
+                .filter((part) => part && (part.type === "text" || part.type === "output_text"))
+                .map((part) => part.text)
+                .join("\n");
+              console.log("After array processing:", content);
+            } else if (typeof content === "object" && content.text) {
+              // Single text object
+              content = content.text;
+              console.log("Extracted from object.text:", content);
+            } else if (typeof content === "string" && (content.startsWith("[") || content.startsWith("{"))) {
+              // JSON string that needs parsing
+              try {
+                const parsed = JSON.parse(content);
+                console.log("Parsed JSON:", { isArray: Array.isArray(parsed), hasText: !!parsed.text });
+
+                if (Array.isArray(parsed)) {
+                  content = parsed
+                    .filter((part) => part && (part.type === "text" || part.type === "output_text"))
+                    .map((part) => part.text)
+                    .join("\n");
+                  console.log("After JSON array processing:", content);
+                } else if (parsed.text) {
+                  content = parsed.text;
+                  console.log("Extracted from parsed.text:", content);
+                }
+              } catch (_e) {
+                // Not valid JSON, use as-is
+                console.log("Content is not valid JSON, using as-is");
+              }
+            }
+            // else: content is already a plain string, use as-is
+
+            // Only add if we have actual text content
+            if (content && typeof content === "string" && content.trim()) {
+              addMessage(chatContainer, content, msg.role);
+            } else {
+              console.warn("❌ Skipping message - invalid content:", {
+                role: msg.role,
+                finalContent: content,
+                originalContent: originalContent,
+              });
+            }
+          }
+        }
+
+        // Scroll to bottom after rendering
+        setTimeout(() => {
+          chatContainer.scrollTop = chatContainer.scrollHeight;
+        }, 100);
+      } else {
+        console.log(`📭 No messages to render for session ${sessionId}`);
+      }
+
+      // Update the list to show new active session
+      updateSessionsList();
+
+      // Switch to chat view if on welcome page
+      if (document.body.classList.contains("view-welcome")) {
+        const { showChatView } = await import("../managers/view-manager.js");
+        await showChatView(elements, appState);
+      }
+
+      // Load files for this session
+      const { loadFiles, setActiveFilesDirectory } = await import("../managers/file-manager.js");
+      const sessionDirectory = `data/files/${sessionId}/sources`;
+      setActiveFilesDirectory(sessionDirectory);
+
+      const filesContainer = document.getElementById("files-container");
+      if (filesContainer) {
+        loadFiles(sessionDirectory, filesContainer);
+      }
+    } else {
+      throw new Error(result.error);
+    }
+
+    // Close sidebar after switching (better UX)
+    const sidebar = document.getElementById("sidebar");
+    if (sidebar && !sidebar.classList.contains("collapsed")) {
+      sidebar.classList.add("collapsed");
+    }
+  } catch (error) {
+    console.error("Failed to switch session:", error);
+    alert(`Failed to switch session: ${error.message}`);
+  }
+}

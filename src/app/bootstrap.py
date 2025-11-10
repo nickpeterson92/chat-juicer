@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 
 from app.state import AppState
 from core.agent import create_agent
-from core.constants import CHAT_HISTORY_DB_PATH, DEFAULT_SESSION_METADATA_PATH, get_settings
+from core.constants import CHAT_HISTORY_DB_PATH, DEFAULT_MODEL, DEFAULT_SESSION_METADATA_PATH, get_settings
 from core.full_history import FullHistoryStore
 from core.prompts import SYSTEM_INSTRUCTIONS
 from core.session_manager import SessionManager
@@ -60,9 +60,9 @@ async def initialize_application() -> AppState:
             # Azure OpenAI configuration
             api_key = settings.azure_openai_api_key
             endpoint = settings.azure_endpoint_str
-            deployment = settings.azure_openai_deployment
+            deployment = DEFAULT_MODEL  # Use default, sessions will override per-session
 
-            logger.info(f"Settings loaded successfully for Azure deployment: {deployment}")
+            logger.info(f"Settings loaded successfully for Azure (default deployment: {deployment})")
 
             http_client = create_http_client(enable_logging=settings.http_request_logging)
             if http_client:

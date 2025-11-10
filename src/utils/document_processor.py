@@ -12,7 +12,7 @@ from agents import Agent, Runner
 if TYPE_CHECKING:
     from markitdown import MarkItDown
 
-from core.constants import DOCUMENT_SUMMARIZATION_THRESHOLD, get_settings
+from core.constants import DEFAULT_MODEL, DOCUMENT_SUMMARIZATION_THRESHOLD, get_settings
 from utils.client_factory import create_sync_openai_client
 from utils.logger import logger
 from utils.token_utils import count_tokens
@@ -48,8 +48,7 @@ async def summarize_content(content: str, file_name: str = "document", model: st
 
         from core.prompts import DOCUMENT_SUMMARIZATION_REQUEST
 
-        settings = get_settings()
-        deployment = settings.azure_openai_deployment
+        deployment = DEFAULT_MODEL
 
         # Create a one-off document summarization agent with generic instructions
         summary_agent = Agent(
@@ -133,14 +132,14 @@ def get_markitdown_converter() -> MarkItDown | None:
         if settings.api_provider == "azure":
             api_key = settings.azure_openai_api_key
             endpoint = settings.azure_endpoint_str
-            deployment = settings.azure_openai_deployment
+            deployment = DEFAULT_MODEL
 
             logger.info(f"Initializing MarkItDown with Azure deployment: {deployment}")
             llm_client = create_sync_openai_client(api_key, base_url=endpoint)
 
         elif settings.api_provider == "openai":
             api_key = settings.openai_api_key
-            deployment = settings.openai_model
+            deployment = DEFAULT_MODEL
 
             logger.info(f"Initializing MarkItDown with OpenAI model: {deployment}")
             llm_client = create_sync_openai_client(api_key)

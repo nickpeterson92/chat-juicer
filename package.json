@@ -12,18 +12,27 @@
     "setup": "npm install && node scripts/setup.js",
     "lint": "biome check electron/*.js scripts/*.js",
     "lint:fix": "biome check electron/*.js scripts/*.js --write",
-    "format": "biome format electron/*.js scripts/*.js --write"
+    "format": "biome format electron/*.js scripts/*.js --write",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.3",
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.1.14",
+    "@vitest/ui": "^4.0.8",
     "electron": "^38.1.2",
     "electron-vite": "^4.0.1",
+    "happy-dom": "^20.0.10",
     "tailwindcss": "^4.1.14",
     "vite": "^7.1.10",
     "vite-plugin-electron": "^0.29.0",
-    "vite-plugin-electron-renderer": "^0.14.6"
+    "vite-plugin-electron-renderer": "^0.14.6",
+    "vitest": "^4.0.8"
   },
   "author": "",
   "license": "MIT",

@@ -251,11 +251,20 @@
   }
 
   .session-title {
-    @apply flex-1 overflow-hidden text-ellipsis whitespace-nowrap;
+    @apply overflow-hidden text-ellipsis whitespace-nowrap;
+    max-width: 180px; /* Less aggressive truncation */
+  }
+
+  .session-content {
+    @apply flex-1 min-w-0 flex flex-col;
+  }
+
+  .session-timestamp {
+    @apply text-xs opacity-70 mt-0.5;
   }
 
   .session-actions {
-    @apply flex gap-1 opacity-0 transition-opacity;
+    @apply flex gap-1 opacity-0 transition-opacity duration-200 flex-shrink-0;
   }
 
   .session-item:hover .session-actions {
@@ -263,15 +272,38 @@
   }
 
   .session-action-btn {
-    @apply bg-transparent border-none cursor-pointer p-1 rounded transition-colors;
+    @apply bg-transparent border-none cursor-pointer p-1.5 rounded inline-flex items-center justify-center;
   }
 
-  .session-action-btn:hover {
-    @apply bg-black/10;
+  .session-action-btn svg {
+    @apply transition-colors duration-150;
   }
 
-  .session-item.active .session-action-btn:hover {
-    @apply bg-white/20;
+  /* Summarize button - Blue hover */
+  .session-action-btn.summarize-btn:hover svg {
+    @apply text-blue-600 stroke-current;
+  }
+
+  [data-theme="dark"] .session-action-btn.summarize-btn:hover svg {
+    @apply text-blue-400;
+  }
+
+  /* Rename button - Green hover */
+  .session-action-btn.rename-btn:hover svg {
+    @apply text-green-600 stroke-current;
+  }
+
+  [data-theme="dark"] .session-action-btn.rename-btn:hover svg {
+    @apply text-green-400;
+  }
+
+  /* Delete button - Red hover */
+  .session-action-btn.delete-btn:hover svg {
+    @apply text-red-600 stroke-current;
+  }
+
+  [data-theme="dark"] .session-action-btn.delete-btn:hover svg {
+    @apply text-red-400;
   }
 
   .session-title-edit {
@@ -288,6 +320,27 @@
 
   [data-theme="dark"] .load-more-sessions-btn {
     @apply border-gray-700 text-gray-100 hover:bg-gray-800;
+  }
+
+  /* Empty session list state */
+  .session-list-empty {
+    @apply flex flex-col items-center justify-center py-12 px-4 text-center;
+  }
+
+  .empty-icon {
+    @apply mb-3 opacity-30 text-gray-500;
+  }
+
+  [data-theme="dark"] .empty-icon {
+    @apply text-gray-400;
+  }
+
+  .empty-message {
+    @apply text-sm text-gray-500;
+  }
+
+  [data-theme="dark"] .empty-message {
+    @apply text-gray-400;
   }
 
   /* Function call cards */
@@ -456,7 +509,11 @@
   }
 
   .file-delete-btn {
-    @apply bg-transparent border-none cursor-pointer p-1 rounded text-sm text-gray-500 transition-all opacity-0 flex-shrink-0 hover:bg-red-500/10 hover:text-red-500 hover:scale-110;
+    @apply bg-transparent border-none cursor-pointer p-1 rounded text-sm text-gray-500 opacity-0 flex-shrink-0;
+  }
+
+  .file-delete-btn svg {
+    @apply transition-colors duration-150;
   }
 
   [data-theme="dark"] .file-delete-btn {
@@ -465,6 +522,14 @@
 
   .file-item:hover .file-delete-btn {
     @apply opacity-100;
+  }
+
+  .file-delete-btn:hover svg {
+    @apply text-red-600;
+  }
+
+  [data-theme="dark"] .file-delete-btn:hover svg {
+    @apply text-red-400;
   }
 
   /* Welcome page components */

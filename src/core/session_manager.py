@@ -349,7 +349,7 @@ class SessionManager:
             True if title generated and updated successfully, False otherwise
         """
         try:
-            from core.constants import get_settings
+            from core.constants import DEFAULT_MODEL
             from core.prompts import SESSION_TITLE_GENERATION_PROMPT
 
             session = self.sessions.get(session_id)
@@ -370,8 +370,7 @@ class SessionManager:
             logger.info(f"Generating title for session {session_id} from {len(recent_messages)} messages")
 
             # Get settings and deployment
-            settings = get_settings()
-            deployment = settings.azure_openai_deployment
+            deployment = DEFAULT_MODEL
 
             # Create a one-off title generation agent
             title_agent = Agent(

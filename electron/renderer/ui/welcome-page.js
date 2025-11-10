@@ -106,7 +106,7 @@ function createModelSelector() {
   return `
     <div class="model-config-inline">
       <button id="model-selector-trigger" class="model-selector-trigger">
-        <span id="selected-model-label">GPT-5 Mini</span>
+        <span id="selected-model-label">GPT-5</span>
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M4 6L8 10L12 6" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
@@ -360,7 +360,7 @@ export function getModelConfig() {
   const selectedCard = document.querySelector(".model-card.selected");
   const selectedWrapper = selectedCard?.closest(".model-card-wrapper");
 
-  const model = selectedWrapper?.dataset.model || "gpt-5-mini";
+  const model = selectedWrapper?.dataset.model || "gpt-5";
   const config = { model };
 
   // Check if this model has a reasoning panel with a selected option

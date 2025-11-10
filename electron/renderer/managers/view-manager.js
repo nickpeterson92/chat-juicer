@@ -18,7 +18,11 @@ const welcomePageListeners = [];
  * @param {Object} appState - Application state
  */
 export async function showWelcomeView(elements, appState) {
-  if (!elements.welcomePageContainer) return;
+  console.log("🚀 showWelcomeView called");
+  if (!elements.welcomePageContainer) {
+    console.error("❌ welcomePageContainer not found!");
+    return;
+  }
 
   // Update state FIRST before rendering
   appState.setState("ui.currentView", "welcome");
@@ -55,10 +59,38 @@ export async function showWelcomeView(elements, appState) {
     // Continue with defaults - config UI will use default options
   }
 
+  // Clean up any existing welcome page listeners before attaching new ones
+  console.log("🧹 Cleaning up old listeners");
+  detachWelcomePageListeners();
+
   // Attach welcome page event listeners after DOM is ready
+  console.log("⏰ Scheduling listener attachment with setTimeout");
   setTimeout(() => {
+    console.log("⏰ setTimeout fired, calling attachWelcomePageListeners");
     attachWelcomePageListeners(elements, appState);
+
+    // Auto-refresh welcome page file list if there's an active session
+    // This prevents showing stale/deleted files
+    const sessionState = window.app?.sessionState;
+    if (sessionState?.currentSessionId) {
+      const welcomeFilesContainer = document.getElementById("welcome-files-container");
+      if (welcomeFilesContainer) {
+        import("../managers/file-manager.js").then(({ loadFiles }) => {
+          const directory = `data/files/${sessionState.currentSessionId}/sources`;
+          console.log("🔄 Auto-refreshing welcome page files");
+          loadFiles(directory, welcomeFilesContainer);
+
+          // Show the files section
+          const welcomeFilesSection = document.getElementById("welcome-files-section");
+          if (welcomeFilesSection && welcomeFilesContainer.children.length > 0) {
+            welcomeFilesSection.style.display = "block";
+          }
+        });
+      }
+    }
   }, 0);
+
+  console.log("✅ showWelcomeView complete");
 }
 
 /**
@@ -120,15 +152,24 @@ function detachWelcomePageListeners() {
  * @param {Object} appState - Application state
  */
 function attachWelcomePageListeners(elements, appState) {
+  console.log("🎯 attachWelcomePageListeners called");
   const welcomeInput = document.getElementById("welcome-input");
   const welcomeSendBtn = document.getElementById("welcome-send-btn");
   const suggestionPills = document.querySelectorAll(".suggestion-pill");
   const welcomeContainer = elements.welcomePageContainer;
 
+  console.log("🎯 Welcome elements:", {
+    hasInput: !!welcomeInput,
+    hasSendBtn: !!welcomeSendBtn,
+    pillCount: suggestionPills.length,
+    hasContainer: !!welcomeContainer,
+  });
+
   // Import loadFiles from file-manager (will be available after refactor)
   // For now, we'll keep the import dynamic to avoid circular dependencies
 
-  // File drag-and-drop handlers for welcome page
+  // NOTE: File drag-and-drop handlers are managed globally in bootstrap.js
+  // to prevent duplicate listeners. We only handle visual feedback here.
   if (welcomeContainer) {
     const dragenterHandler = (e) => {
       if (e.dataTransfer?.types.includes("Files")) {
@@ -158,15 +199,7 @@ function attachWelcomePageListeners(elements, appState) {
     welcomeContainer.addEventListener("dragleave", dragleaveHandler);
     welcomePageListeners.push({ element: welcomeContainer, event: "dragleave", handler: dragleaveHandler });
 
-    const dropHandler = async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      // handleFileDropWithSession will be available from index.js
-      const { handleFileDropWithSession } = await import("../index.js");
-      handleFileDropWithSession(e, true);
-    };
-    welcomeContainer.addEventListener("drop", dropHandler);
-    welcomePageListeners.push({ element: welcomeContainer, event: "drop", handler: dropHandler });
+    // DROP handler is managed in bootstrap.js to prevent duplicates
   }
 
   // Handle welcome files refresh button
@@ -192,69 +225,99 @@ function attachWelcomePageListeners(elements, appState) {
   }
 
   // Handle welcome input send
+  let isProcessing = false; // Guard against duplicate calls
   const sendWelcomeMessage = async () => {
-    if (!welcomeInput) return;
+    // Get fresh reference to input (don't rely on closure)
+    const welcomeInputElement = document.getElementById("welcome-input");
 
-    const message = welcomeInput.value.trim();
-    if (!message || appState.connection.status !== "CONNECTED") return;
+    if (!welcomeInputElement || isProcessing) {
+      console.log("sendWelcomeMessage blocked:", { hasInput: !!welcomeInputElement, isProcessing });
+      return;
+    }
 
-    // Get MCP config from checkboxes
-    const { getMcpConfig, getModelConfig } = await import("../ui/welcome-page.js");
-    const mcpConfig = getMcpConfig();
-    const modelConfig = getModelConfig();
+    const message = welcomeInputElement.value.trim();
+    if (!message) {
+      console.log("sendWelcomeMessage: empty message");
+      return;
+    }
 
-    // Create new session only if one does not already exist (e.g., created by file upload)
-    const { createNewSession, sessionState } = await import("../services/session-service.js");
-    let sessionId = sessionState.currentSessionId;
+    if (appState.connection.status !== "CONNECTED") {
+      console.log("sendWelcomeMessage: not connected");
+      return;
+    }
 
-    if (!sessionId) {
-      const result = await createNewSession(
-        window.electronAPI,
-        elements,
-        null,
-        mcpConfig,
-        modelConfig.model,
-        modelConfig.reasoning_effort
-      );
-      if (!result.success) {
-        window.electronAPI.log("error", "Failed to create session from welcome page", { error: result.error });
-        return;
+    isProcessing = true; // Set guard
+    console.log("sendWelcomeMessage: processing message:", message.substring(0, 50));
+
+    try {
+      // Get MCP config from checkboxes
+      const { getMcpConfig, getModelConfig } = await import("../ui/welcome-page.js");
+      const mcpConfig = getMcpConfig();
+      const modelConfig = getModelConfig();
+
+      // Create new session only if one does not already exist (e.g., created by file upload)
+      const { createNewSession, sessionState } = await import("../services/session-service.js");
+      let sessionId = sessionState.currentSessionId;
+
+      if (!sessionId) {
+        const result = await createNewSession(
+          window.electronAPI,
+          elements,
+          null, // title
+          mcpConfig, // mcp config
+          modelConfig.model, // model
+          modelConfig.reasoning_effort // reasoning effort
+        );
+        if (!result.success) {
+          window.electronAPI.log("error", "Failed to create session from welcome page", { error: result.error });
+          isProcessing = false; // Reset guard before returning
+          return;
+        }
+        sessionId = result.data?.session_id || null;
+
+        window.electronAPI.log("info", "Session created with full configuration", {
+          session_id: sessionId,
+          mcp_config: mcpConfig,
+          model: modelConfig.model,
+          reasoning_effort: modelConfig.reasoning_effort,
+        });
+      } else {
+        window.electronAPI.log("info", "Reusing existing session for welcome message", {
+          session_id: sessionId,
+          created_by: "file_upload",
+        });
       }
-      sessionId = result.data?.session_id || null;
 
-      window.electronAPI.log("info", "Session created with full configuration", {
-        session_id: sessionId,
-        mcp_config: mcpConfig,
-        model: modelConfig.model,
-        reasoning_effort: modelConfig.reasoning_effort,
-      });
-    } else {
-      window.electronAPI.log("info", "Reusing existing session for welcome message", {
-        session_id: sessionId,
-        created_by: "file_upload",
-      });
+      // Clear the input
+      welcomeInputElement.value = "";
+
+      // Transition to chat view (either new or existing session)
+      showChatView(elements, appState);
+
+      // Collapse sidebar to give chat more space (matches behavior when switching sessions)
+      if (elements.sidebar) {
+        elements.sidebar.classList.add("collapsed");
+        window.electronAPI.log("debug", "Sidebar collapsed after starting chat from welcome page");
+      }
+
+      // Add user message to chat
+      addMessage(elements.chatContainer, message, "user");
+
+      // Reset assistant message state
+      appState.setState("message.currentAssistant", null);
+      appState.setState("message.assistantBuffer", "");
+
+      // Send to main process
+      window.electronAPI.sendUserInput(message);
+
+      // Session list will be updated automatically via session-created event
+    } catch (error) {
+      console.error("Error in sendWelcomeMessage:", error);
+      window.electronAPI.log("error", "Failed to send welcome message", { error: error.message });
+    } finally {
+      // Always reset guard, even if there's an error
+      isProcessing = false;
     }
-
-    // Transition to chat view (either new or existing session)
-    showChatView(elements, appState);
-
-    // Collapse sidebar to give chat more space (matches behavior when switching sessions)
-    if (elements.sidebar) {
-      elements.sidebar.classList.add("collapsed");
-      window.electronAPI.log("debug", "Sidebar collapsed after starting chat from welcome page");
-    }
-
-    // Add user message to chat
-    addMessage(elements.chatContainer, message, "user");
-
-    // Reset assistant message state
-    appState.setState("message.currentAssistant", null);
-    appState.setState("message.assistantBuffer", "");
-
-    // Send to main process
-    window.electronAPI.sendUserInput(message);
-
-    // Session list will be updated automatically via session-created event
   };
 
   // Send button click
@@ -265,14 +328,20 @@ function attachWelcomePageListeners(elements, appState) {
 
   // Enter key to send
   if (welcomeInput) {
-    const keypressHandler = (e) => {
+    console.log("🎯 Attaching keydown listener to welcome input");
+    const keydownHandler = (e) => {
+      console.log("🎯 Keydown event:", e.key, "shiftKey:", e.shiftKey);
       if (e.key === "Enter" && !e.shiftKey) {
+        console.log("🎯 Enter pressed! Preventing default and sending message");
         e.preventDefault();
         sendWelcomeMessage();
       }
     };
-    welcomeInput.addEventListener("keypress", keypressHandler);
-    welcomePageListeners.push({ element: welcomeInput, event: "keypress", handler: keypressHandler });
+    welcomeInput.addEventListener("keydown", keydownHandler);
+    welcomePageListeners.push({ element: welcomeInput, event: "keydown", handler: keydownHandler });
+    console.log("✅ Keydown listener attached");
+  } else {
+    console.warn("⚠️ welcomeInput not found, cannot attach keydown listener");
   }
 
   // Suggestion pill clicks

@@ -10,7 +10,7 @@ from typing import Any, Literal
 from agents import Agent, ModelSettings
 from openai.types.shared import Reasoning
 
-from core.constants import REASONING_MODELS, get_settings
+from core.constants import REASONING_MODELS
 from utils.logger import logger
 
 # Type alias for valid reasoning effort levels
@@ -37,11 +37,8 @@ def create_agent(
     Returns:
         Configured Agent instance
     """
-    # Get settings for reasoning effort configuration
-    settings = get_settings()
-
-    # Use session-specific reasoning_effort if provided, otherwise use global default
-    effort_level = reasoning_effort if reasoning_effort is not None else settings.reasoning_effort
+    # Use session-specific reasoning_effort if provided, otherwise use default
+    effort_level = reasoning_effort if reasoning_effort is not None else "medium"
 
     # Validate effort_level is a valid literal type
     valid_efforts: tuple[ReasoningEffort, ...] = ("minimal", "low", "medium", "high")

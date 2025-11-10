@@ -109,13 +109,11 @@ class SessionMetadata(BaseModel):
         description="List of enabled MCP server names (sequential, fetch)",
     )
     model: str = Field(
-        default_factory=lambda: __import__("core.constants", fromlist=["get_settings"])
-        .get_settings()
-        .azure_openai_deployment,
+        default="gpt-5",
         description="Model deployment name for this session",
     )
     reasoning_effort: str = Field(
-        default_factory=lambda: __import__("core.constants", fromlist=["get_settings"]).get_settings().reasoning_effort,
+        default="medium",
         description="Reasoning effort level: minimal | low | medium | high",
     )
 
