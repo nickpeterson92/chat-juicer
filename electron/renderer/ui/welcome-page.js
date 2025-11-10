@@ -676,8 +676,10 @@ export function initializeModelConfig(models = [], reasoningLevels = []) {
     });
   }
 
-  // Setup more models toggle
-  if (moreModelsToggle) {
+  // Setup more models toggle - MUST BE DONE ONCE, NOT EVERY TIME
+  if (moreModelsToggle && !moreModelsToggle.dataset.listenerAttached) {
+    moreModelsToggle.dataset.listenerAttached = "true";
+
     moreModelsToggle.addEventListener("click", () => {
       const isExpanded = moreModelsSection.style.display !== "none";
       moreModelsSection.style.display = isExpanded ? "none" : "block";
