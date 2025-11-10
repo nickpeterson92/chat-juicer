@@ -115,8 +115,11 @@ export function showChatView(elements, appState) {
   document.body.classList.remove("view-welcome");
   document.body.classList.add("view-chat");
 
-  // Focus chat input and ensure proper sizing
-  if (elements.userInput) {
+  // Focus chat input (Phase 7: use InputArea component if available)
+  if (window.components?.inputArea) {
+    window.components.inputArea.focus();
+  } else if (elements.userInput) {
+    // Fallback to direct manipulation if component not available
     elements.userInput.focus();
 
     // Initialize textarea height properly (for textarea elements)
@@ -226,6 +229,89 @@ function attachWelcomePageListeners(elements, appState, services = {}) {
     welcomePageListeners.push({ element: welcomeFilesRefreshBtn, event: "click", handler: refreshHandler });
   }
 
+  // Handle model config changes - update session config if no messages sent yet
+  async function handleModelConfigChange() {
+    const { sessionState } = await import("../services/session-service.js");
+    const sessionId = sessionState.currentSessionId;
+
+    // Only update if there's a session
+    if (!sessionId) return;
+
+    // Check if session has any messages
+    const sessions = await services.sessionService.loadSessions(0, 100);
+    if (!sessions.success) return;
+
+    const currentSession = sessions.sessions.find((s) => s.session_id === sessionId);
+    if (!currentSession || currentSession.message_count > 0) {
+      console.log("⚠️ Session has messages, not updating config on change");
+      return;
+    }
+
+    console.log("🔄 Updating session config (0 messages)");
+
+    // Get new config
+    const { getMcpConfig, getModelConfig } = await import("../ui/welcome-page.js");
+    const mcpConfig = getMcpConfig();
+    const modelConfig = getModelConfig();
+
+    // Update session config via new backend command
+    try {
+      const response = await window.electronAPI.sessionCommand("update_config", {
+        session_id: sessionId,
+        model: modelConfig.model,
+        mcp_config: mcpConfig,
+        reasoning_effort: modelConfig.reasoning_effort,
+      });
+
+      if (response?.session_id) {
+        console.log("✅ Session config updated:", {
+          model: modelConfig.model,
+          mcp_config: mcpConfig,
+          reasoning: modelConfig.reasoning_effort,
+        });
+
+        // Reload sessions list to show updated metadata
+        const sessionsResult = await services.sessionService.loadSessions();
+        if (sessionsResult.success) {
+          // Trigger session list update
+          window.dispatchEvent(
+            new CustomEvent("sessions-loaded", {
+              detail: { sessions: sessionsResult.sessions },
+            })
+          );
+        }
+      } else {
+        console.error("❌ Failed to update session config:", response?.error);
+      }
+    } catch (error) {
+      console.error("❌ Error updating session config:", error);
+    }
+  }
+
+  // Attach listeners to model cards and reasoning options
+  setTimeout(() => {
+    // Model card clicks
+    document.querySelectorAll(".model-card").forEach((card) => {
+      const handler = () => handleModelConfigChange();
+      card.addEventListener("click", handler);
+      welcomePageListeners.push({ element: card, event: "click", handler });
+    });
+
+    // Reasoning option clicks
+    document.querySelectorAll(".reasoning-option").forEach((option) => {
+      const handler = () => handleModelConfigChange();
+      option.addEventListener("click", handler);
+      welcomePageListeners.push({ element: option, event: "click", handler });
+    });
+
+    // MCP toggle clicks
+    document.querySelectorAll(".mcp-toggle-btn").forEach((btn) => {
+      const handler = () => handleModelConfigChange();
+      btn.addEventListener("click", handler);
+      welcomePageListeners.push({ element: btn, event: "click", handler });
+    });
+  }, 100); // Wait for welcome page to render
+
   // Handle welcome input send
   let isProcessing = false; // Guard against duplicate calls
   const sendWelcomeMessage = async () => {
@@ -297,10 +383,21 @@ function attachWelcomePageListeners(elements, appState, services = {}) {
         const { sessionState } = await import("../services/session-service.js");
         sessionState.currentSessionId = sessionId;
 
+        // Update chat model selector IMMEDIATELY with the config we just created
+        // (Don't wait for backend event - that comes after the message completes)
+        const sessionData = {
+          session_id: sessionId,
+          title: result.title || null,
+          model: modelConfig.model,
+          reasoning_effort: modelConfig.reasoning_effort,
+          mcp_config: mcpConfig,
+        };
+
         // Dispatch session-created event to update the session list
         window.dispatchEvent(
           new CustomEvent("session-created", {
             detail: {
+              session: sessionData, // Include full session data
               session_id: sessionId,
               title: result.title || null,
               source: "welcome_page",
@@ -312,6 +409,19 @@ function attachWelcomePageListeners(elements, appState, services = {}) {
           session_id: sessionId,
           created_by: "file_upload",
         });
+
+        // Update chat model selector with current config (for existing sessions too)
+        // This handles the case where a file upload created the session
+        const sessionData = {
+          session_id: sessionId,
+          model: modelConfig.model,
+          reasoning_effort: modelConfig.reasoning_effort,
+          mcp_config: mcpConfig,
+        };
+
+        const { updateChatModelSelector } = await import("../utils/chat-model-updater.js");
+        updateChatModelSelector(sessionData);
+        window.electronAPI.log("info", "Chat model selector updated for existing session");
       }
 
       // Clear the input
@@ -326,8 +436,12 @@ function attachWelcomePageListeners(elements, appState, services = {}) {
         window.electronAPI.log("debug", "Sidebar collapsed after starting chat from welcome page");
       }
 
-      // Add user message to chat
-      addMessage(elements.chatContainer, message, "user");
+      // Add user message to chat (Phase 7: use ChatContainer component if available)
+      if (window.components?.chatContainer) {
+        window.components.chatContainer.addUserMessage(message);
+      } else {
+        addMessage(elements.chatContainer, message, "user");
+      }
 
       // Reset assistant message state
       appState.setState("message.currentAssistant", null);

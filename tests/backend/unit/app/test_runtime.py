@@ -286,20 +286,34 @@ class TestSendSessionCreatedEvent:
 
     @patch("app.runtime.IPCManager")
     def test_send_session_created_event(self, mock_ipc: Mock) -> None:
-        """Test sending session created event."""
+        """Test sending session created event with full metadata."""
         mock_app_state = Mock()
         mock_app_state.session_manager = Mock()
-        mock_app_state.session_manager.get_session.return_value = Mock(
-            session_id="chat_new",
-            title="New Session",
-        )
+
+        # Mock session with model_dump() method
+        mock_session = Mock()
+        mock_session.model_dump.return_value = {
+            "session_id": "chat_new",
+            "title": "New Session",
+            "model": "gpt-5",
+            "reasoning_effort": "medium",
+            "mcp_config": None,
+        }
+        mock_app_state.session_manager.get_session.return_value = mock_session
 
         send_session_created_event(mock_app_state, "chat_new")
 
         mock_ipc.send.assert_called_once()
         call_args = mock_ipc.send.call_args[0][0]
+
         assert call_args["type"] == "session_created"
-        assert call_args["session_id"] == "chat_new"
+        # Session metadata is nested under "session" key
+        assert "session" in call_args
+        session_data = call_args["session"]
+        assert session_data["session_id"] == "chat_new"
+        assert session_data["title"] == "New Session"
+        assert session_data["model"] == "gpt-5"
+        assert session_data["reasoning_effort"] == "medium"
 
     @patch("app.runtime.IPCManager")
     def test_send_session_created_event_no_session(self, mock_ipc: Mock) -> None:

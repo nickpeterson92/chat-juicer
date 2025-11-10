@@ -27,7 +27,7 @@ chat-juicer/
 │       │   ├── function-card-ui.js # Function call card visualization
 │       │   ├── welcome-page.js   # Welcome page UI component
 │       │   └── titlebar.js       # Cross-platform custom titlebar
-│       ├── handlers/message-handlers.js # Handler registry for streaming events
+│       ├── handlers/message-handlers-v2.js # EventBus-integrated message handlers
 │       ├── services/session-service.js  # Session CRUD with consistent error handling
 │       ├── managers/              # UI state and interaction managers
 │       │   ├── theme-manager.js  # Dark mode and theme management
@@ -199,9 +199,10 @@ The renderer process uses a modular architecture for maintainability:
 - `welcome-page.js`: Welcome page component with session loading
 - `titlebar.js`: Cross-platform custom titlebar (Windows/Linux borderless window support)
 
-**Event Handling** (`handlers/message-handlers.js`):
-- Handler registry pattern replacing monolithic switch statement
-- 14+ specialized handler functions for different message types
+**Event Handling** (`handlers/message-handlers-v2.js`):
+- EventBus-integrated message handlers for decoupled architecture
+- 14+ specialized handler functions registered with EventBus
+- Event-driven message processing with pub/sub pattern
 - Isolated, testable handlers (10-30 lines each)
 - Main `processMessage()` router with error handling
 

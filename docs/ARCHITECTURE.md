@@ -287,8 +287,7 @@ electron/renderer/
 │   └── welcome-page.js    # Welcome screen
 │
 ├── handlers/              # Event handlers
-│   ├── message-handlers.js        # Message routing
-│   └── message-handlers-v2.js     # EventBus-integrated handlers
+│   └── message-handlers-v2.js     # EventBus-integrated message routing
 │
 ├── managers/              # UI state managers
 │   ├── theme-manager.js   # Theme switching

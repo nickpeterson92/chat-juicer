@@ -126,17 +126,28 @@
             </div>
           </div>
 
-          <div class="p-5 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-600 flex items-end gap-2.5">
-            <div class="flex-1 relative">
+          <div class="p-5 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-600">
+            <!-- Chat Input Section (compact variant) -->
+            <div class="welcome-input-section compact">
               <textarea
                 id="user-input"
                 placeholder="Reply..."
                 autocomplete="off"
                 rows="1"
-                class="w-full py-3 px-4 border-2 border-gray-200 dark:border-gray-600 rounded-3xl text-base outline-none transition-colors bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:border-gray-400 dark:focus:border-gray-500 disabled:opacity-50 disabled:cursor-not-allowed resize-none overflow-hidden min-h-[48px]"
+                class="welcome-input"
               ></textarea>
+              <div class="welcome-input-footer">
+                <!-- MCP toggles removed for chat page - can add back if needed -->
+                <div></div>
+                <!-- Chat Model Selector -->
+                <div id="chat-model-selector"></div>
+                <button class="welcome-send-btn" id="send-btn" title="Send message">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                  </svg>
+                </button>
+              </div>
             </div>
-            <button class="py-3 px-6 bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900 border-none rounded-3xl text-base font-semibold cursor-pointer transition-all duration-200 hover:bg-gray-700 dark:hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0" id="send-btn">Send</button>
           </div>
         </div>
 

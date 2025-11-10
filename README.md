@@ -333,7 +333,7 @@ chat-juicer/
 │       │   ├── function-card-ui.js # Function call card visualization
 │       │   ├── welcome-page.js   # Welcome page UI component
 │       │   └── titlebar.js       # Cross-platform custom titlebar
-│       ├── handlers/message-handlers.js # Handler registry for streaming events
+│       ├── handlers/message-handlers-v2.js # EventBus-integrated message handlers
 │       ├── services/session-service.js  # Session CRUD operations
 │       ├── managers/              # UI state and interaction managers
 │       │   ├── theme-manager.js  # Dark mode and theme management
@@ -463,7 +463,7 @@ chat-juicer/
 - **core/state.js**: State management with BoundedMap for memory safety and AppState pub/sub
 - **ui/chat-ui.js**: Message rendering and chat interface operations
 - **ui/function-card-ui.js**: Function call card visualization and management
-- **handlers/message-handlers.js**: Handler registry pattern for streaming event processing
+- **handlers/message-handlers-v2.js**: EventBus-integrated message handlers for streaming events
 - **services/session-service.js**: Session CRUD operations with consistent error handling
 
 ## Function Calling

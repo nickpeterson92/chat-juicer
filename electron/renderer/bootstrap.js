@@ -13,23 +13,24 @@ import { IPCAdapter } from "./adapters/IPCAdapter.js";
 import { StorageAdapter } from "./adapters/StorageAdapter.js";
 // Phase 4: EventBus & Monitoring
 import { globalEventBus } from "./core/event-bus.js";
+// State Management
+import { AppState } from "./core/state.js";
+// Managers
+import { elements, initializeElements } from "./managers/dom-manager.js";
+import { loadFiles } from "./managers/file-manager.js";
 import { getCorePlugins, PluginRegistry } from "./plugins/index.js";
 import { FileService } from "./services/file-service.js";
 import { FunctionCallService } from "./services/function-call-service.js";
 // Services (Business Logic)
 import { MessageService } from "./services/message-service.js";
 import { SessionService } from "./services/session-service.js";
-import { DebugDashboard } from "./utils/debug/index.js";
-import { globalMetrics } from "./utils/performance/index.js";
-
 // UI Components
 // Note: showWelcomePage is now imported dynamically via showWelcomeView
-
-// State Management
-import { AppState } from "./core/state.js";
-
-// Managers
-import { elements, initializeElements } from "./managers/dom-manager.js";
+import { ChatContainer } from "./ui/components/chat-container.js";
+import { FilePanel } from "./ui/components/file-panel.js";
+import { InputArea } from "./ui/components/input-area.js";
+import { DebugDashboard } from "./utils/debug/index.js";
+import { globalMetrics } from "./utils/performance/index.js";
 
 /**
  * Bootstrap the application with existing HTML
@@ -112,7 +113,30 @@ export async function bootstrapSimple() {
   console.log("✅ DOM verification complete");
 
   // ======================
-  // 6. Setup Event Listeners
+  // 6. Initialize Components (Phase 7)
+  // ======================
+
+  // Note: sendMessage function is defined later (line ~444), so we'll pass it as a callback
+
+  const components = {
+    chatContainer: new ChatContainer(document.getElementById("chat-container")),
+    inputArea: null, // Will initialize after sendMessage is defined
+    filePanel: new FilePanel(
+      document.getElementById("files-panel"),
+      document.getElementById("open-files-btn"),
+      document.getElementById("files-container"),
+      document.getElementById("refresh-files-btn"),
+      document.getElementById("tab-sources"),
+      document.getElementById("tab-output")
+    ),
+  };
+
+  // Make components globally accessible
+  window.components = components;
+  console.log("✅ Components initialized");
+
+  // ======================
+  // 7. Setup Event Listeners
   // ======================
 
   // Sidebar toggle
@@ -125,81 +149,17 @@ export async function bootstrapSimple() {
   }
 
   // ========================
-  // FILE PANEL FUNCTIONALITY
+  // Phase 7: File panel now managed by FilePanel component
   // ========================
+  // NOTE: FilePanel component handles:
+  // - Panel toggle (open/close)
+  // - Tab switching (sources/output)
+  // - File refresh
+  // - Session-specific directories
+  // - Auto-refresh on panel open
+  // See component initialization above (line ~127)
 
-  // Import file manager
-  const { loadFiles, setActiveFilesDirectory, activeFilesDirectory } = await import("./managers/file-manager.js");
-
-  // Files panel toggle
-  const openFilesBtn = document.getElementById("open-files-btn");
-  const filesPanel = document.getElementById("files-panel");
-  if (openFilesBtn && filesPanel) {
-    openFilesBtn.addEventListener("click", () => {
-      const wasCollapsed = filesPanel.classList.contains("collapsed");
-      filesPanel.classList.toggle("collapsed");
-
-      // Auto-refresh files when opening the panel (better UX)
-      if (wasCollapsed && sessionState.currentSessionId) {
-        // Respect the currently active tab
-        const activeTab = document.querySelector(".files-tab.active");
-        const tabType = activeTab?.dataset.directory || "sources";
-        const directory = `data/files/${sessionState.currentSessionId}/${tabType}`;
-        const filesContainer = document.getElementById("files-container");
-        if (filesContainer) {
-          console.log(`🔄 Auto-refreshing files panel on open (${tabType} tab)`);
-          loadFiles(directory, filesContainer);
-        }
-      }
-    });
-  }
-
-  // Get files container
-  const filesContainer = document.getElementById("files-container");
-
-  // Refresh files button
-  const refreshFilesBtn = document.getElementById("refresh-files-btn");
-  if (refreshFilesBtn) {
-    refreshFilesBtn.addEventListener("click", () => {
-      if (sessionState.currentSessionId) {
-        const directory = `data/files/${sessionState.currentSessionId}/${activeFilesDirectory.includes("output") ? "output" : "sources"}`;
-        loadFiles(directory, filesContainer);
-      }
-    });
-  }
-
-  // File tabs switching (sources/output)
-  const sourcesTab = document.getElementById("tab-sources");
-  const outputTab = document.getElementById("tab-output");
-  const filesTabs = [sourcesTab, outputTab].filter(Boolean);
-
-  for (const tab of filesTabs) {
-    tab.addEventListener("click", () => {
-      let directory = tab.dataset.directory;
-
-      // Use session-specific directories when session is active
-      if (sessionState.currentSessionId) {
-        if (directory === "sources") {
-          directory = `data/files/${sessionState.currentSessionId}/sources`;
-        } else if (directory === "output") {
-          directory = `data/files/${sessionState.currentSessionId}/output`;
-        }
-      }
-
-      // Update active tab styling
-      for (const t of filesTabs) {
-        t.classList.remove("active");
-      }
-      tab.classList.add("active");
-
-      // Update active directory and load files
-      console.log(`📂 Switching to ${tab.dataset.directory} tab, directory: ${directory}`);
-      setActiveFilesDirectory(directory);
-      loadFiles(directory, filesContainer);
-    });
-  }
-
-  // Drag & drop file upload
+  // Drag & drop file upload (still managed globally)
   const chatPanel = document.querySelector(".chat-panel"); // Use querySelector since it's a class, not an ID
   const fileDropZone = document.getElementById("file-drop-zone");
 
@@ -267,9 +227,16 @@ export async function bootstrapSimple() {
         try {
           // Create session without title - backend will generate default timestamp-based title
           const result = await sessionService.createSession({});
+
           if (result.success) {
             sessionState.currentSessionId = result.sessionId;
             console.log("✅ Session created:", result.sessionId);
+
+            // Tell FilePanel component about the new session (Phase 7)
+            if (components.filePanel) {
+              components.filePanel.setSession(result.sessionId);
+              console.log("✅ FilePanel updated with new session");
+            }
 
             // Reload sessions list to show the new session in sidebar
             const sessionsResult = await sessionService.loadSessions();
@@ -277,12 +244,13 @@ export async function bootstrapSimple() {
               updateSessionsList(sessionsResult.sessions || []);
             }
           } else {
-            throw new Error(result.error);
+            console.error("❌ Session creation failed:", result.error || "Unknown error");
+            throw new Error(result.error || "Unknown error creating session");
           }
           // STAY on welcome page for file uploads - only switch to chat on first message
         } catch (error) {
-          console.error("Failed to create session:", error);
-          alert("Failed to create session for file upload");
+          console.error("❌ Failed to create session:", error);
+          alert(`Failed to create session for file upload: ${error.message}`);
           return;
         }
       }
@@ -302,7 +270,7 @@ export async function bootstrapSimple() {
             console.log(`✅ File uploaded: ${file.name}`);
             uploadedCount++;
 
-            // Refresh the appropriate file container based on view
+            // Refresh the appropriate file container based on view (Phase 7: use FilePanel component)
             if (sessionState.currentSessionId) {
               const directory = `data/files/${sessionState.currentSessionId}/sources`;
 
@@ -319,8 +287,18 @@ export async function bootstrapSimple() {
                   loadFiles(directory, welcomeFilesContainer);
                 }
               } else {
-                // Load files into right-side panel (chat view)
-                loadFiles(directory, filesContainer);
+                // Refresh files panel using component (chat view)
+                if (components.filePanel) {
+                  components.filePanel.refresh();
+                } else {
+                  // Fallback: get container from component (should not happen)
+                  console.warn("FilePanel component not available during upload, using direct load");
+                  const container =
+                    components.filePanel?.getFilesContainer() || document.getElementById("files-container");
+                  if (container) {
+                    loadFiles(directory, container);
+                  }
+                }
               }
             }
           } else {
@@ -383,11 +361,11 @@ export async function bootstrapSimple() {
         await showChatView(elements, appState);
       }
 
-      // Display user message in chat
-      const { addMessage } = await import("./ui/chat-ui.js");
-      const chatContainer = document.getElementById("chat-container");
-      if (chatContainer) {
-        addMessage(chatContainer, message.trim(), "user");
+      // Display user message in chat (Phase 7: use ChatContainer component)
+      if (components.chatContainer) {
+        components.chatContainer.addUserMessage(message.trim());
+      } else {
+        console.error("⚠️ ChatContainer component not available - message not displayed");
       }
 
       // Send the message via MessageService
@@ -417,16 +395,10 @@ export async function bootstrapSimple() {
     }
   }
 
-  // Auto-resize textarea helper
-  function autoResizeTextarea(textarea) {
-    if (!textarea || textarea.tagName !== "TEXTAREA") return;
-
-    textarea.style.height = "auto";
-    const maxHeight = 200;
-    const newHeight = Math.min(textarea.scrollHeight, maxHeight);
-    textarea.style.height = `${newHeight}px`;
-    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
-  }
+  // ======================
+  // Phase 7: Auto-resize now handled by InputArea component
+  // ======================
+  // (autoResizeTextarea helper function removed - InputArea.adjustHeight() handles this)
 
   // Chat view: Send button & input
   const sendBtn = document.getElementById("send-btn");
@@ -439,35 +411,32 @@ export async function bootstrapSimple() {
     userInputTag: userInput?.tagName,
   });
 
+  // ======================
+  // Initialize InputArea Component (Phase 7 + Model Selector)
+  // ======================
   if (sendBtn && userInput) {
-    sendBtn.addEventListener("click", () => {
-      console.log("🖱️ Send button clicked");
-      sendMessage(userInput.value, userInput);
-    });
-
-    userInput.addEventListener("keydown", (e) => {
-      console.log("⌨️ Chat input keydown:", e.key, "shift:", e.shiftKey, "target:", e.target.id);
-      if (e.key === "Enter" && !e.shiftKey) {
-        console.log("✅ Enter (no shift) detected - preventing default and sending");
-        e.preventDefault();
-        sendMessage(userInput.value, userInput);
+    const chatModelSelector = document.getElementById("chat-model-selector");
+    components.inputArea = new InputArea(
+      userInput,
+      sendBtn,
+      (message) => {
+        sendMessage(message, userInput);
+      },
+      {
+        modelSelectorContainer: chatModelSelector,
+        ipcAdapter: ipcAdapter,
+        sessionState: sessionState,
+        getModelConfig: null, // Will be injected after importing welcome-page.js
       }
-    });
-
-    // Auto-resize textarea as user types
-    if (userInput.tagName === "TEXTAREA") {
-      userInput.addEventListener("input", () => {
-        autoResizeTextarea(userInput);
-      });
-
-      // Initialize height
-      autoResizeTextarea(userInput);
-    }
-
-    console.log("✅ Chat input event listeners attached to:", userInput.id);
-  } else {
-    console.warn("⚠️ Chat input or send button not found!");
+    );
+    console.log("✅ InputArea component initialized");
   }
+
+  // ======================
+  // Phase 7: Input handling now managed by InputArea component
+  // ======================
+  // NOTE: InputArea component handles all input events (click, keydown, auto-resize)
+  // See component initialization above (line ~472)
 
   // NOTE: Welcome page handlers (input/send/refresh/keypress) are managed in view-manager.js
   // to allow proper cleanup on view transitions. Only global/persistent handlers here.
@@ -506,6 +475,12 @@ export async function bootstrapSimple() {
         const previousSessionId = sessionState.currentSessionId;
         sessionState.currentSessionId = null;
 
+        // Clear FilePanel component session (Phase 7)
+        if (components.filePanel) {
+          components.filePanel.setSession(null);
+          components.filePanel.clear();
+        }
+
         // Clear current session using SessionService
         await sessionService.clearCurrentSession();
 
@@ -518,13 +493,9 @@ export async function bootstrapSimple() {
           }
         }
 
-        // Clear chat UI
-        const { clearChat } = await import("./ui/chat-ui.js");
-        const { clearFunctionCards } = await import("./ui/function-card-ui.js");
-        const chatContainer = document.getElementById("chat-container");
-        if (chatContainer) {
-          clearChat(chatContainer);
-          clearFunctionCards(chatContainer);
+        // Clear chat UI (Phase 7: use ChatContainer component)
+        if (components.chatContainer) {
+          components.chatContainer.clear();
         }
 
         // Show welcome view
@@ -552,10 +523,12 @@ export async function bootstrapSimple() {
       }
     }
 
-    // Close files panel
-    if (filesPanel && !filesPanel.classList.contains("collapsed")) {
-      if (!filesPanel.contains(e.target) && !openFilesBtn?.contains(e.target)) {
-        filesPanel.classList.add("collapsed");
+    // Close files panel (Phase 7: use component API)
+    if (components.filePanel?.isVisible()) {
+      const panel = components.filePanel.getPanel();
+      const toggleBtn = document.getElementById("open-files-btn");
+      if (panel && !panel.contains(e.target) && !toggleBtn?.contains(e.target)) {
+        components.filePanel.hide();
       }
     }
   });
@@ -739,10 +712,27 @@ export async function bootstrapSimple() {
   window.addEventListener("session-created", async (event) => {
     console.log("🎉 Session created event received:", event.detail);
 
+    // Extract session data (can be either { session_id, title } or { session: {...} })
+    const session = event.detail.session || event.detail;
+    const sessionId = session.session_id || event.detail.session_id;
+
     // Set the newly created session as current
-    if (event.detail?.session_id) {
-      sessionState.currentSessionId = event.detail.session_id;
-      console.log("✅ Set current session:", event.detail.session_id);
+    if (sessionId) {
+      sessionState.currentSessionId = sessionId;
+      console.log("✅ Set current session:", sessionId);
+
+      // Tell FilePanel component about the new session (Phase 7)
+      if (components.filePanel) {
+        components.filePanel.setSession(sessionId);
+        console.log("✅ FilePanel updated with new session");
+      }
+
+      // Update chat model selector with new session's config
+      if (session.model && session.reasoning_effort) {
+        const { updateChatModelSelector } = await import("./utils/chat-model-updater.js");
+        updateChatModelSelector(session);
+        console.log("✅ Chat model selector synced with new session");
+      }
     }
 
     // Reload sessions list to show the new session
@@ -843,13 +833,24 @@ export async function bootstrapSimple() {
     setupSessionListHandlers(sessionsList, sessionService, sessionState, updateSessionsList, elements, appState);
   }
 
-  // Load model config metadata from backend and initialize model selector
+  // Load model config metadata from backend and initialize model selector via InputArea
   try {
     const configResult = await ipcAdapter.sendSessionCommand("config_metadata", {});
     if (configResult.success) {
       const { models, reasoning_levels } = configResult;
-      const { initializeModelConfig } = await import("./ui/welcome-page.js");
-      initializeModelConfig(models, reasoning_levels);
+      const { createModelSelector, initializeModelConfig, getModelConfig } = await import("./ui/welcome-page.js");
+
+      // Inject getModelConfig into InputArea
+      components.inputArea.getModelConfig = getModelConfig;
+
+      // Initialize model selector via InputArea component
+      await components.inputArea.initializeModelSelector(
+        models,
+        reasoning_levels,
+        createModelSelector,
+        initializeModelConfig
+      );
+
       console.log("✅ Model config loaded:", models?.length || 0, "models");
     }
   } catch (error) {
@@ -868,16 +869,18 @@ export async function bootstrapSimple() {
       console.error("❌ Failed to load sessions:", result.error);
     }
 
-    // Load files if there's an active session
+    // Load files if there's an active session (Phase 7: use FilePanel component)
     if (sessionState.currentSessionId) {
-      const sessionDirectory = `data/files/${sessionState.currentSessionId}/sources`;
-      setActiveFilesDirectory(sessionDirectory);
-      loadFiles(sessionDirectory, filesContainer);
-      console.log("✅ Files loaded for current session");
+      // Tell FilePanel component about the current session
+      if (components.filePanel) {
+        components.filePanel.setSession(sessionState.currentSessionId);
+        components.filePanel.loadSessionFiles();
+        console.log("✅ FilePanel initialized with session:", sessionState.currentSessionId);
+      }
     } else {
-      // Clear loading state if no session
-      if (filesContainer) {
-        filesContainer.innerHTML = '<div class="files-empty">No session selected</div>';
+      // Clear loading state if no session (Phase 7: use component)
+      if (components.filePanel) {
+        components.filePanel.clear();
       }
     }
   } catch (error) {

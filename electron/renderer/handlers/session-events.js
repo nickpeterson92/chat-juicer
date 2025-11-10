@@ -88,10 +88,19 @@ export function setupSessionEventHandlers({
       // Update current session
       currentSessionId = sessionId;
 
+      // Update FilePanel component with new session context (Phase 7)
+      if (filePanel?.setSession) {
+        filePanel.setSession(sessionId);
+        filePanel.loadSessionFiles();
+      }
+
       // Load messages and files
       if (sessionData) {
         chatContainer.setMessages(sessionData.messages || []);
-        filePanel.setFiles(sessionData.files || []);
+        // Legacy setFiles call (if filePanel doesn't have component API)
+        if (filePanel?.setFiles) {
+          filePanel.setFiles(sessionData.files || []);
+        }
       }
     } catch (error) {
       console.error("Failed to switch session:", error);
@@ -135,6 +144,10 @@ export function setupSessionEventHandlers({
       if (sessionId === currentSessionId) {
         chatContainer.clear();
         filePanel.clear();
+        // Clear session context in FilePanel component (Phase 7)
+        if (filePanel?.setSession) {
+          filePanel.setSession(null);
+        }
         await handleSessionCreate();
       }
     } catch (error) {

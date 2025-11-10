@@ -5,7 +5,6 @@
 
 import { globalEventBus } from "../core/event-bus.js";
 import {
-  addMessage,
   cancelPendingRender,
   completeStreamingMessage,
   createStreamingAssistantMessage,
@@ -137,7 +136,12 @@ export function registerMessageHandlers(context) {
     elements.typingIndicator.parentElement.style.display = "none";
     appState.setState("message.isTyping", false);
 
-    addMessage(elements.chatContainer, message.message, "error");
+    // Add error message (Phase 7: use ChatContainer component)
+    if (window.components?.chatContainer) {
+      window.components.chatContainer.addMessage({ role: "error", content: message.message });
+    } else {
+      console.error("⚠️ ChatContainer component not available - message not displayed");
+    }
 
     // Track error
     globalEventBus.emit("error:backend", {
@@ -266,11 +270,14 @@ export function registerMessageHandlers(context) {
   // ===== Rate Limit Handlers =====
 
   createHandler("rate_limit_hit", (message) => {
-    addMessage(
-      elements.chatContainer,
-      `Rate limit reached. Waiting ${message.wait_time}s before retry (attempt ${message.retry_count})...`,
-      "system"
-    );
+    const content = `Rate limit reached. Waiting ${message.wait_time}s before retry (attempt ${message.retry_count})...`;
+
+    // Add system message (Phase 7: use ChatContainer component)
+    if (window.components?.chatContainer) {
+      window.components.chatContainer.addMessage({ role: "system", content });
+    } else {
+      console.error("⚠️ ChatContainer component not available - message not displayed");
+    }
 
     globalEventBus.emit("analytics:event", {
       category: "api",
@@ -280,7 +287,14 @@ export function registerMessageHandlers(context) {
   });
 
   createHandler("rate_limit_failed", (message) => {
-    addMessage(elements.chatContainer, `${message.message}. Please try again later.`, "error");
+    const content = `${message.message}. Please try again later.`;
+
+    // Add error message (Phase 7: use ChatContainer component)
+    if (window.components?.chatContainer) {
+      window.components.chatContainer.addMessage({ role: "error", content });
+    } else {
+      console.error("⚠️ ChatContainer component not available - message not displayed");
+    }
 
     globalEventBus.emit("error:rate_limit", {
       message: message.message,

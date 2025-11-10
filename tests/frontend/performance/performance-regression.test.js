@@ -3,7 +3,7 @@
  * Ensures critical operations stay within performance budgets
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { EventBus } from "../../../electron/renderer/core/event-bus.js";
 import { BoundedMap } from "../../../electron/renderer/core/state.js";
 
