@@ -82,16 +82,27 @@ class TestHandleSessionCommand:
     async def test_delete_session_command(self) -> None:
         """Test handling 'delete' command."""
         mock_app_state = Mock()
-        mock_app_state.session_manager = Mock()
+        # Create non-None mocks to avoid falsy evaluation
+        mock_app_state.session_manager = Mock(spec=["delete_session", "list_sessions"])
         mock_app_state.session_manager.delete_session.return_value = True
         mock_app_state.session_manager.list_sessions.return_value = []
+        mock_app_state.full_history_store = Mock(spec=["clear_session"])
+        mock_app_state.full_history_store.clear_session.return_value = True
         mock_app_state.current_session = None
 
-        result = await handle_session_command(
-            mock_app_state,
-            "delete",
-            {"session_id": "chat_test123"},
-        )
+        # Mock the SessionBuilder and temp_session
+        with patch("core.session_commands.SessionBuilder") as mock_builder:
+            mock_temp_session = AsyncMock()
+            mock_temp_session.delete_storage.return_value = True
+            mock_builder.return_value.with_persistent_storage.return_value.with_model.return_value.build.return_value = (
+                mock_temp_session
+            )
+
+            result = await handle_session_command(
+                mock_app_state,
+                "delete",
+                {"session_id": "chat_test123"},
+            )
 
         assert result["success"] is True
 

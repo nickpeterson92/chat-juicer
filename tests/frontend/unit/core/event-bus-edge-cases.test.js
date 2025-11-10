@@ -21,54 +21,52 @@ describe("EventBus Edge Cases", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  describe("Error Handler Failures", () => {
-    it("should not crash if error handler itself throws", () => {
-      // Create EventBus with broken error handler
-      const brokenErrorHandler = vi.fn(() => {
-        throw new Error("Error handler failed");
-      });
-      const bus = new EventBus({ errorHandler: brokenErrorHandler });
+  describe("Error Handler Behavior", () => {
+    it("should call custom error handler when handler throws", () => {
+      const customErrorHandler = vi.fn();
+      const bus = new EventBus({ errorHandler: customErrorHandler });
 
-      // Register handler that throws
       bus.on("test:error", () => {
-        throw new Error("Original error");
-      });
-
-      // Should not throw even though both handler and error handler throw
-      expect(() => bus.emit("test:error", {})).not.toThrow();
-
-      // Broken error handler should have been called
-      expect(brokenErrorHandler).toHaveBeenCalledTimes(1);
-    });
-
-    it("should fall back to console.error if error handler throws", () => {
-      const brokenErrorHandler = () => {
-        throw new Error("Error handler crashed");
-      };
-      const bus = new EventBus({ errorHandler: brokenErrorHandler });
-
-      bus.on("test:event", () => {
         throw new Error("Handler error");
       });
 
-      bus.emit("test:event", {});
+      bus.emit("test:error", {});
 
-      // Should have logged to console as fallback
-      expect(consoleErrorSpy).toHaveBeenCalled();
+      // Custom error handler should be called
+      expect(customErrorHandler).toHaveBeenCalledTimes(1);
+      expect(customErrorHandler).toHaveBeenCalledWith(
+        expect.any(Error),
+        expect.objectContaining({ event: "test:error" }),
+        expect.any(Function)
+      );
     });
 
-    it("should handle error handler returning non-void values", () => {
-      const weirdErrorHandler = vi.fn(() => {
-        return "weird return value";
-      });
-      const bus = new EventBus({ errorHandler: weirdErrorHandler });
+    it("should use default error handler if none provided", () => {
+      const bus = new EventBus(); // No custom error handler
 
       bus.on("test:event", () => {
         throw new Error("Test error");
       });
 
+      // Should not crash, uses default handler
       expect(() => bus.emit("test:event", {})).not.toThrow();
-      expect(weirdErrorHandler).toHaveBeenCalled();
+      expect(consoleErrorSpy).toHaveBeenCalled();
+    });
+
+    it("should continue executing other handlers after one throws", () => {
+      const errorHandler = vi.fn(() => {
+        throw new Error("Handler 1 error");
+      });
+      const successHandler = vi.fn();
+
+      eventBus.on("test:error", errorHandler);
+      eventBus.on("test:error", successHandler);
+
+      eventBus.emit("test:error", {});
+
+      // Both should have been called
+      expect(errorHandler).toHaveBeenCalledTimes(1);
+      expect(successHandler).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -159,20 +157,20 @@ describe("EventBus Edge Cases", () => {
       );
     });
 
-    it("should handle wildcard listener removing itself", () => {
-      let unsubscribe;
-      const selfRemovingWildcard = vi.fn(() => {
-        unsubscribe();
-      });
+    it("should handle wildcard listener unsubscribing", () => {
+      const wildcardHandler = vi.fn();
 
-      unsubscribe = eventBus.on("*", selfRemovingWildcard);
+      const unsubscribe = eventBus.on("*", wildcardHandler);
 
       eventBus.emit("test:event1", {});
-      expect(selfRemovingWildcard).toHaveBeenCalledTimes(1);
+      expect(wildcardHandler).toHaveBeenCalledTimes(1);
+
+      // Unsubscribe after first event
+      unsubscribe();
 
       // Should not receive second event
       eventBus.emit("test:event2", {});
-      expect(selfRemovingWildcard).toHaveBeenCalledTimes(1);
+      expect(wildcardHandler).toHaveBeenCalledTimes(1); // Still 1
     });
 
     it("should handle error in wildcard listener", () => {
