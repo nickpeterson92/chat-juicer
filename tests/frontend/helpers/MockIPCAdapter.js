@@ -62,6 +62,30 @@ export class MockIPCAdapter {
    * @returns {Array} Array of data objects sent to that channel
    */
   getCalls(channel) {
+    // Handle both IPC channels and high-level method names
+    if (channel === "session-command") {
+      // For session commands, return the data objects from sendSessionCommand calls
+      return this.callLog
+        .filter((call) => call.method === "sendSessionCommand")
+        .map((call) => {
+          // args are [command, data], return in format tests expect
+          const [command, data] = call.args;
+          return { command, data };
+        });
+    }
+
+    if (channel === "user-input") {
+      // For user input, return calls from sendMessage
+      return this.callLog
+        .filter((call) => call.method === "sendMessage")
+        .map((call) => {
+          // args are [content], return in format tests expect
+          const [content] = call.args;
+          return { content };
+        });
+    }
+
+    // Default behavior for standard IPC channels
     return this.callLog
       .filter((call) => (call.method === "send" || call.method === "invoke") && call.args[0] === channel)
       .map((call) => call.args[1] || {});
@@ -154,18 +178,75 @@ export class MockIPCAdapter {
    * @returns {Promise<any>} Response from backend
    */
   async invoke(channel, data) {
-    const response = await this._executeMethod("invoke", [channel, data]);
+    this._logCall("invoke", [channel, data]);
 
-    // If response is an Error, throw it
-    if (response instanceof Error) {
-      throw response;
+    if (this.shouldFail.has("invoke")) {
+      const error = this.shouldFail.get("invoke");
+      throw typeof error === "string" ? new Error(error) : error;
     }
 
-    return response;
+    // Try channel-specific response first
+    if (this.responses.has(channel)) {
+      const response = this.responses.get(channel);
+      const result = typeof response === "function" ? response(data) : response;
+
+      // If response is an Error, throw it
+      if (result instanceof Error) {
+        throw result;
+      }
+
+      return result;
+    }
+
+    // Fall back to generic invoke response
+    if (this.responses.has("invoke")) {
+      const response = this.responses.get("invoke");
+      const result = typeof response === "function" ? response(channel, data) : response;
+
+      if (result instanceof Error) {
+        throw result;
+      }
+
+      return result;
+    }
+
+    return undefined;
   }
 
   async sendMessage(content) {
-    return this._executeMethod("sendMessage", [content]);
+    // Special handling: look up response by "user-input" first, then fall back to method name
+    this._logCall("sendMessage", [content]);
+
+    if (this.shouldFail.has("sendMessage")) {
+      const error = this.shouldFail.get("sendMessage");
+      throw typeof error === "string" ? new Error(error) : error;
+    }
+
+    // Try "user-input" response first (for backward compat with tests)
+    if (this.responses.has("user-input")) {
+      const response = this.responses.get("user-input");
+      const result = typeof response === "function" ? response(content) : response;
+
+      if (result instanceof Error) {
+        throw result;
+      }
+
+      return result;
+    }
+
+    // Fall back to sendMessage response
+    if (this.responses.has("sendMessage")) {
+      const response = this.responses.get("sendMessage");
+      const result = typeof response === "function" ? response(content) : response;
+
+      if (result instanceof Error) {
+        throw result;
+      }
+
+      return result;
+    }
+
+    return undefined;
   }
 
   async stopGeneration() {
@@ -173,7 +254,40 @@ export class MockIPCAdapter {
   }
 
   async sendSessionCommand(command, data = {}) {
-    return this._executeMethod("sendSessionCommand", [command, data]);
+    // Special handling: look up response by command name first, then fall back to method name
+    this._logCall("sendSessionCommand", [command, data]);
+
+    if (this.shouldFail.has("sendSessionCommand")) {
+      const error = this.shouldFail.get("sendSessionCommand");
+      throw typeof error === "string" ? new Error(error) : error;
+    }
+
+    // Try command-specific response first (e.g., "session-command")
+    if (this.responses.has("session-command")) {
+      const response = this.responses.get("session-command");
+      const result = typeof response === "function" ? response(command, data) : response;
+
+      // If response is an Error, throw it
+      if (result instanceof Error) {
+        throw result;
+      }
+
+      return result;
+    }
+
+    // Fall back to sendSessionCommand response
+    if (this.responses.has("sendSessionCommand")) {
+      const response = this.responses.get("sendSessionCommand");
+      const result = typeof response === "function" ? response(command, data) : response;
+
+      if (result instanceof Error) {
+        throw result;
+      }
+
+      return result;
+    }
+
+    return undefined;
   }
 
   async uploadFile(filePath, fileData, fileName, mimeType) {

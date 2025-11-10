@@ -326,7 +326,7 @@ export class FileService {
     }
 
     const age = Date.now() - cached.timestamp;
-    if (age > maxAge) {
+    if (age >= maxAge) {
       this.fileCache.delete(directory);
       return null;
     }

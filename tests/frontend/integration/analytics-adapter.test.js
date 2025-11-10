@@ -6,7 +6,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   AnalyticsAdapter,
-  AnalyticsBackend,
   ConsoleAnalyticsBackend,
   ElectronIPCAnalyticsBackend,
   LocalStorageAnalyticsBackend,

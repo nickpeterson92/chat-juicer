@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EventBus } from "../../../electron/renderer/core/event-bus.js";
 import { AppState } from "../../../electron/renderer/core/state.js";
-import { createPlugin, Plugin, PluginRegistry, plugin } from "../../../electron/renderer/plugins/plugin-interface.js";
+import { createPlugin, PluginRegistry } from "../../../electron/renderer/plugins/plugin-interface.js";
 
 describe("Plugin Integration Tests", () => {
   let app;

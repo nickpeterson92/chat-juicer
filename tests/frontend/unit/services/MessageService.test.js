@@ -45,7 +45,7 @@ describe("MessageService", () => {
       const calls = mockIPC.getCalls("user-input");
       expect(calls).toHaveLength(1);
       expect(calls[0].content).toBe("Hello");
-      expect(calls[0].session_id).toBe("session-123");
+      // Note: session_id is NOT sent - backend manages session context
     });
 
     it("should trim message content", async () => {
@@ -78,7 +78,8 @@ describe("MessageService", () => {
 
       expect(result.success).toBe(true);
       const calls = mockIPC.getCalls("user-input");
-      expect(calls[0].session_id).toBeUndefined();
+      expect(calls).toHaveLength(1);
+      expect(calls[0].content).toBe("Hello");
     });
 
     it("should handle IPC errors", async () => {

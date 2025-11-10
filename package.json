@@ -24,6 +24,7 @@
     "@biomejs/biome": "^2.2.3",
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.1.14",
+    "@vitest/coverage-v8": "^4.0.8",
     "@vitest/ui": "^4.0.8",
     "electron": "^38.1.2",
     "electron-vite": "^4.0.1",

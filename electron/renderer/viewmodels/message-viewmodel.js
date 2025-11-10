@@ -227,6 +227,12 @@ export function validateMessage(msg) {
     return { valid: false, error: "Message must have content" };
   }
 
+  // Check for empty strings
+  const parsedContent = parseMessageContent(msg.content);
+  if (typeof parsedContent === "string" && parsedContent.trim() === "") {
+    return { valid: false, error: "Message content cannot be empty" };
+  }
+
   const allowedRoles = ["user", "assistant", "system", "error"];
   if (!allowedRoles.includes(msg.role)) {
     return { valid: false, error: `Invalid role: ${msg.role}. Must be one of: ${allowedRoles.join(", ")}` };

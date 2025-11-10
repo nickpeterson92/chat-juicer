@@ -76,7 +76,7 @@ repos:
         entry: npx @biomejs/biome check --write
         language: system
         files: \.(js|jsx|ts|tsx)$
-        exclude: ^(node_modules/|dist/|build/|logs/)
+        exclude: ^(node_modules/|dist/|build/|logs/|coverage/|htmlcov/)
         pass_filenames: true
 
 # Configuration

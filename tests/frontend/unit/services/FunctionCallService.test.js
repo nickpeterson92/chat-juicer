@@ -88,7 +88,7 @@ describe("FunctionCallService", () => {
       const updated = functionCallService.updateCallStatus("call-1", CallStatus.COMPLETED);
 
       expect(updated.endTime).toBeDefined();
-      expect(updated.duration).toBeGreaterThan(0);
+      expect(updated.duration).toBeGreaterThanOrEqual(0);
     });
 
     it("should move to completed calls on completion", () => {

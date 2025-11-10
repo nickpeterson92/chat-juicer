@@ -3,7 +3,7 @@
  * Tests the performance tracking and monitoring system
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   BrowserPerformance,
   FPSMonitor,

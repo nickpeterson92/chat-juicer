@@ -182,11 +182,16 @@ describe("FileService", () => {
   });
 
   describe("uploadFile", () => {
-    const createMockFile = (name, size) => ({ name, size });
+    const createMockFile = (name, size) => ({
+      name,
+      size,
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(size)),
+      type: "text/plain",
+    });
 
     it("should upload valid file", async () => {
       const file = createMockFile("test.txt", 1024);
-      mockIPC.setResponse("upload-file", { success: true });
+      mockIPC.setResponse("uploadFile", { success: true });
 
       const result = await fileService.uploadFile(file, "session-123");
 
@@ -213,7 +218,7 @@ describe("FileService", () => {
 
     it("should handle upload errors", async () => {
       const file = createMockFile("test.txt", 1024);
-      mockIPC.setResponse("upload-file", { success: false, error: "Upload failed" });
+      mockIPC.setResponse("uploadFile", { success: false, error: "Upload failed" });
 
       const result = await fileService.uploadFile(file, "session-123");
 
@@ -268,7 +273,7 @@ describe("FileService", () => {
 
   describe("deleteFile", () => {
     it("should delete file", async () => {
-      mockIPC.setResponse("delete-file", { success: true });
+      mockIPC.setResponse("deleteFile", { success: true });
 
       const result = await fileService.deleteFile("test.txt", "sources", "session-123");
 
@@ -293,7 +298,7 @@ describe("FileService", () => {
       // Setup cache
       fileService.cacheFileList("sources", [{ name: "file1.txt" }, { name: "file2.txt" }]);
 
-      mockIPC.setResponse("delete-file", { success: true });
+      mockIPC.setResponse("deleteFile", { success: true });
 
       await fileService.deleteFile("file1.txt", "sources", "session-123");
 
@@ -305,7 +310,7 @@ describe("FileService", () => {
 
   describe("openFile", () => {
     it("should open file", async () => {
-      mockIPC.setResponse("open-file", { success: true });
+      mockIPC.setResponse("openFile", { success: true });
 
       const result = await fileService.openFile("/path/to/file.txt");
 

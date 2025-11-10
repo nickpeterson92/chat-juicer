@@ -95,6 +95,10 @@ export class FunctionCallService {
       // Move to completed calls
       this.completedCalls.set(callId, { ...call });
 
+      // Remove from active calls
+      this.activeCalls.delete(callId);
+      this.argumentsBuffer.delete(callId);
+
       // Keep completed calls limited
       if (this.completedCalls.size > 100) {
         const oldestKey = this.completedCalls.keys().next().value;
@@ -178,6 +182,10 @@ export class FunctionCallService {
     // Move to completed
     this.completedCalls.set(callId, { ...call });
 
+    // Remove from active
+    this.activeCalls.delete(callId);
+    this.argumentsBuffer.delete(callId);
+
     return call;
   }
 
@@ -202,6 +210,10 @@ export class FunctionCallService {
 
     // Move to completed
     this.completedCalls.set(callId, { ...call });
+
+    // Remove from active
+    this.activeCalls.delete(callId);
+    this.argumentsBuffer.delete(callId);
 
     return call;
   }
