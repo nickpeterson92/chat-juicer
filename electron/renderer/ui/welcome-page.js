@@ -14,41 +14,8 @@ const LOGO_SVG = `<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
   <path fill="currentColor" d="M313.984,368.634l-7.522,10.171c9.402,6.949,18.391,14.956,24.844,23.652c5.059,6.834,8.468,13.968,9.739,21.464H272.7h-68.362c1.218-7.152,4.379-13.968,9.076-20.519c6.039-8.432,14.515-16.244,23.512-23.088l-7.664-10.065c-9.623,7.329-18.991,15.84-26.133,25.772c-7.116,9.898-12.042,21.41-12.042,34.23v6.33H272.7h81.624v-6.33c0-13.296-5.297-25.181-12.854-35.334C333.894,384.73,323.996,376.042,313.984,368.634z"/>
 </svg>`;
 
-/**
- * Model metadata with display names and descriptions
- */
-const MODEL_METADATA = {
-  "gpt-5-pro": {
-    displayName: "GPT-5 Pro",
-    description: "Most capable for complex tasks",
-    isPrimary: true,
-  },
-  "gpt-5": {
-    displayName: "GPT-5",
-    description: "Deep reasoning for hard problems",
-    isPrimary: true,
-  },
-  "gpt-5-mini": {
-    displayName: "GPT-5 Mini",
-    description: "Smart and fast for everyday use",
-    isPrimary: true,
-  },
-  "gpt-5-codex": {
-    displayName: "GPT-5 Codex",
-    description: "Optimized for code generation",
-    isPrimary: false,
-  },
-  "gpt-4.1": {
-    displayName: "GPT-4.1",
-    description: "Previous generation, still capable",
-    isPrimary: false,
-  },
-  "gpt-4.1-mini": {
-    displayName: "GPT-4.1 Mini",
-    description: "Faster responses for simple tasks",
-    isPrimary: false,
-  },
-};
+// Import shared model metadata
+import { MODEL_METADATA, REASONING_DESCRIPTIONS } from "../config/model-metadata.js";
 
 // ============================================================================
 // TEMPLATE FUNCTIONS - Composable UI sections
@@ -101,8 +68,9 @@ function createMcpToggles() {
 
 /**
  * Create model selector dropdown structure
+ * Exported for reuse on chat page
  */
-function createModelSelector() {
+export function createModelSelector() {
   return `
     <div class="model-config-inline">
       <button id="model-selector-trigger" class="model-selector-trigger">
@@ -132,9 +100,10 @@ function createModelSelector() {
 }
 
 /**
- * Create send button
+ * Create send button with arrow icon
+ * Exported for reuse on chat page
  */
-function createSendButton() {
+export function createSendButton() {
   return `
     <button id="welcome-send-btn" class="welcome-send-btn" title="Send message">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -525,12 +494,10 @@ export function initializeModelConfig(models = [], reasoningLevels = []) {
 
   if (!mainModelsContainer || !moreModelsSection) return;
 
-  // Preserve current selection if it exists
-  const currentSelectedCard = document.querySelector(".model-card.selected");
-  const currentSelectedWrapper = currentSelectedCard?.closest(".model-card-wrapper");
-  const currentModelSelection = currentSelectedWrapper?.dataset.model;
-  const currentReasoningOption = currentSelectedWrapper?.querySelector(".reasoning-option.selected");
-  const currentReasoningSelection = currentReasoningOption?.dataset.value;
+  // DON'T preserve selection - always reset to defaults when welcome page loads
+  // The welcome page should always start fresh with GPT-5 + Medium reasoning
+  const currentModelSelection = null;
+  const currentReasoningSelection = null;
 
   // Separate primary and secondary models
   const primaryModels = [];
@@ -584,14 +551,6 @@ export function initializeModelConfig(models = [], reasoningLevels = []) {
 
     moreModelsSection.appendChild(cardWrapper);
   });
-
-  // Reasoning effort descriptions
-  const REASONING_DESCRIPTIONS = {
-    minimal: "Fastest responses, less thorough",
-    low: "Quick thinking for simpler tasks",
-    medium: "Balanced speed and quality",
-    high: "Most thorough, slower responses",
-  };
 
   // Populate reasoning options for all reasoning panels
   if (reasoningLevels.length > 0) {

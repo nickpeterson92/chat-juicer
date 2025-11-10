@@ -89,7 +89,7 @@ export function setupSessionEventHandlers({
       currentSessionId = sessionId;
 
       // Update FilePanel component with new session context (Phase 7)
-      if (filePanel && filePanel.setSession) {
+      if (filePanel?.setSession) {
         filePanel.setSession(sessionId);
         filePanel.loadSessionFiles();
       }
@@ -98,7 +98,7 @@ export function setupSessionEventHandlers({
       if (sessionData) {
         chatContainer.setMessages(sessionData.messages || []);
         // Legacy setFiles call (if filePanel doesn't have component API)
-        if (filePanel && filePanel.setFiles) {
+        if (filePanel?.setFiles) {
           filePanel.setFiles(sessionData.files || []);
         }
       }
@@ -145,7 +145,7 @@ export function setupSessionEventHandlers({
         chatContainer.clear();
         filePanel.clear();
         // Clear session context in FilePanel component (Phase 7)
-        if (filePanel && filePanel.setSession) {
+        if (filePanel?.setSession) {
           filePanel.setSession(null);
         }
         await handleSessionCreate();

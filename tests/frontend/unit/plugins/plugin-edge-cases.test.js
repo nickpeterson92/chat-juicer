@@ -66,7 +66,7 @@ describe("Plugin Edge Cases", () => {
 
       try {
         await registry.register(failingPlugin);
-      } catch (error) {
+      } catch (_error) {
         // Expected to throw
       }
 
@@ -97,7 +97,7 @@ describe("Plugin Edge Cases", () => {
 
       try {
         await registry.register(badPlugin);
-      } catch (error) {
+      } catch (_error) {
         // Expected
       }
 
@@ -149,7 +149,7 @@ describe("Plugin Edge Cases", () => {
 
       try {
         await registry.unregister("test-plugin");
-      } catch (error) {
+      } catch (_error) {
         // Expected
       }
 
@@ -210,7 +210,7 @@ describe("Plugin Edge Cases", () => {
 
       try {
         await registry.register(dependentPlugin);
-      } catch (error) {
+      } catch (_error) {
         // Expected to throw
       }
 
@@ -350,7 +350,7 @@ describe("Plugin Edge Cases", () => {
       // Should still register despite event emission failure
       try {
         await registry.register(plugin);
-      } catch (error) {
+      } catch (_error) {
         // May or may not throw depending on implementation
       }
 

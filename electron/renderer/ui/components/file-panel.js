@@ -3,7 +3,7 @@
  * Wraps existing DOM structure and integrates with file-manager.js
  */
 
-import { loadFiles, setActiveFilesDirectory } from "../../managers/file-manager.js";
+import { loadFiles } from "../../managers/file-manager.js";
 
 export class FilePanel {
   /**
@@ -122,9 +122,8 @@ export class FilePanel {
       directory = `data/files/${this.currentSessionId}/output`;
     }
 
-    // Update active directory and load files
+    // Load files from directory
     console.log(`📂 Switching to ${tab.dataset.directory} tab, directory: ${directory}`);
-    setActiveFilesDirectory(directory);
     loadFiles(directory, this.filesContainer);
   }
 

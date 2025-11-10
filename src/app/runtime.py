@@ -361,5 +361,6 @@ def send_session_created_event(app_state: AppState, session_id: str) -> None:
 
     session_meta = app_state.session_manager.get_session(session_id)
     if session_meta:
-        IPCManager.send({"type": "session_created", "session_id": session_meta.session_id, "title": session_meta.title})
+        # Send full session metadata including model and reasoning_effort
+        IPCManager.send({"type": "session_created", "session": session_meta.model_dump()})
         logger.info(f"Sent session_created event for {session_id} after first message")

@@ -34,6 +34,7 @@ from models.session_models import (
     SessionUpdate,
     SummarizeSessionCommand,
     SwitchSessionCommand,
+    UpdateSessionConfigCommand,
     parse_session_command,
 )
 from utils.logger import logger
@@ -470,6 +471,96 @@ async def rename_session(app_state: AppStateProtocol, session_id: str, title: st
     }
 
 
+async def update_session_config(
+    app_state: AppStateProtocol,
+    session_id: str,
+    model: str | None = None,
+    mcp_config: list[str] | None = None,
+    reasoning_effort: str | None = None,
+) -> dict[str, Any]:
+    """Update session configuration and recreate agent with new settings.
+
+    Args:
+        app_state: Application state containing session manager
+        session_id: Session to update
+        model: New model deployment name (optional)
+        mcp_config: New MCP server configuration (optional)
+        reasoning_effort: New reasoning effort level (optional)
+
+    Returns:
+        Updated session metadata
+    """
+    from models.session_models import SessionUpdate
+
+    if not app_state.session_manager:
+        return _session_error(ERROR_SESSION_MANAGER_NOT_INITIALIZED)
+
+    # Check if session exists
+    session_meta = app_state.session_manager.get_session(session_id)
+    if not session_meta:
+        return _session_error(ERROR_SESSION_NOT_FOUND.format(session_id=session_id))
+
+    # Build update object
+    updates = SessionUpdate(
+        model=model,
+        mcp_config=mcp_config,
+        reasoning_effort=reasoning_effort,
+    )
+
+    # Update session metadata
+    success = app_state.session_manager.update_session(session_id, updates)
+    if not success:
+        return _session_error("Failed to update session configuration")
+
+    # If this is the current session, recreate the agent with new settings
+    if session_id == app_state.session_manager.current_session_id:
+        logger.info(f"Recreating agent for current session {session_id} with updated config")
+
+        from core.agent import create_agent
+        from core.prompts import SYSTEM_INSTRUCTIONS
+        from integrations.mcp_registry import filter_mcp_servers
+        from tools.wrappers import create_session_aware_tools
+
+        # Get updated session metadata
+        updated_session = app_state.session_manager.get_session(session_id)
+        if not updated_session:
+            return _session_error("Session disappeared after update")
+
+        # Create session-aware tools
+        session_tools = create_session_aware_tools(session_id)
+
+        # Filter MCP servers based on updated config
+        session_mcp_servers = filter_mcp_servers(app_state.mcp_servers, updated_session.mcp_config)
+
+        # Create new agent with updated settings
+        new_agent = create_agent(
+            updated_session.model,
+            SYSTEM_INSTRUCTIONS,
+            session_tools,
+            session_mcp_servers,
+            updated_session.reasoning_effort,
+        )
+
+        # Update app_state with new agent
+        app_state.agent = new_agent
+
+        # Update the current session's agent reference
+        if app_state.current_session:
+            app_state.current_session.agent = new_agent
+
+        logger.info(
+            f"Agent recreated with model={updated_session.model}, "
+            f"mcp_servers={len(session_mcp_servers)}, reasoning={updated_session.reasoning_effort}"
+        )
+
+    # Return updated session metadata
+    updated_session = app_state.session_manager.get_session(session_id)
+    if updated_session:
+        return dict(updated_session.model_dump())
+
+    return _session_error("Failed to retrieve updated session")
+
+
 async def get_config_metadata(app_state: AppStateProtocol) -> dict[str, Any]:
     """Return available configuration options for frontend.
 
@@ -579,6 +670,9 @@ async def handle_session_command(app_state: AppStateProtocol, command: str, data
         LoadMoreMessagesCommand: lambda cmd: load_more_messages(app_state, cmd.session_id, cmd.offset, cmd.limit),
         RenameSessionCommand: lambda cmd: rename_session(app_state, cmd.session_id, cmd.title),
         ConfigMetadataCommand: lambda _: get_config_metadata(app_state),
+        UpdateSessionConfigCommand: lambda cmd: update_session_config(
+            app_state, cmd.session_id, cmd.model, cmd.mcp_config, cmd.reasoning_effort
+        ),
     }
 
     try:

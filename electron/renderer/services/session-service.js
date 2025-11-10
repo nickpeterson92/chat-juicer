@@ -119,8 +119,9 @@ export class SessionService {
         };
       }
 
-      return { success: false, error: "Failed to create session" };
+      return { success: false, error: response?.error || "Failed to create session" };
     } catch (error) {
+      console.error("Failed to create session:", error);
       return { success: false, error: error.message };
     }
   }

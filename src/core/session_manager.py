@@ -299,6 +299,15 @@ class SessionManager:
             session.message_count = updates.message_count
         if updates.accumulated_tool_tokens is not None:
             session.accumulated_tool_tokens = updates.accumulated_tool_tokens
+        if updates.model is not None:
+            session.model = updates.model
+            logger.info(f"Updated model for session {session_id}: {updates.model}")
+        if updates.mcp_config is not None:
+            session.mcp_config = updates.mcp_config
+            logger.info(f"Updated MCP config for session {session_id}: {updates.mcp_config}")
+        if updates.reasoning_effort is not None:
+            session.reasoning_effort = updates.reasoning_effort
+            logger.info(f"Updated reasoning effort for session {session_id}: {updates.reasoning_effort}")
 
         self._save_metadata()
         return True

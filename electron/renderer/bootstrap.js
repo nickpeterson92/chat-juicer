@@ -117,7 +117,6 @@ export async function bootstrapSimple() {
   // ======================
 
   // Note: sendMessage function is defined later (line ~444), so we'll pass it as a callback
-  const sendMessageCallback = null;
 
   const components = {
     chatContainer: new ChatContainer(document.getElementById("chat-container")),
@@ -228,6 +227,7 @@ export async function bootstrapSimple() {
         try {
           // Create session without title - backend will generate default timestamp-based title
           const result = await sessionService.createSession({});
+
           if (result.success) {
             sessionState.currentSessionId = result.sessionId;
             console.log("✅ Session created:", result.sessionId);
@@ -244,12 +244,13 @@ export async function bootstrapSimple() {
               updateSessionsList(sessionsResult.sessions || []);
             }
           } else {
-            throw new Error(result.error);
+            console.error("❌ Session creation failed:", result.error || "Unknown error");
+            throw new Error(result.error || "Unknown error creating session");
           }
           // STAY on welcome page for file uploads - only switch to chat on first message
         } catch (error) {
-          console.error("Failed to create session:", error);
-          alert("Failed to create session for file upload");
+          console.error("❌ Failed to create session:", error);
+          alert(`Failed to create session for file upload: ${error.message}`);
           return;
         }
       }
@@ -360,11 +361,11 @@ export async function bootstrapSimple() {
         await showChatView(elements, appState);
       }
 
-      // Display user message in chat
-      const { addMessage } = await import("./ui/chat-ui.js");
-      const chatContainer = document.getElementById("chat-container");
-      if (chatContainer) {
-        addMessage(chatContainer, message.trim(), "user");
+      // Display user message in chat (Phase 7: use ChatContainer component)
+      if (components.chatContainer) {
+        components.chatContainer.addUserMessage(message.trim());
+      } else {
+        console.error("⚠️ ChatContainer component not available - message not displayed");
       }
 
       // Send the message via MessageService
@@ -411,12 +412,23 @@ export async function bootstrapSimple() {
   });
 
   // ======================
-  // Initialize InputArea Component (Phase 7)
+  // Initialize InputArea Component (Phase 7 + Model Selector)
   // ======================
   if (sendBtn && userInput) {
-    components.inputArea = new InputArea(userInput, sendBtn, (message) => {
-      sendMessage(message, userInput);
-    });
+    const chatModelSelector = document.getElementById("chat-model-selector");
+    components.inputArea = new InputArea(
+      userInput,
+      sendBtn,
+      (message) => {
+        sendMessage(message, userInput);
+      },
+      {
+        modelSelectorContainer: chatModelSelector,
+        ipcAdapter: ipcAdapter,
+        sessionState: sessionState,
+        getModelConfig: null, // Will be injected after importing welcome-page.js
+      }
+    );
     console.log("✅ InputArea component initialized");
   }
 
@@ -512,7 +524,7 @@ export async function bootstrapSimple() {
     }
 
     // Close files panel (Phase 7: use component API)
-    if (components.filePanel && components.filePanel.isVisible()) {
+    if (components.filePanel?.isVisible()) {
       const panel = components.filePanel.getPanel();
       const toggleBtn = document.getElementById("open-files-btn");
       if (panel && !panel.contains(e.target) && !toggleBtn?.contains(e.target)) {
@@ -700,15 +712,26 @@ export async function bootstrapSimple() {
   window.addEventListener("session-created", async (event) => {
     console.log("🎉 Session created event received:", event.detail);
 
+    // Extract session data (can be either { session_id, title } or { session: {...} })
+    const session = event.detail.session || event.detail;
+    const sessionId = session.session_id || event.detail.session_id;
+
     // Set the newly created session as current
-    if (event.detail?.session_id) {
-      sessionState.currentSessionId = event.detail.session_id;
-      console.log("✅ Set current session:", event.detail.session_id);
+    if (sessionId) {
+      sessionState.currentSessionId = sessionId;
+      console.log("✅ Set current session:", sessionId);
 
       // Tell FilePanel component about the new session (Phase 7)
       if (components.filePanel) {
-        components.filePanel.setSession(event.detail.session_id);
+        components.filePanel.setSession(sessionId);
         console.log("✅ FilePanel updated with new session");
+      }
+
+      // Update chat model selector with new session's config
+      if (session.model && session.reasoning_effort) {
+        const { updateChatModelSelector } = await import("./utils/chat-model-updater.js");
+        updateChatModelSelector(session);
+        console.log("✅ Chat model selector synced with new session");
       }
     }
 
@@ -810,13 +833,24 @@ export async function bootstrapSimple() {
     setupSessionListHandlers(sessionsList, sessionService, sessionState, updateSessionsList, elements, appState);
   }
 
-  // Load model config metadata from backend and initialize model selector
+  // Load model config metadata from backend and initialize model selector via InputArea
   try {
     const configResult = await ipcAdapter.sendSessionCommand("config_metadata", {});
     if (configResult.success) {
       const { models, reasoning_levels } = configResult;
-      const { initializeModelConfig } = await import("./ui/welcome-page.js");
-      initializeModelConfig(models, reasoning_levels);
+      const { createModelSelector, initializeModelConfig, getModelConfig } = await import("./ui/welcome-page.js");
+
+      // Inject getModelConfig into InputArea
+      components.inputArea.getModelConfig = getModelConfig;
+
+      // Initialize model selector via InputArea component
+      await components.inputArea.initializeModelSelector(
+        models,
+        reasoning_levels,
+        createModelSelector,
+        initializeModelConfig
+      );
+
       console.log("✅ Model config loaded:", models?.length || 0, "models");
     }
   } catch (error) {

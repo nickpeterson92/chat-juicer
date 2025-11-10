@@ -18,20 +18,6 @@ import { formatFileSize, getFileIcon } from "../utils/file-utils.js";
 import { showToast } from "../utils/toast.js";
 
 /**
- * Track active directory tab
- * For session-aware mode, this will be "data/files/{session_id}"
- */
-export let activeFilesDirectory = "sources";
-
-/**
- * Set the active files directory
- * @param {string} directory - Directory name
- */
-export function setActiveFilesDirectory(directory) {
-  activeFilesDirectory = directory;
-}
-
-/**
  * Load session-specific files
  * @param {string} sessionId - Session ID to load files for
  * @param {HTMLElement} container - Container element to render files into

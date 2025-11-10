@@ -207,14 +207,7 @@ async function handleDelete(sessionId, sessionService, sessionState, updateSessi
         if (window.components?.chatContainer) {
           window.components.chatContainer.clear();
         } else {
-          // Fallback to direct calls
-          const { clearChat } = await import("../ui/chat-ui.js");
-          const { clearFunctionCards } = await import("../ui/function-card-ui.js");
-          const chatContainer = document.getElementById("chat-container");
-          if (chatContainer) {
-            clearChat(chatContainer);
-            clearFunctionCards(chatContainer);
-          }
+          console.error("⚠️ ChatContainer component not available - UI not cleared");
         }
 
         // Show welcome view (pass services for session creation)
@@ -261,14 +254,18 @@ async function handleSwitch(sessionId, sessionService, sessionState, updateSessi
       // Update session state
       sessionState.currentSessionId = sessionId;
 
-      // Clear current chat UI
-      const { clearChat } = await import("../ui/chat-ui.js");
-      const { clearFunctionCards } = await import("../ui/function-card-ui.js");
-      const chatContainer = elements.chatContainer || document.getElementById("chat-container");
+      // Update chat model selector to reflect session's config
+      if (result.session) {
+        import("../utils/chat-model-updater.js").then(({ updateChatModelSelector }) => {
+          updateChatModelSelector(result.session);
+        });
+      }
 
-      if (chatContainer) {
-        clearChat(chatContainer);
-        clearFunctionCards(chatContainer);
+      // Clear current chat UI (Phase 7: use component)
+      if (window.components?.chatContainer) {
+        window.components.chatContainer.clear();
+      } else {
+        console.error("⚠️ ChatContainer component not available - UI not cleared");
       }
 
       // Reset app state
@@ -281,78 +278,81 @@ async function handleSwitch(sessionId, sessionService, sessionState, updateSessi
         }
       }
 
-      // Render messages from backend response
+      // Render messages from backend response (Phase 7: use component)
       const messages = result.fullHistory || [];
-      if (messages.length > 0 && chatContainer) {
-        const { addMessage } = await import("../ui/chat-ui.js");
-
+      if (messages.length > 0) {
         console.log(`📨 Rendering ${messages.length} messages for session ${sessionId}`);
 
-        for (const msg of messages) {
-          console.log("Processing message:", {
-            role: msg.role,
-            contentType: typeof msg.content,
-            isArray: Array.isArray(msg.content),
-          });
+        if (window.components?.chatContainer) {
+          // Use ChatContainer component
+          for (const msg of messages) {
+            console.log("Processing message:", {
+              role: msg.role,
+              contentType: typeof msg.content,
+              isArray: Array.isArray(msg.content),
+            });
 
-          if (msg.role && msg.content) {
-            let content = msg.content;
-            const originalContent = content;
+            if (msg.role && msg.content) {
+              let content = msg.content;
+              const originalContent = content;
 
-            // Handle different content formats
-            if (Array.isArray(content)) {
-              console.log("Content is array, length:", content.length);
-              // Direct array (multipart message)
-              // Handle both 'text' and 'output_text' types
-              content = content
-                .filter((part) => part && (part.type === "text" || part.type === "output_text"))
-                .map((part) => part.text)
-                .join("\n");
-              console.log("After array processing:", content);
-            } else if (typeof content === "object" && content.text) {
-              // Single text object
-              content = content.text;
-              console.log("Extracted from object.text:", content);
-            } else if (typeof content === "string" && (content.startsWith("[") || content.startsWith("{"))) {
-              // JSON string that needs parsing
-              try {
-                const parsed = JSON.parse(content);
-                console.log("Parsed JSON:", { isArray: Array.isArray(parsed), hasText: !!parsed.text });
+              // Handle different content formats
+              if (Array.isArray(content)) {
+                console.log("Content is array, length:", content.length);
+                // Direct array (multipart message)
+                // Handle both 'text' and 'output_text' types
+                content = content
+                  .filter((part) => part && (part.type === "text" || part.type === "output_text"))
+                  .map((part) => part.text)
+                  .join("\n");
+                console.log("After array processing:", content);
+              } else if (typeof content === "object" && content.text) {
+                // Single text object
+                content = content.text;
+                console.log("Extracted from object.text:", content);
+              } else if (typeof content === "string" && (content.startsWith("[") || content.startsWith("{"))) {
+                // JSON string that needs parsing
+                try {
+                  const parsed = JSON.parse(content);
+                  console.log("Parsed JSON:", { isArray: Array.isArray(parsed), hasText: !!parsed.text });
 
-                if (Array.isArray(parsed)) {
-                  content = parsed
-                    .filter((part) => part && (part.type === "text" || part.type === "output_text"))
-                    .map((part) => part.text)
-                    .join("\n");
-                  console.log("After JSON array processing:", content);
-                } else if (parsed.text) {
-                  content = parsed.text;
-                  console.log("Extracted from parsed.text:", content);
+                  if (Array.isArray(parsed)) {
+                    content = parsed
+                      .filter((part) => part && (part.type === "text" || part.type === "output_text"))
+                      .map((part) => part.text)
+                      .join("\n");
+                    console.log("After JSON array processing:", content);
+                  } else if (parsed.text) {
+                    content = parsed.text;
+                    console.log("Extracted from parsed.text:", content);
+                  }
+                } catch (_e) {
+                  // Not valid JSON, use as-is
+                  console.log("Content is not valid JSON, using as-is");
                 }
-              } catch (_e) {
-                // Not valid JSON, use as-is
-                console.log("Content is not valid JSON, using as-is");
+              }
+              // else: content is already a plain string, use as-is
+
+              // Only add if we have actual text content
+              if (content && typeof content === "string" && content.trim()) {
+                // Use appropriate method based on role
+                if (msg.role === "user") {
+                  window.components.chatContainer.addUserMessage(content);
+                } else if (msg.role === "assistant") {
+                  window.components.chatContainer.addAssistantMessage(content);
+                }
+              } else {
+                console.warn("❌ Skipping message - invalid content:", {
+                  role: msg.role,
+                  finalContent: content,
+                  originalContent: originalContent,
+                });
               }
             }
-            // else: content is already a plain string, use as-is
-
-            // Only add if we have actual text content
-            if (content && typeof content === "string" && content.trim()) {
-              addMessage(chatContainer, content, msg.role);
-            } else {
-              console.warn("❌ Skipping message - invalid content:", {
-                role: msg.role,
-                finalContent: content,
-                originalContent: originalContent,
-              });
-            }
           }
+        } else {
+          console.error("⚠️ ChatContainer component not available - messages not rendered");
         }
-
-        // Scroll to bottom after rendering
-        setTimeout(() => {
-          chatContainer.scrollTop = chatContainer.scrollHeight;
-        }, 100);
       } else {
         console.log(`📭 No messages to render for session ${sessionId}`);
       }
@@ -366,15 +366,8 @@ async function handleSwitch(sessionId, sessionService, sessionState, updateSessi
         await showChatView(elements, appState);
       }
 
-      // Load files for this session
-      const { loadFiles, setActiveFilesDirectory } = await import("../managers/file-manager.js");
-      const sessionDirectory = `data/files/${sessionId}/sources`;
-      setActiveFilesDirectory(sessionDirectory);
-
-      const filesContainer = document.getElementById("files-container");
-      if (filesContainer) {
-        loadFiles(sessionDirectory, filesContainer);
-      }
+      // File loading is handled by FilePanel component above via:
+      // filePanel.setSession(sessionId) and filePanel.loadSessionFiles()
     } else {
       throw new Error(result.error);
     }

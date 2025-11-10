@@ -6,7 +6,7 @@
  * Output: DOM elements via DOMAdapter
  */
 
-import { formatTimestamp, truncateSessionTitle } from "../../viewmodels/session-viewmodel.js";
+import { formatTimestamp } from "../../viewmodels/session-viewmodel.js";
 
 /**
  * Render a single session list item

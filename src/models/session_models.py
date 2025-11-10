@@ -168,6 +168,9 @@ class SessionUpdate:
     last_used: str | None = None
     message_count: int | None = None
     accumulated_tool_tokens: int | None = None
+    model: str | None = None
+    mcp_config: list[str] | None = None
+    reasoning_effort: str | None = None
 
     def has_updates(self) -> bool:
         """Check if any fields are set for update.
@@ -181,6 +184,9 @@ class SessionUpdate:
                 self.last_used is not None,
                 self.message_count is not None,
                 self.accumulated_tool_tokens is not None,
+                self.model is not None,
+                self.mcp_config is not None,
+                self.reasoning_effort is not None,
             ]
         )
 
@@ -344,6 +350,33 @@ class ConfigMetadataCommand(BaseModel):
         return json_str
 
 
+class UpdateSessionConfigCommand(BaseModel):
+    """Command to update session configuration (model, MCP, reasoning effort).
+
+    Updates the session metadata and recreates the agent with new settings.
+    Session ID and files remain unchanged.
+    """
+
+    command: Literal["update_config"] = "update_config"
+    session_id: str = Field(..., min_length=1, description="Session to update")
+    model: str | None = Field(default=None, description="New model deployment name")
+    mcp_config: list[str] | None = Field(default=None, description="New MCP server configuration")
+    reasoning_effort: str | None = Field(default=None, description="New reasoning effort level")
+
+    @field_validator("session_id")
+    @classmethod
+    def validate_session_id(cls, v: str) -> str:
+        """Validate session_id format."""
+        if not v.startswith("chat_"):
+            raise ValueError("session_id must start with 'chat_'")
+        return v
+
+    def to_json(self) -> str:
+        """Convert to JSON for IPC."""
+        json_str: str = self.model_dump_json(exclude_none=True)
+        return json_str
+
+
 SessionCommand = (
     CreateSessionCommand
     | SwitchSessionCommand
@@ -354,6 +387,7 @@ SessionCommand = (
     | LoadMoreMessagesCommand
     | RenameSessionCommand
     | ConfigMetadataCommand
+    | UpdateSessionConfigCommand
 )
 
 
@@ -389,6 +423,8 @@ def parse_session_command(data: dict[str, Any]) -> SessionCommand:  # noqa: PLR0
         return RenameSessionCommand.model_validate(data)
     elif command_type == "config_metadata":
         return ConfigMetadataCommand.model_validate(data)
+    elif command_type == "update_config":
+        return UpdateSessionConfigCommand.model_validate(data)
     else:
         raise ValueError(f"Unknown command type: {command_type}")
 
