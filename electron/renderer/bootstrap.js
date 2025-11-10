@@ -59,6 +59,14 @@ export async function bootstrapSimple() {
   const functionCallService = new FunctionCallService({ ipcAdapter, storageAdapter });
   const sessionService = new SessionService({ ipcAdapter, storageAdapter });
 
+  // Group services into a single object for easy passing
+  const services = {
+    messageService,
+    fileService,
+    functionCallService,
+    sessionService,
+  };
+
   console.log("✅ Services initialized");
   console.log("📦 Services available:", {
     messageService: "✓",
@@ -494,7 +502,7 @@ export async function bootstrapSimple() {
 
         // Show welcome view
         const { showWelcomeView } = await import("./managers/view-manager.js");
-        await showWelcomeView(elements, appState);
+        await showWelcomeView(elements, appState, services);
 
         // Close sidebar after action
         if (sidebar && !sidebar.classList.contains("collapsed")) {
@@ -557,7 +565,7 @@ export async function bootstrapSimple() {
     console.log("🎬 Initializing welcome view on startup");
     // Use showWelcomeView which handles rendering AND event listeners
     const { showWelcomeView } = await import("./managers/view-manager.js");
-    await showWelcomeView(elements, appState);
+    await showWelcomeView(elements, appState, services);
     console.log("✅ Welcome view initialized (with listeners)");
   }
 

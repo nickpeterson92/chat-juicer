@@ -16,8 +16,9 @@ const welcomePageListeners = [];
  * Show the welcome view
  * @param {Object} elements - DOM elements from dom-manager
  * @param {Object} appState - Application state
+ * @param {Object} services - Service instances (sessionService, etc.)
  */
-export async function showWelcomeView(elements, appState) {
+export async function showWelcomeView(elements, appState, services = {}) {
   console.log("🚀 showWelcomeView called");
   if (!elements.welcomePageContainer) {
     console.error("❌ welcomePageContainer not found!");
@@ -67,7 +68,7 @@ export async function showWelcomeView(elements, appState) {
   console.log("⏰ Scheduling listener attachment with setTimeout");
   setTimeout(() => {
     console.log("⏰ setTimeout fired, calling attachWelcomePageListeners");
-    attachWelcomePageListeners(elements, appState);
+    attachWelcomePageListeners(elements, appState, services);
 
     // Auto-refresh welcome page file list if there's an active session
     // This prevents showing stale/deleted files
@@ -150,8 +151,9 @@ function detachWelcomePageListeners() {
  * Attach event listeners to welcome page elements
  * @param {Object} elements - DOM elements from dom-manager
  * @param {Object} appState - Application state
+ * @param {Object} services - Service instances (sessionService, etc.)
  */
-function attachWelcomePageListeners(elements, appState) {
+function attachWelcomePageListeners(elements, appState, services = {}) {
   console.log("🎯 attachWelcomePageListeners called");
   const welcomeInput = document.getElementById("welcome-input");
   const welcomeSendBtn = document.getElementById("welcome-send-btn");
@@ -256,18 +258,25 @@ function attachWelcomePageListeners(elements, appState) {
       const modelConfig = getModelConfig();
 
       // Create new session only if one does not already exist (e.g., created by file upload)
-      const { createNewSession, sessionState } = await import("../services/session-service.js");
+      const { sessionState } = await import("../services/session-service.js");
       let sessionId = sessionState.currentSessionId;
 
       if (!sessionId) {
-        const result = await createNewSession(
-          window.electronAPI,
-          elements,
-          null, // title
-          mcpConfig, // mcp config
-          modelConfig.model, // model
-          modelConfig.reasoning_effort // reasoning effort
-        );
+        // Use SessionService instance to create session
+        if (!services.sessionService) {
+          console.error("❌ SessionService not available");
+          window.electronAPI.log("error", "SessionService not available in view-manager");
+          isProcessing = false;
+          return;
+        }
+
+        const result = await services.sessionService.createSession({
+          title: null,
+          mcpConfig,
+          model: modelConfig.model,
+          reasoningEffort: modelConfig.reasoning_effort,
+        });
+
         if (!result.success) {
           window.electronAPI.log("error", "Failed to create session from welcome page", { error: result.error });
           isProcessing = false; // Reset guard before returning

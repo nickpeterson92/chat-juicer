@@ -205,9 +205,9 @@ async function handleDelete(sessionId, sessionService, sessionState, updateSessi
           clearFunctionCards(chatContainer);
         }
 
-        // Show welcome view
+        // Show welcome view (pass services for session creation)
         const { showWelcomeView } = await import("../managers/view-manager.js");
-        await showWelcomeView(elements, appState);
+        await showWelcomeView(elements, appState, { sessionService });
       }
 
       // Close sidebar after delete (better UX) - but only if we were on chat view
