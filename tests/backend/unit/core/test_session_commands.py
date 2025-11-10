@@ -628,9 +628,8 @@ class TestGetConfigMetadata:
         mock_app_state = Mock()
         mock_settings = Mock()
         mock_settings.azure_openai_deployment = "gpt-5-mini"
-        mock_settings.reasoning_effort = "medium"
 
-        with patch("core.session_commands.get_settings", return_value=mock_settings):
+        with patch("core.constants.get_settings", return_value=mock_settings):
             result = await get_config_metadata(mock_app_state)
 
         assert result["success"] is True
@@ -646,9 +645,8 @@ class TestGetConfigMetadata:
         mock_app_state = Mock()
         mock_settings = Mock()
         mock_settings.azure_openai_deployment = "gpt-5-mini"
-        mock_settings.reasoning_effort = "medium"
 
-        with patch("core.session_commands.get_settings", return_value=mock_settings):
+        with patch("core.constants.get_settings", return_value=mock_settings):
             result = await get_config_metadata(mock_app_state)
 
         for model in result["models"]:

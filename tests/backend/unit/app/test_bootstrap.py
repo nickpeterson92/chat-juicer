@@ -138,7 +138,7 @@ class TestInitializeApplication:
 
         # Verify Azure-specific settings
         assert app_state is not None
-        assert app_state.deployment == "gpt-4o-deployment"
+        assert app_state.deployment == "gpt-5"  # Uses DEFAULT_MODEL constant
 
     @pytest.mark.asyncio
     @patch("app.bootstrap.load_dotenv")

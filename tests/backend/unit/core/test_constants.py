@@ -52,7 +52,8 @@ class TestGetSettings:
             settings = get_settings()
 
             assert hasattr(settings, "api_provider")
-            assert hasattr(settings, "reasoning_effort")
+            assert hasattr(settings, "debug")
+            assert hasattr(settings, "http_request_logging")
 
     def test_get_settings_with_azure_provider(self, monkeypatch: Any) -> None:
         """Test loading settings with Azure provider."""

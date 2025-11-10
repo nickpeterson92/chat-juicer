@@ -331,7 +331,7 @@ class TestSummarization:
     @patch("core.session.SQLiteSession.__init__", return_value=None)
     @patch("core.session.SQLiteSession.get_items", new_callable=AsyncMock)
     @patch("core.session.SQLiteSession.add_items", new_callable=AsyncMock)
-    @patch("core.session.get_settings")
+    @patch("core.constants.get_settings")
     @patch("core.session.Agent")
     @patch("core.session.Runner", new_callable=AsyncMock)
     @patch("core.session.count_tokens")

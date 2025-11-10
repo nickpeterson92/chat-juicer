@@ -20,6 +20,7 @@ export default defineConfig({
         "**/*.config.js",
         "**/*.spec.js",
         "**/*.test.js",
+        "tests/frontend/helpers/**", // Exclude test mocks and helpers from coverage
       ],
       thresholds: {
         lines: 80,
