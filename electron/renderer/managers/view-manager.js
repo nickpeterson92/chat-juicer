@@ -75,17 +75,17 @@ export async function showWelcomeView(elements, appState, services = {}) {
     const sessionState = window.app?.sessionState;
     if (sessionState?.currentSessionId) {
       const welcomeFilesContainer = document.getElementById("welcome-files-container");
-      if (welcomeFilesContainer) {
+      const welcomeFilesSection = document.getElementById("welcome-files-section");
+
+      if (welcomeFilesContainer && welcomeFilesSection) {
+        // Show the files section immediately when there's an active session
+        welcomeFilesSection.style.display = "block";
+
+        // Then load the files (will show placeholder if empty)
         import("../managers/file-manager.js").then(({ loadFiles }) => {
           const directory = `data/files/${sessionState.currentSessionId}/sources`;
           console.log("🔄 Auto-refreshing welcome page files");
           loadFiles(directory, welcomeFilesContainer);
-
-          // Show the files section
-          const welcomeFilesSection = document.getElementById("welcome-files-section");
-          if (welcomeFilesSection && welcomeFilesContainer.children.length > 0) {
-            welcomeFilesSection.style.display = "block";
-          }
         });
       }
     }

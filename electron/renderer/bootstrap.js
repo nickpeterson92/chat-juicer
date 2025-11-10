@@ -275,28 +275,36 @@ export async function bootstrapSimple() {
               const directory = `data/files/${sessionState.currentSessionId}/sources`;
 
               if (isOnWelcomePage) {
-                // Show welcome files section if hidden
+                // Show welcome files section (always show when there's a session)
                 const welcomeFilesSection = document.getElementById("welcome-files-section");
                 if (welcomeFilesSection) {
                   welcomeFilesSection.style.display = "block";
                 }
 
-                // Load files into welcome page container
+                // Refresh files in welcome page container
                 const welcomeFilesContainer = document.getElementById("welcome-files-container");
                 if (welcomeFilesContainer) {
-                  loadFiles(directory, welcomeFilesContainer);
+                  // Use setTimeout to ensure file is written before refresh
+                  setTimeout(() => {
+                    loadFiles(directory, welcomeFilesContainer);
+                  }, 100);
                 }
               } else {
                 // Refresh files panel using component (chat view)
                 if (components.filePanel) {
-                  components.filePanel.refresh();
+                  // Use setTimeout to ensure file is written before refresh
+                  setTimeout(() => {
+                    components.filePanel.refresh();
+                  }, 100);
                 } else {
                   // Fallback: get container from component (should not happen)
                   console.warn("FilePanel component not available during upload, using direct load");
                   const container =
                     components.filePanel?.getFilesContainer() || document.getElementById("files-container");
                   if (container) {
-                    loadFiles(directory, container);
+                    setTimeout(() => {
+                      loadFiles(directory, container);
+                    }, 100);
                   }
                 }
               }
