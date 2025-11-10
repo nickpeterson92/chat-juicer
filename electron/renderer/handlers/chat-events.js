@@ -3,7 +3,7 @@
  * Handles chat-related events and coordinates between UI and services
  */
 
-import { prepareMessageForDisplay } from "../viewmodels/message-viewmodel.js";
+import { createMessageViewModel } from "../viewmodels/message-viewmodel.js";
 
 /**
  * Setup chat event handlers
@@ -61,7 +61,7 @@ export function setupChatEventHandlers({ chatContainer, inputArea, messageServic
   // Handle message history load
   const handleMessageHistory = (data) => {
     const { messages } = data;
-    const viewModels = messages.map(prepareMessageForDisplay);
+    const viewModels = messages.map(createMessageViewModel);
     chatContainer.setMessages(viewModels);
   };
 

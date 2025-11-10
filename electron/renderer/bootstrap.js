@@ -11,11 +11,16 @@
 import { DOMAdapter } from "./adapters/DOMAdapter.js";
 import { IPCAdapter } from "./adapters/IPCAdapter.js";
 import { StorageAdapter } from "./adapters/StorageAdapter.js";
+// Phase 4: EventBus & Monitoring
+import { globalEventBus } from "./core/event-bus.js";
+import { getCorePlugins, PluginRegistry } from "./plugins/index.js";
 import { FileService } from "./services/file-service.js";
 import { FunctionCallService } from "./services/function-call-service.js";
 // Services (Business Logic)
 import { MessageService } from "./services/message-service.js";
 import { SessionService } from "./services/session-service.js";
+import { DebugDashboard } from "./utils/debug/index.js";
+import { globalMetrics } from "./utils/performance/index.js";
 
 // UI Components
 // Note: showWelcomePage is now imported dynamically via showWelcomeView
@@ -32,7 +37,12 @@ import { elements, initializeElements } from "./managers/dom-manager.js";
  * @returns {Promise<Object>} Application instance with services
  */
 export async function bootstrapSimple() {
-  console.log("🚀 Bootstrapping Chat Juicer (Simple Mode)...");
+  console.log("🚀 Bootstrapping Chat Juicer (Simple Mode + Phase 4)...");
+
+  // ======================
+  // Phase 4: Start performance tracking
+  // ======================
+  globalMetrics.startTimer("bootstrap");
 
   // ======================
   // 1. Create Adapters
@@ -42,6 +52,12 @@ export async function bootstrapSimple() {
   const storageAdapter = new StorageAdapter();
 
   console.log("✅ Adapters initialized");
+
+  // ======================
+  // 1b. EventBus (Phase 4)
+  // ======================
+  // Message routing will be handled by MessageHandlerPlugin (installed below)
+  console.log("✅ EventBus ready (routing via plugin)");
 
   // ======================
   // 2. Initialize State & Elements
@@ -416,14 +432,23 @@ export async function bootstrapSimple() {
   const sendBtn = document.getElementById("send-btn");
   const userInput = document.getElementById("user-input");
 
+  console.log("🔍 Chat input elements:", {
+    sendBtn: !!sendBtn,
+    userInput: !!userInput,
+    userInputId: userInput?.id,
+    userInputTag: userInput?.tagName,
+  });
+
   if (sendBtn && userInput) {
     sendBtn.addEventListener("click", () => {
+      console.log("🖱️ Send button clicked");
       sendMessage(userInput.value, userInput);
     });
 
     userInput.addEventListener("keydown", (e) => {
+      console.log("⌨️ Chat input keydown:", e.key, "shift:", e.shiftKey, "target:", e.target.id);
       if (e.key === "Enter" && !e.shiftKey) {
-        console.log("Enter key pressed in chat input");
+        console.log("✅ Enter (no shift) detected - preventing default and sending");
         e.preventDefault();
         sendMessage(userInput.value, userInput);
       }
@@ -439,7 +464,9 @@ export async function bootstrapSimple() {
       autoResizeTextarea(userInput);
     }
 
-    console.log("✅ Chat input event listeners attached");
+    console.log("✅ Chat input event listeners attached to:", userInput.id);
+  } else {
+    console.warn("⚠️ Chat input or send button not found!");
   }
 
   // NOTE: Welcome page handlers (input/send/refresh/keypress) are managed in view-manager.js
@@ -570,11 +597,65 @@ export async function bootstrapSimple() {
   }
 
   // ======================
-  // 9. Setup IPC Message Handlers
+  // 9. Setup EventBus Message Handlers (Phase 4)
   // ======================
 
-  // Import message handler
-  const { processMessage } = await import("./handlers/message-handlers.js");
+  // Import and register EventBus-driven message handlers
+  const { registerMessageHandlers } = await import("./handlers/message-handlers-v2.js");
+
+  // Register handlers with EventBus
+  registerMessageHandlers({
+    appState,
+    elements,
+    services: {
+      messageService,
+      fileService,
+      functionCallService,
+      sessionService,
+    },
+  });
+
+  console.log("✅ EventBus message handlers registered");
+
+  // ======================
+  // 9b. Initialize Plugin System (Phase 4)
+  // ======================
+  const app = {
+    eventBus: globalEventBus,
+    state: appState,
+    services,
+    adapters: { domAdapter, ipcAdapter, storageAdapter },
+    elements,
+    config: {
+      version: "1.0.0",
+      environment: import.meta.env.MODE,
+    },
+  };
+
+  const pluginRegistry = new PluginRegistry(app);
+  app.pluginRegistry = pluginRegistry;
+
+  console.log("🔌 Installing core plugins...");
+  const corePlugins = getCorePlugins();
+  for (const plugin of corePlugins) {
+    try {
+      await pluginRegistry.register(plugin);
+      console.log(`  ✓ ${plugin.name}`);
+    } catch (error) {
+      console.error(`  ✗ ${plugin.name}:`, error.message);
+    }
+  }
+  console.log("✅ Core plugins installed");
+
+  // ======================
+  // 9c. Initialize Debug Dashboard (Phase 4 - Dev Mode)
+  // ======================
+  if (import.meta.env.DEV) {
+    const dashboard = new DebugDashboard(app);
+    dashboard.init();
+    app.debug = dashboard;
+    console.log("🔍 Debug dashboard initialized (window.__DEBUG__)");
+  }
 
   // JSON buffer for parsing multi-line messages
   let jsonBuffer = "";
@@ -614,23 +695,12 @@ export async function bootstrapSimple() {
             console.log("✅ Parsed message:", message.type);
             jsonBuffer = ""; // Reset on success
 
-            // Process the message with services
-            console.log("Calling processMessage with:", {
-              messageType: message.type,
-              hasAppState: !!appState,
-              hasElements: !!elements,
+            // Emit to EventBus (will be routed by MessageHandlerPlugin to type-specific handlers)
+            console.log("✅ Emitting to EventBus:", message.type);
+            globalEventBus.emit("message:received", message, {
+              source: "backend",
+              timestamp: Date.now(),
             });
-            processMessage(message, {
-              appState,
-              elements,
-              services: {
-                messageService,
-                fileService,
-                functionCallService,
-                sessionService,
-              },
-            });
-            console.log("✅ Message processed");
           } catch (e) {
             // Not yet complete JSON, keep accumulating
             if (!e.message.includes("Unexpected end of JSON")) {
@@ -684,6 +754,22 @@ export async function bootstrapSimple() {
       }
     } catch (error) {
       console.error("Failed to reload sessions after creation:", error);
+    }
+  });
+
+  // Listen for session-updated event (e.g., title changes)
+  window.addEventListener("session-updated", async (event) => {
+    console.log("📝 Session updated event received:", event.detail);
+
+    // Reload sessions list to show the updated title
+    try {
+      const result = await sessionService.loadSessions();
+      if (result.success) {
+        updateSessionsList(result.sessions || []);
+        console.log("✅ Sessions list updated after session update");
+      }
+    } catch (error) {
+      console.error("Failed to reload sessions after update:", error);
     }
   });
 
@@ -798,38 +884,32 @@ export async function bootstrapSimple() {
     console.error("Failed to load sessions:", error);
   }
 
-  console.log("🎉 Chat Juicer (Simple Mode) bootstrapped successfully!");
+  // ======================
+  // Phase 4: Track Bootstrap Performance
+  // ======================
+  // Use plugin-provided instances (set by MetricsBridgePlugin and AnalyticsBridgePlugin)
+  const bootstrapDuration = app.metrics.endTimer("bootstrap");
+  console.log(`⏱️  Bootstrap time: ${bootstrapDuration.toFixed(2)}ms`);
+
+  // Track analytics
+  app.analytics.track("app", "bootstrap", "complete", bootstrapDuration);
+
+  // Emit bootstrap complete event
+  globalEventBus.emit("app:bootstrap:complete", {
+    duration: bootstrapDuration,
+  });
+
+  console.log("🎉 Chat Juicer bootstrapped successfully!");
 
   // ======================
-  // Return Application Instance
+  // Update Application Instance
   // ======================
-  const app = {
-    // Services (main API)
-    services: {
-      message: messageService,
-      file: fileService,
-      functionCall: functionCallService,
-      session: sessionService,
-    },
+  // Note: metrics and analytics already added by bridge plugins
 
-    // Adapters (for advanced usage)
-    adapters: {
-      dom: domAdapter,
-      ipc: ipcAdapter,
-      storage: storageAdapter,
-    },
-
-    // State management
-    state: appState,
-
-    // DOM elements
-    elements: elements,
-
-    // Cleanup function
-    cleanup: () => {
-      console.log("🧹 Cleaning up simple bootstrap...");
-      // In simple mode, minimal cleanup needed
-    },
+  // Cleanup function
+  app.cleanup = () => {
+    console.log("🧹 Cleaning up...");
+    // Cleanup logic here
   };
 
   // Expose globally for debugging

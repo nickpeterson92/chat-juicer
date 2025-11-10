@@ -3,7 +3,7 @@
  * Self-contained component that manages message rendering and scrolling
  */
 
-import { prepareMessageForDisplay } from "../../viewmodels/message-viewmodel.js";
+import { createMessageViewModel } from "../../viewmodels/message-viewmodel.js";
 import {
   renderAssistantMessage,
   renderMessageBatch,
@@ -203,7 +203,7 @@ export class ChatContainer {
   renderNewMessage(message) {
     if (!this.messagesContainer) return;
 
-    const viewModel = prepareMessageForDisplay(message);
+    const viewModel = createMessageViewModel(message);
     const element =
       viewModel.role === "user"
         ? renderUserMessage(viewModel.content, this.dom)
@@ -239,7 +239,7 @@ export class ChatContainer {
     }
 
     // Prepare view models
-    const viewModels = this.messages.map(prepareMessageForDisplay);
+    const viewModels = this.messages.map(createMessageViewModel);
 
     // Render batch
     const fragment = renderMessageBatch(viewModels, this.dom);

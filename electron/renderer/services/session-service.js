@@ -4,21 +4,6 @@
  * Optimized with batch DOM updates for fast session switching
  */
 
-import {
-  IDLE_RENDER_TIMEOUT,
-  INITIAL_RENDER_COUNT,
-  PAGINATION_CHUNK_SIZE,
-  PAGINATION_MAX_RETRIES,
-  PAGINATION_RETRY_DELAY_BASE,
-  PAGINATION_THROTTLE_DELAY,
-} from "../config/constants.js";
-import { clearChat } from "../ui/chat-ui.js";
-import { clearFunctionCards } from "../ui/function-card-ui.js";
-import { clearParseCache } from "../utils/json-cache.js";
-import { initializeCodeCopyButtons, processMermaidDiagrams, renderMarkdown } from "../utils/markdown-renderer.js";
-import { scheduleScroll } from "../utils/scroll-utils.js";
-import { showToast } from "../utils/toast.js";
-
 // ============================================================================
 // NEW: Class-based SessionService with Dependency Injection
 // ============================================================================
