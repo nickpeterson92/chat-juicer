@@ -198,9 +198,11 @@ async function handleDelete(sessionId, sessionService, sessionState, updateSessi
 
         // Clear FilePanel component FIRST (Phase 7 - release file handles!)
         if (window.components?.filePanel) {
+          // CRITICAL: Close all file handles before deletion to prevent "Too many open files"
+          window.components.filePanel.closeAllHandles();
           window.components.filePanel.setSession(null);
           window.components.filePanel.clear();
-          console.log("✅ FilePanel cleared before deletion");
+          console.log("✅ FilePanel handles closed and cleared before deletion");
         }
 
         // Clear chat UI (Phase 7: use component)

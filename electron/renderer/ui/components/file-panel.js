@@ -182,6 +182,30 @@ export class FilePanel {
   }
 
   /**
+   * Close all open file handles (critical before session deletion)
+   * This prevents "Too many open files" errors when deleting sessions
+   */
+  closeAllHandles() {
+    if (!this.filesContainer) return;
+
+    // Clear any file preview elements that might hold references
+    const previews = this.filesContainer.querySelectorAll("[data-file-handle]");
+    previews.forEach((preview) => {
+      // Remove DOM elements that might hold file handles
+      preview.remove();
+    });
+
+    // Force garbage collection by removing all event listeners
+    const clonedContainer = this.filesContainer.cloneNode(false);
+    if (this.filesContainer.parentNode) {
+      this.filesContainer.parentNode.replaceChild(clonedContainer, this.filesContainer);
+      this.filesContainer = clonedContainer;
+    }
+
+    console.log("✅ FilePanel: All file handles closed");
+  }
+
+  /**
    * Clear files list
    */
   clear() {

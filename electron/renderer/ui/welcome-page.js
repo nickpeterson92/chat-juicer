@@ -14,9 +14,6 @@ const LOGO_SVG = `<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
   <path fill="currentColor" d="M313.984,368.634l-7.522,10.171c9.402,6.949,18.391,14.956,24.844,23.652c5.059,6.834,8.468,13.968,9.739,21.464H272.7h-68.362c1.218-7.152,4.379-13.968,9.076-20.519c6.039-8.432,14.515-16.244,23.512-23.088l-7.664-10.065c-9.623,7.329-18.991,15.84-26.133,25.772c-7.116,9.898-12.042,21.41-12.042,34.23v6.33H272.7h81.624v-6.33c0-13.296-5.297-25.181-12.854-35.334C333.894,384.73,323.996,376.042,313.984,368.634z"/>
 </svg>`;
 
-// Import shared model metadata
-import { MODEL_METADATA, REASONING_DESCRIPTIONS } from "../config/model-metadata.js";
-
 // ============================================================================
 // TEMPLATE FUNCTIONS - Composable UI sections
 // ============================================================================
@@ -67,34 +64,19 @@ function createMcpToggles() {
 }
 
 /**
- * Create model selector dropdown structure
+ * Create model selector container (populated by ModelSelector component)
  * Exported for reuse on chat page
  */
 export function createModelSelector() {
   return `
     <div class="model-config-inline">
-      <button id="model-selector-trigger" class="model-selector-trigger">
-        <span id="selected-model-label">GPT-5</span>
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+      <!-- Loading skeleton (replaced by ModelSelector component) -->
+      <button class="model-selector-trigger" disabled style="opacity: 0.6; cursor: wait;">
+        <span style="color: transparent; background: currentColor; border-radius: 4px; opacity: 0.2;">GPT-5</span>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.3;">
           <path d="M4 6L8 10L12 6" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
-      <div id="model-selector-dropdown" class="model-selector-dropdown" style="display: none;">
-        <div class="model-selector-content">
-          <div id="main-models" class="model-cards">
-            <!-- Populated by initializeModelConfig() -->
-          </div>
-          <button id="more-models-toggle" class="more-models-toggle">
-            <span>More models</span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-          <div id="more-models-section" class="more-models-section" style="display: none;">
-            <!-- Populated by initializeModelConfig() -->
-          </div>
-        </div>
-      </div>
     </div>
   `;
 }
@@ -322,25 +304,19 @@ export function getMcpConfig() {
 }
 
 /**
- * Get model configuration from model selector
+ * Get model configuration from ModelSelector component
  * @returns {{model: string, reasoning_effort?: string}} Model configuration object
  */
 export function getModelConfig() {
-  const selectedCard = document.querySelector(".model-card.selected");
-  const selectedWrapper = selectedCard?.closest(".model-card-wrapper");
+  // Get config from global appState (single source of truth)
+  const storedConfig = window.app?.appState?.getState("ui.welcomeModelConfig");
 
-  const model = selectedWrapper?.dataset.model || "gpt-5";
-  const config = { model };
-
-  // Check if this model has a reasoning panel with a selected option
-  if (selectedWrapper) {
-    const reasoningOption = selectedWrapper.querySelector(".reasoning-option.selected");
-    if (reasoningOption) {
-      config.reasoning_effort = reasoningOption.dataset.value || "medium";
-    }
+  if (storedConfig?.model) {
+    return storedConfig;
   }
 
-  return config;
+  // Fallback to defaults if appState not initialized yet
+  return { model: "gpt-5", reasoning_effort: "medium" };
 }
 
 /**
@@ -361,317 +337,16 @@ export function getSuggestionPrompt(category) {
 }
 
 // ============================================================================
-// MODEL CONFIGURATION - Dynamic model card creation and management
+// MODEL CONFIGURATION
 // ============================================================================
-
-/**
- * Create a model card element
- */
-function createModelCard(model, isDefault, isReasoningModel) {
-  const metadata = MODEL_METADATA[model] || {
-    displayName: model,
-    description: "OpenAI language model",
-    isPrimary: false,
-  };
-
-  const card = document.createElement("div");
-  card.className = "model-card-wrapper";
-  card.dataset.model = model;
-
-  const cardButton = document.createElement("button");
-  cardButton.className = "model-card";
-  if (isDefault) {
-    cardButton.classList.add("selected");
-  }
-
-  cardButton.innerHTML = `
-    <div class="model-card-header">
-      <span class="model-card-name">${metadata.displayName}</span>
-      <div class="model-card-icons">
-        ${isReasoningModel ? `<button class="reasoning-expand-btn" data-model="${model}" title="Configure reasoning effort"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : ""}
-        <svg class="model-card-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-          <polyline points="20 6 9 17 4 12"></polyline>
-        </svg>
-      </div>
-    </div>
-    <div class="model-card-description">${metadata.description}</div>
-  `;
-
-  card.appendChild(cardButton);
-
-  // Add reasoning selector panel if this is a reasoning model
-  if (isReasoningModel) {
-    const reasoningPanel = document.createElement("div");
-    reasoningPanel.className = "reasoning-panel";
-    reasoningPanel.dataset.model = model;
-    reasoningPanel.style.display = "none";
-
-    reasoningPanel.innerHTML = `
-      <div class="reasoning-panel-content">
-        <div class="reasoning-panel-label">Reasoning effort</div>
-        <div class="reasoning-options" data-model="${model}">
-          <!-- Options will be populated -->
-        </div>
-      </div>
-    `;
-
-    card.appendChild(reasoningPanel);
-  }
-
-  return card;
-}
-
-/**
- * Handle model card selection
- */
-function handleModelCardClick(cardButton) {
-  // Remove selection from all cards
-  document.querySelectorAll(".model-card").forEach((c) => {
-    c.classList.remove("selected");
-  });
-
-  // Select clicked card
-  cardButton.classList.add("selected");
-
-  // Update trigger label
-  const wrapper = cardButton.closest(".model-card-wrapper");
-  const model = wrapper.dataset.model;
-  const metadata = MODEL_METADATA[model] || { displayName: model };
-  const label = document.getElementById("selected-model-label");
-  if (label) {
-    label.textContent = metadata.displayName;
-  }
-
-  // DON'T close dropdown - let user adjust reasoning effort or explore other models
-  // Dropdown will close when clicking outside
-}
-
-/**
- * Handle reasoning expand button click
- */
-function handleReasoningExpandClick(e, _model) {
-  e.stopPropagation(); // Don't trigger card selection
-
-  // Find the reasoning panel for this model
-  const wrapper = e.target.closest(".model-card-wrapper");
-  const panel = wrapper.querySelector(".reasoning-panel");
-  const expandBtn = wrapper.querySelector(".reasoning-expand-btn");
-
-  if (!panel) return;
-
-  // Toggle panel visibility
-  const isVisible = panel.style.display !== "none";
-
-  // Close all other reasoning panels
-  document.querySelectorAll(".reasoning-panel").forEach((p) => {
-    p.style.display = "none";
-    const otherBtn = p.closest(".model-card-wrapper").querySelector(".reasoning-expand-btn svg");
-    if (otherBtn) {
-      otherBtn.style.transform = "rotate(0deg)";
-    }
-  });
-
-  if (isVisible) {
-    panel.style.display = "none";
-    expandBtn.querySelector("svg").style.transform = "rotate(0deg)";
-  } else {
-    panel.style.display = "block";
-    expandBtn.querySelector("svg").style.transform = "rotate(90deg)";
-  }
-}
-
-/**
- * Initialize model configuration (called after backend metadata loaded)
- * @param {Array} models - Available models from backend
- * @param {Array} reasoningLevels - Available reasoning levels from backend
- */
-export function initializeModelConfig(models = [], reasoningLevels = []) {
-  const mainModelsContainer = document.getElementById("main-models");
-  const moreModelsSection = document.getElementById("more-models-section");
-  const trigger = document.getElementById("model-selector-trigger");
-  const dropdown = document.getElementById("model-selector-dropdown");
-  const moreModelsToggle = document.getElementById("more-models-toggle");
-
-  if (!mainModelsContainer || !moreModelsSection) return;
-
-  // DON'T preserve selection - always reset to defaults when welcome page loads
-  // The welcome page should always start fresh with GPT-5 + Medium reasoning
-  const currentModelSelection = null;
-  const currentReasoningSelection = null;
-
-  // Separate primary and secondary models
-  const primaryModels = [];
-  const secondaryModels = [];
-
-  models.forEach((modelInfo) => {
-    const metadata = MODEL_METADATA[modelInfo.value];
-    if (metadata?.isPrimary) {
-      primaryModels.push(modelInfo);
-    } else {
-      secondaryModels.push(modelInfo);
-    }
-  });
-
-  // Populate main models
-  mainModelsContainer.innerHTML = "";
-  primaryModels.forEach(({ value, isDefault, supportsReasoning }) => {
-    const cardWrapper = createModelCard(
-      value,
-      currentModelSelection ? currentModelSelection === value : isDefault,
-      supportsReasoning
-    );
-    const cardButton = cardWrapper.querySelector(".model-card");
-    cardButton.addEventListener("click", () => handleModelCardClick(cardButton));
-
-    // Add reasoning expand button listener if present
-    const expandBtn = cardWrapper.querySelector(".reasoning-expand-btn");
-    if (expandBtn) {
-      expandBtn.addEventListener("click", (e) => handleReasoningExpandClick(e, value));
-    }
-
-    mainModelsContainer.appendChild(cardWrapper);
-  });
-
-  // Populate more models section
-  moreModelsSection.innerHTML = "";
-  secondaryModels.forEach(({ value, isDefault, supportsReasoning }) => {
-    const cardWrapper = createModelCard(
-      value,
-      currentModelSelection ? currentModelSelection === value : isDefault,
-      supportsReasoning
-    );
-    const cardButton = cardWrapper.querySelector(".model-card");
-    cardButton.addEventListener("click", () => handleModelCardClick(cardButton));
-
-    // Add reasoning expand button listener if present
-    const expandBtn = cardWrapper.querySelector(".reasoning-expand-btn");
-    if (expandBtn) {
-      expandBtn.addEventListener("click", (e) => handleReasoningExpandClick(e, value));
-    }
-
-    moreModelsSection.appendChild(cardWrapper);
-  });
-
-  // Populate reasoning options for all reasoning panels
-  if (reasoningLevels.length > 0) {
-    document.querySelectorAll(".reasoning-options").forEach((container) => {
-      const model = container.dataset.model;
-      container.innerHTML = "";
-
-      reasoningLevels.forEach(({ value, label, isDefault }) => {
-        const option = document.createElement("button");
-        option.className = "reasoning-option";
-        option.dataset.value = value;
-        option.dataset.model = model;
-
-        if (!currentReasoningSelection && isDefault) {
-          option.classList.add("selected");
-        } else if (currentReasoningSelection === value) {
-          option.classList.add("selected");
-        }
-
-        const description = REASONING_DESCRIPTIONS[value] || label;
-
-        option.innerHTML = `
-          <div class="reasoning-option-header">
-            <span class="reasoning-option-value">${value.charAt(0).toUpperCase() + value.slice(1)}</span>
-            <svg class="reasoning-option-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-              <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-          </div>
-          <div class="reasoning-option-description">${description}</div>
-        `;
-
-        option.addEventListener("click", (e) => {
-          e.stopPropagation();
-          // Update selection for this model's reasoning options
-          container.querySelectorAll(".reasoning-option").forEach((opt) => {
-            opt.classList.remove("selected");
-          });
-          option.classList.add("selected");
-        });
-
-        container.appendChild(option);
-      });
-    });
-  }
-
-  // Setup trigger click handler - MUST BE DONE ONCE, NOT EVERY TIME
-  if (trigger && dropdown && !trigger.dataset.listenerAttached) {
-    trigger.dataset.listenerAttached = "true";
-
-    trigger.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const isVisible = dropdown.style.display !== "none";
-
-      if (isVisible) {
-        dropdown.style.display = "none";
-      } else {
-        // Calculate available space and position dynamically
-        const triggerRect = trigger.getBoundingClientRect();
-        const viewportHeight = window.innerHeight;
-        const spaceBelow = viewportHeight - triggerRect.bottom;
-        const spaceAbove = triggerRect.top;
-
-        // Set max height based on available space (leave 20px margin)
-        const maxHeight = Math.max(200, Math.min(500, spaceBelow - 20));
-        dropdown.style.maxHeight = `${maxHeight}px`;
-
-        // If not enough space below but more space above, show above
-        if (spaceBelow < 300 && spaceAbove > spaceBelow) {
-          dropdown.style.top = "auto";
-          dropdown.style.bottom = "100%";
-          dropdown.style.marginBottom = "4px";
-          dropdown.style.marginTop = "0";
-        } else {
-          dropdown.style.top = "calc(100% + 4px)";
-          dropdown.style.bottom = "auto";
-          dropdown.style.marginBottom = "0";
-          dropdown.style.marginTop = "0";
-        }
-
-        dropdown.style.display = "block";
-      }
-    });
-  }
-
-  // Setup more models toggle - MUST BE DONE ONCE, NOT EVERY TIME
-  if (moreModelsToggle && !moreModelsToggle.dataset.listenerAttached) {
-    moreModelsToggle.dataset.listenerAttached = "true";
-
-    moreModelsToggle.addEventListener("click", () => {
-      const isExpanded = moreModelsSection.style.display !== "none";
-      moreModelsSection.style.display = isExpanded ? "none" : "block";
-      const svg = moreModelsToggle.querySelector("svg");
-      if (svg) {
-        svg.style.transform = isExpanded ? "rotate(0deg)" : "rotate(90deg)";
-      }
-    });
-  }
-
-  // Close dropdown when clicking outside - ATTACH ONCE
-  if (!document.body.dataset.modelDropdownListenerAttached) {
-    document.body.dataset.modelDropdownListenerAttached = "true";
-
-    document.addEventListener("click", (e) => {
-      const dropdown = document.getElementById("model-selector-dropdown");
-      const trigger = document.getElementById("model-selector-trigger");
-
-      if (dropdown && !dropdown.contains(e.target) && e.target !== trigger && !trigger?.contains(e.target)) {
-        dropdown.style.display = "none";
-      }
-    });
-  }
-
-  // Update selected label to match current selection
-  const selectedCard = document.querySelector(".model-card.selected");
-  if (selectedCard) {
-    const wrapper = selectedCard.closest(".model-card-wrapper");
-    const model = wrapper?.dataset.model;
-    const metadata = MODEL_METADATA[model] || { displayName: model };
-    const label = document.getElementById("selected-model-label");
-    if (label) {
-      label.textContent = metadata.displayName;
-    }
-  }
-}
+// NOTE: Model selector functionality has been moved to ModelSelector component
+// See: electron/renderer/ui/components/model-selector.js
+//
+// The ModelSelector component is now responsible for:
+// - Rendering model cards
+// - Handling dropdown toggles
+// - Managing reasoning panel expansion
+// - Tracking selection state
+// - Syncing with backend (chat page mode)
+//
+// The initializeModelConfig() export has been removed - use ModelSelector.initialize() instead

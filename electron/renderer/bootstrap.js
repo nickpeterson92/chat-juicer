@@ -604,6 +604,7 @@ export async function bootstrapSimple() {
   const app = {
     eventBus: globalEventBus,
     state: appState,
+    appState, // Add direct reference for backward compatibility
     services,
     adapters: { domAdapter, ipcAdapter, storageAdapter },
     elements,
@@ -611,7 +612,14 @@ export async function bootstrapSimple() {
       version: "1.0.0",
       environment: import.meta.env.MODE,
     },
+    components, // Add components reference
+    sessionState, // Add session state reference
   };
+
+  // CRITICAL: Expose globally IMMEDIATELY before welcome view initializes
+  // This ensures ModelSelector onChange callbacks can access appState
+  window.app = app;
+  console.log("✅ window.app set with appState available");
 
   const pluginRegistry = new PluginRegistry(app);
   app.pluginRegistry = pluginRegistry;
@@ -841,28 +849,29 @@ export async function bootstrapSimple() {
     setupSessionListHandlers(sessionsList, sessionService, sessionState, updateSessionsList, elements, appState);
   }
 
-  // Load model config metadata from backend and initialize model selector via InputArea
+  // Load model config metadata from backend ONCE and cache it
+  // This prefetch ensures model selectors can render instantly without waiting
+  let cachedModelConfig = null;
   try {
     const configResult = await ipcAdapter.sendSessionCommand("config_metadata", {});
     if (configResult.success) {
-      const { models, reasoning_levels } = configResult;
-      const { createModelSelector, initializeModelConfig, getModelConfig } = await import("./ui/welcome-page.js");
+      cachedModelConfig = {
+        models: configResult.models,
+        reasoning_levels: configResult.reasoning_levels,
+      };
 
-      // Inject getModelConfig into InputArea
-      components.inputArea.getModelConfig = getModelConfig;
+      // Initialize model selector via InputArea component (uses ModelSelector internally)
+      await components.inputArea.initializeModelSelector(cachedModelConfig.models, cachedModelConfig.reasoning_levels);
 
-      // Initialize model selector via InputArea component
-      await components.inputArea.initializeModelSelector(
-        models,
-        reasoning_levels,
-        createModelSelector,
-        initializeModelConfig
-      );
-
-      console.log("✅ Model config loaded:", models?.length || 0, "models");
+      console.log("✅ Model config loaded and cached:", cachedModelConfig.models?.length || 0, "models");
     }
   } catch (error) {
     console.error("Failed to load model config:", error);
+  }
+
+  // Store cached config in appState for instant access by welcome page
+  if (cachedModelConfig) {
+    appState.setState("ui.cachedModelConfig", cachedModelConfig);
   }
 
   // Load sessions and populate sidebar using SessionService
@@ -923,8 +932,8 @@ export async function bootstrapSimple() {
     // Cleanup logic here
   };
 
-  // Expose globally for debugging
-  window.app = app;
+  // Note: window.app is already set earlier (before showWelcomeView)
+  // to ensure onChange callbacks can access appState
 
   return app;
 }
