@@ -4,6 +4,7 @@
  */
 
 import { addMessage } from "../ui/chat-ui.js";
+import { ModelSelector } from "../ui/components/model-selector.js";
 import { getSuggestionPrompt, hideWelcomePage, showWelcomePage } from "../ui/welcome-page.js";
 
 /**
@@ -16,9 +17,8 @@ const welcomePageListeners = [];
  * Show the welcome view
  * @param {Object} elements - DOM elements from dom-manager
  * @param {Object} appState - Application state
- * @param {Object} services - Service instances (sessionService, etc.)
  */
-export async function showWelcomeView(elements, appState, services = {}) {
+export async function showWelcomeView(elements, appState) {
   console.log("🚀 showWelcomeView called");
   if (!elements.welcomePageContainer) {
     console.error("❌ welcomePageContainer not found!");
@@ -27,6 +27,11 @@ export async function showWelcomeView(elements, appState, services = {}) {
 
   // Update state FIRST before rendering
   appState.setState("ui.currentView", "welcome");
+
+  // Clear any previous welcome model config (start fresh)
+  if (window.app?.appState) {
+    window.app.appState.setState("ui.welcomeModelConfig", null);
+  }
 
   // Get system username
   let userName = "User"; // Fallback
@@ -43,32 +48,43 @@ export async function showWelcomeView(elements, appState, services = {}) {
   document.body.classList.add("view-welcome");
   document.body.classList.remove("view-chat");
 
-  // Load configuration metadata from backend
-  try {
-    const metadata = await window.electronAPI.sessionCommand("config_metadata", {});
-    if (metadata?.models) {
-      // Import and initialize model config UI
-      const { initializeModelConfig } = await import("../ui/welcome-page.js");
-      initializeModelConfig(metadata.models, metadata.reasoning_levels || []);
-      window.electronAPI.log("info", "Model configuration initialized", {
-        models: metadata.models.length,
-        reasoning_levels: metadata.reasoning_levels?.length || 0,
-      });
+  // Load configuration metadata and initialize ModelSelector
+  // OPTIMIZATION: Try cached config first (instant), fallback to fetch if needed
+  let cachedConfig = appState.getState("ui.cachedModelConfig");
+
+  // If no cached config, fetch it (only happens on very first load)
+  if (!cachedConfig) {
+    try {
+      const metadata = await window.electronAPI.sessionCommand("config_metadata", {});
+      if (metadata?.models) {
+        cachedConfig = {
+          models: metadata.models,
+          reasoning_levels: metadata.reasoning_levels || [],
+        };
+        appState.setState("ui.cachedModelConfig", cachedConfig);
+      }
+    } catch (error) {
+      window.electronAPI.log("error", "Failed to load config metadata", { error: error.message });
     }
-  } catch (error) {
-    window.electronAPI.log("error", "Failed to load config metadata", { error: error.message });
-    // Continue with defaults - config UI will use default options
+  }
+
+  // Initialize ModelSelector with cached config (instant, no waiting)
+  if (cachedConfig?.models) {
+    // Use requestAnimationFrame to wait for DOM, then initialize async
+    requestAnimationFrame(() => {
+      const modelSelectorContainer = document.querySelector("#welcome-page-container .model-config-inline");
+      if (modelSelectorContainer) {
+        initializeWelcomeModelSelector(modelSelectorContainer, cachedConfig);
+      }
+    });
   }
 
   // Clean up any existing welcome page listeners before attaching new ones
-  console.log("🧹 Cleaning up old listeners");
   detachWelcomePageListeners();
 
   // Attach welcome page event listeners after DOM is ready
-  console.log("⏰ Scheduling listener attachment with setTimeout");
   setTimeout(() => {
-    console.log("⏰ setTimeout fired, calling attachWelcomePageListeners");
-    attachWelcomePageListeners(elements, appState, services);
+    attachWelcomePageListeners(elements, appState);
 
     // Auto-refresh welcome page file list if there's an active session
     // This prevents showing stale/deleted files
@@ -84,14 +100,48 @@ export async function showWelcomeView(elements, appState, services = {}) {
         // Then load the files (will show placeholder if empty)
         import("../managers/file-manager.js").then(({ loadFiles }) => {
           const directory = `data/files/${sessionState.currentSessionId}/sources`;
-          console.log("🔄 Auto-refreshing welcome page files");
           loadFiles(directory, welcomeFilesContainer);
         });
       }
     }
   }, 0);
+}
 
-  console.log("✅ showWelcomeView complete");
+/**
+ * Initialize ModelSelector for welcome page (extracted for cleaner async handling)
+ * @private
+ */
+async function initializeWelcomeModelSelector(container, cachedConfig) {
+  const welcomeModelSelector = new ModelSelector(container, {
+    onChange: (model, reasoningEffort) => {
+      // Store config in global appState (single source of truth)
+      if (window.app?.appState) {
+        window.app.appState.setState("ui.welcomeModelConfig", {
+          model,
+          reasoning_effort: reasoningEffort,
+        });
+      }
+    },
+    autoSyncBackend: false, // Welcome page is local-only
+  });
+
+  await welcomeModelSelector.initialize(cachedConfig.models, cachedConfig.reasoning_levels);
+
+  // Store initial default selection immediately
+  const initialSelection = welcomeModelSelector.getSelection();
+  if (window.app?.appState) {
+    window.app.appState.setState("ui.welcomeModelConfig", {
+      model: initialSelection.model,
+      reasoning_effort: initialSelection.reasoning_effort,
+    });
+  }
+
+  window.electronAPI.log("info", "ModelSelector initialized on welcome page", {
+    models: cachedConfig.models.length,
+    reasoning_levels: cachedConfig.reasoning_levels?.length || 0,
+    initialModel: initialSelection.model,
+    initialReasoning: initialSelection.reasoning_effort,
+  });
 }
 
 /**
@@ -154,21 +204,12 @@ function detachWelcomePageListeners() {
  * Attach event listeners to welcome page elements
  * @param {Object} elements - DOM elements from dom-manager
  * @param {Object} appState - Application state
- * @param {Object} services - Service instances (sessionService, etc.)
  */
-function attachWelcomePageListeners(elements, appState, services = {}) {
-  console.log("🎯 attachWelcomePageListeners called");
+function attachWelcomePageListeners(elements, appState) {
   const welcomeInput = document.getElementById("welcome-input");
   const welcomeSendBtn = document.getElementById("welcome-send-btn");
   const suggestionPills = document.querySelectorAll(".suggestion-pill");
   const welcomeContainer = elements.welcomePageContainer;
-
-  console.log("🎯 Welcome elements:", {
-    hasInput: !!welcomeInput,
-    hasSendBtn: !!welcomeSendBtn,
-    pillCount: suggestionPills.length,
-    hasContainer: !!welcomeContainer,
-  });
 
   // Import loadFiles from file-manager (will be available after refactor)
   // For now, we'll keep the import dynamic to avoid circular dependencies
@@ -468,20 +509,14 @@ function attachWelcomePageListeners(elements, appState, services = {}) {
 
   // Enter key to send
   if (welcomeInput) {
-    console.log("🎯 Attaching keydown listener to welcome input");
     const keydownHandler = (e) => {
-      console.log("🎯 Keydown event:", e.key, "shiftKey:", e.shiftKey);
       if (e.key === "Enter" && !e.shiftKey) {
-        console.log("🎯 Enter pressed! Preventing default and sending message");
         e.preventDefault();
         sendWelcomeMessage();
       }
     };
     welcomeInput.addEventListener("keydown", keydownHandler);
     welcomePageListeners.push({ element: welcomeInput, event: "keydown", handler: keydownHandler });
-    console.log("✅ Keydown listener attached");
-  } else {
-    console.warn("⚠️ welcomeInput not found, cannot attach keydown listener");
   }
 
   // Suggestion pill clicks
