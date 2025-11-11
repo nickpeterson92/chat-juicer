@@ -375,6 +375,18 @@ async function handleSwitch(sessionId, sessionService, sessionState, updateSessi
       } else {
         console.error("⚠️ FilePanel component not available");
       }
+
+      // Scroll to bottom AFTER view transitions complete (UX: show most recent)
+      if (messages.length > 0 && window.components?.chatContainer) {
+        const { scheduleScroll } = await import("../utils/scroll-utils.js");
+        // Use double RAF to ensure layout is fully settled after showChatView
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            scheduleScroll(window.components.chatContainer.getElement());
+            console.log("📜 Scrolled to bottom after loading session");
+          });
+        });
+      }
     } else {
       throw new Error(result.error);
     }
