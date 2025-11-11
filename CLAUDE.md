@@ -18,28 +18,53 @@ chat-juicer/
 │   ├── logger.js     # Centralized structured logging with IPC forwarding
 │   ├── config/
 │   │   └── main-constants.js     # Main process configuration constants
-│   └── renderer/     # Modular renderer process (ES6 modules)
+│   └── renderer/     # Component-based renderer process (ES6 modules)
 │       ├── index.js              # Main entry point orchestrating all modules
-│       ├── config/constants.js   # Centralized configuration (timeouts, limits, delimiters)
-│       ├── core/state.js         # BoundedMap memory management and AppState pub/sub
+│       ├── bootstrap.js          # Renderer initialization and setup
+│       ├── adapters/             # Platform abstraction layer
+│       │   ├── DOMAdapter.js, IPCAdapter.js, StorageAdapter.js, index.js
+│       ├── config/               # Configuration management
+│       │   ├── constants.js      # Centralized configuration (timeouts, limits, delimiters)
+│       │   └── model-metadata.js # Model configuration and metadata
+│       ├── core/                 # Core framework
+│       │   ├── event-bus.js      # Event-driven messaging system
+│       │   └── state.js          # BoundedMap memory management and AppState pub/sub
 │       ├── ui/
-│       │   ├── chat-ui.js        # Message rendering and chat interface
-│       │   ├── function-card-ui.js # Function call card visualization
-│       │   ├── welcome-page.js   # Welcome page UI component
+│       │   ├── components/       # Reusable UI components
+│       │   │   ├── chat-container.js     # Message container component
+│       │   │   ├── connection-status.js  # Connection status indicator
+│       │   │   ├── file-panel.js         # File management with handle cleanup
+│       │   │   ├── input-area.js         # Chat input and controls
+│       │   │   ├── model-selector.js     # Model/reasoning selection (shared)
+│       │   │   └── index.js              # Component exports
+│       │   ├── renderers/        # Rendering utilities
+│       │   │   ├── file-list-renderer.js    # File list rendering
+│       │   │   ├── function-card-renderer.js # Function call cards
+│       │   │   ├── message-renderer.js      # Message formatting
+│       │   │   ├── session-list-renderer.js # Session list rendering
+│       │   │   └── index.js                 # Renderer exports
+│       │   ├── chat-ui.js        # Main chat interface
+│       │   ├── function-card-ui.js # Function call visualization
+│       │   ├── welcome-page.js   # Welcome page component
 │       │   └── titlebar.js       # Cross-platform custom titlebar
-│       ├── handlers/message-handlers-v2.js # EventBus-integrated message handlers
-│       ├── services/session-service.js  # Session CRUD with consistent error handling
-│       ├── managers/              # UI state and interaction managers
-│       │   ├── theme-manager.js  # Dark mode and theme management
-│       │   ├── view-manager.js   # View state (welcome vs chat)
-│       │   ├── dom-manager.js    # DOM element management
-│       │   └── file-manager.js   # File drag-and-drop handling
+│       ├── handlers/             # Event handlers
+│       │   ├── message-handlers-v2.js, session-list-handlers.js
+│       │   ├── chat-events.js, file-events.js, session-events.js, index.js
+│       ├── services/             # Business logic services
+│       │   ├── session-service.js, message-service.js, file-service.js
+│       │   ├── function-call-service.js, index.js
+│       ├── managers/             # UI state managers
+│       │   ├── view-manager.js, file-manager.js, dom-manager.js, theme-manager.js
+│       ├── plugins/              # Plugin architecture
+│       │   ├── plugin-interface.js, core-plugins.js, index.js
+│       ├── viewmodels/           # View models for data presentation
+│       │   ├── message-viewmodel.js, session-viewmodel.js
 │       └── utils/                # Renderer utilities
-│           ├── markdown-renderer.js # Markdown rendering with syntax highlighting
-│           ├── scroll-utils.js   # Scroll behavior utilities
-│           ├── json-cache.js     # JSON parsing cache
-│           ├── toast.js          # Toast notification system
-│           └── file-utils.js     # File handling utilities
+│           ├── markdown-renderer.js, scroll-utils.js, json-cache.js
+│           ├── toast.js, file-utils.js, chat-model-updater.js, lottie-color.js
+│           ├── analytics/        # Analytics and tracking
+│           ├── debug/            # Debugging utilities
+│           └── performance/      # Performance monitoring and profiling
 ├── ui/               # Frontend static assets
 │   ├── index.html    # Main chat UI (loads renderer/index.js as ES6 module)
 │   ├── input.css     # Tailwind CSS source
@@ -47,45 +72,55 @@ chat-juicer/
 │   └── smoke-loading.svg       # Loading animation
 ├── src/              # Python backend (modular architecture)
 │   ├── main.py       # Application orchestrator (174 lines, pure coordination)
+│   ├── __init__.py   # Package initialization
+│   ├── .env.example  # Environment variable template
+│   ├── requirements.txt  # Python dependencies (Python 3.13+ required)
 │   ├── app/          # Application modules (orchestrator pattern)
+│   │   ├── __init__.py
 │   │   ├── state.py          # AppState dataclass (single source of truth)
 │   │   ├── bootstrap.py      # Application initialization and configuration
-│   │   └── runtime.py        # Core runtime operations (session, message handling)
+│   │   └── runtime.py        # Core runtime operations (8 functions: session, message handling)
 │   ├── core/         # Core business logic
+│   │   ├── __init__.py
 │   │   ├── agent.py            # Agent/Runner implementation with MCP support
 │   │   ├── session.py          # TokenAwareSQLiteSession with auto-summarization (20% threshold - Layer 1)
 │   │   ├── full_history.py     # FullHistoryStore for complete UI-facing conversation history (Layer 2)
-│   │   ├── session_manager.py  # Multi-session lifecycle management with metadata persistence
+│   │   ├── session_manager.py  # Multi-session lifecycle management with file handle cleanup
 │   │   ├── session_commands.py # Session command handlers (create, switch, delete, list)
 │   │   ├── prompts.py          # System instruction prompts and templates
 │   │   └── constants.py        # Configuration with Pydantic Settings validation
-│   ├── models/       # Data models and type definitions
+│   ├── models/       # Data models and type definitions (Pydantic)
+│   │   ├── __init__.py
 │   │   ├── api_models.py      # Pydantic models for API responses
 │   │   ├── event_models.py    # Event and message models for IPC
+│   │   ├── ipc_models.py      # IPC message structure models
 │   │   ├── sdk_models.py      # Protocol typing for SDK integration
 │   │   └── session_models.py  # Session metadata and persistence models
-│   ├── tools/        # Function calling tools
+│   ├── tools/        # Function calling tools (async)
+│   │   ├── __init__.py
 │   │   ├── document_generation.py # Document generation from templates
-│   │   ├── file_operations.py     # File reading and directory listing
+│   │   ├── file_operations.py     # File reading and directory listing (markitdown)
 │   │   ├── text_editing.py        # Text, regex, and insert editing operations
 │   │   ├── wrappers.py            # Tool wrapper utilities
 │   │   └── registry.py            # Tool registration and discovery
 │   ├── integrations/ # External integrations
+│   │   ├── __init__.py
 │   │   ├── mcp_servers.py        # MCP server setup and management
+│   │   ├── mcp_registry.py       # MCP server registry and discovery
 │   │   ├── event_handlers.py     # Streaming event handlers
 │   │   └── sdk_token_tracker.py  # SDK-level universal token tracking via monkey-patching
-│   ├── utils/        # Utility modules
-│   │   ├── logger.py            # Enterprise JSON logging with rotation and session correlation
-│   │   ├── ipc.py               # IPC manager with pre-cached templates
-│   │   ├── token_utils.py       # Token management with LRU caching
-│   │   ├── file_utils.py        # File system utility functions
-│   │   ├── document_processor.py # Document processing utilities
-│   │   ├── json_utils.py        # JSON parsing and formatting utilities
-│   │   ├── http_logger.py       # HTTP request logging middleware
-│   │   ├── client_factory.py    # Azure OpenAI client factory and configuration
-│   │   ├── validation.py        # Input validation and sanitization
-│   │   └── session_integrity.py # Session integrity validation
-│   └── requirements.txt  # Python dependencies
+│   └── utils/        # Utility modules
+│       ├── __init__.py
+│       ├── logger.py            # Enterprise JSON logging with rotation and session correlation
+│       ├── ipc.py               # IPC manager with pre-cached templates
+│       ├── token_utils.py       # Token management with LRU caching
+│       ├── file_utils.py        # File system utility functions
+│       ├── document_processor.py # Document processing and optimization utilities
+│       ├── json_utils.py        # JSON parsing and formatting utilities
+│       ├── http_logger.py       # HTTP request logging middleware
+│       ├── client_factory.py    # Azure OpenAI client factory and configuration
+│       ├── validation.py        # Input validation and sanitization
+│       └── session_integrity.py # Session integrity validation
 ├── sources/          # Source documents for processing
 ├── output/           # Generated documentation output
 ├── templates/        # Document templates with {{placeholders}}
@@ -175,8 +210,8 @@ The application integrates two MCP servers for enhanced capabilities:
 - Supports GET/POST requests with headers and parameters
 - Integrated into `.juicer` venv for seamless operation
 
-### Frontend Architecture (Modular ES6)
-The renderer process uses a modular architecture for maintainability:
+### Frontend Architecture (Component-Based ES6)
+The renderer process uses a component-based modular architecture for maintainability and reusability:
 
 **Entry Point** (`renderer/index.js`):
 - Orchestrates all modules via ES6 imports
@@ -193,18 +228,56 @@ The renderer process uses a modular architecture for maintainability:
 - `AppState`: Pub/sub state management with connection state machine
 - Structured state organization (connection, message, functions, ui)
 
+**UI Components** (`renderer/ui/components/`):
+- `chat-container.js`: Message container component
+  - Manages message display area with scroll behavior
+  - Encapsulated container logic for maintainability
+- `connection-status.js`: Connection status indicator component
+  - Real-time connection state visualization
+  - Integrated with AppState connection state machine
+- `file-panel.js`: File management component with proper lifecycle
+  - File handle cleanup via `closeAllHandles()` method
+  - Prevents "too many open files" errors during session deletion
+  - Safe DOM manipulation with event listener cleanup
+- `input-area.js`: Chat input field component
+  - Input controls, send button, file upload integration
+  - Model selector integration for chat view
+  - Enter/Shift+Enter keyboard handling
+- `model-selector.js`: Reusable model and reasoning effort selection component
+  - Shared across welcome page and chat page (DRY principle)
+  - Supports local-only mode (welcome) and auto-sync mode (chat)
+  - Prefetched configuration for instant loading
+- `index.js`: Clean component exports for simplified imports
+
+**UI Renderers** (`renderer/ui/renderers/`):
+- `file-list-renderer.js`: File list visualization
+  - Renders uploaded files with metadata (size, type)
+  - File removal and preview controls
+- `function-card-renderer.js`: Function call card rendering
+  - Visual representation of tool calls with status
+  - Argument display and result formatting
+- `message-renderer.js`: Message formatting and rendering
+  - Markdown rendering with syntax highlighting
+  - Role-based styling (user, assistant, system)
+- `session-list-renderer.js`: Session list rendering
+  - Session metadata display (title, timestamp, message count)
+  - Active session highlighting and selection controls
+- `index.js`: Clean renderer exports
+
 **UI Modules** (`renderer/ui/`):
-- `chat-ui.js`: Message rendering (addMessage, streaming messages, clear chat)
+- `chat-ui.js`: Message rendering operations
 - `function-card-ui.js`: Function call visualization cards with status updates
 - `welcome-page.js`: Welcome page component with session loading
 - `titlebar.js`: Cross-platform custom titlebar (Windows/Linux borderless window support)
 
-**Event Handling** (`handlers/message-handlers-v2.js`):
-- EventBus-integrated message handlers for decoupled architecture
-- 14+ specialized handler functions registered with EventBus
-- Event-driven message processing with pub/sub pattern
-- Isolated, testable handlers (10-30 lines each)
-- Main `processMessage()` router with error handling
+**Event Handling** (`handlers/`):
+- `message-handlers-v2.js`: EventBus-integrated message handlers for decoupled architecture
+  - 14+ specialized handler functions registered with EventBus
+  - Event-driven message processing with pub/sub pattern
+  - Isolated, testable handlers (10-30 lines each)
+- `session-list-handlers.js`: Session list interactions
+  - Proper cleanup before deletion (closeAllHandles)
+  - Prevents resource leaks during session management
 
 **Services** (`services/session-service.js`):
 - Session CRUD operations (load, create, switch, delete)
@@ -213,9 +286,9 @@ The renderer process uses a modular architecture for maintainability:
 
 **Managers** (`renderer/managers/`):
 - `theme-manager.js`: Dark mode and theme persistence
-- `view-manager.js`: View state management (welcome vs chat)
+- `view-manager.js`: View state management (welcome vs chat) with model selector coordination
 - `dom-manager.js`: DOM element reference management
-- `file-manager.js`: File drag-and-drop handling
+- `file-manager.js`: File operations and drag-and-drop handling
 
 **Utilities** (`renderer/utils/`):
 - `markdown-renderer.js`: Markdown rendering with syntax highlighting (highlight.js), math (KaTeX), diagrams (Mermaid)
@@ -225,9 +298,10 @@ The renderer process uses a modular architecture for maintainability:
 - `file-utils.js`: File handling utilities
 
 **Benefits**:
-- Modular structure enables easier testing and maintenance
+- Component-based architecture enables code reuse (ModelSelector shared across views)
+- Proper lifecycle management prevents resource leaks
 - Handler registry allows adding new message types without modifying routing logic
-- Clear separation of concerns (state, UI, services, handlers, managers)
+- Clear separation of concerns (state, UI, components, services, handlers, managers)
 - ES6 modules with explicit imports/exports
 - Manager pattern for complex UI state coordination
 
@@ -425,6 +499,26 @@ The Agent/Runner pattern provides structured events:
 - Accumulated tool tokens tracked separately from conversation tokens
 - SDK-level automatic token tracking for all tool calls (native, MCP, future agents)
 - Minimal client state - session handles all conversation management
+
+### Resource Management
+The application includes robust resource management to prevent file handle exhaustion:
+
+**Session Deletion (3-Layer Defense)**:
+1. **Frontend Cleanup**: FilePanel component explicitly closes all file handles before deletion
+   - `closeAllHandles()` method removes file previews and event listeners
+   - DOM cloning technique forces garbage collection
+2. **Backend Garbage Collection**: Python `gc.collect()` + 50ms delay before `shutil.rmtree()`
+   - Forces Python to close unreferenced file handles
+   - Allows OS time to release handles
+3. **Increased Limits**: File descriptor limit increased from 256→4096 at startup (macOS/Linux)
+   - Prevents "too many open files" errors (errno 24)
+   - Configured in `bootstrap.py` initialization
+
+**Benefits**:
+- Reliable session deletion without orphaned directories
+- Prevents file handle exhaustion in production
+- Graceful degradation on Windows (no resource module)
+- Comprehensive error messages for debugging
 
 ## Troubleshooting
 
