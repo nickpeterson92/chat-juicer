@@ -41,8 +41,12 @@ export async function loadFiles(directory = "sources", container = null) {
   // Use provided container or default to elements.filesContainer
   const targetContainer = container || elements.filesContainer;
 
-  if (!targetContainer) return;
+  if (!targetContainer) {
+    console.error("❌ loadFiles: No container element found", { directory, container, elements });
+    return;
+  }
 
+  console.log("📂 loadFiles called:", { directory, containerId: targetContainer.id });
   targetContainer.innerHTML = `<div class="files-loading">${MSG_LOADING_FILES}</div>`;
 
   try {
@@ -56,9 +60,11 @@ export async function loadFiles(directory = "sources", container = null) {
     const files = result.files || [];
 
     if (files.length === 0) {
-      // Display directory-specific empty message with drag-and-drop hint
+      // Display directory-specific empty message
       const dirName = directory.includes("/output") ? "output/" : "sources/";
+      const isOutput = directory.includes("/output");
       const isWelcomePage = targetContainer.id === "welcome-files-container";
+      const isChatPage = targetContainer.id === "files-container";
 
       if (isWelcomePage) {
         // Show drag-and-drop friendly empty state on welcome page
@@ -71,8 +77,33 @@ export async function loadFiles(directory = "sources", container = null) {
             <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Files will be uploaded to this session</p>
           </div>
         `;
+      } else if (isChatPage) {
+        // Compact empty state for chat page file panel
+        if (isOutput) {
+          // Output directory - show generation message
+          targetContainer.innerHTML = `
+            <div class="files-empty">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="opacity-20 mb-2 mx-auto">
+                <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z"/>
+              </svg>
+              <p class="text-xs text-gray-400 dark:text-gray-500 text-center">No generated files yet</p>
+              <p class="text-xs text-gray-500 dark:text-gray-600 text-center mt-1">Ask me to generate documents</p>
+            </div>
+          `;
+        } else {
+          // Sources directory - show upload message
+          targetContainer.innerHTML = `
+            <div class="files-empty">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="opacity-20 mb-2 mx-auto">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              </svg>
+              <p class="text-xs text-gray-400 dark:text-gray-500 text-center">No files in ${dirName}</p>
+              <p class="text-xs text-gray-500 dark:text-gray-600 text-center mt-1">Drag files onto the canvas to upload</p>
+            </div>
+          `;
+        }
       } else {
-        // Simpler message for chat view file panel
+        // Fallback message for other containers
         targetContainer.innerHTML = `<div class="files-empty">${MSG_NO_FILES.replace("{directory}", dirName)}</div>`;
       }
       return;

@@ -133,14 +133,18 @@ export class FilePanel {
    * @param {string|null} sessionId - Session ID (null to clear)
    */
   setSession(sessionId) {
+    console.log("📌 FilePanel.setSession() called:", sessionId);
     this.currentSessionId = sessionId;
 
     // Refresh current tab with new session context
     if (sessionId) {
       const activeTab = this.getActiveTab();
+      console.log("📌 FilePanel active tab:", activeTab?.dataset.directory);
       if (activeTab) {
         this.switchTab(activeTab);
       }
+    } else {
+      console.log("📌 FilePanel session cleared");
     }
   }
 
@@ -158,13 +162,20 @@ export class FilePanel {
    * Refresh files in current directory
    */
   refresh() {
-    if (!this.currentSessionId) return;
+    if (!this.currentSessionId) {
+      console.warn("⚠️ FilePanel.refresh() called but no currentSessionId set");
+      return;
+    }
 
     const activeTab = this.getActiveTab();
     const dirType = activeTab?.dataset.directory || "sources";
     const directory = `data/files/${this.currentSessionId}/${dirType}`;
 
-    console.log(`🔄 Refreshing files panel (${dirType} tab)`);
+    console.log(`🔄 Refreshing files panel (${dirType} tab)`, {
+      sessionId: this.currentSessionId,
+      directory,
+      containerId: this.filesContainer?.id,
+    });
     loadFiles(directory, this.filesContainer);
   }
 
@@ -212,6 +223,39 @@ export class FilePanel {
     if (this.filesContainer) {
       this.filesContainer.innerHTML = "";
     }
+  }
+
+  /**
+   * Add a file to the list (called when file is uploaded)
+   * @param {Object} fileData - File data object
+   */
+  addFile(fileData) {
+    // For now, just refresh the file list
+    // This will trigger a backend call to get the updated file list
+    console.log("📄 File added, refreshing file panel:", fileData);
+    this.refresh();
+  }
+
+  /**
+   * Update file status (e.g., uploading, loaded, error)
+   * @param {string} fileId - File ID
+   * @param {string} status - New status
+   */
+  updateFile(fileId, status) {
+    console.log(`📄 File ${fileId} status updated to: ${status}`);
+    // If upload is complete, refresh the list
+    if (status === "loaded") {
+      this.refresh();
+    }
+  }
+
+  /**
+   * Remove a file from the list
+   * @param {string} fileId - File ID to remove
+   */
+  removeFile(fileId) {
+    console.log("📄 File removed, refreshing file panel:", fileId);
+    this.refresh();
   }
 
   /**
