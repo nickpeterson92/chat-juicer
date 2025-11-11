@@ -59,7 +59,7 @@ make health             # Check system configuration
 - 🧠 **Sequential Thinking**: MCP server for advanced multi-step reasoning and problem decomposition
 - 🌐 **Web Content Retrieval**: Fetch MCP server for HTTP/HTTPS web content fetching
 - 💾 **Two-Layer Session Persistence**: Layered architecture separating LLM context from UI display
-- 🔄 **Multi-Session Support**: Create, switch, and manage multiple conversation sessions
+- 🔄 **Multi-Session Support**: Create, switch, and manage multiple conversation sessions with reliable deletion
 - 📊 **Smart Session Management**: TokenAwareSQLiteSession with auto-summarization at 20% threshold
 - ⚡ **Streaming Responses**: Real-time AI response streaming with structured event handling
 - 🛠️ **Function Calling**: Async native tools and MCP server integration
@@ -70,7 +70,8 @@ make health             # Check system configuration
 - 📄 **Document Generation**: Template-based document creation with multi-format support (PDF, Word, Excel, HTML)
 - 🔧 **Editing Tools**: Text, regex, and insert operations for document modification
 - 🎯 **Type Safety**: Full mypy strict compliance with Pydantic runtime validation
-- 🏗️ **Production Features**: Memory management, error recovery, performance optimization
+- 🧩 **Component Architecture**: Reusable frontend components with proper state management
+- 🏗️ **Production Features**: Memory management, error recovery, performance optimization, file handle cleanup
 
 ## Architecture
 
@@ -87,12 +88,14 @@ Chat Juicer uses OpenAI's **Agent/Runner pattern** with a **two-layer persistenc
 
 ### Key Architectural Components:
 - **Backend**: Python with async functions, Pydantic models, type safety (mypy strict=true)
-- **Frontend**: Electron with memory-bounded state management and health monitoring
+- **Frontend**: Electron with component-based architecture, memory-bounded state management, and health monitoring
+- **UI Components**: Reusable components (ModelSelector, FilePanel, ChatContainer) with proper lifecycle management
 - **Persistence**: Two-layer SQLite architecture (LLM context + UI display)
 - **Session**: TokenAwareSQLiteSession with 20% threshold auto-summarization
-- **Session Manager**: Multi-session lifecycle management with metadata persistence
+- **Session Manager**: Multi-session lifecycle management with metadata persistence and file handle cleanup
 - **Logging**: Enterprise JSON logging with rotation and session correlation
 - **Type System**: Protocols for SDK integration, Pydantic for validation, TypedDict for data
+- **Resource Management**: Garbage collection, file handle cleanup, and increased descriptor limits (256→4096)
 
 ## Prerequisites
 
@@ -329,17 +332,32 @@ chat-juicer/
 │       ├── config/constants.js   # Centralized configuration
 │       ├── core/state.js         # BoundedMap memory management and AppState pub/sub
 │       ├── ui/
-│       │   ├── chat-ui.js        # Message rendering and chat interface
-│       │   ├── function-card-ui.js # Function call card visualization
-│       │   ├── welcome-page.js   # Welcome page UI component
+│       │   ├── components/       # Reusable UI components
+│       │   │   ├── chat-container.js     # Message container component
+│       │   │   ├── connection-status.js  # Connection status indicator
+│       │   │   ├── file-panel.js         # File management with handle cleanup
+│       │   │   ├── input-area.js         # Chat input and controls
+│       │   │   ├── model-selector.js     # Model/reasoning selection (shared)
+│       │   │   └── index.js              # Component exports
+│       │   ├── renderers/        # Rendering utilities
+│       │   │   ├── file-list-renderer.js    # File list rendering
+│       │   │   ├── function-card-renderer.js # Function call cards
+│       │   │   ├── message-renderer.js      # Message formatting
+│       │   │   ├── session-list-renderer.js # Session list rendering
+│       │   │   └── index.js                 # Renderer exports
+│       │   ├── chat-ui.js        # Main chat interface
+│       │   ├── function-card-ui.js # Function call visualization
+│       │   ├── welcome-page.js   # Welcome page component
 │       │   └── titlebar.js       # Cross-platform custom titlebar
-│       ├── handlers/message-handlers-v2.js # EventBus-integrated message handlers
+│       ├── handlers/             # Event handlers
+│       │   ├── message-handlers-v2.js    # EventBus-integrated message handlers
+│       │   └── session-list-handlers.js  # Session list interactions
 │       ├── services/session-service.js  # Session CRUD operations
 │       ├── managers/              # UI state and interaction managers
 │       │   ├── theme-manager.js  # Dark mode and theme management
 │       │   ├── view-manager.js   # View state (welcome vs chat)
 │       │   ├── dom-manager.js    # DOM element management
-│       │   └── file-manager.js   # File drag-and-drop handling
+│       │   └── file-manager.js   # File operations and drag-and-drop
 │       └── utils/                # Renderer utilities
 │           ├── markdown-renderer.js # Markdown rendering with syntax highlighting
 │           ├── scroll-utils.js   # Scroll behavior utilities
@@ -352,8 +370,17 @@ chat-juicer/
 │   ├── chat-juicer-logo-real.svg  # Application logo
 │   └── smoke-loading.svg       # Loading animation
 ├── src/              # Python backend (modular architecture)
-│   ├── main.py       # Application entry point
+│   ├── main.py       # Application entry point (pure orchestrator - 174 lines)
+│   ├── __init__.py   # Package initialization
+│   ├── .env.example  # Environment variable template
+│   ├── requirements.txt  # Python dependencies
+│   ├── app/          # Application modules (orchestrator pattern)
+│   │   ├── __init__.py
+│   │   ├── state.py          # AppState dataclass (single source of truth)
+│   │   ├── bootstrap.py      # Application initialization and configuration
+│   │   └── runtime.py        # Core runtime operations (session, message handling)
 │   ├── core/         # Core business logic
+│   │   ├── __init__.py
 │   │   ├── agent.py            # Agent/Runner implementation with MCP support
 │   │   ├── session.py          # TokenAwareSQLiteSession with auto-summarization (Layer 1)
 │   │   ├── full_history.py     # FullHistoryStore for UI display (Layer 2)
@@ -362,32 +389,37 @@ chat-juicer/
 │   │   ├── prompts.py          # System instruction prompts
 │   │   └── constants.py        # Configuration with Pydantic Settings validation
 │   ├── models/       # Data models and type definitions
+│   │   ├── __init__.py
 │   │   ├── api_models.py      # Pydantic models for API responses
-│   │   ├── event_models.py    # Event and message models
+│   │   ├── event_models.py    # Event and message models for IPC
+│   │   ├── ipc_models.py      # IPC message models
 │   │   ├── sdk_models.py      # Protocol typing for SDK integration
-│   │   └── session_models.py  # Session metadata models
+│   │   └── session_models.py  # Session metadata and persistence models
 │   ├── tools/        # Function calling tools
+│   │   ├── __init__.py
 │   │   ├── document_generation.py # Document generation from templates
 │   │   ├── file_operations.py     # File reading and directory listing
-│   │   ├── text_editing.py        # Text editing operations
+│   │   ├── text_editing.py        # Text, regex, and insert editing operations
 │   │   ├── wrappers.py            # Tool wrapper utilities
 │   │   └── registry.py            # Tool registration and discovery
 │   ├── integrations/ # External integrations
+│   │   ├── __init__.py
 │   │   ├── mcp_servers.py        # MCP server setup and management
+│   │   ├── mcp_registry.py       # MCP server registry and discovery
 │   │   ├── event_handlers.py     # Streaming event handlers
-│   │   └── sdk_token_tracker.py  # SDK-level universal token tracking
-│   ├── utils/        # Utility modules
-│   │   ├── logger.py            # Enterprise JSON logging with rotation
-│   │   ├── ipc.py               # IPC manager with pre-cached templates
-│   │   ├── token_utils.py       # Token management with LRU caching
-│   │   ├── file_utils.py        # File utility functions
-│   │   ├── document_processor.py # Document processing utilities
-│   │   ├── json_utils.py        # JSON parsing and formatting
-│   │   ├── http_logger.py       # HTTP request logging
-│   │   ├── client_factory.py    # Azure OpenAI client factory
-│   │   ├── validation.py        # Input validation utilities
-│   │   └── session_integrity.py # Session integrity validation
-│   └── requirements.txt  # Python dependencies
+│   │   └── sdk_token_tracker.py  # SDK-level universal token tracking via monkey-patching
+│   └── utils/        # Utility modules
+│       ├── __init__.py
+│       ├── logger.py            # Enterprise JSON logging with rotation and session correlation
+│       ├── ipc.py               # IPC manager with pre-cached templates
+│       ├── token_utils.py       # Token management with LRU caching
+│       ├── file_utils.py        # File system utility functions
+│       ├── document_processor.py # Document processing and optimization utilities
+│       ├── json_utils.py        # JSON parsing and formatting utilities
+│       ├── http_logger.py       # HTTP request logging middleware
+│       ├── client_factory.py    # Azure OpenAI client factory and configuration
+│       ├── validation.py        # Input validation and sanitization
+│       └── session_integrity.py # Session integrity validation
 ├── sources/          # Source documents for processing
 ├── output/           # Generated documentation output
 ├── templates/        # Document templates with {{placeholders}}
@@ -417,38 +449,59 @@ chat-juicer/
 
 ### Python Backend (`src/`)
 
+**Entry Point**
+- **main.py**: Pure orchestrator (174 lines) - bootstrap → loop → cleanup pattern
+- **__init__.py**: Package initialization
+
+**Application Modules** (`app/`)
+- **state.py**: AppState dataclass - single source of truth for application state
+- **bootstrap.py**: Application initialization, environment loading, MCP server setup
+- **runtime.py**: Core runtime operations (8 functions for message processing, session management)
+
 **Core Business Logic** (`core/`)
 - **agent.py**: Agent/Runner implementation with MCP server integration and streaming event handling
 - **session.py**: TokenAwareSQLiteSession with automatic summarization and layered persistence (Layer 1)
 - **full_history.py**: FullHistoryStore for complete UI-facing conversation history (Layer 2)
-- **session_manager.py**: Session lifecycle management with metadata persistence (sessions.json)
+- **session_manager.py**: Session lifecycle management with metadata persistence, file handle cleanup
+- **session_commands.py**: Session command handlers (create, switch, delete, list)
+- **prompts.py**: System instruction prompts and templates
 - **constants.py**: Centralized configuration with Pydantic Settings validation
 
 **Data Models** (`models/`)
 - **api_models.py**: Pydantic models for API responses and function returns
 - **event_models.py**: Event and message models for IPC communication
+- **ipc_models.py**: IPC message structure models
 - **sdk_models.py**: Protocol definitions for type-safe SDK integration
+- **session_models.py**: Session metadata and persistence models
 
 **Tools** (`tools/`)
 - **document_generation.py**: Template-based document generation with placeholder replacement
 - **file_operations.py**: Directory listing and file reading with markitdown support
 - **text_editing.py**: Text, regex, and insert editing operations
+- **wrappers.py**: Tool wrapper utilities for consistent interface
 - **registry.py**: Tool registration and discovery system
 
 **Integrations** (`integrations/`)
-- **mcp_servers.py**: MCP server setup and management (Sequential Thinking)
+- **mcp_servers.py**: MCP server setup and management (Sequential Thinking, Fetch)
+- **mcp_registry.py**: MCP server registry and discovery
 - **event_handlers.py**: Streaming event handlers for Agent/Runner pattern
 - **sdk_token_tracker.py**: Universal token tracking via SDK monkey-patching
 
 **Utilities** (`utils/`)
 - **logger.py**: Enterprise JSON logging with rotation and session correlation
 - **ipc.py**: IPC manager with pre-cached templates for performance
-- **utils.py**: Token management utilities with LRU caching
+- **token_utils.py**: Token management utilities with LRU caching
 - **file_utils.py**: File system utility functions
 - **document_processor.py**: Document processing and optimization utilities
+- **json_utils.py**: JSON parsing and formatting utilities
+- **http_logger.py**: HTTP request logging middleware
+- **client_factory.py**: Azure OpenAI client factory and configuration
+- **validation.py**: Input validation and sanitization
+- **session_integrity.py**: Session integrity validation
 
-**Entry Point**
-- **main.py**: Application entry point and async event loop management
+**Configuration**
+- **.env.example**: Environment variable template
+- **requirements.txt**: Python dependencies (Python 3.13+ required)
 
 ### Electron Frontend (`electron/`)
 
@@ -457,14 +510,74 @@ chat-juicer/
 - **preload.js**: Secure context-isolated bridge between main and renderer processes
 - **logger.js**: Centralized logging with IPC forwarding from renderer to main process
 
-**Renderer Process** (`electron/renderer/`) - Modular ES6 architecture
+**Renderer Process** (`electron/renderer/`) - Component-based ES6 architecture
 - **index.js**: Main entry point orchestrating all renderer modules
-- **config/constants.js**: Centralized configuration values (timeouts, limits, delimiters)
-- **core/state.js**: State management with BoundedMap for memory safety and AppState pub/sub
-- **ui/chat-ui.js**: Message rendering and chat interface operations
-- **ui/function-card-ui.js**: Function call card visualization and management
-- **handlers/message-handlers-v2.js**: EventBus-integrated message handlers for streaming events
-- **services/session-service.js**: Session CRUD operations with consistent error handling
+- **bootstrap.js**: Renderer initialization and setup
+- **adapters/**: Platform abstraction layer
+  - **DOMAdapter.js**: DOM manipulation abstraction
+  - **IPCAdapter.js**: IPC communication abstraction
+  - **StorageAdapter.js**: Local storage abstraction
+  - **index.js**: Adapter exports
+- **config/**: Configuration management
+  - **constants.js**: Centralized configuration values (timeouts, limits, delimiters)
+  - **model-metadata.js**: Model configuration and metadata
+- **core/**: Core framework
+  - **event-bus.js**: Event-driven messaging system
+  - **state.js**: BoundedMap memory management and AppState pub/sub
+- **ui/components/**: Reusable UI components
+  - **chat-container.js**: Message container component with scroll management
+  - **connection-status.js**: Real-time connection status indicator
+  - **file-panel.js**: File management with handle cleanup for safe session deletion
+  - **input-area.js**: Chat input field with send controls and file upload
+  - **model-selector.js**: Model and reasoning effort selection (shared: welcome + chat)
+  - **index.js**: Component exports for clean imports
+- **ui/renderers/**: Specialized rendering utilities
+  - **file-list-renderer.js**: File list visualization with metadata
+  - **function-card-renderer.js**: Function call card rendering
+  - **message-renderer.js**: Message formatting with markdown support
+  - **session-list-renderer.js**: Session list with metadata display
+  - **index.js**: Renderer exports
+- **ui/**: Top-level UI modules
+  - **chat-ui.js**: Main chat interface
+  - **function-card-ui.js**: Function call visualization
+  - **welcome-page.js**: Welcome screen component
+  - **titlebar.js**: Custom window titlebar
+- **handlers/**: Event handlers
+  - **message-handlers-v2.js**: EventBus-integrated message handlers for streaming events
+  - **session-list-handlers.js**: Session list interactions with proper cleanup
+  - **chat-events.js**: Chat-specific event handlers
+  - **file-events.js**: File upload/management event handlers
+  - **session-events.js**: Session lifecycle event handlers
+  - **index.js**: Handler exports
+- **services/**: Business logic services
+  - **session-service.js**: Session CRUD operations
+  - **message-service.js**: Message processing and formatting
+  - **file-service.js**: File operations and management
+  - **function-call-service.js**: Function call handling
+  - **index.js**: Service exports
+- **managers/**: UI state managers
+  - **view-manager.js**: View state management (welcome vs chat)
+  - **file-manager.js**: File operations and drag-and-drop handling
+  - **dom-manager.js**: DOM element lifecycle management
+  - **theme-manager.js**: Theme and dark mode management
+- **plugins/**: Plugin architecture
+  - **plugin-interface.js**: Plugin interface definition
+  - **core-plugins.js**: Core plugin implementations
+  - **index.js**: Plugin exports
+- **viewmodels/**: View models for data presentation
+  - **message-viewmodel.js**: Message data transformation
+  - **session-viewmodel.js**: Session data transformation
+- **utils/**: Utility functions
+  - **markdown-renderer.js**: Markdown rendering with syntax highlighting
+  - **scroll-utils.js**: Scroll behavior management
+  - **json-cache.js**: JSON parsing cache with LRU eviction
+  - **toast.js**: Toast notification system
+  - **file-utils.js**: File handling utilities
+  - **chat-model-updater.js**: Model configuration update utilities
+  - **lottie-color.js**: Lottie animation color utilities
+  - **analytics/**: Analytics and tracking
+  - **debug/**: Debugging utilities
+  - **performance/**: Performance monitoring and profiling
 
 ## Function Calling
 
@@ -654,8 +767,17 @@ The application includes IPC-based session management:
 - **Create**: Start new conversation sessions with automatic titles
 - **Switch**: Change active session and restore full conversation history
 - **List**: View all available sessions with metadata
-- **Delete**: Remove sessions and clean up both persistence layers
+- **Delete**: Remove sessions and clean up both persistence layers (with automatic file handle cleanup to prevent "too many open files" errors)
 - **Summarize**: Manually trigger conversation summarization
+
+#### Session Deletion Reliability
+
+The application includes robust session deletion with a 3-layer defense against file handle exhaustion:
+1. **Frontend Cleanup**: FilePanel closes all file handles before deletion request
+2. **Backend Garbage Collection**: Forces Python GC with 50ms delay before directory removal
+3. **Increased Limits**: File descriptor limit increased from 256→4096 at startup (macOS/Linux)
+
+This ensures sessions are completely removed from both metadata and filesystem without orphaned directories.
 
 #### Database Exploration
 

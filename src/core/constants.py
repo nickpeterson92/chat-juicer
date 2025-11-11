@@ -288,9 +288,9 @@ ERROR_PATH_OUTSIDE_PROJECT = "Access denied: Path outside project scope"
 # ============================================================================
 
 #: Trigger automatic session naming after this many user messages.
-#: Provides enough conversation context to generate meaningful titles.
-#: Value of 3 balances between quick naming and sufficient context.
-SESSION_NAMING_TRIGGER_MESSAGES = 3
+#: Even a single user message provides enough context for the LLM to generate
+#: a meaningful title, and users expect sessions to be named immediately.
+SESSION_NAMING_TRIGGER_MESSAGES = 1
 
 #: Maximum tokens allowed for session title generation.
 #: Keeps titles concise (3-10 words typically = 5-15 tokens).

@@ -16,37 +16,48 @@
 ```
 src/
 ├── main.py              # Pure orchestrator (bootstrap → loop → cleanup)
-├── app/                 # Application modules
+├── __init__.py          # Package initialization
+├── .env.example         # Environment variable template
+├── requirements.txt     # Python dependencies (Python 3.13+)
+├── app/                 # Application modules (orchestrator pattern)
+│   ├── __init__.py
 │   ├── state.py        # AppState dataclass (single source of truth)
 │   ├── bootstrap.py    # Application initialization
-│   └── runtime.py      # Core runtime operations
+│   └── runtime.py      # Core runtime operations (8 functions)
 ├── core/               # Business logic
+│   ├── __init__.py
 │   ├── agent.py        # Agent/Runner configuration
 │   ├── session.py      # TokenAwareSQLiteSession (Layer 1)
 │   ├── full_history.py # FullHistoryStore (Layer 2)
-│   ├── session_manager.py
-│   ├── session_commands.py
-│   ├── prompts.py
-│   └── constants.py
+│   ├── session_manager.py  # Multi-session with file handle cleanup
+│   ├── session_commands.py # Session command handlers
+│   ├── prompts.py      # System prompts
+│   └── constants.py    # Pydantic Settings
 ├── models/             # Pydantic models
+│   ├── __init__.py
 │   ├── api_models.py
 │   ├── event_models.py
+│   ├── ipc_models.py
 │   ├── sdk_models.py
 │   └── session_models.py
-├── tools/              # Function calling tools
+├── tools/              # Function calling tools (async)
+│   ├── __init__.py
 │   ├── file_operations.py
 │   ├── document_generation.py
 │   ├── text_editing.py
 │   ├── wrappers.py
 │   └── registry.py
 ├── integrations/       # External integrations
+│   ├── __init__.py
 │   ├── mcp_servers.py  # MCP server management
+│   ├── mcp_registry.py # MCP server registry
 │   ├── event_handlers.py
 │   └── sdk_token_tracker.py
 └── utils/              # Utilities
+    ├── __init__.py
     ├── logger.py       # Enterprise JSON logging
     ├── ipc.py          # IPC manager
-    ├── token_utils.py
+    ├── token_utils.py  # Token management with LRU cache
     ├── file_utils.py
     ├── document_processor.py
     ├── json_utils.py
@@ -269,30 +280,51 @@ SESSION_ID_LENGTH: int = 8
 
 ## Frontend Architecture (Electron)
 
-### Modular ES6 Structure
+### Component-Based ES6 Structure
 ```
 electron/renderer/
 ├── index.js                    # Main entry point
-├── config/constants.js         # Configuration constants
-├── core/state.js               # BoundedMap + AppState pub/sub
-├── ui/                         # UI components
+├── bootstrap.js                # Renderer initialization
+├── adapters/                   # Platform abstraction
+│   ├── DOMAdapter.js, IPCAdapter.js, StorageAdapter.js, index.js
+├── config/                     # Configuration management
+│   ├── constants.js, model-metadata.js
+├── core/                       # Core framework
+│   ├── event-bus.js, state.js
+├── ui/                         # UI layer
+│   ├── components/             # Reusable components
+│   │   ├── chat-container.js  # Message container
+│   │   ├── connection-status.js # Connection indicator
+│   │   ├── file-panel.js      # File management with handle cleanup
+│   │   ├── input-area.js      # Chat input and controls
+│   │   ├── model-selector.js  # Model/reasoning selection (shared)
+│   │   └── index.js           # Component exports
+│   ├── renderers/              # Rendering utilities
+│   │   ├── file-list-renderer.js
+│   │   ├── function-card-renderer.js
+│   │   ├── message-renderer.js
+│   │   ├── session-list-renderer.js
+│   │   └── index.js           # Renderer exports
 │   ├── chat-ui.js
 │   ├── function-card-ui.js
 │   ├── welcome-page.js
 │   └── titlebar.js
-├── handlers/message-handlers.js # Event handler registry
-├── services/session-service.js  # Session CRUD operations
-├── managers/                    # UI state managers
-│   ├── theme-manager.js
-│   ├── view-manager.js
-│   ├── dom-manager.js
-│   └── file-manager.js
-└── utils/                       # Utilities
-    ├── markdown-renderer.js
-    ├── scroll-utils.js
-    ├── json-cache.js
-    ├── toast.js
-    └── file-utils.js
+├── handlers/                   # Event handlers
+│   ├── message-handlers-v2.js, session-list-handlers.js
+│   ├── chat-events.js, file-events.js, session-events.js, index.js
+├── services/                   # Business logic services
+│   ├── session-service.js, message-service.js, file-service.js
+│   ├── function-call-service.js, index.js
+├── managers/                   # UI state managers
+│   ├── view-manager.js, file-manager.js, dom-manager.js, theme-manager.js
+├── plugins/                    # Plugin architecture
+│   ├── plugin-interface.js, core-plugins.js, index.js
+├── viewmodels/                 # View models
+│   ├── message-viewmodel.js, session-viewmodel.js
+└── utils/                      # Utilities
+    ├── markdown-renderer.js, scroll-utils.js, json-cache.js
+    ├── toast.js, file-utils.js, chat-model-updater.js, lottie-color.js
+    ├── analytics/, debug/, performance/
 ```
 
 ### JavaScript/TypeScript Conventions
@@ -302,6 +334,34 @@ electron/renderer/
 - Use template literals for strings: `` `Message: ${msg}` ``
 - Use optional chaining: `obj?.prop?.method?.()`
 - Use nullish coalescing: `value ?? defaultValue`
+
+### Component Guidelines
+- **Reusability**: Extract shared UI logic into components (e.g., ModelSelector)
+- **Lifecycle Management**: Components must clean up resources (event listeners, file handles)
+- **State Management**: Pass `onChange` callbacks for state updates, avoid internal mutations
+- **Modes**: Support different operational modes (e.g., local-only vs auto-sync)
+
+```javascript
+// ✅ Component with cleanup
+class FilePanel {
+  closeAllHandles() {
+    // Remove file previews
+    const previews = this.container.querySelectorAll("[data-file-handle]");
+    previews.forEach(preview => preview.remove());
+
+    // Clone container to remove event listeners
+    const cloned = this.container.cloneNode(false);
+    this.container.parentNode?.replaceChild(cloned, this.container);
+    this.container = cloned;
+  }
+}
+```
+
+### Resource Management
+- **File Handles**: Always close file handles before deletion operations
+- **Event Listeners**: Clean up listeners when destroying components
+- **DOM References**: Use cloning technique to force garbage collection
+- **Backend Coordination**: Frontend cleanup before backend operations (e.g., session deletion)
 
 ## Testing Guidelines
 
@@ -386,6 +446,8 @@ make health     # System health check
 8. **Import Order**: future → stdlib → third-party → first-party → local
 9. **Docstrings Required**: All public functions need Google-style docs
 10. **MCP Integration**: Use Agent/Runner pattern for tool orchestration
+11. **Component Lifecycle**: Always implement cleanup methods (closeAllHandles, destroy, etc.)
+12. **Resource Management**: Close file handles before deletion, force GC when needed
 
 ## Anti-Patterns to Avoid
 

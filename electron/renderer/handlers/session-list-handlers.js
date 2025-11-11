@@ -368,8 +368,13 @@ async function handleSwitch(sessionId, sessionService, sessionState, updateSessi
         await showChatView(elements, appState);
       }
 
-      // File loading is handled by FilePanel component above via:
-      // filePanel.setSession(sessionId) and filePanel.loadSessionFiles()
+      // Update FilePanel component with new session (Phase 7)
+      if (window.components?.filePanel) {
+        window.components.filePanel.setSession(sessionId);
+        console.log("✅ FilePanel updated with new session");
+      } else {
+        console.error("⚠️ FilePanel component not available");
+      }
     } else {
       throw new Error(result.error);
     }
