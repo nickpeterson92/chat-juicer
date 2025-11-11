@@ -279,7 +279,10 @@ function attachWelcomePageListeners(elements, appState) {
     if (!sessionId) return;
 
     // Check if session has any messages
-    const sessions = await services.sessionService.loadSessions(0, 100);
+    const sessionService = window.app?.services?.sessionService;
+    if (!sessionService) return;
+
+    const sessions = await sessionService.loadSessions(0, 100);
     if (!sessions.success) return;
 
     const currentSession = sessions.sessions.find((s) => s.session_id === sessionId);
@@ -312,14 +315,17 @@ function attachWelcomePageListeners(elements, appState) {
         });
 
         // Reload sessions list to show updated metadata
-        const sessionsResult = await services.sessionService.loadSessions();
-        if (sessionsResult.success) {
-          // Trigger session list update
-          window.dispatchEvent(
-            new CustomEvent("sessions-loaded", {
-              detail: { sessions: sessionsResult.sessions },
-            })
-          );
+        const sessionService = window.app?.services?.sessionService;
+        if (sessionService) {
+          const sessionsResult = await sessionService.loadSessions();
+          if (sessionsResult.success) {
+            // Trigger session list update
+            window.dispatchEvent(
+              new CustomEvent("sessions-loaded", {
+                detail: { sessions: sessionsResult.sessions },
+              })
+            );
+          }
         }
       } else {
         console.error("❌ Failed to update session config:", response?.error);
@@ -389,15 +395,16 @@ function attachWelcomePageListeners(elements, appState) {
       let sessionId = sessionState.currentSessionId;
 
       if (!sessionId) {
-        // Use SessionService instance to create session
-        if (!services.sessionService) {
+        // Get sessionService from window.app (created in bootstrap.js)
+        const sessionService = window.app?.services?.sessionService;
+        if (!sessionService) {
           console.error("❌ SessionService not available");
           window.electronAPI.log("error", "SessionService not available in view-manager");
           isProcessing = false;
           return;
         }
 
-        const result = await services.sessionService.createSession({
+        const result = await sessionService.createSession({
           title: null,
           mcpConfig,
           model: modelConfig.model,
