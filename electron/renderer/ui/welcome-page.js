@@ -65,17 +65,15 @@ function createMcpToggles() {
 
 /**
  * Create model selector container (populated by ModelSelector component)
- * Exported for reuse on chat page
  */
-export function createModelSelector() {
+function createModelSelector() {
   return `<div class="model-config-inline"></div>`;
 }
 
 /**
  * Create send button with arrow icon
- * Exported for reuse on chat page
  */
-export function createSendButton() {
+function createSendButton() {
   return `
     <button id="welcome-send-btn" class="welcome-send-btn" title="Send message">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
