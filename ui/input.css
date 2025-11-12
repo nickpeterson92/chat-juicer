@@ -58,12 +58,22 @@
     -webkit-app-region: drag;
     position: fixed;
     top: 0;
-    left: 0;
-    right: 0;
+    left: 260px;  /* Exclude sidebar when expanded */
+    right: 420px; /* Exclude file panel when expanded */
     height: 32px;
     z-index: 10000;
     background: transparent;
     pointer-events: auto;
+  }
+
+  /* Extend drag handle when sidebar is collapsed */
+  body:has(#sidebar.collapsed) .macos-drag-handle {
+    left: 0;
+  }
+
+  /* Extend drag handle when file panel is collapsed */
+  body:has(#files-panel.collapsed) .macos-drag-handle {
+    right: 0;
   }
 
   body:has(.custom-titlebar) .macos-drag-handle {
@@ -71,7 +81,8 @@
   }
 
   #sidebar-toggle,
-  #open-files-btn {
+  #open-files-btn,
+  #files-panel > div:first-child {
     -webkit-app-region: no-drag;
     position: relative;
     z-index: 10001;
@@ -177,6 +188,22 @@
 
   body:has(.custom-titlebar) {
     padding-top: 32px;
+  }
+
+  /* ==========================================
+   * PANEL ALIGNMENT: Ensure full-height panels align properly
+   * Both session panel (sidebar) and file panel extend full height
+   * and need to account for custom titlebar on Windows/Linux
+   * ========================================== */
+
+  /* Session panel first button - push down to account for titlebar */
+  body:has(.custom-titlebar) #sidebar > button:first-of-type {
+    margin-top: 44px; /* 32px titlebar + 12px original margin */
+  }
+
+  /* File panel header - push down to account for titlebar on Windows/Linux */
+  body:has(.custom-titlebar) #files-panel > div:first-child {
+    margin-top: 32px; /* Account for custom titlebar */
   }
 
   /* ==========================================
