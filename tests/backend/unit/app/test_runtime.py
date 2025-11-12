@@ -87,6 +87,7 @@ class TestProcessUserInput:
     @patch("app.runtime.IPCManager")
     async def test_process_user_input_success(self, mock_ipc: Mock) -> None:
         """Test processing user input successfully."""
+        mock_app_state = Mock()
         mock_session = Mock()
         mock_session.agent = Mock()
         mock_session.should_summarize = AsyncMock(return_value=False)
@@ -105,7 +106,7 @@ class TestProcessUserInput:
         mock_result.stream_events = mock_stream
         mock_session.run_with_auto_summary = AsyncMock(return_value=mock_result)
 
-        await process_user_input(mock_session, "Test input")
+        await process_user_input(mock_app_state, mock_session, "Test input")
 
         mock_ipc.send_assistant_start.assert_called_once()
         mock_ipc.send_assistant_end.assert_called_once()
@@ -115,11 +116,18 @@ class TestProcessUserInput:
     @patch("app.runtime.handle_streaming_error")
     async def test_process_user_input_error(self, mock_handle_error: Mock, mock_ipc: Mock) -> None:
         """Test processing user input with error."""
+        mock_app_state = Mock()
+        mock_app_state.session_manager = Mock()
+        mock_app_state.session_manager.get_session.return_value = Mock(is_named=True)
+
         mock_session = Mock()
         mock_session.agent = Mock()
+        mock_session.session_id = "chat_test"
+        mock_session.accumulated_tool_tokens = 0
+        mock_session.get_items = AsyncMock(return_value=[])
         mock_session.should_summarize = AsyncMock(side_effect=Exception("Test error"))
 
-        await process_user_input(mock_session, "Test input")
+        await process_user_input(mock_app_state, mock_session, "Test input")
 
         mock_handle_error.assert_called_once()
 

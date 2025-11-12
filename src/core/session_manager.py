@@ -241,11 +241,60 @@ class SessionManager:
         logger.info(f"Deleted session: {session_id}")
         return True
 
+    def sync_metadata_with_database(self) -> int:
+        """Sync session metadata with database to fix any desync issues.
+
+        This should be called on startup BEFORE cleanup_empty_sessions() to ensure
+        metadata is accurate before any deletion logic runs.
+
+        Returns:
+            Number of sessions updated
+        """
+        from core.constants import CHAT_HISTORY_DB_PATH
+        from core.full_history import FullHistoryStore
+        from models.session_models import SessionUpdate
+
+        full_history = FullHistoryStore(db_path=CHAT_HISTORY_DB_PATH)
+        updated_count = 0
+
+        logger.info("Syncing session metadata with database...")
+
+        # Helper to sync single session (avoids try-except in loop for performance)
+        def sync_session(sid: str, sess: SessionMetadata) -> bool:
+            try:
+                actual_messages = full_history.get_messages(sid)
+                actual_count = len(actual_messages)
+
+                if sess.message_count != actual_count:
+                    logger.warning(
+                        f"Syncing session {sid}: metadata says {sess.message_count}, " f"DB has {actual_count} messages"
+                    )
+                    self.update_session(sid, SessionUpdate(message_count=actual_count))
+                    return True
+                return False
+            except Exception as e:
+                logger.error(f"Failed to sync session {sid} with database: {e}")
+                return False
+
+        for session_id, session in self.sessions.items():
+            if sync_session(session_id, session):
+                updated_count += 1
+
+        if updated_count > 0:
+            logger.info(f"Metadata sync complete: updated {updated_count} sessions")
+        else:
+            logger.info("Metadata sync complete: all sessions in sync")
+
+        return updated_count
+
     def cleanup_empty_sessions(self, max_age_hours: int = 24) -> int:
         """Delete sessions with no messages older than max_age_hours.
 
         This prevents orphaned sessions from accumulating when users upload files
         but never send a message.
+
+        CRITICAL SAFEGUARD: Always validates against database before deletion to prevent
+        the desync bug where metadata is stale but messages exist in the database.
 
         Args:
             max_age_hours: Maximum age in hours for empty sessions (default: 24)
@@ -258,35 +307,94 @@ class SessionManager:
         from datetime import datetime
         from pathlib import Path
 
+        from core.constants import CHAT_HISTORY_DB_PATH
+        from core.full_history import FullHistoryStore
+
         cutoff_time = datetime.now().timestamp() - (max_age_hours * 3600)
         deleted_count = 0
+        skipped_count = 0
+
+        # Initialize FullHistoryStore for database validation
+        full_history = FullHistoryStore(db_path=CHAT_HISTORY_DB_PATH)
+
+        # Helper to validate and cleanup single session (avoids try-except in loop)
+        def should_cleanup_session(sid: str, sess: SessionMetadata) -> tuple[bool, bool]:
+            """Returns (should_delete, should_skip)"""
+            try:
+                actual_messages = full_history.get_messages(sid)
+                actual_count = len(actual_messages)
+
+                # If database has messages, update metadata and SKIP deletion
+                if actual_count > 0:
+                    if sess.message_count != actual_count:
+                        logger.warning(
+                            f"Session {sid} metadata desync: "
+                            f"metadata says {sess.message_count}, DB has {actual_count} messages. "
+                            f"Skipping deletion and updating metadata."
+                        )
+                        from models.session_models import SessionUpdate
+
+                        self.update_session(sid, SessionUpdate(message_count=actual_count))
+                    return (False, True)
+
+                # CRITICAL: If metadata says messages exist but DB is empty, SKIP deletion
+                # This prevents data loss from desync - better to keep than delete
+                if sess.message_count > 0:
+                    logger.warning(
+                        f"Session {sid} CRITICAL DESYNC: "
+                        f"metadata says {sess.message_count} messages, but DB is empty. "
+                        f"SKIPPING DELETION to prevent data loss."
+                    )
+                    return (False, True)
+
+                # Check if session has uploaded files before deletion
+                sources_dir = Path(f"data/files/{sid}/sources")
+                if sources_dir.exists():
+                    files = list(sources_dir.iterdir())
+                    if files:
+                        logger.info(f"Session {sid} has {len(files)} uploaded files, skipping cleanup")
+                        return (False, True)
+
+                # Check age - only delete if old AND no messages AND no files
+                session_created = datetime.fromisoformat(sess.created_at).timestamp()
+                if session_created < cutoff_time:
+                    return (True, False)
+                return (False, False)
+
+            except Exception as e:
+                logger.error(f"Failed to validate session {sid} against database: {e}")
+                logger.warning(f"Skipping session {sid} cleanup due to validation error")
+                return (False, True)
+
+        # Helper to delete session files (avoids nested try-except)
+        def delete_session_files(sid: str) -> None:
+            session_files_dir = Path(f"data/files/{sid}")
+            if session_files_dir.exists():
+                try:
+                    shutil.rmtree(session_files_dir)
+                    logger.info(f"Cleaned up empty session files: {session_files_dir}")
+                except Exception as e:
+                    logger.error(f"Failed to cleanup session files {session_files_dir}: {e}", exc_info=True)
 
         # Iterate over copy of sessions dict since we're modifying it
         for session_id, session in list(self.sessions.items()):
-            # Skip sessions with messages
-            if session.message_count > 0:
+            should_delete, should_skip = should_cleanup_session(session_id, session)
+
+            if should_skip:
+                skipped_count += 1
                 continue
 
-            # Check if session is older than cutoff
-            # Parse ISO format timestamp to datetime for comparison
-            session_created = datetime.fromisoformat(session.created_at).timestamp()
-            if session_created < cutoff_time:
-                # Delete session files directory
-                session_files_dir = Path(f"data/files/{session_id}")
-                if session_files_dir.exists():
-                    try:
-                        shutil.rmtree(session_files_dir)
-                        logger.info(f"Cleaned up empty session files: {session_files_dir}")
-                    except Exception as e:
-                        logger.error(f"Failed to cleanup session files {session_files_dir}: {e}", exc_info=True)
-
-                # Delete session metadata (reuse delete_session method)
+            if should_delete:
+                delete_session_files(session_id)
                 if self.delete_session(session_id):
                     deleted_count += 1
                     logger.info(f"Cleaned up empty session: {session_id}")
 
         if deleted_count > 0:
-            logger.info(f"Cleanup complete: removed {deleted_count} empty sessions older than {max_age_hours}h")
+            logger.info(
+                f"Cleanup complete: removed {deleted_count} empty sessions older than {max_age_hours}h "
+                f"(skipped {skipped_count} sessions with messages)"
+            )
 
         return deleted_count
 

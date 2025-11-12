@@ -58,6 +58,7 @@ class TestInitializeApplication:
         mock_full_history_instance = Mock()
         mock_full_history.return_value = mock_full_history_instance
         mock_session_manager_instance = Mock()
+        mock_session_manager_instance.sync_metadata_with_database.return_value = 0
         mock_session_manager_instance.cleanup_empty_sessions.return_value = 0
         mock_session_manager.return_value = mock_session_manager_instance
 
@@ -114,6 +115,7 @@ class TestInitializeApplication:
         mock_create_agent.return_value = Mock()
         mock_full_history.return_value = Mock()
         mock_session_manager_instance = Mock()
+        mock_session_manager_instance.sync_metadata_with_database.return_value = 0
         mock_session_manager_instance.cleanup_empty_sessions.return_value = 0
         mock_session_manager.return_value = mock_session_manager_instance
 
@@ -181,6 +183,7 @@ class TestInitializeApplication:
         mock_create_agent.return_value = Mock()
         mock_full_history.return_value = Mock()
         mock_session_manager_instance = Mock()
+        mock_session_manager_instance.sync_metadata_with_database.return_value = 0
         mock_session_manager_instance.cleanup_empty_sessions.return_value = 2
         mock_session_manager.return_value = mock_session_manager_instance
 

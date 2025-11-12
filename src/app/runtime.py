@@ -172,13 +172,17 @@ async def ensure_session_exists(app_state: AppState) -> tuple[TokenAwareSQLiteSe
     return app_state.current_session, True
 
 
-async def process_user_input(session: TokenAwareSQLiteSession, user_input: str) -> None:
+async def process_user_input(app_state: AppState, session: TokenAwareSQLiteSession, user_input: str) -> None:
     """Process a single user input using token-aware SQLite session.
 
     Streams Agent/Runner events, converts to Electron IPC format, handles errors,
     and manages automatic summarization when token thresholds are reached.
 
+    CRITICAL: This function ALWAYS updates session metadata via try/finally,
+    even if streaming errors occur. This prevents session metadata desync bugs.
+
     Args:
+        app_state: Application state container (for metadata updates)
         session: TokenAwareSQLiteSession instance
         user_input: User's message
 
@@ -192,81 +196,92 @@ async def process_user_input(session: TokenAwareSQLiteSession, user_input: str) 
     response_text = ""
     tracker = CallTracker()  # Track function call IDs
 
-    # No retry logic - fail fast on errors
+    # CRITICAL: Use try/finally to ensure metadata is ALWAYS updated,
+    # even if streaming errors occur. This prevents metadata desync bugs.
     try:
-        # Use the new session's convenience method that handles auto-summarization
-        # This returns a RunResultStreaming object
-        result = await session.run_with_auto_summary(session.agent, user_input, max_turns=MAX_CONVERSATION_TURNS)
+        # No retry logic - fail fast on errors
+        try:
+            # Use the new session's convenience method that handles auto-summarization
+            # This returns a RunResultStreaming object
+            result = await session.run_with_auto_summary(session.agent, user_input, max_turns=MAX_CONVERSATION_TURNS)
 
-        # Stream the events (SDK tracker handles token counting automatically)
-        async for event in result.stream_events():
-            # Convert to Electron IPC format with call_id tracking
-            ipc_msg = await handle_electron_ipc(event, tracker)
-            if ipc_msg:
-                IPCManager.send_raw(ipc_msg)
+            # Stream the events (SDK tracker handles token counting automatically)
+            async for event in result.stream_events():
+                # Convert to Electron IPC format with call_id tracking
+                ipc_msg = await handle_electron_ipc(event, tracker)
+                if ipc_msg:
+                    IPCManager.send_raw(ipc_msg)
 
-            # Accumulate response text for logging
-            if (
-                event.type == RUN_ITEM_STREAM_EVENT
-                and hasattr(event, "item")
-                and event.item
-                and event.item.type == MESSAGE_OUTPUT_ITEM
-                and hasattr(event.item, "raw_item")
-            ):
-                content = getattr(event.item.raw_item, "content", []) or []  # Ensure we always have a list
-                for content_item in content:
-                    text = getattr(content_item, "text", "")
-                    if text:
-                        response_text += text
+                # Accumulate response text for logging
+                if (
+                    event.type == RUN_ITEM_STREAM_EVENT
+                    and hasattr(event, "item")
+                    and event.item
+                    and event.item.type == MESSAGE_OUTPUT_ITEM
+                    and hasattr(event.item, "raw_item")
+                ):
+                    content = getattr(event.item.raw_item, "content", []) or []  # Ensure we always have a list
+                    for content_item in content:
+                        text = getattr(content_item, "text", "")
+                        if text:
+                            response_text += text
 
-    except PersistenceError as e:
-        # Layer 2 persistence failure - notify user
-        logger.error(f"Persistence failure during message processing: {e}")
-        error_msg = {
-            "type": "error",
-            "message": "Failed to save conversation history. Your message may not be persisted. Please try again.",
-            "code": "persistence_error",
-            "details": {"error": str(e)},
-        }
-        IPCManager.send(error_msg)
+        except PersistenceError as e:
+            # Layer 2 persistence failure - notify user
+            logger.error(f"Persistence failure during message processing: {e}")
+            error_msg = {
+                "type": "error",
+                "message": "Failed to save conversation history. Your message may not be persisted. Please try again.",
+                "code": "persistence_error",
+                "details": {"error": str(e)},
+            }
+            IPCManager.send(error_msg)
+            IPCManager.send_assistant_end()
+            return
+
+        except Exception as e:
+            handle_streaming_error(e)
+            return
+
+        # Send end message
         IPCManager.send_assistant_end()
-        return
 
-    except Exception as e:
-        handle_streaming_error(e)
-        return
+        # Log response
+        if response_text:
+            file_msg = (
+                f"AI: {response_text[:LOG_PREVIEW_LENGTH]}{'...' if len(response_text) > LOG_PREVIEW_LENGTH else ''}"
+            )
+            logger.info(f"AI: {response_text}", extra={"file_message": file_msg})
 
-    # Send end message
-    IPCManager.send_assistant_end()
+        # SDK token tracker handles all token updates automatically
+        # Just update conversation tokens from items
+        items = await session.get_items()
+        items_tokens = session.calculate_items_tokens(items)
+        session.total_tokens = items_tokens + session.accumulated_tool_tokens
 
-    # Log response
-    if response_text:
-        file_msg = f"AI: {response_text[:LOG_PREVIEW_LENGTH]}{'...' if len(response_text) > LOG_PREVIEW_LENGTH else ''}"
-        logger.info(f"AI: {response_text}", extra={"file_message": file_msg})
-
-    # SDK token tracker handles all token updates automatically
-    # Just update conversation tokens from items
-    items = await session.get_items()
-    items_tokens = session.calculate_items_tokens(items)
-    session.total_tokens = items_tokens + session.accumulated_tool_tokens
-
-    # Log current token usage (SDK tracker already updated tool tokens)
-    logger.info(
-        f"Token usage: {session.total_tokens}/{session.trigger_tokens} "
-        f"({int(session.total_tokens / session.trigger_tokens * 100)}%)"
-    )
-
-    # CRITICAL FIX: Check if we need to summarize AFTER the run
-    # This catches cases where tool tokens pushed us over the threshold
-    if await session.should_summarize():
-        logger.info(f"Post-run summarization triggered: {session.total_tokens}/{session.trigger_tokens} tokens")
-        await session.summarize_with_agent()
-
-        # Log new token count after summarization
+        # Log current token usage (SDK tracker already updated tool tokens)
         logger.info(
-            f"Token usage after summarization: {session.total_tokens}/{session.trigger_tokens} "
+            f"Token usage: {session.total_tokens}/{session.trigger_tokens} "
             f"({int(session.total_tokens / session.trigger_tokens * 100)}%)"
         )
+
+        # CRITICAL FIX: Check if we need to summarize AFTER the run
+        # This catches cases where tool tokens pushed us over the threshold
+        if await session.should_summarize():
+            logger.info(f"Post-run summarization triggered: {session.total_tokens}/{session.trigger_tokens} tokens")
+            await session.summarize_with_agent()
+
+            # Log new token count after summarization
+            logger.info(
+                f"Token usage after summarization: {session.total_tokens}/{session.trigger_tokens} "
+                f"({int(session.total_tokens / session.trigger_tokens * 100)}%)"
+            )
+
+    finally:
+        # CRITICAL: Always update session metadata, even if errors occurred
+        # This prevents the desync bug where messages are in DB but metadata is stale
+        logger.debug(f"Updating session metadata for {session.session_id} (called from finally block)")
+        await update_session_metadata(app_state, session)
 
 
 async def handle_session_command_wrapper(app_state: AppState, command: str, data: dict[str, Any]) -> dict[str, Any]:

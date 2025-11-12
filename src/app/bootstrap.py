@@ -157,6 +157,12 @@ async def initialize_application() -> AppState:
     session_manager = SessionManager(metadata_path=DEFAULT_SESSION_METADATA_PATH)
     logger.info("Session manager initialized")
 
+    # CRITICAL: Sync metadata with database BEFORE cleanup to prevent desync bugs
+    # This fixes any stale metadata from previous sessions before deletion logic runs
+    synced_count = session_manager.sync_metadata_with_database()
+    if synced_count > 0:
+        logger.info(f"Startup sync: updated {synced_count} sessions with correct message counts")
+
     # Cleanup empty sessions on startup (prevent orphaned sessions from file uploads)
     deleted_count = session_manager.cleanup_empty_sessions(max_age_hours=24)
     if deleted_count > 0:

@@ -84,22 +84,31 @@ class TransactionCoordinator:
         """
         backoff = self.initial_backoff
 
-        for attempt in range(self.max_retries):
+        # Helper to attempt operation once (avoids try-except in loop for performance)
+        def attempt_operation(attempt_num: int) -> tuple[bool, str | None, Exception | None]:
             try:
                 operation()
+                return (True, None, None)
+            except Exception as e:
+                return (False, None, e)
+
+        for attempt in range(self.max_retries):
+            success, _, error = attempt_operation(attempt)
+
+            if success:
                 return True, None
-            except Exception as e:  # noqa: PERF203 - Necessary for retry logic
-                logger.warning(f"{operation_name} failed (attempt {attempt + 1}/{self.max_retries}): {e}")
 
-                # Last attempt - give up
-                if attempt == self.max_retries - 1:
-                    error_msg = f"{operation_name} failed after {self.max_retries} attempts: {e}"
-                    logger.error(error_msg, exc_info=True)
-                    return False, error_msg
+            logger.warning(f"{operation_name} failed (attempt {attempt + 1}/{self.max_retries}): {error}")
 
-                # Wait before retry with exponential backoff
-                await asyncio.sleep(backoff)
-                backoff *= self.backoff_multiplier
+            # Last attempt - give up
+            if attempt == self.max_retries - 1:
+                error_msg = f"{operation_name} failed after {self.max_retries} attempts: {error}"
+                logger.error(error_msg, exc_info=True)
+                return False, error_msg
+
+            # Wait before retry with exponential backoff
+            await asyncio.sleep(backoff)
+            backoff *= self.backoff_multiplier
 
         return False, "Max retries exceeded"
 

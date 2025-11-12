@@ -25,7 +25,6 @@ from app.runtime import (
     handle_session_command_wrapper,
     process_user_input,
     send_session_created_event,
-    update_session_metadata,
 )
 from integrations.sdk_token_tracker import disconnect_session
 from models.event_models import UserInput
@@ -117,11 +116,9 @@ async def main() -> None:
             # Ensure session exists (lazy initialization on first message)
             session, is_new_session = await ensure_session_exists(app_state)
 
-            # Process user input through session (handles summarization automatically)
-            await process_user_input(session, user_input)
-
-            # Update session metadata after each message
-            await update_session_metadata(app_state, session)
+            # Process user input through session (handles summarization + metadata update automatically)
+            # CRITICAL: process_user_input now updates metadata via try/finally to prevent desync bugs
+            await process_user_input(app_state, session, user_input)
 
             # Send session creation event AFTER first message completes
             if is_new_session:

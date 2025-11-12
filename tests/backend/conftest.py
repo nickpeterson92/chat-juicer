@@ -64,6 +64,36 @@ def clear_token_cache() -> Generator[None, None, None]:
         pass
 
 
+@pytest.fixture(autouse=True)
+def cleanup_test_session_directories() -> Generator[None, None, None]:
+    """Clean up test session directories created in data/files/.
+
+    Tests that call SessionManager.create_session() create real directories
+    at data/files/{session_id}. This fixture removes any test directories
+    created during the test run to prevent pollution of the real data directory.
+    """
+    import contextlib
+    import shutil
+
+    # Collect session IDs before test
+    data_files_dir = Path("data/files")
+    existing_sessions = set()
+    if data_files_dir.exists():
+        existing_sessions = {d.name for d in data_files_dir.iterdir() if d.is_dir()}
+
+    yield  # Run test
+
+    # Clean up any new session directories created during test
+    if data_files_dir.exists():
+        current_sessions = {d.name for d in data_files_dir.iterdir() if d.is_dir()}
+        new_sessions = current_sessions - existing_sessions
+
+        for session_id in new_sessions:
+            session_dir = data_files_dir / session_id
+            with contextlib.suppress(Exception):
+                shutil.rmtree(session_dir)  # Best effort cleanup
+
+
 # ============================================================================
 # Mock External Dependencies
 # ============================================================================
