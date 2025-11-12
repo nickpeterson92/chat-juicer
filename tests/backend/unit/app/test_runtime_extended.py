@@ -63,13 +63,20 @@ class TestProcessUserInputExtended:
         """Test processing user input with persistence error."""
         from core.session.transaction_coordinator import PersistenceError
 
+        mock_app_state = Mock()
+        mock_app_state.session_manager = Mock()
+        mock_app_state.session_manager.get_session.return_value = Mock(is_named=True)
+
         mock_session = Mock()
         mock_session.agent = Mock()
+        mock_session.session_id = "chat_test"
+        mock_session.accumulated_tool_tokens = 0
+        mock_session.get_items = AsyncMock(return_value=[])
 
         # Raise persistence error during run
         mock_session.run_with_auto_summary = AsyncMock(side_effect=PersistenceError("Layer 2 write failed"))
 
-        await process_user_input(mock_session, "Test input")
+        await process_user_input(mock_app_state, mock_session, "Test input")
 
         # Should send error message to UI (exactly one call for persistence error)
         assert mock_ipc.send.call_count == 1  # Only the error message
@@ -87,6 +94,7 @@ class TestProcessUserInputExtended:
     @patch("app.runtime.IPCManager")
     async def test_process_user_input_with_response_text(self, mock_ipc: Mock) -> None:
         """Test processing user input with response text logging."""
+        mock_app_state = Mock()
         mock_session = Mock()
         mock_session.agent = Mock()
         mock_session.session_id = "chat_test"
@@ -126,7 +134,7 @@ class TestProcessUserInputExtended:
         with patch("app.runtime.handle_electron_ipc") as mock_handle_ipc:
             mock_handle_ipc.return_value = None
 
-            await process_user_input(mock_session, "Test input")
+            await process_user_input(mock_app_state, mock_session, "Test input")
 
         # Should process the message and log response
         mock_ipc.send_assistant_start.assert_called_once()
@@ -136,6 +144,7 @@ class TestProcessUserInputExtended:
     @patch("app.runtime.IPCManager")
     async def test_process_user_input_triggers_summarization(self, mock_ipc: Mock) -> None:
         """Test that post-run summarization is triggered when needed."""
+        mock_app_state = Mock()
         mock_session = Mock()
         mock_session.agent = Mock()
         mock_session.session_id = "chat_test"
@@ -160,7 +169,7 @@ class TestProcessUserInputExtended:
         mock_result.stream_events = mock_stream
         mock_session.run_with_auto_summary = AsyncMock(return_value=mock_result)
 
-        await process_user_input(mock_session, "Test input")
+        await process_user_input(mock_app_state, mock_session, "Test input")
 
         # Should trigger summarization
         mock_session.should_summarize.assert_called_once()

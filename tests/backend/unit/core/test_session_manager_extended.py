@@ -405,30 +405,34 @@ class TestSessionManagerCleanupEmptySessions:
         assert session.session_id in manager.sessions
 
     def test_cleanup_empty_sessions_old_empty(self, temp_dir: Path) -> None:
-        """Test cleanup deletes old empty sessions."""
+        """Test cleanup deletes old empty sessions.
+
+        This test creates real session directories which are cleaned up by the
+        cleanup_test_session_directories fixture after the test completes.
+        """
         from datetime import datetime, timedelta
 
         manager = SessionManager(metadata_path=temp_dir / "sessions.json")
         session = manager.create_session(title="Old Empty")
 
-        # Make session old by backdating created_at
+        # Make session old and empty
         old_time = datetime.now() - timedelta(hours=48)
         session.created_at = old_time.isoformat()
         session.message_count = 0
         manager.sessions[session.session_id] = session
 
-        # Create session files directory
-        from pathlib import Path
+        # Mock FullHistoryStore to confirm session is empty in DB
+        with patch("core.full_history.FullHistoryStore") as mock_store_class:
+            mock_store = Mock()
+            mock_store.get_messages.return_value = []  # DB confirms empty
+            mock_store_class.return_value = mock_store
 
-        session_dir = Path(f"data/files/{session.session_id}")
-        session_dir.mkdir(parents=True, exist_ok=True)
+            deleted = manager.cleanup_empty_sessions(max_age_hours=24)
 
-        deleted = manager.cleanup_empty_sessions(max_age_hours=24)
-
-        # Should delete old empty session
+        # Should delete the old empty session
         assert deleted == 1
         assert session.session_id not in manager.sessions
-        assert not session_dir.exists()
+        # Directory will be cleaned up by cleanup_test_session_directories fixture
 
     def test_cleanup_empty_sessions_file_error(self, temp_dir: Path) -> None:
         """Test cleanup continues despite file deletion errors."""

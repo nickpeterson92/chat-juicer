@@ -337,14 +337,25 @@ class SessionManager:
                         self.update_session(sid, SessionUpdate(message_count=actual_count))
                     return (False, True)
 
-                # Metadata says 0, database confirms 0 - safe to check age
+                # CRITICAL: If metadata says messages exist but DB is empty, SKIP deletion
+                # This prevents data loss from desync - better to keep than delete
                 if sess.message_count > 0:
                     logger.warning(
-                        f"Session {sid} reverse desync: "
-                        f"metadata says {sess.message_count}, but DB is empty. Proceeding with cleanup check."
+                        f"Session {sid} CRITICAL DESYNC: "
+                        f"metadata says {sess.message_count} messages, but DB is empty. "
+                        f"SKIPPING DELETION to prevent data loss."
                     )
+                    return (False, True)
 
-                # Check age
+                # Check if session has uploaded files before deletion
+                sources_dir = Path(f"data/files/{sid}/sources")
+                if sources_dir.exists():
+                    files = list(sources_dir.iterdir())
+                    if files:
+                        logger.info(f"Session {sid} has {len(files)} uploaded files, skipping cleanup")
+                        return (False, True)
+
+                # Check age - only delete if old AND no messages AND no files
                 session_created = datetime.fromisoformat(sess.created_at).timestamp()
                 if session_created < cutoff_time:
                     return (True, False)

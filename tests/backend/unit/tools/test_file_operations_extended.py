@@ -275,34 +275,27 @@ class TestSearchFilesExtended:
     @pytest.mark.asyncio
     async def test_search_files_with_session_isolation(self, temp_dir: Path) -> None:
         """Test search_files respects session isolation."""
-        # Create session directory structure
+        # Create session directory structure in temp_dir (not real data/files/)
         session_id = "chat_test123"
-        session_dir = Path(f"data/files/{session_id}/sources")
+        session_dir = temp_dir / "files" / session_id / "sources"
         session_dir.mkdir(parents=True, exist_ok=True)
 
-        try:
-            # Create test files
-            (session_dir / "test1.txt").write_text("Test 1")
-            (session_dir / "test2.txt").write_text("Test 2")
+        # Create test files
+        (session_dir / "test1.txt").write_text("Test 1")
+        (session_dir / "test2.txt").write_text("Test 2")
 
-            with patch("tools.file_operations.validate_directory_path") as mock_validate:
-                mock_validate.return_value = (session_dir, None)
+        with patch("tools.file_operations.validate_directory_path") as mock_validate:
+            mock_validate.return_value = (session_dir, None)
 
-                result_json = await search_files(
-                    "*.txt",
-                    base_path="sources",
-                    session_id=session_id,
-                )
-                result = json.loads(result_json)
+            result_json = await search_files(
+                "*.txt",
+                base_path="sources",
+                session_id=session_id,
+            )
+            result = json.loads(result_json)
 
-                assert result["success"] is True
-                assert result["count"] == 2
-        finally:
-            # Cleanup
-            import shutil
-
-            if session_dir.parent.parent.exists():
-                shutil.rmtree(session_dir.parent.parent)
+            assert result["success"] is True
+            assert result["count"] == 2
 
     @pytest.mark.asyncio
     async def test_search_files_non_recursive(self, temp_dir: Path) -> None:
