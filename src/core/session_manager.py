@@ -260,7 +260,7 @@ class SessionManager:
         logger.info("Syncing session metadata with database...")
 
         # Helper to sync single session (avoids try-except in loop for performance)
-        def sync_session(sid: str, sess) -> bool:
+        def sync_session(sid: str, sess: SessionMetadata) -> bool:
             try:
                 actual_messages = full_history.get_messages(sid)
                 actual_count = len(actual_messages)
@@ -318,7 +318,7 @@ class SessionManager:
         full_history = FullHistoryStore(db_path=CHAT_HISTORY_DB_PATH)
 
         # Helper to validate and cleanup single session (avoids try-except in loop)
-        def should_cleanup_session(sid: str, sess) -> tuple[bool, bool]:
+        def should_cleanup_session(sid: str, sess: SessionMetadata) -> tuple[bool, bool]:
             """Returns (should_delete, should_skip)"""
             try:
                 actual_messages = full_history.get_messages(sid)
