@@ -16,13 +16,19 @@ import { initializeElements } from "../../managers/dom-manager.js";
  * @returns {Promise<import('../types.js').StateDomPhaseResult>}
  * @throws {Error} If required DOM elements are missing
  */
-export async function initializeStateAndDOM({ domAdapter: _domAdapter }) {
+export async function initializeStateAndDOM({ domAdapter: _domAdapter, ipcAdapter }) {
   console.log("📦 Phase 2: Initializing state and DOM...");
 
   try {
     // Create state
     const appState = new AppState();
     console.log("  ✓ AppState created");
+
+    // Inject appState into IPCAdapter for command queuing
+    if (ipcAdapter) {
+      ipcAdapter.setAppState(appState);
+      console.log("  ✓ AppState injected into IPCAdapter");
+    }
 
     // Initialize DOM element references
     initializeElements();

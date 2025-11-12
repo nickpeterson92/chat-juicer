@@ -24,7 +24,7 @@ describe("Toast Utilities", () => {
 
   afterEach(() => {
     // Cleanup
-    if (container && container.parentNode) {
+    if (container?.parentNode) {
       container.parentNode.removeChild(container);
     }
     vi.restoreAllMocks();
@@ -93,7 +93,7 @@ describe("Toast Utilities", () => {
     });
 
     it("should auto-dismiss after specified duration", () => {
-      const toast = showToast("Auto dismiss", "info", 1000);
+      const _toast = showToast("Auto dismiss", "info", 1000);
 
       expect(container.children.length).toBe(1);
 
@@ -104,7 +104,7 @@ describe("Toast Utilities", () => {
     });
 
     it("should use default duration of 3000ms", () => {
-      const toast = showToast("Default duration", "info");
+      const _toast = showToast("Default duration", "info");
 
       expect(container.children.length).toBe(1);
 

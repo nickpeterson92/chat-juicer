@@ -12,8 +12,16 @@
  * @param {Function} updateSessionsList - Function to refresh sessions list
  * @param {Object} elements - DOM elements
  * @param {Object} appState - Application state
+ * @param {Object} ipcAdapter - IPC adapter for command queue processing
  */
-export function setupSessionListHandlers(sessionsList, sessionService, updateSessionsList, elements, appState) {
+export function setupSessionListHandlers(
+  sessionsList,
+  sessionService,
+  updateSessionsList,
+  elements,
+  appState,
+  ipcAdapter
+) {
   // Click handler for session switching and actions
   sessionsList.addEventListener("click", async (e) => {
     const target = e.target;
@@ -28,7 +36,7 @@ export function setupSessionListHandlers(sessionsList, sessionService, updateSes
     const action = target.dataset?.action || target.closest("[data-action]")?.dataset?.action;
 
     if (action === "summarize") {
-      await handleSummarize(sessionId, sessionService);
+      await handleSummarize(sessionId, sessionService, appState, ipcAdapter);
       e.stopPropagation();
       return;
     }
@@ -66,7 +74,7 @@ export function setupSessionListHandlers(sessionsList, sessionService, updateSes
 /**
  * Handle session summarize
  */
-async function handleSummarize(sessionId, sessionService) {
+async function handleSummarize(sessionId, sessionService, appState, ipcAdapter) {
   // Only summarize if this is the current session
   if (sessionId !== sessionService.getCurrentSessionId()) {
     alert("Please switch to this session first to summarize it.");
@@ -75,7 +83,27 @@ async function handleSummarize(sessionId, sessionService) {
 
   try {
     console.log("Summarizing session:", sessionId);
+
+    // Track Python status - summarization started
+    if (appState) {
+      appState.setState("python.status", "busy_summarizing");
+      console.log("🔄 Python status: busy_summarizing");
+    }
+
     const result = await sessionService.summarizeSession(sessionId);
+
+    // Track Python status - summarization ended
+    if (appState) {
+      appState.setState("python.status", "idle");
+      console.log("✅ Python status: idle");
+    }
+
+    // Process queued commands
+    if (ipcAdapter && ipcAdapter.commandQueue.length > 0) {
+      console.log("📦 Processing queued commands after summarization...");
+      await ipcAdapter.processQueue();
+    }
+
     if (result.success) {
       console.log("✅ Session summarized successfully");
     } else {
@@ -83,6 +111,17 @@ async function handleSummarize(sessionId, sessionService) {
     }
   } catch (error) {
     console.error("Error summarizing session:", error);
+
+    // Ensure status is reset even on error
+    if (appState) {
+      appState.setState("python.status", "idle");
+    }
+
+    // Process queue even on error
+    if (ipcAdapter && ipcAdapter.commandQueue.length > 0) {
+      await ipcAdapter.processQueue();
+    }
+
     alert(`Error summarizing session: ${error.message}`);
   }
 }

@@ -110,152 +110,189 @@ export async function initializeEventHandlers({
     const fileDropZone = document.getElementById("file-drop-zone");
     const welcomePageContainer = document.getElementById("welcome-page-container");
 
-    // Prevent default drag behavior
-    ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
-      addListener(
-        document,
-        eventName,
-        (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        },
-        false
-      );
+    // Track drag state for elegant drop zone management
+    let dragCounter = 0;
+    let hideDropZoneTimer = null;
+
+    // Helper to show drop zone
+    const showDropZone = () => {
+      if (fileDropZone) {
+        fileDropZone.classList.add("active");
+        // Clear any pending hide timer
+        if (hideDropZoneTimer) {
+          clearTimeout(hideDropZoneTimer);
+          hideDropZoneTimer = null;
+        }
+      }
+    };
+
+    // Helper to hide drop zone (with optional delay)
+    const hideDropZone = (immediate = false) => {
+      if (!fileDropZone) return;
+
+      if (immediate) {
+        fileDropZone.classList.remove("active");
+        dragCounter = 0;
+        if (hideDropZoneTimer) {
+          clearTimeout(hideDropZoneTimer);
+          hideDropZoneTimer = null;
+        }
+      } else {
+        // Debounced hide - gives time for dragenter to cancel if moving between elements
+        if (hideDropZoneTimer) {
+          clearTimeout(hideDropZoneTimer);
+        }
+        hideDropZoneTimer = eventHandlersComponent.setTimeout(() => {
+          fileDropZone.classList.remove("active");
+          dragCounter = 0;
+          hideDropZoneTimer = null;
+        }, 50);
+      }
+    };
+
+    // Document-level drag handling
+    addListener(document, "dragenter", (e) => {
+      e.preventDefault();
+      if (e.dataTransfer?.types.includes("Files")) {
+        dragCounter++;
+        showDropZone();
+      }
     });
 
-    if (fileDropZone) {
-      // Show drop zone on drag over chat panel
-      if (chatPanel) {
-        addListener(chatPanel, "dragenter", (e) => {
-          if (e.dataTransfer?.types.includes("Files")) {
-            fileDropZone.classList.add("active");
-          }
-        });
+    addListener(document, "dragover", (e) => {
+      e.preventDefault();
+      // Keep drop zone visible during drag
+      if (e.dataTransfer?.types.includes("Files")) {
+        showDropZone();
       }
+    });
 
-      // Show drop zone on drag over welcome page
-      if (welcomePageContainer) {
-        addListener(welcomePageContainer, "dragenter", (e) => {
-          if (e.dataTransfer?.types.includes("Files")) {
-            fileDropZone.classList.add("active");
-          }
-        });
-      }
-
-      // Hide drop zone when leaving
-      addListener(fileDropZone, "dragleave", (e) => {
-        if (e.target === fileDropZone) {
-          fileDropZone.classList.remove("active");
+    addListener(document, "dragleave", (e) => {
+      e.preventDefault();
+      if (e.dataTransfer?.types.includes("Files")) {
+        dragCounter--;
+        // Only hide if we've left all drag contexts
+        if (dragCounter <= 0) {
+          hideDropZone();
         }
-      });
+      }
+    });
 
-      // Handle file drop
-      const handleFileDrop = async (e) => {
-        e.preventDefault();
-        fileDropZone.classList.remove("active");
+    addListener(document, "drop", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // Immediately hide drop zone on any drop (even outside drop zones)
+      hideDropZone(true);
+    });
 
-        const files = Array.from(e.dataTransfer.files);
-        if (files.length === 0) return;
+    // Handle file drop
+    const handleFileDrop = async (e) => {
+      e.preventDefault();
+      fileDropZone.classList.remove("active");
 
-        console.log("🗂️ Files dropped:", files.length, "files");
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length === 0) return;
 
-        const isOnWelcomePage = document.body.classList.contains("view-welcome");
+      console.log("🗂️ Files dropped:", files.length, "files");
 
-        // If no session, create one first
-        if (!sessionService.getCurrentSessionId()) {
-          console.log("No session - creating one for file upload");
-          try {
-            const result = await sessionService.createSession({});
+      const isOnWelcomePage = document.body.classList.contains("view-welcome");
 
-            if (result.success) {
-              console.log("✅ Session created:", result.sessionId);
+      // If no session, create one first
+      if (!sessionService.getCurrentSessionId()) {
+        console.log("No session - creating one for file upload");
+        try {
+          const result = await sessionService.createSession({});
 
-              if (components.filePanel) {
-                components.filePanel.setSession(result.sessionId);
-              }
+          if (result.success) {
+            console.log("✅ Session created:", result.sessionId);
 
-              // Reload sessions list (SessionService will notify observers)
-              const sessionsResult = await sessionService.loadSessions();
-              if (sessionsResult.success) {
-                updateSessionsList(sessionsResult.sessions || []);
-              }
-            } else {
-              throw new Error(result.error || "Unknown error creating session");
+            if (components.filePanel) {
+              components.filePanel.setSession(result.sessionId);
             }
-          } catch (error) {
-            console.error("❌ Failed to create session:", error);
-            alert(`Failed to create session for file upload: ${error.message}`);
-            return;
+
+            // Reload sessions list (SessionService will notify observers)
+            const sessionsResult = await sessionService.loadSessions();
+            if (sessionsResult.success) {
+              updateSessionsList(sessionsResult.sessions || []);
+            }
+          } else {
+            throw new Error(result.error || "Unknown error creating session");
           }
+        } catch (error) {
+          console.error("❌ Failed to create session:", error);
+          alert(`Failed to create session for file upload: ${error.message}`);
+          return;
         }
+      }
 
-        // Upload each file using FileService
-        const { showToast } = await import("../../utils/toast.js");
-        let uploadedCount = 0;
+      // Upload each file using FileService
+      const { showToast } = await import("../../utils/toast.js");
+      let uploadedCount = 0;
 
-        for (const file of files) {
-          try {
-            const result = await services.fileService.uploadFile(file, sessionService.getCurrentSessionId());
+      for (const file of files) {
+        try {
+          const result = await services.fileService.uploadFile(file, sessionService.getCurrentSessionId());
 
-            if (result.success) {
-              console.log(`✅ File uploaded: ${file.name}`);
-              uploadedCount++;
+          if (result.success) {
+            console.log(`✅ File uploaded: ${file.name}`);
+            uploadedCount++;
 
-              // Refresh the appropriate file container
-              if (sessionService.getCurrentSessionId()) {
-                const directory = `data/files/${sessionService.getCurrentSessionId()}/sources`;
+            // Refresh the appropriate file container
+            if (sessionService.getCurrentSessionId()) {
+              const directory = `data/files/${sessionService.getCurrentSessionId()}/sources`;
 
-                if (isOnWelcomePage) {
-                  const welcomeFilesSection = document.getElementById("welcome-files-section");
-                  if (welcomeFilesSection) {
-                    welcomeFilesSection.style.display = "block";
-                  }
+              if (isOnWelcomePage) {
+                const welcomeFilesSection = document.getElementById("welcome-files-section");
+                if (welcomeFilesSection) {
+                  welcomeFilesSection.style.display = "block";
+                }
 
-                  const welcomeFilesContainer = document.getElementById("welcome-files-container");
-                  if (welcomeFilesContainer) {
-                    eventHandlersComponent.setTimeout(() => {
-                      loadFiles(directory, welcomeFilesContainer);
-                    }, 100);
-                  }
-                } else {
-                  if (components.filePanel) {
-                    eventHandlersComponent.setTimeout(() => {
-                      components.filePanel.refresh();
-                    }, 100);
-                  }
+                const welcomeFilesContainer = document.getElementById("welcome-files-container");
+                if (welcomeFilesContainer) {
+                  eventHandlersComponent.setTimeout(() => {
+                    loadFiles(directory, welcomeFilesContainer);
+                  }, 100);
+                }
+              } else {
+                if (components.filePanel) {
+                  eventHandlersComponent.setTimeout(() => {
+                    components.filePanel.refresh();
+                  }, 100);
                 }
               }
-            } else {
-              console.error(`File upload failed: ${result.error}`);
-              showToast(`Failed to upload ${file.name}`, "error", 3000);
             }
-          } catch (error) {
-            console.error("Error uploading file:", error);
-            showToast(`Error uploading ${file.name}`, "error", 3000);
+          } else {
+            console.error(`File upload failed: ${result.error}`);
+            showToast(`Failed to upload ${file.name}`, "error", 3000);
           }
+        } catch (error) {
+          console.error("Error uploading file:", error);
+          showToast(`Error uploading ${file.name}`, "error", 3000);
         }
+      }
 
-        // Show summary toast
-        if (files.length === 1) {
-          if (uploadedCount === 1) {
-            showToast(`File uploaded: ${files[0].name}`, "success", 2000);
-          }
-        } else if (files.length > 1) {
-          if (uploadedCount === files.length) {
-            showToast(`${uploadedCount} files uploaded successfully`, "success", 2000);
-          } else if (uploadedCount > 0) {
-            showToast(`${uploadedCount}/${files.length} files uploaded`, "warning", 3000);
-          }
+      // Show summary toast
+      if (files.length === 1) {
+        if (uploadedCount === 1) {
+          showToast(`File uploaded: ${files[0].name}`, "success", 2000);
         }
-      };
+      } else if (files.length > 1) {
+        if (uploadedCount === files.length) {
+          showToast(`${uploadedCount} files uploaded successfully`, "success", 2000);
+        } else if (uploadedCount > 0) {
+          showToast(`${uploadedCount}/${files.length} files uploaded`, "warning", 3000);
+        }
+      }
+    };
 
-      // Attach drop handler to all drop targets
-      if (chatPanel) {
-        addListener(chatPanel, "drop", handleFileDrop);
-      }
-      if (welcomePageContainer) {
-        addListener(welcomePageContainer, "drop", handleFileDrop);
-      }
+    // Attach drop handler to all drop targets
+    if (chatPanel) {
+      addListener(chatPanel, "drop", handleFileDrop);
+    }
+    if (welcomePageContainer) {
+      addListener(welcomePageContainer, "drop", handleFileDrop);
+    }
+    if (fileDropZone) {
       addListener(fileDropZone, "drop", handleFileDrop);
     }
 
@@ -340,6 +377,7 @@ export async function initializeEventHandlers({
     registerMessageHandlers({
       appState,
       elements,
+      ipcAdapter,
       services: {
         messageService: services.messageService,
         fileService: services.fileService,
@@ -487,7 +525,7 @@ export async function initializeEventHandlers({
 
     const sessionsList = document.getElementById("sessions-list");
     if (sessionsList) {
-      setupSessionListHandlers(sessionsList, sessionService, updateSessionsList, elements, appState);
+      setupSessionListHandlers(sessionsList, sessionService, updateSessionsList, elements, appState, ipcAdapter);
     }
 
     console.log("  ✓ Session list handlers attached");
