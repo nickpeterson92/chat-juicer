@@ -6,8 +6,7 @@
  *
  * Architecture:
  * - Component registration with unique IDs
- * - Tracked setTimeout/setInterval with automatic cleanup
- * - Scoped EventBus proxies for automatic listener removal
+ * - Tracked setTimeout with automatic cleanup
  * - Zero-overhead WeakMap-based tracking
  *
  * Usage:
@@ -18,10 +17,6 @@
  *
  * // Tracked timer (auto-clears on unmount)
  * manager.setTimeout(component, () => {...}, 100);
- *
- * // Scoped event bus (auto-unsubscribes on unmount)
- * const scopedBus = manager.createScopedEventBus(component, globalEventBus);
- * scopedBus.on('event', handler);
  *
  * // Cleanup all resources
  * manager.unmount(component);
@@ -108,31 +103,6 @@ export class LifecycleManager {
   }
 
   /**
-   * Tracked setInterval that auto-clears on component unmount
-   * @param {Object} component - Component object
-   * @param {Function} callback - Timer callback
-   * @param {number} delay - Delay in milliseconds
-   * @returns {number} Timer ID
-   */
-  setInterval(component, callback, delay) {
-    const componentId = this.componentIds.get(component);
-    if (!componentId) {
-      console.warn("[Lifecycle] setInterval called on unregistered component");
-      return window.setInterval(callback, delay);
-    }
-
-    const entry = this.components.get(componentId);
-    if (!entry || !entry.mounted) {
-      console.warn(`[Lifecycle] setInterval called on unmounted component: ${componentId}`);
-      return null;
-    }
-
-    const timerId = window.setInterval(callback, delay);
-    entry.timers.add(timerId);
-    return timerId;
-  }
-
-  /**
    * Clear a tracked timer manually
    * @param {Object} component - Component object
    * @param {number} timerId - Timer ID to clear
@@ -148,54 +118,6 @@ export class LifecycleManager {
       window.clearTimeout(timerId); // Works for both setTimeout and setInterval
       entry.timers.delete(timerId);
     }
-  }
-
-  /**
-   * Create a scoped EventBus proxy that auto-unsubscribes on unmount
-   * @param {Object} component - Component object
-   * @param {EventBus} eventBus - EventBus instance to proxy
-   * @returns {Proxy} Scoped EventBus proxy
-   */
-  createScopedEventBus(component, eventBus) {
-    const componentId = this.componentIds.get(component);
-    if (!componentId) {
-      console.warn("[Lifecycle] createScopedEventBus called on unregistered component");
-      return eventBus;
-    }
-
-    const entry = this.components.get(componentId);
-    if (!entry) {
-      console.warn(`[Lifecycle] createScopedEventBus called on unknown component: ${componentId}`);
-      return eventBus;
-    }
-
-    // Create proxy that intercepts on/once methods
-    return new Proxy(eventBus, {
-      get: (target, prop) => {
-        if (prop === "on" || prop === "once") {
-          return (...args) => {
-            // Call original method and get unsubscribe function
-            const unsubscribe = target[prop](...args);
-
-            // Track unsubscribe function for cleanup
-            if (typeof unsubscribe === "function") {
-              entry.unsubscribers.add(unsubscribe);
-
-              // Return wrapped unsubscribe that also removes from tracking
-              return () => {
-                entry.unsubscribers.delete(unsubscribe);
-                unsubscribe();
-              };
-            }
-
-            return unsubscribe;
-          };
-        }
-
-        // Pass through all other methods
-        return target[prop];
-      },
-    });
   }
 
   /**
