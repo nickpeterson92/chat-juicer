@@ -9,6 +9,8 @@
  */
 
 import { MODEL_METADATA, REASONING_DESCRIPTIONS } from "../../config/model-metadata.js";
+import { ComponentLifecycle } from "../../core/component-lifecycle.js";
+import { globalLifecycleManager } from "../../core/lifecycle-manager.js";
 
 export class ModelSelector {
   /**
@@ -34,6 +36,9 @@ export class ModelSelector {
 
     // Track if listeners are attached to prevent duplication
     this.listenersAttached = false;
+
+    // Mount component with lifecycle management
+    ComponentLifecycle.mount(this, "ModelSelector", globalLifecycleManager);
   }
 
   /**
@@ -255,7 +260,7 @@ export class ModelSelector {
         const dropdown = this.container.querySelector("#model-selector-dropdown");
 
         if (!trigger || !dropdown) {
-          setTimeout(attempt, 50);
+          this.setTimeout(attempt, 50);
           return;
         }
 

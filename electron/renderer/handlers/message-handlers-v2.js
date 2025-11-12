@@ -138,7 +138,7 @@ export function registerMessageHandlers(context) {
 
     // Add error message (Phase 7: use ChatContainer component)
     if (window.components?.chatContainer) {
-      window.components.chatContainer.addMessage({ role: "error", content: message.message });
+      window.components.chatContainer.addErrorMessage(message.message);
     } else {
       console.error("⚠️ ChatContainer component not available - message not displayed");
     }
@@ -274,7 +274,7 @@ export function registerMessageHandlers(context) {
 
     // Add system message (Phase 7: use ChatContainer component)
     if (window.components?.chatContainer) {
-      window.components.chatContainer.addMessage({ role: "system", content });
+      window.components.chatContainer.addSystemMessage(content);
     } else {
       console.error("⚠️ ChatContainer component not available - message not displayed");
     }
@@ -291,7 +291,7 @@ export function registerMessageHandlers(context) {
 
     // Add error message (Phase 7: use ChatContainer component)
     if (window.components?.chatContainer) {
-      window.components.chatContainer.addMessage({ role: "error", content });
+      window.components.chatContainer.addErrorMessage(content);
     } else {
       console.error("⚠️ ChatContainer component not available - message not displayed");
     }
@@ -345,22 +345,16 @@ export function registerMessageHandlers(context) {
 
   createHandler("session_updated", (message) => {
     if (message.data?.success && message.data.session) {
-      import("../services/session-service.js").then(({ sessionState }) => {
-        const session = sessionState.sessions.find((s) => s.session_id === message.data.session.session_id);
+      // Use SessionService instead of sessionState
+      if (services?.sessionService) {
+        services.sessionService.updateSession(message.data.session);
+      }
 
-        if (session) {
-          Object.assign(session, message.data.session);
-        } else {
-          sessionState.sessions.push(message.data.session);
-          sessionState.sessions.sort((a, b) => new Date(b.last_used) - new Date(a.last_used));
-        }
-
-        window.dispatchEvent(
-          new CustomEvent("session-updated", {
-            detail: message.data,
-          })
-        );
-      });
+      window.dispatchEvent(
+        new CustomEvent("session-updated", {
+          detail: message.data,
+        })
+      );
     }
 
     // Track session update

@@ -6,6 +6,7 @@ This ensures users never lose conversation history when summarization occurs.
 
 from __future__ import annotations
 
+import errno
 import json
 import sqlite3
 
@@ -16,6 +17,30 @@ from core.constants import CHAT_HISTORY_DB_PATH, FULL_HISTORY_TABLE_PREFIX
 from utils.json_utils import json_safe
 from utils.logger import logger
 from utils.validation import sanitize_session_id
+
+
+class FullHistoryError(Exception):
+    """Base exception for full history storage errors."""
+
+    pass
+
+
+class DiskFullError(FullHistoryError):
+    """Disk full error during write operation."""
+
+    pass
+
+
+class PermissionError(FullHistoryError):
+    """Permission denied during write operation."""
+
+    pass
+
+
+class CorruptionError(FullHistoryError):
+    """Database corruption detected."""
+
+    pass
 
 
 class FullHistoryStore:
@@ -79,15 +104,18 @@ class FullHistoryStore:
             )
             conn.commit()
 
-    def save_message(self, session_id: str, message: dict[str, Any]) -> bool:
+    def save_message(self, session_id: str, message: dict[str, Any]) -> None:
         """Append message to full history (never trimmed).
 
         Args:
             session_id: Session identifier
             message: Message dict with 'role' and 'content' keys
 
-        Returns:
-            True if message saved successfully, False otherwise
+        Raises:
+            DiskFullError: If disk is full
+            PermissionError: If permission denied
+            CorruptionError: If database is corrupted
+            FullHistoryError: For other storage errors
         """
         try:
             self._ensure_table_exists(session_id)
@@ -105,7 +133,7 @@ class FullHistoryStore:
                     f"Skipping non-chat message for session {session_id}: "
                     f"role={role}, has_content={bool(content)}, type={item_type}"
                 )
-                return False
+                return  # Not an error - just skip
 
             # Handle complex content structures (arrays, dicts)
             if not isinstance(content, str):
@@ -126,12 +154,31 @@ class FullHistoryStore:
                 conn.commit()
 
             logger.debug(f"Saved message to full_history for session {session_id}: role={role}")
-            return True
+
+        except OSError as e:
+            # Map OS errors to specific exception types
+            if e.errno == errno.ENOSPC:
+                error_msg = f"Disk full while saving to full_history for session {session_id}"
+                logger.error(error_msg, exc_info=True)
+                raise DiskFullError(error_msg) from e
+            elif e.errno == errno.EACCES:
+                error_msg = f"Permission denied while saving to full_history for session {session_id}"
+                logger.error(error_msg, exc_info=True)
+                raise PermissionError(error_msg) from e
+            else:
+                error_msg = f"OS error while saving to full_history for session {session_id}: {e}"
+                logger.error(error_msg, exc_info=True)
+                raise FullHistoryError(error_msg) from e
+
+        except sqlite3.DatabaseError as e:
+            error_msg = f"Database corruption detected in full_history for session {session_id}: {e}"
+            logger.error(error_msg, exc_info=True)
+            raise CorruptionError(error_msg) from e
 
         except Exception as e:
-            logger.error(f"Failed to save message to full_history for session {session_id}: {e}", exc_info=True)
-            # Don't raise - Layer 2 is best-effort for UX
-            return False
+            error_msg = f"Failed to save message to full_history for session {session_id}: {e}"
+            logger.error(error_msg, exc_info=True)
+            raise FullHistoryError(error_msg) from e
 
     def get_messages(self, session_id: str, limit: int | None = None, offset: int = 0) -> list[dict[str, Any]]:
         """Retrieve all messages for a session (with optional pagination).
@@ -272,3 +319,49 @@ class FullHistoryStore:
         except Exception as e:
             logger.error(f"Failed to clear full_history for session {session_id}: {e}", exc_info=True)
             return False
+
+    def health_check(self, session_id: str) -> tuple[bool, str | None]:
+        """Check database health for a session.
+
+        Validates that the database is accessible and not corrupted.
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            Tuple of (is_healthy: bool, error: str | None)
+        """
+        try:
+            table_name = self._get_table_name(session_id)
+
+            with sqlite3.connect(self.db_path) as conn:
+                # Check if table exists
+                cursor = conn.execute(
+                    """
+                    SELECT name FROM sqlite_master
+                    WHERE type='table' AND name=?
+                    """,
+                    (table_name,),
+                )
+                table_exists = cursor.fetchone() is not None
+
+                if not table_exists:
+                    # No table is fine - will be created on first message
+                    logger.debug(f"No full_history table exists yet for session {session_id}")
+                    return True, None
+
+                # Try to read from table to verify it's not corrupted
+                cursor = conn.execute(f"SELECT COUNT(*) FROM {table_name}")
+                count = cursor.fetchone()[0]
+                logger.debug(f"Health check passed for session {session_id}: {count} messages")
+                return True, None
+
+        except sqlite3.DatabaseError as e:
+            error_msg = f"Database health check failed for session {session_id}: {e}"
+            logger.error(error_msg, exc_info=True)
+            return False, error_msg
+
+        except Exception as e:
+            error_msg = f"Health check error for session {session_id}: {e}"
+            logger.error(error_msg, exc_info=True)
+            return False, error_msg

@@ -30,6 +30,15 @@ const HIDDEN_FILE_PREFIX = "."; // Prefix for hidden files/directories (Unix con
 const JSON_DELIMITER = "__JSON__";
 const JSON_DELIMITER_LENGTH = JSON_DELIMITER.length; // 8 characters
 
+// Buffer security limits (DoS protection)
+// Prevents memory exhaustion from unbounded IPC buffer accumulation
+const MAX_BUFFER_SIZE = 10 * 1024 * 1024; // 10MB - absolute maximum buffer size
+const MAX_MESSAGE_SIZE = 5 * 1024 * 1024; // 5MB - maximum single message size
+const MAX_SESSION_RESPONSE = 2 * 1024 * 1024; // 2MB - session command response limit
+const MAX_FILE_UPLOAD_RESPONSE = 5 * 1024 * 1024; // 5MB - file upload response limit
+const BUFFER_CHECK_INTERVAL = 1024 * 1024; // 1MB - backpressure check interval
+const BACKPRESSURE_PAUSE_DURATION = 100; // 100ms - pause duration for backpressure
+
 module.exports = {
   RESTART_DELAY,
   RESTART_CALLBACK_DELAY,
@@ -46,4 +55,10 @@ module.exports = {
   HIDDEN_FILE_PREFIX,
   JSON_DELIMITER,
   JSON_DELIMITER_LENGTH,
+  MAX_BUFFER_SIZE,
+  MAX_MESSAGE_SIZE,
+  MAX_SESSION_RESPONSE,
+  MAX_FILE_UPLOAD_RESPONSE,
+  BUFFER_CHECK_INTERVAL,
+  BACKPRESSURE_PAUSE_DURATION,
 };

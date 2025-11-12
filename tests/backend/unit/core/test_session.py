@@ -63,7 +63,7 @@ class TestSessionBuilder:
         assert builder._session_id == "chat_test"
         assert builder._agent == mock_agent
 
-    @patch("core.session.TokenAwareSQLiteSession")
+    @patch("core.session.base.TokenAwareSQLiteSession")
     def test_builder_build(self, mock_session_class: Mock) -> None:
         """Test building session instance."""
         builder = SessionBuilder("chat_test").with_model("gpt-4o")
@@ -75,8 +75,8 @@ class TestSessionBuilder:
 class TestTokenAwareSQLiteSession:
     """Tests for TokenAwareSQLiteSession."""
 
-    @patch("core.session.SQLiteSession.__init__", return_value=None)
-    @patch("core.session.SQLiteSession.get_items", new_callable=AsyncMock)
+    @patch("agents.SQLiteSession.__init__", return_value=None)
+    @patch("agents.SQLiteSession.get_items", new_callable=AsyncMock)
     def test_session_initialization(self, mock_get_items: AsyncMock, mock_init: Mock) -> None:
         """Test session initialization."""
         mock_get_items.return_value = []
@@ -92,9 +92,9 @@ class TestTokenAwareSQLiteSession:
         assert session.max_tokens > 0  # Model limit calculated
         assert session.threshold == 0.8  # Default threshold
 
-    @patch("core.session.SQLiteSession.__init__", return_value=None)
-    @patch("core.session.SQLiteSession.get_items", new_callable=AsyncMock)
-    @patch("core.session.count_tokens")
+    @patch("agents.SQLiteSession.__init__", return_value=None)
+    @patch("agents.SQLiteSession.get_items", new_callable=AsyncMock)
+    @patch("utils.token_utils.count_tokens")
     def test_calculate_total_tokens(self, mock_count_tokens: Mock, mock_get_items: AsyncMock, mock_init: Mock) -> None:
         """Test calculating total tokens from items."""
         mock_get_items.return_value = []
@@ -114,9 +114,9 @@ class TestTokenAwareSQLiteSession:
         total = session._calculate_total_tokens(items)
         assert total > 0
 
-    @patch("core.session.SQLiteSession.__init__", return_value=None)
-    @patch("core.session.SQLiteSession.get_items", new_callable=AsyncMock)
-    @patch("core.session.count_tokens")
+    @patch("agents.SQLiteSession.__init__", return_value=None)
+    @patch("agents.SQLiteSession.get_items", new_callable=AsyncMock)
+    @patch("utils.token_utils.count_tokens")
     def test_calculate_total_tokens_with_cache(
         self, mock_count_tokens: Mock, mock_get_items: AsyncMock, mock_init: Mock
     ) -> None:
@@ -144,9 +144,9 @@ class TestTokenAwareSQLiteSession:
         # Cache should reduce number of calls
         assert call_count_2 <= call_count_1 + 2  # Allow some overhead
 
-    @patch("core.session.SQLiteSession.__init__", return_value=None)
-    @patch("core.session.SQLiteSession.add_items", new_callable=AsyncMock)
-    @patch("core.session.SQLiteSession.get_items", new_callable=AsyncMock)
+    @patch("agents.SQLiteSession.__init__", return_value=None)
+    @patch("agents.SQLiteSession.add_items", new_callable=AsyncMock)
+    @patch("agents.SQLiteSession.get_items", new_callable=AsyncMock)
     async def test_add_items_layer1_and_layer2(
         self, mock_get_items: AsyncMock, mock_add_items: AsyncMock, mock_init: Mock
     ) -> None:
@@ -171,8 +171,8 @@ class TestTokenAwareSQLiteSession:
         mock_add_items.assert_called_once()
         mock_full_history.save_message.assert_called_once()
 
-    @patch("core.session.SQLiteSession.__init__", return_value=None)
-    @patch("core.session.SQLiteSession.get_items", new_callable=AsyncMock)
+    @patch("agents.SQLiteSession.__init__", return_value=None)
+    @patch("agents.SQLiteSession.get_items", new_callable=AsyncMock)
     async def test_add_items_without_full_history_raises(self, mock_get_items: AsyncMock, mock_init: Mock) -> None:
         """Test that adding items without full_history_store raises error."""
         mock_get_items.return_value = []
@@ -194,8 +194,8 @@ class TestTokenAwareSQLiteSession:
         except RuntimeError as e:
             assert "CRITICAL" in str(e)
 
-    @patch("core.session.SQLiteSession.__init__", return_value=None)
-    @patch("core.session.SQLiteSession.get_items", new_callable=AsyncMock)
+    @patch("agents.SQLiteSession.__init__", return_value=None)
+    @patch("agents.SQLiteSession.get_items", new_callable=AsyncMock)
     async def test_should_summarize_threshold(self, mock_get_items: AsyncMock, mock_init: Mock) -> None:
         """Test should_summarize checks threshold correctly."""
         mock_get_items.return_value = []
@@ -215,8 +215,8 @@ class TestTokenAwareSQLiteSession:
         session.total_tokens = 15000
         assert await session.should_summarize() is True
 
-    @patch("core.session.SQLiteSession.__init__", return_value=None)
-    @patch("core.session.SQLiteSession.get_items", new_callable=AsyncMock)
+    @patch("agents.SQLiteSession.__init__", return_value=None)
+    @patch("agents.SQLiteSession.get_items", new_callable=AsyncMock)
     def test_collect_recent_exchanges(self, mock_get_items: AsyncMock, mock_init: Mock) -> None:
         """Test collecting recent user-assistant exchanges."""
         mock_get_items.return_value = []
@@ -241,8 +241,8 @@ class TestTokenAwareSQLiteSession:
         # Should have 4 items (2 user + 2 assistant)
         assert len(recent) == 4
 
-    @patch("core.session.SQLiteSession.__init__", return_value=None)
-    @patch("core.session.SQLiteSession.get_items", new_callable=AsyncMock)
+    @patch("agents.SQLiteSession.__init__", return_value=None)
+    @patch("agents.SQLiteSession.get_items", new_callable=AsyncMock)
     def test_update_with_tool_tokens(self, mock_get_items: AsyncMock, mock_init: Mock) -> None:
         """Test updating accumulated tool tokens."""
         mock_get_items.return_value = []
@@ -258,8 +258,8 @@ class TestTokenAwareSQLiteSession:
         assert session.accumulated_tool_tokens == 100
         assert session.total_tokens == initial_tokens + 100
 
-    @patch("core.session.SQLiteSession.__init__", return_value=None)
-    @patch("core.session.SQLiteSession.get_items", new_callable=AsyncMock)
+    @patch("agents.SQLiteSession.__init__", return_value=None)
+    @patch("agents.SQLiteSession.get_items", new_callable=AsyncMock)
     def test_skip_full_history_context_manager(self, mock_get_items: AsyncMock, mock_init: Mock) -> None:
         """Test skip_full_history context manager."""
         mock_get_items.return_value = []
@@ -280,9 +280,9 @@ class TestTokenAwareSQLiteSession:
 class TestTokenCounting:
     """Tests for token counting functionality."""
 
-    @patch("core.session.SQLiteSession.__init__", return_value=None)
-    @patch("core.session.SQLiteSession.get_items", new_callable=AsyncMock)
-    @patch("core.session.count_tokens")
+    @patch("agents.SQLiteSession.__init__", return_value=None)
+    @patch("agents.SQLiteSession.get_items", new_callable=AsyncMock)
+    @patch("utils.token_utils.count_tokens")
     def test_count_item_tokens_simple(
         self, mock_count_tokens: Mock, mock_get_items: AsyncMock, mock_init: Mock
     ) -> None:
@@ -300,9 +300,9 @@ class TestTokenCounting:
         tokens = session._count_item_tokens(item)
         assert tokens > 0
 
-    @patch("core.session.SQLiteSession.__init__", return_value=None)
-    @patch("core.session.SQLiteSession.get_items", new_callable=AsyncMock)
-    @patch("core.session.count_tokens")
+    @patch("agents.SQLiteSession.__init__", return_value=None)
+    @patch("agents.SQLiteSession.get_items", new_callable=AsyncMock)
+    @patch("utils.token_utils.count_tokens")
     def test_count_item_tokens_with_tool_calls(
         self, mock_count_tokens: Mock, mock_get_items: AsyncMock, mock_init: Mock
     ) -> None:
@@ -328,17 +328,17 @@ class TestTokenCounting:
 class TestSummarization:
     """Tests for conversation summarization."""
 
-    @patch("core.session.SQLiteSession.__init__", return_value=None)
-    @patch("core.session.SQLiteSession.get_items", new_callable=AsyncMock)
-    @patch("core.session.SQLiteSession.add_items", new_callable=AsyncMock)
+    @patch("agents.SQLiteSession.__init__", return_value=None)
+    @patch("agents.SQLiteSession.get_items", new_callable=AsyncMock)
+    @patch("agents.SQLiteSession.add_items", new_callable=AsyncMock)
     @patch("core.constants.get_settings")
-    @patch("core.session.Agent")
-    @patch("core.session.Runner", new_callable=AsyncMock)
-    @patch("core.session.count_tokens")
+    @patch("agents.Agent")
+    @patch("agents.Runner.run", new_callable=AsyncMock)
+    @patch("utils.token_utils.count_tokens")
     async def test_summarize_with_agent(
         self,
         mock_count_tokens: Mock,
-        mock_runner: AsyncMock,
+        mock_runner_run: AsyncMock,
         mock_agent_class: Mock,
         mock_get_settings: Mock,
         mock_get_items: AsyncMock,
@@ -360,10 +360,10 @@ class TestSummarization:
         mock_summary_agent = Mock()
         mock_agent_class.return_value = mock_summary_agent
 
-        # Mock Runner.run (static method) result
+        # Mock Runner.run result
         mock_result = Mock()
         mock_result.final_output = "This is a summary of the conversation"
-        mock_runner.run = AsyncMock(return_value=mock_result)
+        mock_runner_run.return_value = mock_result
 
         mock_agent = Mock()
         mock_full_history = Mock()

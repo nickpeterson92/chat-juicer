@@ -5,6 +5,12 @@
  * On macOS, uses native traffic light buttons (no custom titlebar needed).
  */
 
+import { ComponentLifecycle } from "../core/component-lifecycle.js";
+import { globalLifecycleManager } from "../core/lifecycle-manager.js";
+
+// Titlebar component for lifecycle management
+const titlebarComponent = {};
+
 /**
  * Initialize custom titlebar based on platform
  * Creates and injects titlebar HTML for Windows/Linux only
@@ -21,6 +27,9 @@ export function initializeTitlebar() {
 
   // On Windows/Linux, create custom titlebar
   console.log(`[Titlebar] Creating custom titlebar for ${platform}`);
+
+  // Mount titlebar component with lifecycle management
+  ComponentLifecycle.mount(titlebarComponent, "Titlebar", globalLifecycleManager);
 
   // Create titlebar container
   const titlebar = document.createElement("div");
@@ -81,8 +90,8 @@ function setupTitlebarHandlers() {
   if (maximizeBtn) {
     maximizeBtn.addEventListener("click", async () => {
       window.electronAPI.windowMaximize();
-      // Update icon after a short delay to reflect new state
-      setTimeout(updateMaximizeIcon, 100);
+      // Update icon after a short delay to reflect new state (lifecycle-managed)
+      titlebarComponent.setTimeout(updateMaximizeIcon, 100);
     });
 
     // Double-click titlebar to maximize (Windows convention)
@@ -90,7 +99,7 @@ function setupTitlebarHandlers() {
     if (dragRegion) {
       dragRegion.addEventListener("dblclick", async () => {
         window.electronAPI.windowMaximize();
-        setTimeout(updateMaximizeIcon, 100);
+        titlebarComponent.setTimeout(updateMaximizeIcon, 100);
       });
     }
   }

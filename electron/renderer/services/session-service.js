@@ -34,6 +34,47 @@ export class SessionService {
     this.totalSessions = 0;
     this.hasMoreSessions = false;
     this.isLoadingSessions = false;
+
+    // Observer pattern for state change notifications
+    this.observers = new Set();
+  }
+
+  /**
+   * Subscribe to state changes
+   * @param {Function} observer - Callback function(changeType, data, state)
+   * @returns {Function} Unsubscribe function
+   */
+  subscribe(observer) {
+    if (typeof observer !== "function") {
+      throw new TypeError("Observer must be a function");
+    }
+    this.observers.add(observer);
+
+    // Return unsubscribe function
+    return () => this.observers.delete(observer);
+  }
+
+  /**
+   * Notify all observers of state change
+   * @private
+   * @param {string} changeType - Type of change (sessions_loaded, session_created, etc.)
+   * @param {Object} data - Change-specific data
+   */
+  _notifyObservers(changeType, data) {
+    const state = {
+      currentSessionId: this.currentSessionId,
+      sessions: [...this.sessions],
+      totalSessions: this.totalSessions,
+      hasMoreSessions: this.hasMoreSessions,
+    };
+
+    this.observers.forEach((observer) => {
+      try {
+        observer(changeType, data, state);
+      } catch (error) {
+        console.error("[SessionService] Observer error:", error);
+      }
+    });
   }
 
   /**
@@ -64,6 +105,9 @@ export class SessionService {
         // Update pagination state
         this.totalSessions = response.total_count || response.sessions.length;
         this.hasMoreSessions = response.has_more || false;
+
+        // Notify observers
+        this._notifyObservers("sessions_loaded", { offset, limit, sessions: this.sessions });
 
         return { success: true, sessions: this.sessions, hasMore: this.hasMoreSessions };
       }
@@ -112,6 +156,10 @@ export class SessionService {
 
       if (response?.session_id) {
         this.currentSessionId = response.session_id;
+
+        // Notify observers
+        this._notifyObservers("session_created", { sessionId: response.session_id });
+
         return {
           success: true,
           sessionId: response.session_id,
@@ -146,6 +194,9 @@ export class SessionService {
 
       if (response?.session) {
         this.currentSessionId = sessionId;
+
+        // Notify observers
+        this._notifyObservers("session_switched", { sessionId, session: response.session });
 
         return {
           success: true,
@@ -185,6 +236,9 @@ export class SessionService {
         if (this.currentSessionId === sessionId) {
           this.currentSessionId = null;
         }
+
+        // Notify observers
+        this._notifyObservers("session_deleted", { sessionId });
 
         return { success: true };
       } else if (response?.error) {
@@ -266,6 +320,10 @@ export class SessionService {
 
       if (response?.success) {
         this.currentSessionId = null;
+
+        // Notify observers
+        this._notifyObservers("session_cleared", {});
+
         return { success: true };
       } else if (response?.error) {
         return { success: false, error: response.error };
@@ -303,6 +361,28 @@ export class SessionService {
     } catch (error) {
       return { success: false, error: error.message, messages: [] };
     }
+  }
+
+  /**
+   * Update session in local cache (for real-time updates from backend)
+   * @param {Object} sessionData - Updated session data
+   */
+  updateSession(sessionData) {
+    if (!sessionData?.session_id) return;
+
+    const index = this.sessions.findIndex((s) => s.session_id === sessionData.session_id);
+
+    if (index >= 0) {
+      // Update existing session
+      this.sessions[index] = { ...this.sessions[index], ...sessionData };
+    } else {
+      // Add new session
+      this.sessions.push(sessionData);
+      this.sessions.sort((a, b) => new Date(b.last_used) - new Date(a.last_used));
+    }
+
+    // Notify observers
+    this._notifyObservers("session_updated", { session: sessionData });
   }
 
   /**
@@ -358,14 +438,3 @@ export class SessionService {
     this.isLoadingSessions = false;
   }
 }
-
-/**
- * Session state (managed by SessionService, exported for compatibility)
- */
-export const sessionState = {
-  currentSessionId: null,
-  sessions: [],
-  totalSessions: 0,
-  hasMoreSessions: false,
-  isLoadingSessions: false,
-};

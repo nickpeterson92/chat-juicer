@@ -5,12 +5,22 @@
 
 import smokeAnimationData from "../../../ui/Smoke.json";
 import { MAX_MESSAGES } from "../config/constants.js";
+import { ComponentLifecycle } from "../core/component-lifecycle.js";
+import { globalLifecycleManager } from "../core/lifecycle-manager.js";
 import { initLottieWithColor } from "../utils/lottie-color.js";
 import { initializeCodeCopyButtons, processMermaidDiagrams, renderMarkdown } from "../utils/markdown-renderer.js";
 import { scheduleScroll } from "../utils/scroll-utils.js";
 
 // Message cache for O(1) message management (replaces O(n) querySelectorAll)
 const messageCache = new Map();
+
+// Chat UI component for lifecycle management
+const chatUIComponent = {};
+
+// Initialize chat UI component once
+if (!chatUIComponent._lifecycle) {
+  ComponentLifecycle.mount(chatUIComponent, "ChatUI", globalLifecycleManager);
+}
 
 /**
  * Add a message to the chat container
@@ -52,8 +62,8 @@ export function addMessage(chatContainer, content, type = "assistant") {
   // Render markdown for assistant messages, plain text for others
   if (type === "assistant") {
     contentDiv.innerHTML = renderMarkdown(content, true); // isComplete = true for static messages
-    // Process Mermaid diagrams and initialize copy buttons asynchronously after DOM insertion
-    setTimeout(() => {
+    // Process Mermaid diagrams and initialize copy buttons asynchronously after DOM insertion (lifecycle-managed)
+    chatUIComponent.setTimeout(() => {
       // CRITICAL: Initialize copy buttons AFTER Mermaid processing completes
       processMermaidDiagrams(contentDiv)
         .catch((err) => window.electronAPI.log("error", "Mermaid processing error", { error: err.message }))
@@ -246,13 +256,13 @@ export function completeStreamingMessage(chatContainer) {
       cursor.remove();
     }
 
-    // Fade out loading smoke animation over 800ms before removing
+    // Fade out loading smoke animation over 800ms before removing (lifecycle-managed)
     const loadingLamp = streamingMsg.querySelector(".loading-lamp");
     if (loadingLamp) {
       console.log("[Chat UI] Fading out loading indicator");
       loadingLamp.style.transition = "opacity 800ms ease-out";
       loadingLamp.style.opacity = "0";
-      setTimeout(() => {
+      chatUIComponent.setTimeout(() => {
         loadingLamp.remove();
         console.log("[Chat UI] Loading indicator removed");
       }, 800);

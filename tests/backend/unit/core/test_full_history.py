@@ -7,7 +7,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from core.full_history import FullHistoryStore
+import pytest
+
+from core.full_history import (
+    FullHistoryError,
+    FullHistoryStore,
+)
 
 
 class TestFullHistoryStore:
@@ -22,8 +27,8 @@ class TestFullHistoryStore:
         """Test saving a message."""
         store = FullHistoryStore(db_path=temp_db_path)
         message = {"role": "user", "content": "Hello"}
-        result = store.save_message("chat_test", message)
-        assert result is True
+        # Should not raise exception
+        store.save_message("chat_test", message)
 
     def test_get_messages(self, temp_db_path: Path) -> None:
         """Test retrieving messages."""
@@ -43,8 +48,8 @@ class TestFullHistoryStore:
             {"role": "user", "content": "How are you?"},
         ]
         for msg in messages:
-            result = store.save_message("chat_test", msg)
-            assert result is True
+            # Should not raise exception
+            store.save_message("chat_test", msg)
 
         retrieved = store.get_messages("chat_test")
         assert len(retrieved) == 3
@@ -114,13 +119,11 @@ class TestFullHistoryStore:
     def test_save_message_invalid_data(self, temp_db_path: Path) -> None:
         """Test saving message with invalid data."""
         store = FullHistoryStore(db_path=temp_db_path)
-        # Message without role
-        result = store.save_message("chat_test", {"content": "Hello"})
-        assert result is False
+        # Message without role - should skip silently (not an error)
+        store.save_message("chat_test", {"content": "Hello"})
 
-        # Message without content
-        result = store.save_message("chat_test", {"role": "user"})
-        assert result is False
+        # Message without content - should skip silently (not an error)
+        store.save_message("chat_test", {"role": "user"})
 
     def test_multiple_sessions_isolation(self, temp_db_path: Path) -> None:
         """Test that sessions are isolated from each other."""
@@ -140,8 +143,8 @@ class TestFullHistoryStore:
         """Test saving message with dict content (non-string)."""
         store = FullHistoryStore(db_path=temp_db_path)
         message = {"role": "user", "content": {"type": "text", "value": "Hello"}}
-        result = store.save_message("chat_test", message)
-        assert result is True
+        # Should not raise exception
+        store.save_message("chat_test", message)
 
         messages = store.get_messages("chat_test")
         assert len(messages) >= 1
@@ -152,8 +155,8 @@ class TestFullHistoryStore:
         """Test saving message with list content (non-string)."""
         store = FullHistoryStore(db_path=temp_db_path)
         message = {"role": "user", "content": ["item1", "item2", "item3"]}
-        result = store.save_message("chat_test", message)
-        assert result is True
+        # Should not raise exception
+        store.save_message("chat_test", message)
 
         messages = store.get_messages("chat_test")
         assert len(messages) == 1
@@ -167,8 +170,8 @@ class TestFullHistoryStore:
             "timestamp": "2024-01-01T00:00:00Z",
             "model": "gpt-4",
         }
-        result = store.save_message("chat_test", message)
-        assert result is True
+        # Should not raise exception
+        store.save_message("chat_test", message)
 
     def test_save_message_database_error(self, temp_db_path: Path) -> None:
         """Test error handling when database write fails."""
@@ -177,10 +180,10 @@ class TestFullHistoryStore:
 
         # Cause a database error by using an invalid path
         store.db_path = Path("/invalid/nonexistent/path/db.sqlite")
-        result = store.save_message("chat_test", {"role": "user", "content": "Test"})
 
-        # Should return False on error (best-effort Layer 2)
-        assert result is False
+        # Should raise FullHistoryError
+        with pytest.raises(FullHistoryError):
+            store.save_message("chat_test", {"role": "user", "content": "Test"})
 
     def test_get_messages_nonexistent_session(self, temp_db_path: Path) -> None:
         """Test getting messages for a session that doesn't exist."""
@@ -218,13 +221,38 @@ class TestFullHistoryStore:
         store = FullHistoryStore(db_path=temp_db_path)
 
         # Save a valid message first
-        result1 = store.save_message("chat_test", {"role": "user", "content": "Valid"})
-        assert result1 is True
+        store.save_message("chat_test", {"role": "user", "content": "Valid"})
 
-        # Try to save an invalid message (should fail gracefully)
-        result2 = store.save_message("chat_test", {"role": "user"})  # Missing content
-        assert result2 is False
+        # Try to save an invalid message (should skip silently - not an error)
+        store.save_message("chat_test", {"role": "user"})  # Missing content
 
-        # Store should still work after error
-        result3 = store.save_message("chat_test", {"role": "user", "content": "Still works"})
-        assert result3 is True
+        # Store should still work after skipped message
+        store.save_message("chat_test", {"role": "user", "content": "Still works"})
+
+    def test_health_check_healthy(self, temp_db_path: Path) -> None:
+        """Test health check for healthy session."""
+        store = FullHistoryStore(db_path=temp_db_path)
+        store.save_message("chat_test", {"role": "user", "content": "Hello"})
+
+        is_healthy, error = store.health_check("chat_test")
+        assert is_healthy is True
+        assert error is None
+
+    def test_health_check_nonexistent_session(self, temp_db_path: Path) -> None:
+        """Test health check for nonexistent session."""
+        store = FullHistoryStore(db_path=temp_db_path)
+
+        is_healthy, error = store.health_check("nonexistent_session")
+        # No table is fine - will be created on first message
+        assert is_healthy is True
+        assert error is None
+
+    def test_health_check_invalid_path(self, temp_db_path: Path) -> None:
+        """Test health check with invalid database path."""
+        store = FullHistoryStore(db_path=temp_db_path)
+        # Change path after initialization to avoid mkdir error
+        store.db_path = Path("/invalid/nonexistent/path/db.sqlite")
+
+        is_healthy, error = store.health_check("chat_test")
+        assert is_healthy is False
+        assert error is not None
