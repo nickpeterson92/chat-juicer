@@ -76,7 +76,7 @@ export class ModelSelector {
    * @private
    */
   injectHTML() {
-    // Smooth replacement of skeleton with real UI
+    // Smooth fade-in for initial appearance
     this.container.style.opacity = "0";
     this.container.style.transition = "opacity 150ms ease-in";
 

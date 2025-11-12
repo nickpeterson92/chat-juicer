@@ -68,17 +68,7 @@ function createMcpToggles() {
  * Exported for reuse on chat page
  */
 export function createModelSelector() {
-  return `
-    <div class="model-config-inline">
-      <!-- Loading skeleton (replaced by ModelSelector component) -->
-      <button class="model-selector-trigger" disabled style="opacity: 0.6; cursor: wait;">
-        <span style="color: transparent; background: currentColor; border-radius: 4px; opacity: 0.2;">GPT-5</span>
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.3;">
-          <path d="M4 6L8 10L12 6" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </button>
-    </div>
-  `;
+  return `<div class="model-config-inline"></div>`;
 }
 
 /**
