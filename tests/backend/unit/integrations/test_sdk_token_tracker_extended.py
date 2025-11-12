@@ -69,10 +69,13 @@ class TestTrackStreamingEvent:
         mock_event.item.raw_item.arguments = '{"file_path": "test.txt"}'
 
         # Patch isinstance to treat our mock as RunItemStreamEvent
-        with patch(
-            "integrations.sdk_token_tracker.isinstance",
-            side_effect=lambda obj, cls: True if obj is mock_event else isinstance(obj, cls),
-        ), patch("integrations.sdk_token_tracker.count_tokens") as mock_count:
+        with (
+            patch(
+                "integrations.sdk_token_tracker.isinstance",
+                side_effect=lambda obj, cls: True if obj is mock_event else isinstance(obj, cls),
+            ),
+            patch("integrations.sdk_token_tracker.count_tokens") as mock_count,
+        ):
             mock_count.return_value = {"exact_tokens": 10}
 
             result = track_streaming_event(mock_event)
@@ -97,10 +100,13 @@ class TestTrackStreamingEvent:
         mock_event.item.output = "File content: " + ("x" * 1000)
 
         # Patch isinstance to treat our mock as RunItemStreamEvent
-        with patch(
-            "integrations.sdk_token_tracker.isinstance",
-            side_effect=lambda obj, cls: True if obj is mock_event else isinstance(obj, cls),
-        ), patch("integrations.sdk_token_tracker.count_tokens") as mock_count:
+        with (
+            patch(
+                "integrations.sdk_token_tracker.isinstance",
+                side_effect=lambda obj, cls: True if obj is mock_event else isinstance(obj, cls),
+            ),
+            patch("integrations.sdk_token_tracker.count_tokens") as mock_count,
+        ):
             mock_count.return_value = {"exact_tokens": 250}
 
             result = track_streaming_event(mock_event)
@@ -125,10 +131,13 @@ class TestTrackStreamingEvent:
         mock_event.item.raw_item = {"error": "File not found"}
 
         # Patch isinstance to treat our mock as RunItemStreamEvent
-        with patch(
-            "integrations.sdk_token_tracker.isinstance",
-            side_effect=lambda obj, cls: True if obj is mock_event else isinstance(obj, cls),
-        ), patch("integrations.sdk_token_tracker.count_tokens") as mock_count:
+        with (
+            patch(
+                "integrations.sdk_token_tracker.isinstance",
+                side_effect=lambda obj, cls: True if obj is mock_event else isinstance(obj, cls),
+            ),
+            patch("integrations.sdk_token_tracker.count_tokens") as mock_count,
+        ):
             mock_count.return_value = {"exact_tokens": 5}
 
             result = track_streaming_event(mock_event)
@@ -156,10 +165,13 @@ class TestTrackStreamingEvent:
         mock_event.item.raw_item.content = [mock_content]
 
         # Patch isinstance to treat our mock as RunItemStreamEvent
-        with patch(
-            "integrations.sdk_token_tracker.isinstance",
-            side_effect=lambda obj, cls: True if obj is mock_event else isinstance(obj, cls),
-        ), patch("integrations.sdk_token_tracker.count_tokens") as mock_count:
+        with (
+            patch(
+                "integrations.sdk_token_tracker.isinstance",
+                side_effect=lambda obj, cls: True if obj is mock_event else isinstance(obj, cls),
+            ),
+            patch("integrations.sdk_token_tracker.count_tokens") as mock_count,
+        ):
             mock_count.return_value = {"exact_tokens": 20}
 
             result = track_streaming_event(mock_event)
@@ -183,10 +195,13 @@ class TestTrackStreamingEvent:
         mock_event.item.output = "Handoff to agent X"
 
         # Patch isinstance to treat our mock as RunItemStreamEvent
-        with patch(
-            "integrations.sdk_token_tracker.isinstance",
-            side_effect=lambda obj, cls: True if obj is mock_event else isinstance(obj, cls),
-        ), patch("integrations.sdk_token_tracker.count_tokens") as mock_count:
+        with (
+            patch(
+                "integrations.sdk_token_tracker.isinstance",
+                side_effect=lambda obj, cls: True if obj is mock_event else isinstance(obj, cls),
+            ),
+            patch("integrations.sdk_token_tracker.count_tokens") as mock_count,
+        ):
             mock_count.return_value = {"exact_tokens": 15}
 
             result = track_streaming_event(mock_event)
