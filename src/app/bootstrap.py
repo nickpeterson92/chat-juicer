@@ -24,7 +24,6 @@ from integrations.sdk_token_tracker import patch_sdk_for_auto_tracking
 from tools import AGENT_TOOLS
 from utils.client_factory import create_http_client, create_openai_client
 from utils.logger import logger
-from utils.session_integrity import validate_and_repair_all_sessions
 
 
 async def initialize_application() -> AppState:
@@ -153,19 +152,6 @@ async def initialize_application() -> AppState:
     # Initialize full history store for layered persistence
     full_history_store = FullHistoryStore(db_path=CHAT_HISTORY_DB_PATH)
     logger.info("Full history store initialized")
-
-    # SAFEGUARD: Validate session integrity on startup
-    validation_results = validate_and_repair_all_sessions(
-        full_history_store=full_history_store, db_path=CHAT_HISTORY_DB_PATH, auto_repair=True
-    )
-
-    if validation_results["orphaned_count"] > 0:
-        logger.warning(
-            f"Session integrity check: Found {validation_results['orphaned_count']} orphaned sessions. "
-            f"Repaired: {validation_results['repaired_count']}, Failed: {validation_results['repair_failed_count']}"
-        )
-    else:
-        logger.info(f"Session integrity check: All {validation_results['healthy_count']} sessions are healthy")
 
     # Initialize session manager
     session_manager = SessionManager(metadata_path=DEFAULT_SESSION_METADATA_PATH)

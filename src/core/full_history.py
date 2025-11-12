@@ -2,6 +2,8 @@
 
 Maintains complete conversation history separate from token-optimized LLM context.
 This ensures users never lose conversation history when summarization occurs.
+
+Architecture: Single shared table with session_id column (migrated from per-session tables).
 """
 
 from __future__ import annotations
@@ -13,7 +15,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from core.constants import CHAT_HISTORY_DB_PATH, FULL_HISTORY_TABLE_PREFIX
+from core.constants import CHAT_HISTORY_DB_PATH, FULL_HISTORY_TABLE_NAME
 from utils.json_utils import json_safe
 from utils.logger import logger
 from utils.validation import sanitize_session_id
@@ -48,10 +50,13 @@ class FullHistoryStore:
 
     Separate from TokenAwareSQLiteSession to avoid token optimization
     affecting user-visible history. Uses append-only storage with no trimming.
+
+    Architecture: Single shared 'full_history' table with session_id column.
+    All sessions share one table for optimal performance and maintainability.
     """
 
-    #: Table prefix for full history storage (SQL-safe constant)
-    TABLE_PREFIX = FULL_HISTORY_TABLE_PREFIX
+    #: Shared table name for full history storage
+    TABLE_NAME = FULL_HISTORY_TABLE_NAME
 
     def __init__(self, db_path: str | Path = CHAT_HISTORY_DB_PATH):
         """Initialize full history store.
@@ -67,42 +72,54 @@ class FullHistoryStore:
         """Ensure database directory exists."""
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    def _get_table_name(self, session_id: str) -> str:
-        """Get table name for a session's full history with validation.
+    def _ensure_table_exists_internal(self, conn: sqlite3.Connection) -> None:
+        """Ensure shared full_history table exists (internal version with connection).
 
         Args:
-            session_id: Session identifier (will be validated for SQL safety)
-
-        Returns:
-            SQL-safe table name for this session's full history
-
-        Raises:
-            ValueError: If session_id contains invalid characters
+            conn: Database connection to use
         """
-        safe_id = sanitize_session_id(session_id)
-        return f"{self.TABLE_PREFIX}{safe_id}"
+        # Create main table
+        conn.execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS {self.TABLE_NAME} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                metadata TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+        # Create indexes for performance
+        conn.execute(
+            f"""
+            CREATE INDEX IF NOT EXISTS idx_{self.TABLE_NAME}_session_id
+            ON {self.TABLE_NAME}(session_id)
+            """
+        )
+
+        conn.execute(
+            f"""
+            CREATE INDEX IF NOT EXISTS idx_{self.TABLE_NAME}_session_created
+            ON {self.TABLE_NAME}(session_id, created_at)
+            """
+        )
+
+        conn.commit()
 
     def _ensure_table_exists(self, session_id: str) -> None:
-        """Ensure full history table exists for the session.
+        """Ensure shared full_history table exists.
 
         Args:
-            session_id: Session identifier (validated internally)
+            session_id: Session identifier (for validation only, not used in table creation)
         """
-        table_name = self._get_table_name(session_id)
+        # Validate session_id (for security even though not used in table name)
+        sanitize_session_id(session_id)
 
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                f"""
-                CREATE TABLE IF NOT EXISTS {table_name} (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    role TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    metadata TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-            conn.commit()
+            self._ensure_table_exists_internal(conn)
 
     def save_message(self, session_id: str, message: dict[str, Any]) -> None:
         """Append message to full history (never trimmed).
@@ -119,7 +136,6 @@ class FullHistoryStore:
         """
         try:
             self._ensure_table_exists(session_id)
-            table_name = self._get_table_name(session_id)
 
             role = message.get("role", "")
             content = message.get("content", "")
@@ -146,10 +162,10 @@ class FullHistoryStore:
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute(
                     f"""
-                    INSERT INTO {table_name} (role, content, metadata)
-                    VALUES (?, ?, ?)
+                    INSERT INTO {self.TABLE_NAME} (session_id, role, content, metadata)
+                    VALUES (?, ?, ?, ?)
                     """,
-                    (role, content, metadata_json),
+                    (session_id, role, content, metadata_json),
                 )
                 conn.commit()
 
@@ -192,28 +208,33 @@ class FullHistoryStore:
             List of message dicts with 'role' and 'content' keys
         """
         try:
-            table_name = self._get_table_name(session_id)
+            # Validate session_id
+            sanitize_session_id(session_id)
 
-            # Check if table exists
             with sqlite3.connect(self.db_path) as conn:
+                # Check if shared table exists
                 cursor = conn.execute(
                     """
                     SELECT name FROM sqlite_master
                     WHERE type='table' AND name=?
                     """,
-                    (table_name,),
+                    (self.TABLE_NAME,),
                 )
                 if not cursor.fetchone():
-                    logger.info(f"No full_history table for session {session_id}")
+                    logger.info("No full_history table exists yet")
                     return []
 
-                # Build query with optional pagination
-                query = f"SELECT role, content, metadata FROM {table_name} ORDER BY id DESC"
-                params: tuple[Any, ...] = ()
+                # Build query with session_id filter
+                query = f"""
+                    SELECT role, content, metadata FROM {self.TABLE_NAME}
+                    WHERE session_id = ?
+                    ORDER BY id DESC
+                """
+                params: list[Any] = [session_id]
 
                 if limit is not None:
                     query += " LIMIT ? OFFSET ?"
-                    params = (limit, offset)
+                    params.extend([limit, offset])
 
                 cursor = conn.execute(query, params)
                 rows = cursor.fetchall()
@@ -263,7 +284,8 @@ class FullHistoryStore:
             Number of messages in full history
         """
         try:
-            table_name = self._get_table_name(session_id)
+            # Validate session_id
+            sanitize_session_id(session_id)
 
             with sqlite3.connect(self.db_path) as conn:
                 # Check if table exists
@@ -272,12 +294,18 @@ class FullHistoryStore:
                     SELECT name FROM sqlite_master
                     WHERE type='table' AND name=?
                     """,
-                    (table_name,),
+                    (self.TABLE_NAME,),
                 )
                 if not cursor.fetchone():
                     return 0
 
-                cursor = conn.execute(f"SELECT COUNT(*) FROM {table_name}")
+                cursor = conn.execute(
+                    f"""
+                    SELECT COUNT(*) FROM {self.TABLE_NAME}
+                    WHERE session_id = ?
+                    """,
+                    (session_id,),
+                )
                 count = cursor.fetchone()[0]
                 return int(count)
 
@@ -295,22 +323,27 @@ class FullHistoryStore:
             True if successful, False otherwise
         """
         try:
-            table_name = self._get_table_name(session_id)
+            # Validate session_id
+            sanitize_session_id(session_id)
 
             with sqlite3.connect(self.db_path) as conn:
-                # Check if table exists before trying to drop
+                # Check if table exists
                 cursor = conn.execute(
                     """
                     SELECT name FROM sqlite_master
                     WHERE type='table' AND name=?
                     """,
-                    (table_name,),
+                    (self.TABLE_NAME,),
                 )
                 if not cursor.fetchone():
                     logger.info(f"No full_history table to clear for session {session_id}")
                     return True
 
-                conn.execute(f"DROP TABLE IF EXISTS {table_name}")
+                # Delete rows for this session
+                conn.execute(
+                    f"DELETE FROM {self.TABLE_NAME} WHERE session_id = ?",
+                    (session_id,),
+                )
                 conn.commit()
 
             logger.info(f"Cleared full_history for session {session_id}")
@@ -332,7 +365,8 @@ class FullHistoryStore:
             Tuple of (is_healthy: bool, error: str | None)
         """
         try:
-            table_name = self._get_table_name(session_id)
+            # Validate session_id
+            sanitize_session_id(session_id)
 
             with sqlite3.connect(self.db_path) as conn:
                 # Check if table exists
@@ -341,17 +375,23 @@ class FullHistoryStore:
                     SELECT name FROM sqlite_master
                     WHERE type='table' AND name=?
                     """,
-                    (table_name,),
+                    (self.TABLE_NAME,),
                 )
                 table_exists = cursor.fetchone() is not None
 
                 if not table_exists:
                     # No table is fine - will be created on first message
-                    logger.debug(f"No full_history table exists yet for session {session_id}")
+                    logger.debug("No full_history table exists yet")
                     return True, None
 
                 # Try to read from table to verify it's not corrupted
-                cursor = conn.execute(f"SELECT COUNT(*) FROM {table_name}")
+                cursor = conn.execute(
+                    f"""
+                    SELECT COUNT(*) FROM {self.TABLE_NAME}
+                    WHERE session_id = ?
+                    """,
+                    (session_id,),
+                )
                 count = cursor.fetchone()[0]
                 logger.debug(f"Health check passed for session {session_id}: {count} messages")
                 return True, None

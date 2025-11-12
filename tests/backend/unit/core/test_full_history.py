@@ -99,22 +99,26 @@ class TestFullHistoryStore:
         messages = store.get_messages("chat_test")
         assert len(messages) == 0
 
-    def test_table_name_generation(self, temp_db_path: Path) -> None:
-        """Test that table names are generated correctly."""
+    def test_shared_table_usage(self, temp_db_path: Path) -> None:
+        """Test that all sessions use the shared table."""
         store = FullHistoryStore(db_path=temp_db_path)
-        table_name = store._get_table_name("chat_test123")
-        assert table_name.startswith(store.TABLE_PREFIX)
-        assert "test123" in table_name
+        # All sessions should use the same TABLE_NAME
+        assert store.TABLE_NAME == "full_history"
+        # No more per-session table name generation
+        assert not hasattr(store, "_get_table_name")
 
     def test_sql_injection_prevention(self, temp_db_path: Path) -> None:
         """Test that SQL injection attempts are prevented."""
         store = FullHistoryStore(db_path=temp_db_path)
-        # Should raise ValueError for invalid session_id
+        # Invalid session_id should raise ValueError during save/get operations
+        invalid_session_id = "chat_'; DROP TABLE users; --"
+
+        # Test that operations with invalid session_id raise ValueError
         try:
-            store._get_table_name("chat_'; DROP TABLE users; --")
+            store.save_message(invalid_session_id, {"role": "user", "content": "test"})
             raise AssertionError("Should have raised ValueError")
-        except ValueError:
-            pass  # Expected
+        except (ValueError, FullHistoryError):
+            pass  # Expected - validation catches this
 
     def test_save_message_invalid_data(self, temp_db_path: Path) -> None:
         """Test saving message with invalid data."""
