@@ -8,6 +8,6 @@ from .base import TokenAwareSQLiteSession
 from .builders import SessionBuilder
 
 __all__ = [
-    "TokenAwareSQLiteSession",
     "SessionBuilder",
+    "TokenAwareSQLiteSession",
 ]
