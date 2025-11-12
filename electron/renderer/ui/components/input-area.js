@@ -13,7 +13,7 @@ export class InputArea {
    * @param {Object} options - Optional configuration
    * @param {HTMLElement} options.modelSelectorContainer - Container for model selector
    * @param {Object} options.ipcAdapter - IPC adapter for backend communication
-   * @param {Object} options.sessionState - Session state object
+   * @param {Object} options.sessionService - Session service for getting current session
    * @param {Function} options.getModelConfig - Function to get current model config
    */
   constructor(textarea, sendButton, onSendCallback, options = {}) {
@@ -28,7 +28,7 @@ export class InputArea {
     // Model selector optional dependencies
     this.modelSelectorContainer = options.modelSelectorContainer;
     this.ipcAdapter = options.ipcAdapter;
-    this.sessionState = options.sessionState;
+    this.sessionService = options.sessionService;
     this.modelSelector = null; // Will be initialized if dependencies provided
 
     this.setupEventListeners();
@@ -227,7 +227,7 @@ export class InputArea {
    * @param {Array} reasoningLevels - Available reasoning levels from backend
    */
   async initializeModelSelector(models, reasoningLevels) {
-    if (!this.modelSelectorContainer || !this.ipcAdapter || !this.sessionState) {
+    if (!this.modelSelectorContainer || !this.ipcAdapter || !this.sessionService) {
       console.warn("⚠️ Model selector dependencies not provided, skipping initialization");
       return;
     }
@@ -238,7 +238,7 @@ export class InputArea {
         console.log("🔄 Chat page model selection changed:", { model, reasoningEffort });
       },
       ipcAdapter: this.ipcAdapter,
-      sessionState: this.sessionState,
+      sessionService: this.sessionService, // Pass SessionService for getting current session ID
       autoSyncBackend: true, // Automatically sync to backend on change
     });
 

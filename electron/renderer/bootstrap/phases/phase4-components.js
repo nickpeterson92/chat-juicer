@@ -99,7 +99,7 @@ export async function initializeComponents({ elements, appState, services, ipcAd
       components.inputArea = new InputArea(userInput, sendBtn, (message) => sendMessage(message, userInput), {
         modelSelectorContainer: chatModelSelector,
         ipcAdapter: ipcAdapter,
-        sessionState: appState, // Pass appState as sessionState for model selector
+        sessionService: services.sessionService, // Pass SessionService for model selector to get currentSessionId
         getModelConfig: null, // Will be injected after model config loads
       });
       console.log("  ✓ InputArea initialized with sendMessage callback");
