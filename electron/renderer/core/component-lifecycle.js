@@ -27,9 +27,6 @@
  * // Use lifecycle-managed timers
  * component.setTimeout(() => {...}, 1000);
  *
- * // Use scoped event bus
- * component._scopedEventBus.on('event', handler);
- *
  * // Unmount component
  * ComponentLifecycle.unmount(component, globalLifecycleManager);
  * ```
@@ -61,18 +58,9 @@ export function mount(component, name, lifecycleManager) {
     mounted: true,
   };
 
-  // Create scoped EventBus (if eventBus exists globally)
-  if (typeof window !== "undefined" && window.app?.eventBus) {
-    component._scopedEventBus = lifecycleManager.createScopedEventBus(component, window.app.eventBus);
-  }
-
   // Add lifecycle-managed timer methods
   component.setTimeout = (callback, delay) => {
     return lifecycleManager.setTimeout(component, callback, delay);
-  };
-
-  component.setInterval = (callback, delay) => {
-    return lifecycleManager.setInterval(component, callback, delay);
   };
 
   component.clearTimer = (timerId) => {
@@ -117,21 +105,10 @@ export function unmount(component, lifecycleManager) {
 
   // Clean up lifecycle metadata
   delete component._lifecycle;
-  delete component._scopedEventBus;
   delete component.setTimeout;
-  delete component.setInterval;
   delete component.clearTimer;
 
   console.log("[ComponentLifecycle] Component unmounted");
-}
-
-/**
- * Check if component is mounted
- * @param {Object} component - Component object
- * @returns {boolean} True if mounted
- */
-export function isMounted(component) {
-  return !!component?._lifecycle?.mounted;
 }
 
 /**
@@ -140,5 +117,4 @@ export function isMounted(component) {
 export const ComponentLifecycle = {
   mount,
   unmount,
-  isMounted,
 };

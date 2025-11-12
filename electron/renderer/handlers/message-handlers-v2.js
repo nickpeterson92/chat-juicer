@@ -387,34 +387,6 @@ export function registerMessageHandlers(context) {
 }
 
 /**
- * Setup message router that routes incoming messages to type-specific handlers
- */
-export function setupMessageRouter() {
-  // Listen for incoming messages and route to type-specific handlers
-  globalEventBus.on("message:received", (eventData) => {
-    // EventBus passes: { event, data, metadata, timestamp }
-    // Extract the actual message from data
-    const message = eventData.data || eventData;
-    const metadata = eventData.metadata || {};
-
-    console.log("[MessageRouter] Received message:", message?.type, metadata);
-
-    if (!message || !message.type) {
-      console.warn("[MessageRouter] Invalid message - missing type:", message);
-      return;
-    }
-
-    // Route to type-specific handler
-    // Emit message directly (EventBus will wrap it in { data, metadata, ... })
-    console.log(`[MessageRouter] Routing to: message:${message.type}`);
-    globalEventBus.emit(`message:${message.type}`, message, metadata);
-    console.log(`[MessageRouter] Route complete for: message:${message.type}`);
-  });
-
-  console.log("[MessageRouter] Message router registered");
-}
-
-/**
  * Process incoming message through EventBus
  * @param {Object} message - Message object with 'type' field
  * @param {Object} context - Application context
