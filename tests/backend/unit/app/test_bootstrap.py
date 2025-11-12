@@ -27,10 +27,8 @@ class TestInitializeApplication:
     @patch("app.bootstrap.create_agent")
     @patch("app.bootstrap.FullHistoryStore")
     @patch("app.bootstrap.SessionManager")
-    @patch("app.bootstrap.validate_and_repair_all_sessions")
     async def test_initialize_application_openai(
         self,
-        mock_validate: Mock,
         mock_session_manager: Mock,
         mock_full_history: Mock,
         mock_create_agent: Mock,
@@ -62,12 +60,6 @@ class TestInitializeApplication:
         mock_session_manager_instance = Mock()
         mock_session_manager_instance.cleanup_empty_sessions.return_value = 0
         mock_session_manager.return_value = mock_session_manager_instance
-        mock_validate.return_value = {
-            "orphaned_count": 0,
-            "healthy_count": 5,
-            "repaired_count": 0,
-            "repair_failed_count": 0,
-        }
 
         # Run initialization
         app_state = await initialize_application()
@@ -91,10 +83,8 @@ class TestInitializeApplication:
     @patch("app.bootstrap.create_agent")
     @patch("app.bootstrap.FullHistoryStore")
     @patch("app.bootstrap.SessionManager")
-    @patch("app.bootstrap.validate_and_repair_all_sessions")
     async def test_initialize_application_azure(
         self,
-        mock_validate: Mock,
         mock_session_manager: Mock,
         mock_full_history: Mock,
         mock_create_agent: Mock,
@@ -126,12 +116,6 @@ class TestInitializeApplication:
         mock_session_manager_instance = Mock()
         mock_session_manager_instance.cleanup_empty_sessions.return_value = 0
         mock_session_manager.return_value = mock_session_manager_instance
-        mock_validate.return_value = {
-            "orphaned_count": 0,
-            "healthy_count": 0,
-            "repaired_count": 0,
-            "repair_failed_count": 0,
-        }
 
         # Run initialization
         app_state = await initialize_application()
@@ -168,10 +152,8 @@ class TestInitializeApplication:
     @patch("app.bootstrap.create_agent")
     @patch("app.bootstrap.FullHistoryStore")
     @patch("app.bootstrap.SessionManager")
-    @patch("app.bootstrap.validate_and_repair_all_sessions")
     async def test_initialize_with_session_repair(
         self,
-        mock_validate: Mock,
         mock_session_manager: Mock,
         mock_full_history: Mock,
         mock_create_agent: Mock,
@@ -201,15 +183,8 @@ class TestInitializeApplication:
         mock_session_manager_instance = Mock()
         mock_session_manager_instance.cleanup_empty_sessions.return_value = 2
         mock_session_manager.return_value = mock_session_manager_instance
-        mock_validate.return_value = {
-            "orphaned_count": 3,
-            "healthy_count": 5,
-            "repaired_count": 2,
-            "repair_failed_count": 1,
-        }
 
         app_state = await initialize_application()
 
         # Should complete successfully even with repairs
         assert app_state is not None
-        mock_validate.assert_called_once()

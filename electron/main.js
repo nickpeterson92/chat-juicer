@@ -6,6 +6,7 @@ const os = require("node:os");
 const Logger = require("./logger");
 const PythonManager = require("../scripts/python-manager");
 const platformConfig = require("../scripts/platform-config");
+const StreamingBufferManager = require("./utils/streaming-buffer");
 const {
   RESTART_DELAY,
   RESTART_CALLBACK_DELAY,
@@ -22,6 +23,10 @@ const {
   HIDDEN_FILE_PREFIX,
   JSON_DELIMITER,
   JSON_DELIMITER_LENGTH,
+  MAX_SESSION_RESPONSE,
+  MAX_FILE_UPLOAD_RESPONSE,
+  BUFFER_CHECK_INTERVAL,
+  BACKPRESSURE_PAUSE_DURATION,
 } = require("./config/main-constants");
 
 // Initialize logger for main process
@@ -293,7 +298,7 @@ app.whenReady().then(() => {
     }
   });
 
-  // IPC handler for session commands
+  // IPC handler for session commands (with StreamingBufferManager)
   ipcMain.handle("session-command", async (_event, { command, data }) => {
     logger.info("Session command received", { command });
 
@@ -312,49 +317,80 @@ app.whenReady().then(() => {
       // Wait for response (with timeout)
       // Summarization needs longer timeout since it calls LLM (network delays, large conversations)
       const timeoutMs = command === "summarize" ? SUMMARIZE_COMMAND_TIMEOUT : SESSION_COMMAND_TIMEOUT;
-      return new Promise((resolve) => {
-        let buffer = ""; // Accumulate chunks for large responses
 
-        const timeout = setTimeout(() => {
-          logger.warn("Session command timed out", { command });
+      return new Promise((resolve, reject) => {
+        let timeoutId;
+        let backpressureInterval;
+
+        // Create streaming buffer manager with security limits
+        const bufferManager = new StreamingBufferManager({
+          maxSize: MAX_SESSION_RESPONSE,
+          operationType: `session-${command}`,
+          onMessage: (message) => {
+            // If this is the session_response we're waiting for, resolve
+            if (message.type === "session_response") {
+              cleanup();
+              resolve(message.data);
+            }
+            // Otherwise, continue waiting for more messages
+          },
+          onOverflow: (bytesReceived) => {
+            cleanup();
+            logger.error("Session command response too large", {
+              command,
+              bytesReceived,
+              maxSize: MAX_SESSION_RESPONSE,
+            });
+            reject(
+              new Error(
+                `Response exceeded maximum size of ${MAX_SESSION_RESPONSE} bytes (received ${bytesReceived} bytes). Try smaller requests.`
+              )
+            );
+          },
+        });
+
+        // Cleanup function to remove listeners and timers
+        const cleanup = () => {
+          if (timeoutId) clearTimeout(timeoutId);
+          if (backpressureInterval) clearInterval(backpressureInterval);
           pythonProcess.stdout.removeListener("data", responseHandler);
-          resolve({ error: "Command timed out" });
+        };
+
+        // Set timeout for response
+        timeoutId = setTimeout(() => {
+          cleanup();
+          logger.warn("Session command timed out", {
+            command,
+            stats: bufferManager.getStats(),
+          });
+          reject(new Error("Command timed out"));
         }, timeoutMs);
 
-        // Listen for response from Python
+        // Response handler with streaming buffer
         const responseHandler = (data) => {
-          buffer += data.toString("utf-8");
+          try {
+            bufferManager.append(data.toString("utf-8"));
 
-          // Loop through ALL complete messages in buffer to find session_response
-          // A chunk may contain multiple messages (function events + session_response)
-          while (true) {
-            const jsonStart = buffer.indexOf(JSON_DELIMITER);
-            if (jsonStart === -1) break; // No more messages
-
-            const jsonEnd = buffer.indexOf(JSON_DELIMITER, jsonStart + JSON_DELIMITER_LENGTH);
-            if (jsonEnd === -1) break; // Incomplete message, wait for more data
-
-            try {
-              const jsonStr = buffer.substring(jsonStart + JSON_DELIMITER_LENGTH, jsonEnd);
-              const message = JSON.parse(jsonStr);
-
-              // Remove this message from buffer before checking type
-              buffer = buffer.substring(jsonEnd + JSON_DELIMITER_LENGTH);
-
-              // If this is the session_response we're waiting for, resolve
-              if (message.type === "session_response") {
-                clearTimeout(timeout);
-                pythonProcess.stdout.removeListener("data", responseHandler);
-                resolve(message.data);
-                return; // Stop processing
-              }
-
-              // Otherwise, continue to next message in buffer
-            } catch (e) {
-              // Failed to parse, remove malformed message and continue
-              buffer = buffer.substring(jsonEnd + JSON_DELIMITER_LENGTH);
-              logger.error("Failed to parse message in session response handler", { error: e.message });
+            // Apply backpressure if buffer filling too quickly
+            if (bufferManager.shouldApplyBackpressure(BUFFER_CHECK_INTERVAL)) {
+              logger.debug("Applying backpressure to Python stdout", {
+                stats: bufferManager.getStats(),
+              });
+              pythonProcess.stdout.pause();
+              setTimeout(() => {
+                if (pythonProcess?.stdout) {
+                  pythonProcess.stdout.resume();
+                }
+              }, BACKPRESSURE_PAUSE_DURATION);
             }
+          } catch (error) {
+            cleanup();
+            if (error.code === "BUFFER_OVERFLOW") {
+              // Already handled by onOverflow callback
+              return;
+            }
+            logger.error("Session command error", { error: error.message });
+            reject(error);
           }
         };
 
@@ -366,7 +402,7 @@ app.whenReady().then(() => {
     }
   });
 
-  // IPC handler for file uploads
+  // IPC handler for file uploads (with StreamingBufferManager)
   ipcMain.handle("upload-file", async (_event, { filename, data, size, type }) => {
     logger.info("File upload requested", { filename, size, type });
 
@@ -384,44 +420,78 @@ app.whenReady().then(() => {
       logger.debug("Sent upload command to Python", { filename, size });
 
       // Wait for response with timeout
-      return new Promise((resolve) => {
-        let buffer = ""; // Accumulate chunks for large responses
+      return new Promise((resolve, reject) => {
+        let timeoutId;
+        let backpressureInterval;
 
-        const timeout = setTimeout(() => {
-          logger.warn("File upload timed out", { filename });
+        // Create streaming buffer manager with security limits
+        const bufferManager = new StreamingBufferManager({
+          maxSize: MAX_FILE_UPLOAD_RESPONSE,
+          operationType: "file-upload",
+          onMessage: (message) => {
+            // If this is the upload_response, resolve
+            if (message.type === "upload_response") {
+              cleanup();
+              resolve(message.data);
+            }
+          },
+          onOverflow: (bytesReceived) => {
+            cleanup();
+            logger.error("File upload response too large", {
+              filename,
+              bytesReceived,
+              maxSize: MAX_FILE_UPLOAD_RESPONSE,
+            });
+            reject(
+              new Error(
+                `Response exceeded maximum size of ${MAX_FILE_UPLOAD_RESPONSE} bytes (received ${bytesReceived} bytes). File may be too large.`
+              )
+            );
+          },
+        });
+
+        // Cleanup function
+        const cleanup = () => {
+          if (timeoutId) clearTimeout(timeoutId);
+          if (backpressureInterval) clearInterval(backpressureInterval);
           pythonProcess.stdout.removeListener("data", responseHandler);
-          resolve({ success: false, error: "Upload timed out" });
+        };
+
+        // Set timeout
+        timeoutId = setTimeout(() => {
+          cleanup();
+          logger.warn("File upload timed out", {
+            filename,
+            stats: bufferManager.getStats(),
+          });
+          reject(new Error("Upload timed out"));
         }, FILE_UPLOAD_TIMEOUT);
 
+        // Response handler with streaming buffer
         const responseHandler = (data) => {
-          buffer += data.toString("utf-8");
+          try {
+            bufferManager.append(data.toString("utf-8"));
 
-          // Loop through ALL complete messages to find upload_response
-          while (true) {
-            const jsonStart = buffer.indexOf(JSON_DELIMITER);
-            if (jsonStart === -1) break;
-
-            const jsonEnd = buffer.indexOf(JSON_DELIMITER, jsonStart + JSON_DELIMITER_LENGTH);
-            if (jsonEnd === -1) break;
-
-            try {
-              const jsonStr = buffer.substring(jsonStart + JSON_DELIMITER_LENGTH, jsonEnd);
-              const message = JSON.parse(jsonStr);
-
-              // Remove this message from buffer
-              buffer = buffer.substring(jsonEnd + JSON_DELIMITER_LENGTH);
-
-              // If this is the upload_response, resolve
-              if (message.type === "upload_response") {
-                clearTimeout(timeout);
-                pythonProcess.stdout.removeListener("data", responseHandler);
-                resolve(message.data);
-                return;
-              }
-            } catch (e) {
-              buffer = buffer.substring(jsonEnd + JSON_DELIMITER_LENGTH);
-              logger.error("Failed to parse message in upload response handler", { error: e.message });
+            // Apply backpressure if needed
+            if (bufferManager.shouldApplyBackpressure(BUFFER_CHECK_INTERVAL)) {
+              logger.debug("Applying backpressure to Python stdout", {
+                stats: bufferManager.getStats(),
+              });
+              pythonProcess.stdout.pause();
+              setTimeout(() => {
+                if (pythonProcess?.stdout) {
+                  pythonProcess.stdout.resume();
+                }
+              }, BACKPRESSURE_PAUSE_DURATION);
             }
+          } catch (error) {
+            cleanup();
+            if (error.code === "BUFFER_OVERFLOW") {
+              // Already handled by onOverflow callback
+              return;
+            }
+            logger.error("File upload error", { error: error.message });
+            reject(error);
           }
         };
 

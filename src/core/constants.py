@@ -400,10 +400,10 @@ DEFAULT_SESSION_METADATA_PATH = "data/sessions.json"
 #: use this shared database with separate table structures.
 CHAT_HISTORY_DB_PATH = "data/chat_history.db"
 
-#: Table prefix for full conversation history storage (Layer 2).
+#: Shared table name for full conversation history storage (Layer 2).
 #: Used by FullHistoryStore to maintain complete user-visible history.
-#: Table naming: {FULL_HISTORY_TABLE_PREFIX}{session_id}
-FULL_HISTORY_TABLE_PREFIX = "full_history_"
+#: All sessions share a single table with session_id column for filtering.
+FULL_HISTORY_TABLE_NAME = "full_history"
 
 #: Table prefix for LLM context storage (Layer 1).
 #: Used by TokenAwareSQLiteSession for token-optimized AI context.

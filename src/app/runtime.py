@@ -24,6 +24,7 @@ from core.constants import (
 )
 from core.prompts import SYSTEM_INSTRUCTIONS
 from core.session import TokenAwareSQLiteSession
+from core.session.transaction_coordinator import PersistenceError
 from core.session_commands import handle_session_command
 from integrations.event_handlers import CallTracker, build_event_handlers
 from integrations.mcp_registry import filter_mcp_servers
@@ -217,6 +218,19 @@ async def process_user_input(session: TokenAwareSQLiteSession, user_input: str) 
                     text = getattr(content_item, "text", "")
                     if text:
                         response_text += text
+
+    except PersistenceError as e:
+        # Layer 2 persistence failure - notify user
+        logger.error(f"Persistence failure during message processing: {e}")
+        error_msg = {
+            "type": "error",
+            "message": "Failed to save conversation history. Your message may not be persisted. Please try again.",
+            "code": "persistence_error",
+            "details": {"error": str(e)},
+        }
+        IPCManager.send(error_msg)
+        IPCManager.send_assistant_end()
+        return
 
     except Exception as e:
         handle_streaming_error(e)

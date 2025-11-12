@@ -10,6 +10,16 @@ import katex from "katex";
 import { Marked, marked } from "marked";
 import markedFootnote from "marked-footnote";
 import mermaid from "mermaid";
+import { ComponentLifecycle } from "../core/component-lifecycle.js";
+import { globalLifecycleManager } from "../core/lifecycle-manager.js";
+
+// Markdown renderer component for lifecycle management
+const markdownRendererComponent = {};
+
+// Initialize markdown renderer component once
+if (!markdownRendererComponent._lifecycle) {
+  ComponentLifecycle.mount(markdownRendererComponent, "MarkdownRenderer", globalLifecycleManager);
+}
 
 /**
  * Initialize Mermaid with theme-specific configuration
@@ -607,8 +617,8 @@ export function initializeCodeCopyButtons(container) {
         </svg>`;
         btn.classList.add("copied");
 
-        // Reset after 2 seconds
-        setTimeout(() => {
+        // Reset after 2 seconds (lifecycle-managed)
+        markdownRendererComponent.setTimeout(() => {
           btn.innerHTML = originalHTML;
           btn.classList.remove("copied");
         }, 2000);
@@ -622,7 +632,7 @@ export function initializeCodeCopyButtons(container) {
           <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>`;
 
-        setTimeout(() => {
+        markdownRendererComponent.setTimeout(() => {
           btn.innerHTML = originalHTML;
         }, 2000);
       }

@@ -23,7 +23,7 @@ import { initializeCodeCopyButtons, processMermaidDiagrams } from "../utils/mark
  * @param {Object} context - Application context
  */
 export function registerMessageHandlers(context) {
-  const { appState, elements, services } = context;
+  const { appState, elements, services, ipcAdapter } = context;
 
   // Helper to create scoped handler
   const createHandler = (type, handler) => {
@@ -59,6 +59,10 @@ export function registerMessageHandlers(context) {
   // ===== Assistant Message Handlers =====
 
   createHandler("assistant_start", (_message) => {
+    // Track Python status - streaming started
+    appState.setState("python.status", "busy_streaming");
+    console.log("🔄 Python status: busy_streaming");
+
     // Hide AI thinking indicator
     if (elements.aiThinking) {
       elements.aiThinking.classList.remove("active");
@@ -86,12 +90,22 @@ export function registerMessageHandlers(context) {
     }
   });
 
-  createHandler("assistant_end", (_message) => {
+  createHandler("assistant_end", async (_message) => {
     const currentAssistantElement = appState.message.currentAssistant;
 
     // Complete streaming
     completeStreamingMessage(elements.chatContainer);
     appState.setState("message.currentAssistant", null);
+
+    // Track Python status - streaming ended
+    appState.setState("python.status", "idle");
+    console.log("✅ Python status: idle");
+
+    // Process queued commands
+    if (ipcAdapter && ipcAdapter.commandQueue.length > 0) {
+      console.log("📦 Processing queued commands after streaming...");
+      await ipcAdapter.processQueue();
+    }
 
     // Hide AI thinking indicator
     if (elements.aiThinking) {
@@ -138,7 +152,7 @@ export function registerMessageHandlers(context) {
 
     // Add error message (Phase 7: use ChatContainer component)
     if (window.components?.chatContainer) {
-      window.components.chatContainer.addMessage({ role: "error", content: message.message });
+      window.components.chatContainer.addErrorMessage(message.message);
     } else {
       console.error("⚠️ ChatContainer component not available - message not displayed");
     }
@@ -274,7 +288,7 @@ export function registerMessageHandlers(context) {
 
     // Add system message (Phase 7: use ChatContainer component)
     if (window.components?.chatContainer) {
-      window.components.chatContainer.addMessage({ role: "system", content });
+      window.components.chatContainer.addSystemMessage(content);
     } else {
       console.error("⚠️ ChatContainer component not available - message not displayed");
     }
@@ -291,7 +305,7 @@ export function registerMessageHandlers(context) {
 
     // Add error message (Phase 7: use ChatContainer component)
     if (window.components?.chatContainer) {
-      window.components.chatContainer.addMessage({ role: "error", content });
+      window.components.chatContainer.addErrorMessage(content);
     } else {
       console.error("⚠️ ChatContainer component not available - message not displayed");
     }
@@ -345,22 +359,16 @@ export function registerMessageHandlers(context) {
 
   createHandler("session_updated", (message) => {
     if (message.data?.success && message.data.session) {
-      import("../services/session-service.js").then(({ sessionState }) => {
-        const session = sessionState.sessions.find((s) => s.session_id === message.data.session.session_id);
+      // Use SessionService instead of sessionState
+      if (services?.sessionService) {
+        services.sessionService.updateSession(message.data.session);
+      }
 
-        if (session) {
-          Object.assign(session, message.data.session);
-        } else {
-          sessionState.sessions.push(message.data.session);
-          sessionState.sessions.sort((a, b) => new Date(b.last_used) - new Date(a.last_used));
-        }
-
-        window.dispatchEvent(
-          new CustomEvent("session-updated", {
-            detail: message.data,
-          })
-        );
-      });
+      window.dispatchEvent(
+        new CustomEvent("session-updated", {
+          detail: message.data,
+        })
+      );
     }
 
     // Track session update

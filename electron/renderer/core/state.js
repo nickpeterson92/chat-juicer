@@ -90,6 +90,12 @@ export class AppState {
       currentView: "welcome", // "welcome" | "chat"
     };
 
+    // Python backend state (for command queuing)
+    this.python = {
+      status: "idle", // idle | busy_streaming | busy_summarizing
+      commandQueue: [], // Queue for commands when Python is busy
+    };
+
     // State change listeners
     this.listeners = new Map();
   }

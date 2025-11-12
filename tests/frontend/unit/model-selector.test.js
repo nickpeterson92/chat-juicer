@@ -37,7 +37,7 @@ describe("ModelSelector", () => {
   let container;
   let mockOnChange;
   let mockIpcAdapter;
-  let mockSessionState;
+  let mockSessionService;
 
   beforeEach(() => {
     // Create fresh container for each test
@@ -49,8 +49,8 @@ describe("ModelSelector", () => {
     mockIpcAdapter = {
       sendSessionCommand: vi.fn().mockResolvedValue({ session_id: "test-session" }),
     };
-    mockSessionState = {
-      currentSessionId: "test-session",
+    mockSessionService = {
+      getCurrentSessionId: vi.fn().mockReturnValue("test-session"),
     };
   });
 
@@ -78,13 +78,13 @@ describe("ModelSelector", () => {
       const selector = new ModelSelector(container, {
         onChange: mockOnChange,
         ipcAdapter: mockIpcAdapter,
-        sessionState: mockSessionState,
+        sessionService: mockSessionService,
         autoSyncBackend: true,
       });
 
       expect(selector.onChange).toBe(mockOnChange);
       expect(selector.ipcAdapter).toBe(mockIpcAdapter);
-      expect(selector.sessionState).toBe(mockSessionState);
+      expect(selector.sessionService).toBe(mockSessionService);
       expect(selector.autoSyncBackend).toBe(true);
     });
   });
@@ -291,7 +291,7 @@ describe("ModelSelector", () => {
       const selector = new ModelSelector(container, {
         onChange: mockOnChange,
         ipcAdapter: mockIpcAdapter,
-        sessionState: mockSessionState,
+        sessionService: mockSessionService,
         autoSyncBackend: true,
       });
 
@@ -323,7 +323,7 @@ describe("ModelSelector", () => {
       const selector = new ModelSelector(container, {
         onChange: mockOnChange,
         ipcAdapter: mockIpcAdapter,
-        sessionState: mockSessionState,
+        sessionService: mockSessionService,
         autoSyncBackend: false,
       });
 

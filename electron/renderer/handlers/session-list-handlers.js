@@ -8,19 +8,19 @@
  * Setup event handlers for session list using event delegation
  *
  * @param {HTMLElement} sessionsList - Sessions list container
- * @param {Object} sessionService - Session service instance
- * @param {Object} sessionState - Session state object
+ * @param {Object} sessionService - Session service instance (SSOT)
  * @param {Function} updateSessionsList - Function to refresh sessions list
  * @param {Object} elements - DOM elements
  * @param {Object} appState - Application state
+ * @param {Object} ipcAdapter - IPC adapter for command queue processing
  */
 export function setupSessionListHandlers(
   sessionsList,
   sessionService,
-  sessionState,
   updateSessionsList,
   elements,
-  appState
+  appState,
+  ipcAdapter
 ) {
   // Click handler for session switching and actions
   sessionsList.addEventListener("click", async (e) => {
@@ -36,7 +36,7 @@ export function setupSessionListHandlers(
     const action = target.dataset?.action || target.closest("[data-action]")?.dataset?.action;
 
     if (action === "summarize") {
-      await handleSummarize(sessionId, sessionService, sessionState);
+      await handleSummarize(sessionId, sessionService, appState, ipcAdapter);
       e.stopPropagation();
       return;
     }
@@ -48,7 +48,7 @@ export function setupSessionListHandlers(
     }
 
     if (action === "delete") {
-      await handleDelete(sessionId, sessionService, sessionState, updateSessionsList, elements, appState);
+      await handleDelete(sessionId, sessionService, updateSessionsList, elements, appState);
       e.stopPropagation();
       return;
     }
@@ -60,8 +60,8 @@ export function setupSessionListHandlers(
     }
 
     // Otherwise, switch to this session (only if different)
-    if (sessionId !== sessionState.currentSessionId) {
-      await handleSwitch(sessionId, sessionService, sessionState, updateSessionsList, elements, appState);
+    if (sessionId !== sessionService.getCurrentSessionId()) {
+      await handleSwitch(sessionId, sessionService, updateSessionsList, elements, appState);
     } else {
       // Already in this session - do nothing (better UX, no popup)
       console.log("Already in session:", sessionId);
@@ -74,16 +74,36 @@ export function setupSessionListHandlers(
 /**
  * Handle session summarize
  */
-async function handleSummarize(sessionId, sessionService, sessionState) {
+async function handleSummarize(sessionId, sessionService, appState, ipcAdapter) {
   // Only summarize if this is the current session
-  if (sessionId !== sessionState.currentSessionId) {
+  if (sessionId !== sessionService.getCurrentSessionId()) {
     alert("Please switch to this session first to summarize it.");
     return;
   }
 
   try {
     console.log("Summarizing session:", sessionId);
+
+    // Track Python status - summarization started
+    if (appState) {
+      appState.setState("python.status", "busy_summarizing");
+      console.log("🔄 Python status: busy_summarizing");
+    }
+
     const result = await sessionService.summarizeSession(sessionId);
+
+    // Track Python status - summarization ended
+    if (appState) {
+      appState.setState("python.status", "idle");
+      console.log("✅ Python status: idle");
+    }
+
+    // Process queued commands
+    if (ipcAdapter && ipcAdapter.commandQueue.length > 0) {
+      console.log("📦 Processing queued commands after summarization...");
+      await ipcAdapter.processQueue();
+    }
+
     if (result.success) {
       console.log("✅ Session summarized successfully");
     } else {
@@ -91,6 +111,17 @@ async function handleSummarize(sessionId, sessionService, sessionState) {
     }
   } catch (error) {
     console.error("Error summarizing session:", error);
+
+    // Ensure status is reset even on error
+    if (appState) {
+      appState.setState("python.status", "idle");
+    }
+
+    // Process queue even on error
+    if (ipcAdapter && ipcAdapter.commandQueue.length > 0) {
+      await ipcAdapter.processQueue();
+    }
+
     alert(`Error summarizing session: ${error.message}`);
   }
 }
@@ -159,7 +190,7 @@ async function handleRename(sessionItem, sessionId, sessionService, _updateSessi
 /**
  * Handle session delete
  */
-async function handleDelete(sessionId, sessionService, sessionState, updateSessionsList, elements, appState) {
+async function handleDelete(sessionId, sessionService, updateSessionsList, elements, appState) {
   // Get session title for confirmation
   const sessionItem = document.querySelector(`[data-session-id="${sessionId}"]`);
   const titleDiv = sessionItem?.querySelector(".session-title");
@@ -174,6 +205,15 @@ async function handleDelete(sessionId, sessionService, sessionState, updateSessi
     // Check which view we're on BEFORE deleting (to decide sidebar auto-close behavior)
     const wasOnWelcomePage = document.body.classList.contains("view-welcome");
 
+    // IMPORTANT: Check if we're deleting the current session BEFORE calling deleteSession
+    // (deleteSession will set currentSessionId to null, making the check impossible after)
+    const isDeletingCurrentSession = sessionId === sessionService.getCurrentSessionId();
+    console.log("🗑️ Delete check:", {
+      deletedSessionId: sessionId,
+      currentSessionIdBeforeDelete: sessionService.getCurrentSessionId(),
+      isDeletingCurrentSession,
+    });
+
     const result = await sessionService.deleteSession(sessionId);
 
     if (result.success) {
@@ -186,15 +226,8 @@ async function handleDelete(sessionId, sessionService, sessionState, updateSessi
       }
 
       // If we deleted the current session, clear and show welcome page
-      console.log("🗑️ Delete check:", {
-        deletedSessionId: sessionId,
-        currentSessionId: sessionState.currentSessionId,
-        match: sessionId === sessionState.currentSessionId,
-      });
-
-      if (sessionId === sessionState.currentSessionId) {
+      if (isDeletingCurrentSession) {
         console.log("🏠 Deleted active session, navigating to welcome page");
-        sessionState.currentSessionId = null;
 
         // Clear FilePanel component FIRST (Phase 7 - release file handles!)
         if (window.components?.filePanel) {
@@ -238,11 +271,11 @@ async function handleDelete(sessionId, sessionService, sessionState, updateSessi
 /**
  * Handle session switch
  */
-async function handleSwitch(sessionId, sessionService, sessionState, updateSessionsList, elements, appState) {
+async function handleSwitch(sessionId, sessionService, updateSessionsList, elements, appState) {
   console.log("Switching to session:", sessionId);
 
   // Double-check: don't switch if already in this session
-  if (sessionId === sessionState.currentSessionId) {
+  if (sessionId === sessionService.getCurrentSessionId()) {
     console.log("Already in this session, skipping switch");
     return;
   }
@@ -252,9 +285,6 @@ async function handleSwitch(sessionId, sessionService, sessionState, updateSessi
 
     if (result.success) {
       console.log("✅ Switched to session:", sessionId);
-
-      // Update session state
-      sessionState.currentSessionId = sessionId;
 
       // Update chat model selector to reflect session's config
       if (result.session) {

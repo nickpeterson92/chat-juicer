@@ -25,7 +25,7 @@ Chat Juicer is optimized for **production-grade performance** with specific budg
 | **Message Render** | <16ms (60fps) | ~8ms | ✅ |
 | **Session Switch** | <500ms | ~245ms | ✅ |
 | **Memory (1h use)** | <150MB | ~120MB | ✅ |
-| **Test Coverage** | >80% | 82% | ✅ |
+| **Test Coverage** | >80% | 87% | ✅ |
 
 ---
 

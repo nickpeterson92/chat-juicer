@@ -2,7 +2,7 @@
 
 This file provides guidance to you (Claude) when working with code in this repository.
 
-⚠️ CRITICAL ⚠️ - Open your heart, your mind and your third eye. Take a deep breath and focus. You've got this!
+⚠️ CRITICAL ⚠️ - Open your heart, your mind and your third eye. Take a deep breath and focus.
 
 ## Project Overview
 
@@ -599,13 +599,12 @@ The Sequential Thinking server is configured in `integrations/mcp_servers.py` an
 - Database access
 - Custom reasoning patterns
 
-## Project Constraints
+## Project Architecture Notes
 
-- No formal test framework configured (pragmatic choice given rapidly evolving AI SDKs)
-- Manual validation required
 - Agent/Runner pattern with full async architecture
 - MCP servers run as subprocesses via npx
 - All functions now async (updated from original sync implementation)
+- Production-grade testing infrastructure: 1,192 tests with 87% coverage (614 Python + 578 JavaScript)
 
 ## Important Implementation Notes
 
@@ -616,12 +615,29 @@ The Sequential Thinking server is configured in `integrations/mcp_servers.py` an
 - Renderer process logs forwarded to main process via IPC for centralized logging
 - Replaced console.* statements with structured logging throughout
 
-### Testing Approach
-- Test Agent/Runner integration thoroughly
-- Verify MCP server communication
-- Check streaming event handling
-- Ensure Electron IPC compatibility
-- Test all function calls with new pattern
+### Testing Infrastructure
+The project maintains comprehensive test coverage with modern tooling:
+
+**Test Suite**: 1,192 tests with 87% coverage
+- **Python Tests**: 614 unit tests using pytest with fixtures and mocking
+  - Core business logic (Agent/Runner, session management, token tracking)
+  - Tool implementations (file operations, document generation, text editing)
+  - Integration tests for MCP server communication
+  - Pydantic model validation and type safety
+- **JavaScript Tests**: 578 tests covering frontend architecture
+  - Component tests (chat, file panel, input area, model selector)
+  - Service layer tests (session, message, file operations)
+  - Event handler tests (message, session, file events)
+  - Manager tests (view, theme, DOM, file management)
+  - Renderer tests (markdown, function cards, message formatting)
+  - Utility tests (scroll behavior, JSON cache, toast notifications)
+  - IPC communication and state management
+
+**Test Execution**:
+- Pytest for Python backend with coverage reporting
+- Modern JavaScript test runner for frontend components
+- Pre-commit hooks ensure all tests pass before commits
+- Continuous validation via `make check` and `make precommit`
 
 ### Performance Considerations
 - Full async/await architecture for optimal concurrency

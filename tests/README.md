@@ -7,8 +7,8 @@ Comprehensive test suite for both backend (Python) and frontend (JavaScript) wit
 | Component | Tests | Coverage | Status |
 |-----------|-------|----------|--------|
 | **Backend (Python)** | 614 | 85.57% | ✅ Passing |
-| **Frontend (JavaScript)** | 583 | 90%+ | ✅ Passing |
-| **Total** | **1,197** | **87%+** | ✅ **Passing** |
+| **Frontend (JavaScript)** | 578 | 90%+ | ✅ Passing |
+| **Total** | **1,192** | **87%+** | ✅ **Passing** |
 
 **Quick Links**:
 - [Backend Test Guide](#backend-tests-python) (this document)

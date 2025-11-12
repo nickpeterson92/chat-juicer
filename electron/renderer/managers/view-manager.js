@@ -3,9 +3,14 @@
  * Manages view state and transitions between welcome and chat views
  */
 
+import { ComponentLifecycle } from "../core/component-lifecycle.js";
+import { globalLifecycleManager } from "../core/lifecycle-manager.js";
 import { addMessage } from "../ui/chat-ui.js";
 import { ModelSelector } from "../ui/components/model-selector.js";
 import { getSuggestionPrompt, hideWelcomePage, showWelcomePage } from "../ui/welcome-page.js";
+
+// View manager component for lifecycle management
+const viewManagerComponent = {};
 
 /**
  * Track welcome page event listeners for cleanup
@@ -68,6 +73,11 @@ export async function showWelcomeView(elements, appState) {
     }
   }
 
+  // Mount view manager component if not already mounted
+  if (!viewManagerComponent._lifecycle) {
+    ComponentLifecycle.mount(viewManagerComponent, "ViewManager", globalLifecycleManager);
+  }
+
   // Initialize ModelSelector with cached config (instant, no waiting)
   if (cachedConfig?.models) {
     // Use requestAnimationFrame to wait for DOM, then initialize async
@@ -82,14 +92,15 @@ export async function showWelcomeView(elements, appState) {
   // Clean up any existing welcome page listeners before attaching new ones
   detachWelcomePageListeners();
 
-  // Attach welcome page event listeners after DOM is ready
-  setTimeout(() => {
+  // Attach welcome page event listeners after DOM is ready (lifecycle-managed)
+  viewManagerComponent.setTimeout(() => {
     attachWelcomePageListeners(elements, appState);
 
     // Auto-refresh welcome page file list if there's an active session
     // This prevents showing stale/deleted files
-    const sessionState = window.app?.sessionState;
-    if (sessionState?.currentSessionId) {
+    const sessionService = window.app?.services?.sessionService;
+    const currentSessionId = sessionService?.getCurrentSessionId();
+    if (currentSessionId) {
       const welcomeFilesContainer = document.getElementById("welcome-files-container");
       const welcomeFilesSection = document.getElementById("welcome-files-section");
 
@@ -99,7 +110,7 @@ export async function showWelcomeView(elements, appState) {
 
         // Then load the files (will show placeholder if empty)
         import("../managers/file-manager.js").then(({ loadFiles }) => {
-          const directory = `data/files/${sessionState.currentSessionId}/sources`;
+          const directory = `data/files/${currentSessionId}/sources`;
           loadFiles(directory, welcomeFilesContainer);
         });
       }
@@ -252,9 +263,9 @@ function attachWelcomePageListeners(elements, appState) {
   const welcomeFilesRefreshBtn = document.getElementById("welcome-files-refresh");
   if (welcomeFilesRefreshBtn) {
     const refreshHandler = async () => {
-      // Get current session ID to load session files
-      const { sessionState } = await import("../services/session-service.js");
-      const sessionId = sessionState.currentSessionId;
+      // Get current session ID from SessionService
+      const sessionService = window.app?.services?.sessionService;
+      const sessionId = sessionService?.getCurrentSessionId();
 
       if (sessionId) {
         // Load session-specific files
@@ -272,15 +283,13 @@ function attachWelcomePageListeners(elements, appState) {
 
   // Handle model config changes - update session config if no messages sent yet
   async function handleModelConfigChange() {
-    const { sessionState } = await import("../services/session-service.js");
-    const sessionId = sessionState.currentSessionId;
+    const sessionService = window.app?.services?.sessionService;
+    if (!sessionService) return;
+
+    const sessionId = sessionService.getCurrentSessionId();
 
     // Only update if there's a session
     if (!sessionId) return;
-
-    // Check if session has any messages
-    const sessionService = window.app?.services?.sessionService;
-    if (!sessionService) return;
 
     const sessions = await sessionService.loadSessions(0, 100);
     if (!sessions.success) return;
@@ -335,8 +344,8 @@ function attachWelcomePageListeners(elements, appState) {
     }
   }
 
-  // Attach listeners to model cards and reasoning options
-  setTimeout(() => {
+  // Attach listeners to model cards and reasoning options (lifecycle-managed)
+  viewManagerComponent.setTimeout(() => {
     // Model card clicks
     document.querySelectorAll(".model-card").forEach((card) => {
       const handler = () => handleModelConfigChange();
@@ -391,19 +400,17 @@ function attachWelcomePageListeners(elements, appState) {
       const modelConfig = getModelConfig();
 
       // Create new session only if one does not already exist (e.g., created by file upload)
-      const { sessionState } = await import("../services/session-service.js");
-      let sessionId = sessionState.currentSessionId;
+      const sessionService = window.app?.services?.sessionService;
+      if (!sessionService) {
+        console.error("❌ SessionService not available");
+        window.electronAPI.log("error", "SessionService not available in view-manager");
+        isProcessing = false;
+        return;
+      }
+
+      let sessionId = sessionService.getCurrentSessionId();
 
       if (!sessionId) {
-        // Get sessionService from window.app (created in bootstrap.js)
-        const sessionService = window.app?.services?.sessionService;
-        if (!sessionService) {
-          console.error("❌ SessionService not available");
-          window.electronAPI.log("error", "SessionService not available in view-manager");
-          isProcessing = false;
-          return;
-        }
-
         const result = await sessionService.createSession({
           title: null,
           mcpConfig,
@@ -426,10 +433,6 @@ function attachWelcomePageListeners(elements, appState) {
           model: modelConfig.model,
           reasoning_effort: modelConfig.reasoning_effort,
         });
-
-        // Update session state to mark this as the current session
-        const { sessionState } = await import("../services/session-service.js");
-        sessionState.currentSessionId = sessionId;
 
         // Update chat model selector IMMEDIATELY with the config we just created
         // (Don't wait for backend event - that comes after the message completes)

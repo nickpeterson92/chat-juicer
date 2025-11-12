@@ -9,6 +9,8 @@
  */
 
 import { MODEL_METADATA, REASONING_DESCRIPTIONS } from "../../config/model-metadata.js";
+import { ComponentLifecycle } from "../../core/component-lifecycle.js";
+import { globalLifecycleManager } from "../../core/lifecycle-manager.js";
 
 export class ModelSelector {
   /**
@@ -16,7 +18,7 @@ export class ModelSelector {
    * @param {Object} options - Configuration options
    * @param {Function} options.onChange - Callback when selection changes (model, reasoningEffort) => void
    * @param {Object} options.ipcAdapter - Optional IPC adapter for backend sync (chat page mode)
-   * @param {Object} options.sessionState - Optional session state for backend sync (chat page mode)
+   * @param {Object} options.sessionService - Optional session service for backend sync (chat page mode)
    * @param {boolean} options.autoSyncBackend - If true, automatically update backend on change (default: false)
    */
   constructor(container, options = {}) {
@@ -29,11 +31,14 @@ export class ModelSelector {
     this.reasoningLevels = [];
     this.onChange = options.onChange || null;
     this.ipcAdapter = options.ipcAdapter || null;
-    this.sessionState = options.sessionState || null;
+    this.sessionService = options.sessionService || null;
     this.autoSyncBackend = options.autoSyncBackend || false;
 
     // Track if listeners are attached to prevent duplication
     this.listenersAttached = false;
+
+    // Mount component with lifecycle management
+    ComponentLifecycle.mount(this, "ModelSelector", globalLifecycleManager);
   }
 
   /**
@@ -255,7 +260,7 @@ export class ModelSelector {
         const dropdown = this.container.querySelector("#model-selector-dropdown");
 
         if (!trigger || !dropdown) {
-          setTimeout(attempt, 50);
+          this.setTimeout(attempt, 50);
           return;
         }
 
@@ -377,7 +382,7 @@ export class ModelSelector {
         }
 
         // Auto-sync to backend if enabled (chat page mode)
-        if (this.autoSyncBackend && this.ipcAdapter && this.sessionState) {
+        if (this.autoSyncBackend && this.ipcAdapter && this.sessionService) {
           await this.syncToBackend(selectedModel, reasoningEffort);
         }
 
@@ -447,7 +452,7 @@ export class ModelSelector {
         }
 
         // Auto-sync to backend if enabled (chat page mode)
-        if (this.autoSyncBackend && this.ipcAdapter && this.sessionState) {
+        if (this.autoSyncBackend && this.ipcAdapter && this.sessionService) {
           await this.syncToBackend(model, reasoningValue);
         }
       });
@@ -475,7 +480,7 @@ export class ModelSelector {
    * @private
    */
   async syncToBackend(model, reasoningEffort) {
-    const currentSessionId = this.sessionState?.currentSessionId;
+    const currentSessionId = this.sessionService?.getCurrentSessionId();
     if (!currentSessionId) {
       console.log("⚠️ No active session, model change ignored");
       return;
