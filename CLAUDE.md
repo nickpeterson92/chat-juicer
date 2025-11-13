@@ -121,8 +121,6 @@ chat-juicer/
 │       ├── client_factory.py    # Azure OpenAI client factory and configuration
 │       ├── validation.py        # Input validation and sanitization
 │       └── session_integrity.py # Session integrity validation
-├── sources/          # Source documents for processing
-├── output/           # Generated documentation output
 ├── templates/        # Document templates with {{placeholders}}
 ├── data/             # Persistent data storage
 │   ├── chat_history.db       # SQLite database (Layer 1 & Layer 2)

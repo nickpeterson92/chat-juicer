@@ -1401,7 +1401,7 @@
   .message-content .mermaid-wrapper {
     margin: 0.5rem 0;
     padding: 1rem;
-    background-color: white;
+    background-color: #f8f8f6;
     border: 1px solid rgba(0, 0, 0, 0.1);
     border-radius: 0.5rem;
     overflow-x: auto;
@@ -1409,7 +1409,7 @@
   }
 
   [data-theme="dark"] .message-content .mermaid-wrapper {
-    background-color: #1e293b;
+    background-color: #20222d;
     border-color: rgba(255, 255, 255, 0.1);
   }
 
@@ -1488,7 +1488,7 @@
   }
 
   [data-theme="dark"] body.view-welcome {
-    background: #1e2432;
+    background: #191b29;
   }
 
   [data-theme="dark"] body.view-chat {
