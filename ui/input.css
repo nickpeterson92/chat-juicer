@@ -2,8 +2,44 @@
 
 @variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-/* Tailwind v4 Theme - Keyframe animations only */
+/* Tailwind v4 Theme - Custom tokens */
 @theme {
+  /* ========================================
+   * EPIC 2: COLOR SYSTEM INTEGRATION
+   * Maps CSS variables to Tailwind utilities
+   * ======================================== */
+
+  /* Surface Colors */
+  --color-surface-1: var(--color-surface-1);
+  --color-surface-2: var(--color-surface-2);
+  --color-surface-3: var(--color-surface-3);
+  --color-surface-overlay: var(--color-surface-overlay);
+  --color-surface-hover: var(--color-surface-hover);
+  --color-surface-active: var(--color-surface-active);
+
+  /* Text Colors */
+  --color-text-primary: var(--color-text-primary);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-assistant: var(--color-text-assistant);
+  --color-text-user: var(--color-text-user);
+  --color-text-on-surface: var(--color-text-on-surface);
+
+  /* Border Colors */
+  --color-border-primary: var(--color-border-primary);
+  --color-border-secondary: var(--color-border-secondary);
+  --color-border-focus: var(--color-border-focus);
+  --color-border-hover: var(--color-border-hover);
+
+  /* Brand Colors */
+  --color-brand-primary: var(--color-brand-primary);
+  --color-brand-secondary: var(--color-brand-secondary);
+
+  /* Status Colors */
+  --color-status-info: var(--color-status-info);
+  --color-status-success: var(--color-status-success);
+  --color-status-warning: var(--color-status-warning);
+  --color-status-error: var(--color-status-error);
+
   /* Keyframe animations that Tailwind doesn't provide */
   @keyframes slideIn {
     from {
@@ -110,7 +146,7 @@
   }
 
   .dark .custom-titlebar {
-    background: #1f2937;
+    background: #191b29;
     border-bottom-color: #4f5663;
   }
 
@@ -163,7 +199,7 @@
 
   .titlebar-button:hover {
     background: #f3f4f6;
-    color: #1f2937;
+    color: #191b29;
   }
 
   .dark .titlebar-button:hover {
@@ -1472,6 +1508,111 @@
 
 /* Base styles */
 @layer base {
+  :root {
+    /* ========================================
+     * SURFACE COLORS - Light Mode
+     * ======================================== */
+    --color-surface-1: #f8f8f6;
+    --color-surface-2: #ffffff;
+    --color-surface-3: #f8f8f6;
+    --color-surface-overlay: rgba(0, 0, 0, 0.05);
+    --color-surface-hover: rgba(0, 0, 0, 0.03);
+    --color-surface-active: rgba(37, 99, 235, 0.08);
+
+    /* ========================================
+     * TEXT COLORS - Light Mode
+     * ======================================== */
+    --color-text-primary: #1a1a1a;
+    --color-text-secondary: #6b7280;
+    --color-text-assistant: #191b29;
+    --color-text-user: #ffffff;
+    --color-text-on-surface: #374151;
+
+    /* ========================================
+     * BORDER COLORS - Light Mode
+     * ======================================== */
+    --color-border-primary: #6b7280;
+    --color-border-secondary: #d1d5db;
+    --color-border-focus: #2563eb;
+    --color-border-hover: #0066cc;
+
+    /* ========================================
+     * BRAND COLORS (Same for both modes)
+     * ======================================== */
+    --color-brand-primary: #0066cc;
+    --color-brand-secondary: #0052a3;
+    --color-brand-gradient: linear-gradient(135deg, #0066cc 0%, #0052a3 100%);
+
+    /* ========================================
+     * STATUS COLORS (Same for both modes)
+     * ======================================== */
+    --color-status-info: #3b82f6;
+    --color-status-success: #10b981;
+    --color-status-warning: #f59e0b;
+    --color-status-error: #ef4444;
+
+    /* ========================================
+     * FUNCTION CALL STATES (Same for both modes)
+     * ======================================== */
+    --color-function-executing: linear-gradient(135deg, #0066cc 0%, #0052a3 100%);
+    --color-function-success: linear-gradient(135deg, #059669 0%, #10b981 100%);
+    --color-function-error: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+
+    /* ========================================
+     * SCROLLBAR COLORS - Light Mode
+     * ======================================== */
+    --color-scrollbar-thumb: #e5e7eb;
+    --color-scrollbar-thumb-hover: #6b7280;
+
+    /* ========================================
+     * OVERLAYS - Light Mode
+     * ======================================== */
+    --color-overlay-backdrop: rgba(0, 0, 0, 0.5);
+  }
+
+  [data-theme="dark"] {
+    /* ========================================
+     * SURFACE COLORS - Dark Mode
+     * ======================================== */
+    --color-surface-1: #141622;
+    --color-surface-2: #191b29;
+    --color-surface-3: #1e2432;
+    --color-surface-overlay: rgba(255, 255, 255, 0.05);
+    --color-surface-hover: rgba(255, 255, 255, 0.03);
+    --color-surface-active: rgba(37, 99, 235, 0.12);
+
+    /* ========================================
+     * TEXT COLORS - Dark Mode
+     * ======================================== */
+    --color-text-primary: #f5f5f5;
+    --color-text-secondary: #a0a0a0;
+    --color-text-assistant: #f1f5f9;
+    --color-text-on-surface: #d1d5db;
+
+    /* ========================================
+     * BORDER COLORS - Dark Mode (WCAG AA compliant)
+     * ======================================== */
+    --color-border-primary: #6b7280;    /* Lightened from #374151 for 3:1 contrast */
+    --color-border-secondary: #6b7280;  /* Unified with primary for consistency */
+    --color-border-focus: #60a5fa;      /* Lightened from #2563eb for 3:1+ contrast */
+
+    /* ========================================
+     * BRAND COLORS - Dark Mode Override (WCAG AA compliant)
+     * ======================================== */
+    --color-brand-primary: #60a5fa;     /* Lightened from #0066cc for 4.5:1+ contrast on text */
+
+    /* ========================================
+     * SCROLLBAR COLORS - Dark Mode
+     * ======================================== */
+    --color-scrollbar-thumb: #333333;
+    --color-scrollbar-thumb-hover: #a0a0a0;
+
+    /* ========================================
+     * OVERLAYS - Dark Mode
+     * ======================================== */
+    --color-overlay-backdrop: rgba(0, 0, 0, 0.9);
+  }
+
   * {
     margin: 0;
     padding: 0;
@@ -1501,7 +1642,7 @@
   }
 
   [data-theme="dark"] body.view-chat {
-    background: #1f2937;
+    background: #191b29;
   }
 
   /* Placeholder text for empty states */

@@ -65,8 +65,8 @@ describe("WCAG Contrast Validation Utility", () => {
   describe("WCAG AA Text Contrast - Light Mode", () => {
     const WHITE = "#ffffff";
 
-    it("text-gray-800 (#1f2937) should meet 4.5:1 for normal text", () => {
-      const ratio = getContrastRatio("#1f2937", WHITE);
+    it("text-gray-800 (#191b29) should meet 4.5:1 for normal text", () => {
+      const ratio = getContrastRatio("#191b29", WHITE);
       expect(ratio).toBeGreaterThanOrEqual(4.5);
     });
 
@@ -82,7 +82,7 @@ describe("WCAG Contrast Validation Utility", () => {
   });
 
   describe("WCAG AA Text Contrast - Dark Mode", () => {
-    const DARK_BG = "#1f2937";
+    const DARK_BG = "#191b29";
 
     it("text-gray-100 (#f3f4f6) should meet 4.5:1 for normal text", () => {
       const ratio = getContrastRatio("#f3f4f6", DARK_BG);
@@ -106,7 +106,7 @@ describe("WCAG Contrast Validation Utility", () => {
     });
 
     it("dark border (#4f5663) provides visual hierarchy on dark background", () => {
-      const ratio = getContrastRatio("#4f5663", "#1f2937");
+      const ratio = getContrastRatio("#4f5663", "#191b29");
       // Note: 1.99:1 is acceptable for non-interactive visual separators
       // Interactive components use focus states and other indicators
       expect(ratio).toBeGreaterThan(1.5);
