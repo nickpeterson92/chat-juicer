@@ -12,6 +12,7 @@ import markedFootnote from "marked-footnote";
 import mermaid from "mermaid";
 import { ComponentLifecycle } from "../core/component-lifecycle.js";
 import { globalLifecycleManager } from "../core/lifecycle-manager.js";
+import { getCSSVariable } from "./css-variables.js";
 
 // Markdown renderer component for lifecycle management
 const markdownRendererComponent = {};
@@ -22,90 +23,114 @@ if (!markdownRendererComponent._lifecycle) {
 }
 
 /**
- * Initialize Mermaid with theme-specific configuration
- * @param {boolean} isDark - Whether to use dark theme
+ * Get Mermaid theme configuration from CSS variables
+ * Dynamically reads theme-appropriate colors for diagram rendering
+ * @returns {Object} Mermaid configuration object
  */
-function initializeMermaid(isDark = false) {
-  const theme = isDark ? "dark" : "default";
+function getMermaidConfig() {
+  // Detect current theme
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
 
-  mermaid.initialize({
+  return {
     startOnLoad: false,
-    theme: theme,
+    theme: "base", // Use base theme with custom variables
     securityLevel: "loose",
     fontFamily: "system-ui, -apple-system, sans-serif",
-    themeVariables: isDark
-      ? {
-          // Dark theme colors
-          primaryColor: "#0066cc",
-          primaryTextColor: "#f1f5f9",
-          primaryBorderColor: "#3b82f6",
-          lineColor: "#3b82f6",
-          edgeLabelBackground: "#2a2d3a",
-          secondaryColor: "#3b82f6",
-          tertiaryColor: "#363947",
-          textColor: "#f1f5f9",
-          mainBkg: "#2a2d3a",
-          nodeBorder: "#3b82f6",
-          clusterBkg: "#363947",
-          clusterBorder: "#3b82f6",
-          nodeTextColor: "#f1f5f9",
-          // Sequence diagram dark theme
-          actorBorder: "#3b82f6",
-          actorBkg: "#2a2d3a",
-          actorTextColor: "#f1f5f9",
-          actorLineColor: "#3b82f6",
-          signalColor: "#f1f5f9",
-          signalTextColor: "#f1f5f9",
-          labelBoxBkgColor: "#363947",
-          labelBoxBorderColor: "#3b82f6",
-          labelTextColor: "#f1f5f9",
-          loopTextColor: "#f1f5f9",
-          noteBorderColor: "#3b82f6",
-          noteBkgColor: "#363947",
-          noteTextColor: "#f1f5f9",
-          activationBorderColor: "#3b82f6",
-          activationBkgColor: "#0066cc",
-          sequenceNumberColor: "#ffffff",
-        }
-      : {
-          // Light theme colors
-          primaryColor: "#0066cc",
-          primaryTextColor: "#191b29",
-          primaryBorderColor: "#0066cc",
-          lineColor: "#0066cc",
-          edgeLabelBackground: "#f8f8f6",
-          secondaryColor: "#3b82f6",
-          tertiaryColor: "#e8e8e6",
-          textColor: "#191b29",
-          mainBkg: "#f8f8f6",
-          nodeBorder: "#0066cc",
-          clusterBkg: "#e8e8e6",
-          clusterBorder: "#0066cc",
-          nodeTextColor: "#191b29",
-          // Sequence diagram light theme
-          actorBorder: "#0066cc",
-          actorBkg: "#f8f8f6",
-          actorTextColor: "#191b29",
-          actorLineColor: "#0066cc",
-          signalColor: "#191b29",
-          signalTextColor: "#191b29",
-          labelBoxBkgColor: "#e8e8e6",
-          labelBoxBorderColor: "#0066cc",
-          labelTextColor: "#191b29",
-          loopTextColor: "#191b29",
-          noteBorderColor: "#0066cc",
-          noteBkgColor: "#e8e8e6",
-          noteTextColor: "#191b29",
-          activationBorderColor: "#0066cc",
-          activationBkgColor: "#0066cc",
-          sequenceNumberColor: "#ffffff",
-        },
-  });
+    themeVariables: {
+      // Primary colors
+      primaryColor: getCSSVariable("--color-brand-primary", "#0066cc"),
+      primaryTextColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
+      primaryBorderColor: getCSSVariable("--color-brand-primary", "#0066cc"),
+
+      // Lines and edges
+      lineColor: getCSSVariable("--color-brand-primary", "#0066cc"),
+      edgeLabelBackground: getCSSVariable("--color-surface-1", isDark ? "#2a2d3a" : "#f8f8f6"),
+
+      // Secondary and tertiary colors with better contrast
+      secondaryColor: isDark ? "#10b981" : "#059669", // Green for variety
+      tertiaryColor: isDark ? "#f59e0b" : "#d97706", // Amber for distinction
+
+      // Text
+      textColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
+
+      // Backgrounds
+      mainBkg: getCSSVariable("--color-surface-1", isDark ? "#2a2d3a" : "#f8f8f6"),
+      nodeBorder: getCSSVariable("--color-brand-primary", "#0066cc"),
+      clusterBkg: getCSSVariable("--color-surface-3", isDark ? "#363947" : "#e8e8e6"),
+      clusterBorder: getCSSVariable("--color-brand-primary", "#0066cc"),
+      nodeTextColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
+
+      // Gantt chart specific colors (critical for readability)
+      gridColor: isDark ? "#4b5563" : "#d1d5db", // Subtle grid lines
+      todayLineColor: getCSSVariable("--color-status-error", "#ef4444"), // Red for today marker
+
+      // Section colors (different background for each section)
+      sectionBkgColor: isDark ? "#1e293b" : "#f1f5f9",
+      sectionBkgColor2: isDark ? "#334155" : "#e2e8f0",
+      altSectionBkgColor: isDark ? "#0f172a" : "#f8fafc",
+
+      // Task colors (colorful bars for tasks)
+      taskBkgColor: isDark ? "#3b82f6" : "#2563eb", // Blue
+      taskTextColor: "#ffffff",
+      taskTextOutsideColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
+      taskTextClickableColor: getCSSVariable("--color-brand-primary", "#0066cc"),
+      taskBorderColor: isDark ? "#1e40af" : "#1d4ed8",
+
+      // Active task (different color for active/in-progress)
+      activeTaskBkgColor: getCSSVariable("--color-status-success", "#10b981"), // Green
+      activeTaskBorderColor: isDark ? "#059669" : "#047857",
+
+      // Done tasks (completed)
+      doneTaskBkgColor: isDark ? "#64748b" : "#94a3b8", // Gray for completed
+      doneTaskBorderColor: isDark ? "#475569" : "#64748b",
+
+      // Critical tasks (high priority)
+      critBkgColor: getCSSVariable("--color-status-error", "#ef4444"), // Red
+      critBorderColor: isDark ? "#dc2626" : "#b91c1c",
+
+      // Pie chart colors (distinct palette for slices)
+      pie1: getCSSVariable("--color-brand-primary", "#0066cc"), // Blue
+      pie2: getCSSVariable("--color-status-success", "#10b981"), // Green
+      pie3: getCSSVariable("--color-status-warning", "#f59e0b"), // Amber
+      pie4: getCSSVariable("--color-status-error", "#ef4444"), // Red
+      pie5: "#8b5cf6", // Purple
+      pie6: "#ec4899", // Pink
+      pie7: "#14b8a6", // Teal
+      pie8: "#f97316", // Orange
+      pie9: "#6366f1", // Indigo
+      pie10: "#84cc16", // Lime
+      pie11: "#06b6d4", // Cyan
+      pie12: "#a855f7", // Violet
+      pieTitleTextColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
+      pieSectionTextColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
+      pieLegendTextColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
+      pieStrokeColor: getCSSVariable("--color-surface-1", isDark ? "#1e293b" : "#ffffff"),
+      pieStrokeWidth: "2px",
+      pieOpacity: "0.9",
+
+      // Sequence diagram specific colors
+      actorBorder: getCSSVariable("--color-brand-primary", "#0066cc"),
+      actorBkg: getCSSVariable("--color-surface-1", isDark ? "#2a2d3a" : "#f8f8f6"),
+      actorTextColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
+      actorLineColor: getCSSVariable("--color-brand-primary", "#0066cc"),
+      signalColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
+      signalTextColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
+      labelBoxBkgColor: getCSSVariable("--color-surface-3", isDark ? "#363947" : "#e8e8e6"),
+      labelBoxBorderColor: getCSSVariable("--color-brand-primary", "#0066cc"),
+      labelTextColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
+      loopTextColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
+      noteBorderColor: getCSSVariable("--color-brand-primary", "#0066cc"),
+      noteBkgColor: getCSSVariable("--color-surface-3", isDark ? "#363947" : "#e8e8e6"),
+      noteTextColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
+      activationBorderColor: getCSSVariable("--color-brand-primary", "#0066cc"),
+      activationBkgColor: getCSSVariable("--color-brand-primary", "#0066cc"),
+      sequenceNumberColor: "#ffffff", // Always white for contrast on brand color
+    },
+  };
 }
 
-// Initialize Mermaid with current theme
-const isDarkMode = document.documentElement.getAttribute("data-theme") === "dark";
-initializeMermaid(isDarkMode);
+// Initialize Mermaid with dynamic config from CSS variables
+mermaid.initialize(getMermaidConfig());
 
 /**
  * Re-render all existing mermaid diagrams with current theme
@@ -149,8 +174,8 @@ async function reRenderAllMermaidDiagrams() {
 const themeObserver = new MutationObserver((mutations) => {
   mutations.forEach((mutation) => {
     if (mutation.type === "attributes" && mutation.attributeName === "data-theme") {
-      const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-      initializeMermaid(isDark);
+      console.log("[Mermaid] Theme changed, re-initializing...");
+      mermaid.initialize(getMermaidConfig());
       // Re-render all existing diagrams with new theme
       reRenderAllMermaidDiagrams();
     }
@@ -160,6 +185,13 @@ const themeObserver = new MutationObserver((mutations) => {
 themeObserver.observe(document.documentElement, {
   attributes: true,
   attributeFilter: ["data-theme"],
+});
+
+// Also listen for custom theme-changed event (redundant safety)
+document.addEventListener("theme-changed", () => {
+  console.log("[Mermaid] Custom theme-changed event, re-initializing...");
+  mermaid.initialize(getMermaidConfig());
+  reRenderAllMermaidDiagrams();
 });
 
 /**

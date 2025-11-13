@@ -7,12 +7,32 @@ import smokeAnimationData from "../../../ui/Smoke.json";
 import { MAX_MESSAGES } from "../config/constants.js";
 import { ComponentLifecycle } from "../core/component-lifecycle.js";
 import { globalLifecycleManager } from "../core/lifecycle-manager.js";
+import { getBrandPrimaryColor } from "../utils/css-variables.js";
 import { initLottieWithColor } from "../utils/lottie-color.js";
 import { initializeCodeCopyButtons, processMermaidDiagrams, renderMarkdown } from "../utils/markdown-renderer.js";
 import { scheduleScroll } from "../utils/scroll-utils.js";
 
 // Message cache for O(1) message management (replaces O(n) querySelectorAll)
 const messageCache = new Map();
+
+// Brand color cache for performance (updated on theme change)
+let cachedBrandColor = null;
+
+// Initialize cache on module load
+function initializeCacheColor() {
+  cachedBrandColor = getBrandPrimaryColor();
+  console.log("[Chat UI] Brand color cached:", cachedBrandColor);
+}
+
+// Listen for theme changes to update cache
+document.addEventListener("theme-changed", () => {
+  const oldColor = cachedBrandColor;
+  cachedBrandColor = getBrandPrimaryColor();
+  console.log("[Chat UI] Theme changed, brand color updated:", oldColor, "→", cachedBrandColor);
+});
+
+// Initialize cache immediately
+initializeCacheColor();
 
 // Chat UI component for lifecycle management
 const chatUIComponent = {};
@@ -200,8 +220,8 @@ export function createStreamingAssistantMessage(chatContainer) {
   // Add loading indicator (start with dot, replace with Lottie if available)
   const loadingSpan = document.createElement("span");
   loadingSpan.className = "loading-lamp";
-  loadingSpan.style.cssText =
-    "display: inline-block !important; width: 48px; height: 48px; vertical-align: middle; margin-right: 8px; opacity: 1; line-height: 48px; text-align: center; font-size: 32px; color: #0066cc; font-weight: bold;";
+  const brandColor = cachedBrandColor || getBrandPrimaryColor();
+  loadingSpan.style.cssText = `display: inline-block !important; width: 48px; height: 48px; vertical-align: middle; margin-right: 8px; opacity: 1; line-height: 48px; text-align: center; font-size: 32px; color: ${brandColor}; font-weight: bold;`;
   loadingSpan.textContent = "●"; // Start with visible fallback in brand blue
   console.log("[Chat UI] Loading indicator created:", loadingSpan);
 
@@ -218,7 +238,8 @@ export function createStreamingAssistantMessage(chatContainer) {
     try {
       // Clear the dot before initializing Lottie
       loadingSpan.textContent = "";
-      const animation = initLottieWithColor(loadingSpan, smokeAnimationData, "#0066cc");
+      const brandColor = cachedBrandColor || getBrandPrimaryColor();
+      const animation = initLottieWithColor(loadingSpan, smokeAnimationData, brandColor);
       if (!animation) {
         console.error("[Chat UI] Failed to initialize Lottie animation");
         loadingSpan.textContent = "●"; // Restore fallback if Lottie fails

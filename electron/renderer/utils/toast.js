@@ -4,6 +4,8 @@
  * Includes full accessibility support (ARIA, keyboard, screen readers)
  */
 
+import { getCSSVariable } from "./css-variables.js";
+
 // Track active toasts for deduplication and limits
 const activeToasts = new Map(); // message -> toast element
 const MAX_CONCURRENT_TOASTS = 5;
@@ -56,15 +58,17 @@ export function showToast(message, type = "info", duration = 3000) {
   toast.setAttribute("aria-atomic", "true"); // Read entire message
   toast.setAttribute("tabindex", "0"); // Make focusable for keyboard nav
 
-  // Type-specific styling
-  const typeStyles = {
-    info: "bg-blue-500 text-white",
-    success: "bg-emerald-500 text-white",
-    warning: "bg-amber-500 text-white",
-    error: "bg-red-500 text-white",
+  // Type-specific styling using CSS variables
+  const statusColors = {
+    info: getCSSVariable("--color-status-info", "#3b82f6"),
+    success: getCSSVariable("--color-status-success", "#10b981"),
+    warning: getCSSVariable("--color-status-warning", "#f59e0b"),
+    error: getCSSVariable("--color-status-error", "#ef4444"),
   };
 
-  toast.classList.add(...(typeStyles[type] || typeStyles.info).split(" "));
+  const bgColor = statusColors[type] || statusColors.info;
+  toast.style.backgroundColor = bgColor;
+  toast.style.color = "#ffffff"; // White text for contrast on all status colors
   toast.textContent = message;
 
   // Track this toast
