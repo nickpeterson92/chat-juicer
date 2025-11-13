@@ -26,6 +26,7 @@
     "@tailwindcss/vite": "^4.1.14",
     "@vitest/coverage-v8": "^4.0.8",
     "@vitest/ui": "^4.0.8",
+    "axe-core": "^4.11.0",
     "electron": "^38.1.2",
     "electron-vite": "^4.0.1",
     "happy-dom": "^20.0.10",

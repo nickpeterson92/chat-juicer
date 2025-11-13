@@ -97,7 +97,7 @@ export async function loadFiles(directory = "sources", container = null) {
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="opacity-20 mb-2 mx-auto">
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
               </svg>
-              <p class="text-xs text-gray-400 dark:text-gray-500 text-center">No files in ${dirName}</p>
+              <p class="text-xs text-gray-400 dark:text-gray-500 text-center">No source files found</p>
               <p class="text-xs text-gray-500 dark:text-gray-600 text-center mt-1">Drag files onto the canvas to upload</p>
             </div>
           `;
