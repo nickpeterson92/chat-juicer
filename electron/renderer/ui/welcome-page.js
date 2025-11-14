@@ -5,6 +5,8 @@
  * Architecture: Composable template functions for maintainability
  */
 
+import { animateWelcomeScreen } from "./utils/welcome-animations.js";
+
 // Inline SVG logo (needed for color override with currentColor)
 const LOGO_SVG = `<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
   <path fill="currentColor" d="M277.821,153.703c29.216,0,54.766,15.433,69.06,38.609l10.771-6.639c-16.484-26.76-46.078-44.63-79.832-44.63c-33.753,0-63.356,17.87-79.84,44.63l10.772,6.639C223.046,169.136,248.606,153.703,277.821,153.703z"/>
@@ -255,9 +257,6 @@ export function showWelcomePage(container, userName = "User") {
       welcomeInput.style.height = `${Math.min(welcomeInput.scrollHeight, 200)}px`;
       updateSendButtonState();
     });
-
-    // Focus input
-    welcomeInput.focus();
   }
 
   updateSendButtonState();
@@ -271,6 +270,26 @@ export function showWelcomePage(container, userName = "User") {
       btn.classList.toggle("active");
     });
   });
+
+  // Trigger welcome animations AFTER DOM mount
+  const greetingElement = container.querySelector(".welcome-greeting");
+  const pillElements = Array.from(container.querySelectorAll(".suggestion-pill"));
+
+  if (greetingElement && pillElements.length > 0) {
+    // Use requestAnimationFrame to ensure DOM is fully painted
+    requestAnimationFrame(() => {
+      const cleanup = animateWelcomeScreen({
+        greeting: greetingElement,
+        pills: pillElements,
+      });
+
+      // Store cleanup function for navigation
+      if (container._animationCleanup) {
+        container._animationCleanup();
+      }
+      container._animationCleanup = cleanup;
+    });
+  }
 }
 
 /**
@@ -279,6 +298,13 @@ export function showWelcomePage(container, userName = "User") {
  */
 export function hideWelcomePage(container) {
   if (!container) return;
+
+  // Cleanup animations before removing DOM
+  if (container._animationCleanup) {
+    container._animationCleanup();
+    delete container._animationCleanup;
+  }
+
   container.innerHTML = "";
 }
 

@@ -572,6 +572,16 @@
     @apply absolute inset-0 flex items-center justify-center z-[100];
   }
 
+  /* ==========================================
+   * ACCESSIBILITY: Screen reader only elements
+   * Visually hidden but available to assistive tech
+   * ========================================== */
+  .sr-only {
+    @apply absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap;
+    border: 0;
+    clip: rect(0, 0, 0, 0);
+  }
+
   .welcome-content {
     @apply max-w-[720px] w-full px-8 pt-8 pb-12 flex flex-col items-center gap-8 translate-y-[4vh];
   }
@@ -588,6 +598,10 @@
   .welcome-greeting {
     @apply text-3xl font-medium m-0;
     color: var(--color-text-primary);
+    /* GPU acceleration for animations */
+    will-change: transform, opacity;
+    transform: translate3d(0, 0, 0);
+    backface-visibility: hidden;
   }
 
   .welcome-input-section {
@@ -940,6 +954,10 @@
     @apply flex items-center gap-1.5 py-2 px-3 rounded-lg bg-transparent text-sm font-[450] cursor-pointer transition-all whitespace-nowrap;
     border: 1px solid var(--color-border-secondary);
     color: var(--color-text-secondary);
+    /* GPU acceleration for animations */
+    will-change: transform, opacity;
+    transform: translate3d(0, 0, 0);
+    backface-visibility: hidden;
   }
 
   .suggestion-pill:hover {
@@ -950,6 +968,14 @@
 
   .suggestion-pill:active {
     color: var(--color-text-primary);
+  }
+
+  /* Focus indicator for accessibility (WCAG 2.4.7 AA) */
+  .suggestion-pill:focus-visible {
+    box-shadow: 0 0 0 3px var(--color-brand-primary);
+    outline: 2px solid transparent; /* High contrast mode fallback */
+    opacity: 1 !important; /* Ensure pill is visible when focused during animation */
+    border-color: var(--color-border-focus);
   }
 
   .pill-icon {
@@ -1548,5 +1574,19 @@
 
   [data-theme="dark"] .files-error {
     @apply text-red-400;
+  }
+
+  /* ==========================================
+   * ACCESSIBILITY: Forced colors mode (high contrast)
+   * Disable animations and ensure proper contrast
+   * ========================================== */
+  @media (forced-colors: active) {
+    .welcome-greeting,
+    .suggestion-pill {
+      animation: none !important;
+      transition: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
   }
 }

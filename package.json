@@ -40,6 +40,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "animejs": "^4.2.2",
     "dompurify": "^3.3.0",
     "highlight.js": "^11.11.1",
     "katex": "^0.16.25",

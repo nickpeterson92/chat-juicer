@@ -55,8 +55,6 @@ describe("WCAG 2.1 AA Compliance", () => {
       const html = readFileSync(htmlPath, "utf-8");
 
       // Check for title attributes on interactive elements
-      const buttonsWithoutTitle = html.match(/<button[^>]*(?!title=)[^>]*>/g);
-
       // Some buttons may not need titles if they have visible text
       // This is a basic check - in reality, buttons with only icons need titles
       expect(html).toContain("title=");

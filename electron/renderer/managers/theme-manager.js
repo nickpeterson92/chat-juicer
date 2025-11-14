@@ -18,7 +18,7 @@ export function initializeTheme(elements) {
   if (savedTheme) {
     // User has explicitly chosen a theme
     theme = savedTheme;
-  } else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+  } else if (window.matchMedia?.("(prefers-color-scheme: dark)").matches) {
     // System prefers dark mode
     theme = "dark";
   } else {
