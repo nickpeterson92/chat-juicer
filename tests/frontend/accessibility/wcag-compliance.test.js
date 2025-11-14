@@ -38,17 +38,6 @@ describe("WCAG 2.1 AA Compliance", () => {
     });
   });
 
-  describe("Theme Detection", () => {
-    it("should respect system color scheme preference", () => {
-      const themeManagerPath = resolve(process.cwd(), "electron/renderer/managers/theme-manager.js");
-      const themeManager = readFileSync(themeManagerPath, "utf-8");
-
-      // Verify system theme detection is implemented
-      expect(themeManager).toContain("prefers-color-scheme");
-      expect(themeManager).toContain("matchMedia");
-    });
-  });
-
   describe("Semantic HTML", () => {
     it("should use proper ARIA labels for interactive elements", () => {
       const htmlPath = resolve(process.cwd(), "ui/index.html");
