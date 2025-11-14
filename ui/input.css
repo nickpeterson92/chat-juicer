@@ -2,94 +2,10 @@
 
 @variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-/* Tailwind v4 Theme - Custom tokens */
-@theme {
-  /* ========================================
-   * EPIC 2: COLOR SYSTEM INTEGRATION
-   * Maps CSS variables to Tailwind utilities
-   * ======================================== */
-
-  /* Surface Colors */
-  --color-surface-1: var(--color-surface-1);
-  --color-surface-2: var(--color-surface-2);
-  --color-surface-3: var(--color-surface-3);
-  --color-surface-overlay: var(--color-surface-overlay);
-  --color-surface-hover: var(--color-surface-hover);
-  --color-surface-active: var(--color-surface-active);
-
-  /* Text Colors */
-  --color-text-primary: var(--color-text-primary);
-  --color-text-secondary: var(--color-text-secondary);
-  --color-text-assistant: var(--color-text-assistant);
-  --color-text-user: var(--color-text-user);
-  --color-text-on-surface: var(--color-text-on-surface);
-
-  /* Border Colors */
-  --color-border-primary: var(--color-border-primary);
-  --color-border-secondary: var(--color-border-secondary);
-  --color-border-focus: var(--color-border-focus);
-  --color-border-hover: var(--color-border-hover);
-
-  /* Brand Colors */
-  --color-brand-primary: var(--color-brand-primary);
-  --color-brand-secondary: var(--color-brand-secondary);
-
-  /* Status Colors */
-  --color-status-info: var(--color-status-info);
-  --color-status-success: var(--color-status-success);
-  --color-status-warning: var(--color-status-warning);
-  --color-status-error: var(--color-status-error);
-
-  /* File Type Colors */
-  --color-file-image: var(--color-file-image);
-  --color-file-code: var(--color-file-code);
-  --color-file-archive: var(--color-file-archive);
-  --color-file-audio: var(--color-file-audio);
-
-  /* Keyframe animations that Tailwind doesn't provide */
-  @keyframes slideIn {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @keyframes typing {
-    0%,
-    60%,
-    100% {
-      opacity: 0.3;
-    }
-    30% {
-      opacity: 1;
-    }
-  }
-
-  @keyframes fadeOut {
-    0% {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-    100% {
-      opacity: 0;
-      transform: translateY(-8px) scale(0.95);
-    }
-  }
-
-  @keyframes toast-pulse {
-    0%,
-    100% {
-      transform: scale(1);
-    }
-    50% {
-      transform: scale(1.05);
-    }
-  }
-}
+/* NOTE: @theme block removed - brand colors defined in @layer base :root/:dark sections
+ * Tailwind v4 can use CSS custom properties directly via arbitrary values
+ * Keyframe animations moved to @layer base for better organization
+ */
 
 /* Essential custom CSS - Platform-specific features and complex patterns */
 @layer components {
@@ -906,7 +822,7 @@
     background-color: var(--color-surface-active);
     color: var(--color-text-user);
     opacity: 0.5;
-    box-shadow: inset 0 0 0 0 rgba(0, 102, 204, 0.4);
+    box-shadow: inset 0 0 0 0 rgba(13, 99, 251, 0.4);
   }
 
   /* Compact variant - very small button with equal spacing from edges */
@@ -923,29 +839,29 @@
     background-color: var(--color-brand-primary);
     color: var(--color-text-user);
     opacity: 1;
-    box-shadow: 0 10px 20px -12px rgba(0, 102, 204, 0.7);
+    box-shadow: 0 10px 20px -12px rgba(13, 99, 251, 0.7);
   }
 
   .welcome-send-btn.ready:hover {
-    box-shadow: 0 12px 26px -16px rgba(0, 102, 204, 0.9);
+    box-shadow: 0 12px 26px -16px rgba(13, 99, 251, 0.9);
     transform: translateY(-1px);
   }
 
   .welcome-send-btn.ready:active {
     transform: translateY(0);
-    box-shadow: 0 6px 18px -12px rgba(0, 102, 204, 0.75);
+    box-shadow: 0 6px 18px -12px rgba(13, 99, 251, 0.75);
   }
 
   [data-theme="dark"] .welcome-send-btn.ready {
-    box-shadow: 0 10px 24px -14px rgba(0, 102, 204, 0.8);
+    box-shadow: 0 10px 24px -14px rgba(13, 99, 251, 0.8);
   }
 
   [data-theme="dark"] .welcome-send-btn.ready:hover {
-    box-shadow: 0 12px 28px -18px rgba(0, 102, 204, 0.9);
+    box-shadow: 0 12px 28px -18px rgba(13, 99, 251, 0.9);
   }
 
   [data-theme="dark"] .welcome-send-btn.ready:active {
-    box-shadow: 0 8px 20px -14px rgba(0, 102, 204, 0.85);
+    box-shadow: 0 8px 20px -14px rgba(13, 99, 251, 0.85);
   }
 
   .welcome-send-btn:disabled {
@@ -1004,6 +920,12 @@
     will-change: transform, opacity;
     transform: translate3d(0, 0, 0);
     backface-visibility: hidden;
+  }
+
+  /* Pre-hide pills before animation runs to prevent flash during view transitions */
+  .suggestion-pill.pills-pre-animate {
+    opacity: 0;
+    transform: translate3d(-30px, 0, 0);
   }
 
   .suggestion-pill:hover {
@@ -1554,6 +1476,41 @@ body.view-chat {
 
 /* Base styles */
 @layer base {
+  /* ==========================================
+   * KEYFRAME ANIMATIONS
+   * ========================================== */
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fadeOut {
+    0% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-8px) scale(0.95);
+    }
+  }
+
+  @keyframes toast-pulse {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.05);
+    }
+  }
+
   :root {
     /* ========================================
      * SURFACE COLORS - Light Mode
@@ -1566,7 +1523,7 @@ body.view-chat {
     --color-surface-active: rgba(37, 99, 235, 0.08);
 
     /* Body background colors - Light Mode */
-    --color-body-welcome: #0066cc;  /* Brand primary for welcome page */
+    --color-body-welcome: #0d63fb;  /* Brand primary for welcome page */
     --color-body-chat: #fafafa;     /* Softer white for chat view */
 
     /* Welcome page specific colors - Light Mode */
@@ -1596,16 +1553,16 @@ body.view-chat {
      * ======================================== */
     --color-border-primary: #6b7280;
     --color-border-secondary: #d1d5db;
-    --color-border-focus: #0066cc;
-    --color-border-hover: #0066cc;
+    --color-border-focus: #0d63fb;
+    --color-border-hover: #0d63fb;
 
     /* ========================================
      * BRAND COLORS (Same for both modes)
      * ======================================== */
-    --color-brand-primary: #0066cc;
-    --color-brand-secondary: #0052a3;
-    --color-brand-gradient: linear-gradient(135deg, #0066cc 0%, #0052a3 100%);
-    --color-brand-glow: rgba(0, 102, 204, 0.2);  /* Brand blue at 20% for focus/hover glows */
+    --color-brand-primary: #0d63fb;
+    --color-brand-secondary: #0a4fc9;  /* Darker shade for gradients */
+    --color-brand-gradient: linear-gradient(135deg, #0d63fb 0%, #0a4fc9 100%);
+    --color-brand-glow: rgba(13, 99, 251, 0.2);  /* Brand blue at 20% for focus/hover glows */
 
     /* Secondary brand colors for accents */
     --color-brand-accent-1: #deff4d;  /* Lime green */
@@ -1625,7 +1582,7 @@ body.view-chat {
     /* ========================================
      * FUNCTION CALL STATES (Same for both modes)
      * ======================================== */
-    --color-function-executing: linear-gradient(135deg, #0066cc 0%, #0052a3 100%);
+    --color-function-executing: linear-gradient(135deg, #0d63fb 0%, #0a4fc9 100%);
     --color-function-success: linear-gradient(135deg, #059669 0%, #10b981 100%);
     --color-function-error: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
 
@@ -1690,7 +1647,7 @@ body.view-chat {
      * ======================================== */
     --color-border-primary: #6b7280;    /* Lightened from #374151 for 3:1 contrast */
     --color-border-secondary: #6b7280;  /* Unified with primary for consistency */
-    --color-border-focus: #0066cc;      /* Brand blue for consistency */
+    --color-border-focus: #0d63fb;      /* Brand blue for consistency */
 
     /* ========================================
      * SCROLLBAR COLORS - Dark Mode

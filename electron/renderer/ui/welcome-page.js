@@ -144,7 +144,7 @@ function createFilesSection() {
  */
 function createSuggestionPill(category, icon, label) {
   return `
-    <button class="suggestion-pill" data-category="${category}">
+    <button class="suggestion-pill pills-pre-animate" data-category="${category}">
       <span class="pill-icon">
         ${icon}
       </span>

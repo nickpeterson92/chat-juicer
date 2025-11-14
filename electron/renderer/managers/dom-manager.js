@@ -20,7 +20,6 @@ export function initializeElements() {
   elements.restartBtn = document.getElementById("restart-btn");
   elements.statusIndicator = document.getElementById("status-indicator");
   elements.statusText = document.getElementById("status-text");
-  elements.typingIndicator = document.getElementById("typing-indicator");
   elements.aiThinking = document.getElementById("ai-thinking");
   elements.filesPanel = document.getElementById("files-panel");
   elements.filesContainer = document.getElementById("files-container");

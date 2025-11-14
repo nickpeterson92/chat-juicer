@@ -84,6 +84,11 @@ function animateElements(elements) {
   const greetingVariant = GREETING_VARIANTS[greetingKeys[Math.floor(Math.random() * greetingKeys.length)]];
   const pillVariant = PILL_VARIANTS[pillKeys[Math.floor(Math.random() * pillKeys.length)]];
 
+  // Remove pre-animate class to allow animation to take control
+  pills.forEach((pill) => {
+    pill.classList.remove("pills-pre-animate");
+  });
+
   // Set initial states
   greeting.style.opacity = "0";
   pills.forEach((pill) => {
@@ -144,6 +149,10 @@ export function animateWelcomeScreen(elements) {
         timeline.seek(timeline.duration);
         timeline.pause();
       }
+      // Remove pre-animate class and clean up inline styles
+      elements.pills.forEach((pill) => {
+        pill.classList.remove("pills-pre-animate");
+      });
       cleanupInlineStyles([elements.greeting, ...elements.pills]);
       announceToScreenReader("Animation skipped. Welcome page ready.");
       document.getElementById("welcome-input")?.focus();

@@ -73,7 +73,6 @@ export class AppState {
     this.message = {
       currentAssistant: null,
       assistantBuffer: "",
-      isTyping: false,
     };
 
     // Function call tracking

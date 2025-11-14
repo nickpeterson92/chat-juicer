@@ -4,35 +4,16 @@
  */
 
 import smokeAnimationData from "../../../ui/Smoke.json";
+import { CRITICAL_COLORS } from "../config/colors.js";
 import { MAX_MESSAGES } from "../config/constants.js";
 import { ComponentLifecycle } from "../core/component-lifecycle.js";
 import { globalLifecycleManager } from "../core/lifecycle-manager.js";
-import { getBrandPrimaryColor } from "../utils/css-variables.js";
 import { initLottieWithColor } from "../utils/lottie-color.js";
 import { initializeCodeCopyButtons, processMermaidDiagrams, renderMarkdown } from "../utils/markdown-renderer.js";
 import { scheduleScroll } from "../utils/scroll-utils.js";
 
 // Message cache for O(1) message management (replaces O(n) querySelectorAll)
 const messageCache = new Map();
-
-// Brand color cache for performance (updated on theme change)
-let cachedBrandColor = null;
-
-// Initialize cache on module load
-function initializeCacheColor() {
-  cachedBrandColor = getBrandPrimaryColor();
-  console.log("[Chat UI] Brand color cached:", cachedBrandColor);
-}
-
-// Listen for theme changes to update cache
-document.addEventListener("theme-changed", () => {
-  const oldColor = cachedBrandColor;
-  cachedBrandColor = getBrandPrimaryColor();
-  console.log("[Chat UI] Theme changed, brand color updated:", oldColor, "→", cachedBrandColor);
-});
-
-// Initialize cache immediately
-initializeCacheColor();
 
 // Chat UI component for lifecycle management
 const chatUIComponent = {};
@@ -89,6 +70,8 @@ export function addMessage(chatContainer, content, type = "assistant") {
         .catch((err) => window.electronAPI.log("error", "Mermaid processing error", { error: err.message }))
         .finally(() => {
           initializeCodeCopyButtons(contentDiv);
+          // Scroll again after Mermaid diagrams render (they add height to the message)
+          scheduleScroll(chatContainer);
         });
     }, 0);
   } else {
@@ -220,7 +203,8 @@ export function createStreamingAssistantMessage(chatContainer) {
   // Add loading indicator (start with dot, replace with Lottie if available)
   const loadingSpan = document.createElement("span");
   loadingSpan.className = "loading-lamp";
-  const brandColor = cachedBrandColor || getBrandPrimaryColor();
+  // Use CRITICAL_COLORS for guaranteed brand color availability (no CSS variable timing dependency)
+  const brandColor = CRITICAL_COLORS.BRAND_PRIMARY;
   loadingSpan.style.cssText = `display: inline-block !important; width: 48px; height: 48px; vertical-align: middle; margin-right: 8px; opacity: 1; line-height: 48px; text-align: center; font-size: 32px; color: ${brandColor}; font-weight: bold;`;
   loadingSpan.textContent = "●"; // Start with visible fallback in brand blue
   console.log("[Chat UI] Loading indicator created:", loadingSpan);
@@ -238,13 +222,18 @@ export function createStreamingAssistantMessage(chatContainer) {
     try {
       // Clear the dot before initializing Lottie
       loadingSpan.textContent = "";
-      const brandColor = cachedBrandColor || getBrandPrimaryColor();
-      const animation = initLottieWithColor(loadingSpan, smokeAnimationData, brandColor);
+
+      // Use CRITICAL_COLORS for guaranteed brand color availability (no CSS variable timing dependency)
+      const safeBrandColor = CRITICAL_COLORS.BRAND_PRIMARY;
+
+      console.log("[Chat UI] Initializing Lottie with brand blue from constants:", safeBrandColor);
+
+      const animation = initLottieWithColor(loadingSpan, smokeAnimationData, safeBrandColor);
       if (!animation) {
         console.error("[Chat UI] Failed to initialize Lottie animation");
         loadingSpan.textContent = "●"; // Restore fallback if Lottie fails
       } else {
-        console.log("[Chat UI] Lottie animation loaded successfully");
+        console.log("[Chat UI] Lottie animation loaded successfully with color:", safeBrandColor);
       }
     } catch (error) {
       console.error("[Chat UI] Error loading Lottie:", error);

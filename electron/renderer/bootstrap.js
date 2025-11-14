@@ -140,6 +140,14 @@ export async function bootstrapSimple() {
       globalLifecycleManager.unmountAll();
     });
 
+    // Validate critical colors (development safety check)
+    try {
+      const { validateCriticalColors } = await import("./config/colors.js");
+      validateCriticalColors();
+    } catch (error) {
+      console.warn("[Bootstrap] Color validation failed (non-critical):", error);
+    }
+
     const bootstrapDuration = globalMetrics.endTimer("bootstrap");
     console.log(`\n⏱️  Bootstrap time: ${bootstrapDuration.toFixed(2)}ms`);
 

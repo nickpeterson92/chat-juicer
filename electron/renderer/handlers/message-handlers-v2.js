@@ -17,6 +17,7 @@ import {
   updateFunctionCallStatus,
 } from "../ui/function-card-ui.js";
 import { initializeCodeCopyButtons, processMermaidDiagrams } from "../utils/markdown-renderer.js";
+import { scheduleScroll } from "../utils/scroll-utils.js";
 
 /**
  * Register all message handlers with EventBus
@@ -68,9 +69,6 @@ export function registerMessageHandlers(context) {
       elements.aiThinking.classList.remove("active");
     }
 
-    // Hide typing indicator
-    elements.typingIndicator.classList.remove("active");
-    elements.typingIndicator.parentElement.style.display = "none";
     appState.setState("message.isTyping", false);
 
     // Create streaming message
@@ -127,6 +125,8 @@ export function registerMessageHandlers(context) {
           )
           .finally(() => {
             initializeCodeCopyButtons(messageContentDiv);
+            // Scroll again after Mermaid diagrams render (they add height to the message)
+            scheduleScroll(elements.chatContainer);
           });
       }
     }
@@ -146,8 +146,6 @@ export function registerMessageHandlers(context) {
       elements.aiThinking.classList.remove("active");
     }
 
-    elements.typingIndicator.classList.remove("active");
-    elements.typingIndicator.parentElement.style.display = "none";
     appState.setState("message.isTyping", false);
 
     // Add error message (Phase 7: use ChatContainer component)

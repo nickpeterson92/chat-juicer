@@ -180,7 +180,6 @@ describe("AppState", () => {
       expect(appState.message).toEqual({
         currentAssistant: null,
         assistantBuffer: "",
-        isTyping: false,
       });
     });
 
@@ -239,12 +238,12 @@ describe("AppState", () => {
       const callback = vi.fn();
       appState.subscribe("*", callback);
 
-      appState.setState("message.isTyping", true);
+      appState.setState("message.currentAssistant", "msg-123");
 
       expect(callback).toHaveBeenCalledWith({
-        path: "message.isTyping",
-        newValue: true,
-        oldValue: false,
+        path: "message.currentAssistant",
+        newValue: "msg-123",
+        oldValue: null,
       });
     });
   });
@@ -299,10 +298,10 @@ describe("AppState", () => {
       const callback1 = vi.fn();
       const callback2 = vi.fn();
 
-      appState.subscribe("message.isTyping", callback1);
-      appState.subscribe("message.isTyping", callback2);
+      appState.subscribe("message.assistantBuffer", callback1);
+      appState.subscribe("message.assistantBuffer", callback2);
 
-      appState.setState("message.isTyping", true);
+      appState.setState("message.assistantBuffer", "Hello");
 
       expect(callback1).toHaveBeenCalled();
       expect(callback2).toHaveBeenCalled();
@@ -433,10 +432,10 @@ describe("AppState", () => {
       const messageCallback = vi.fn();
       const wildcardCallback = vi.fn();
 
-      appState.subscribe("message.isTyping", messageCallback);
+      appState.subscribe("message.assistantBuffer", messageCallback);
       appState.subscribe("*", wildcardCallback);
 
-      appState.setState("message.isTyping", true);
+      appState.setState("message.assistantBuffer", "Hello");
       appState.setState("message.currentAssistant", "msg-456");
 
       expect(messageCallback).toHaveBeenCalledTimes(1);
