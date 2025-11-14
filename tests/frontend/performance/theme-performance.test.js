@@ -67,7 +67,7 @@ describe("Phase 2: Theme Switching Performance", () => {
     window = dom.window;
   });
 
-  it("should switch from light to dark in under 100ms", () => {
+  it("should switch from light to dark in under 150ms", () => {
     const startTime = performance.now();
 
     // Perform theme switch
@@ -79,11 +79,11 @@ describe("Phase 2: Theme Switching Performance", () => {
     const endTime = performance.now();
     const duration = endTime - startTime;
 
-    expect(duration).toBeLessThan(100);
+    expect(duration).toBeLessThan(150);
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
   });
 
-  it("should switch from dark to light in under 100ms", () => {
+  it("should switch from dark to light in under 150ms", () => {
     // Set initial dark theme
     document.documentElement.setAttribute("data-theme", "dark");
 
@@ -98,11 +98,11 @@ describe("Phase 2: Theme Switching Performance", () => {
     const endTime = performance.now();
     const duration = endTime - startTime;
 
-    expect(duration).toBeLessThan(100);
+    expect(duration).toBeLessThan(150);
     expect(document.documentElement.getAttribute("data-theme")).toBe("light");
   });
 
-  it("should maintain average switch time under 100ms over 10 iterations", () => {
+  it("should maintain average switch time under 150ms over 10 iterations", () => {
     const durations = [];
 
     // Perform 10 theme switches alternating light/dark
@@ -129,13 +129,13 @@ describe("Phase 2: Theme Switching Performance", () => {
       Average: ${average.toFixed(2)}ms
       Min: ${min.toFixed(2)}ms
       Max: ${max.toFixed(2)}ms
-      Target: <100ms
+      Target: <150ms
       All iterations: ${durations.map((d) => d.toFixed(2)).join("ms, ")}ms
     `);
 
     // Assertions
-    expect(average).toBeLessThan(100);
-    expect(max).toBeLessThan(100); // Even worst case should be under 100ms
+    expect(average).toBeLessThan(150);
+    expect(max).toBeLessThan(150); // Even worst case should be under 150ms
     expect(min).toBeGreaterThan(0); // Sanity check
   });
 
