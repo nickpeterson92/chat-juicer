@@ -12,7 +12,6 @@ import { globalLifecycleManager } from "../../core/lifecycle-manager.js";
 import { registerMessageHandlers } from "../../handlers/message-handlers-v2.js";
 import { setupSessionListHandlers } from "../../handlers/session-list-handlers.js";
 import { loadFiles } from "../../managers/file-manager.js";
-import { initializeTheme, toggleTheme } from "../../managers/theme-manager.js";
 import { renderEmptySessionList, renderSessionList } from "../../ui/renderers/session-list-renderer.js";
 import { initializeTitlebar } from "../../ui/titlebar.js";
 
@@ -299,20 +298,12 @@ export async function initializeEventHandlers({
     console.log("  ✓ Drag-and-drop handlers attached");
 
     // ======================
-    // 3. Theme & Titlebar
+    // 3. Titlebar
     // ======================
 
-    initializeTheme(elements);
     initializeTitlebar();
 
-    const themeToggle = document.getElementById("theme-toggle");
-    if (themeToggle) {
-      addListener(themeToggle, "click", () => {
-        toggleTheme(elements);
-      });
-    }
-
-    console.log("  ✓ Theme handlers initialized");
+    console.log("  ✓ Titlebar initialized");
 
     // ======================
     // 4. Session Management

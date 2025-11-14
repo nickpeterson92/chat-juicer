@@ -54,7 +54,7 @@ chat-juicer/
 │       │   ├── session-service.js, message-service.js, file-service.js
 │       │   ├── function-call-service.js, index.js
 │       ├── managers/             # UI state managers
-│       │   ├── view-manager.js, file-manager.js, dom-manager.js, theme-manager.js
+│       │   ├── view-manager.js, file-manager.js, dom-manager.js
 │       ├── plugins/              # Plugin architecture
 │       │   ├── plugin-interface.js, core-plugins.js, index.js
 │       ├── viewmodels/           # View models for data presentation
@@ -283,7 +283,6 @@ The renderer process uses a component-based modular architecture for maintainabi
 - DRY patterns for session management
 
 **Managers** (`renderer/managers/`):
-- `theme-manager.js`: Dark mode and theme persistence
 - `view-manager.js`: View state management (welcome vs chat) with model selector coordination
 - `dom-manager.js`: DOM element reference management
 - `file-manager.js`: File operations and drag-and-drop handling
@@ -439,7 +438,7 @@ Chat Juicer uses a **hybrid color system** combining CSS custom properties with 
 **Key Concepts**:
 - **28 semantic tokens** defined in `ui/input.css` (single source of truth)
 - **Tailwind v4 utilities** via arbitrary values: `bg-[var(--color-surface-1)]`
-- **Runtime theme switching** via `data-theme` attribute (light/dark modes)
+- **Single unified color system** with consistent visual design
 - **JavaScript utilities** for dynamic color access (`css-variables.js`)
 
 **Token Categories**:
@@ -465,13 +464,6 @@ import { getBrandPrimaryColor } from './utils/css-variables.js';
 const brandColor = getBrandPrimaryColor(); // '#0066cc'
 ```
 
-**Theme Switching**:
-```javascript
-// Toggle theme (managed by theme-manager.js)
-document.documentElement.setAttribute('data-theme', 'dark');
-// CSS variables update automatically, no page reload required
-```
-
 **Maintenance**: See `claudedocs/COLOR_SYSTEM_MASTER_DESIGN.md` Part 5 for how to add new colors or change values.
 
 **Implementation Status**:
@@ -484,10 +476,10 @@ The HTML codebase has been fully migrated from arbitrary color values to semanti
 
 **Migration Pattern**:
 ```html
-<!-- Before: Hardcoded colors with dark mode variants -->
+<!-- Before: Hardcoded colors with conditional variants -->
 <div class="bg-[#f8f8f6] dark:bg-[#141622]">
 
-<!-- After: Single semantic token (theme switching automatic) -->
+<!-- After: Single semantic token -->
 <div class="bg-surface-1">
 ```
 
@@ -500,12 +492,12 @@ The HTML codebase has been fully migrated from arbitrary color values to semanti
 - Input area: `bg-[#f8f8f6] dark:bg-[#141622]` → `bg-surface-1`
 
 **Benefits Realized**:
-- Eliminated 14 hardcoded color values (7 pairs of light/dark)
+- Eliminated 14 hardcoded color values (7 conditional pairs)
 - Reduced CSS class verbosity (1 class vs 2 classes per element)
-- Automatic theme switching via CSS variables (no JavaScript required)
+- Consistent color application via CSS variables (no JavaScript required)
 - Single source of truth for color values
 
-**Validation**: All changes tested in light and dark modes. Zero visual differences from baseline. Theme switching remains sub-100ms.
+**Validation**: All changes tested thoroughly. Zero visual differences from baseline. Color system performs optimally.
 
 ## Critical Implementation Details
 

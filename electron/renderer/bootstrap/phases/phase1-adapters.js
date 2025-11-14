@@ -19,6 +19,12 @@ import { StorageAdapter } from "../../adapters/StorageAdapter.js";
 export async function initializeAdapters() {
   console.log("📦 Phase 1: Initializing adapters...");
 
+  // One-time cleanup: Remove legacy theme preference
+  if (localStorage.getItem("theme")) {
+    localStorage.removeItem("theme");
+    console.log("  ✓ Cleaned up legacy theme preference");
+  }
+
   try {
     // Create adapters (synchronous, no network calls)
     const domAdapter = new DOMAdapter();

@@ -19,7 +19,7 @@
   <!-- Styles will be bundled by Vite -->
   <link rel="stylesheet" href="input.css">
 </head>
-<body class="view-welcome">
+<body class="view-welcome" data-theme="dark">
   <!-- macOS drag handle (hidden on Windows/Linux where custom titlebar is used) -->
   <div class="macos-drag-handle"></div>
 
@@ -49,15 +49,7 @@
       </div>
 
       <!-- Sidebar Footer (Settings) -->
-      <div class="border-t border-primary p-2">
-        <button class="w-full py-2.5 px-3 bg-transparent border-none rounded-md cursor-pointer text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2.5 transition-colors hover:bg-surface-hover text-left" id="theme-toggle" title="Toggle dark mode">
-          <span class="w-5 flex items-center justify-center" id="theme-icon">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-            </svg>
-          </span>
-          <span class="flex-1 text-sm" id="theme-text">Dark mode</span>
-        </button>
+      <div class="border-t border-primary py-[14px] px-2">
         <div class="w-full py-2.5 px-3 bg-transparent border-none rounded-md text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2.5 text-left cursor-default">
           <div class="w-2.5 h-2.5 rounded-full bg-emerald-500 dark:bg-emerald-500 animate-pulse" id="status-indicator"></div>
           <span class="flex-1 text-sm" id="status-text">Connected</span>
