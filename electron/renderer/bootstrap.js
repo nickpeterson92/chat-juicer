@@ -22,6 +22,7 @@ import { ErrorRecoveryStrategy, handlePhaseError } from "./bootstrap/error-recov
 import { validatePhaseResult } from "./bootstrap/validators.js";
 import { globalLifecycleManager } from "./core/lifecycle-manager.js";
 import { AppState } from "./core/state.js";
+import { getCSSVariable } from "./utils/css-variables.js";
 import { globalMetrics } from "./utils/performance/index.js";
 
 /**
@@ -139,6 +140,14 @@ export async function bootstrapSimple() {
       globalLifecycleManager.unmountAll();
     });
 
+    // Validate critical colors (development safety check)
+    try {
+      const { validateCriticalColors } = await import("./config/colors.js");
+      validateCriticalColors();
+    } catch (error) {
+      console.warn("[Bootstrap] Color validation failed (non-critical):", error);
+    }
+
     const bootstrapDuration = globalMetrics.endTimer("bootstrap");
     console.log(`\n⏱️  Bootstrap time: ${bootstrapDuration.toFixed(2)}ms`);
 
@@ -183,13 +192,22 @@ function createMinimalApp(phaseResults) {
  * Show bootstrap error UI
  */
 function showBootstrapErrorUI(error, recovery) {
+  // Get CSS variables for theming
+  const overlayBg = getCSSVariable("--color-overlay-backdrop", "rgba(0, 0, 0, 0.9)");
+  const surfaceBg = getCSSVariable("--color-surface-2", "#ffffff");
+  const textPrimary = getCSSVariable("--color-text-primary", "#1a1a1a");
+  const statusError = getCSSVariable("--color-status-error", "#dc2626");
+  const surface3 = getCSSVariable("--color-surface-3", "#f8f8f6");
+  const brandPrimary = getCSSVariable("--color-brand-primary", "#0066cc");
+  const textWhite = "#ffffff"; // Button text always white for contrast
+
   // Create error overlay using native DOM APIs
   const overlay = document.createElement("div");
   overlay.id = "bootstrap-error-overlay";
   overlay.style.cssText = `
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.9);
+    background: ${overlayBg};
     display: flex;
     align-items: center;
     justify-content: center;
@@ -198,31 +216,32 @@ function showBootstrapErrorUI(error, recovery) {
 
   overlay.innerHTML = `
     <div style="
-      background: white;
+      background: ${surfaceBg};
       padding: 2rem;
       border-radius: 8px;
       max-width: 600px;
       max-height: 80vh;
       overflow-y: auto;
-      color: black;
+      color: ${textPrimary};
     ">
-      <h2 style="margin-top: 0; color: #dc2626;">⚠️ Initialization Error</h2>
+      <h2 style="margin-top: 0; color: ${statusError};">⚠️ Initialization Error</h2>
       <p style="margin: 1rem 0;"><strong>Phase:</strong> ${recovery.phase}</p>
       <p style="margin: 1rem 0;">${recovery.message}</p>
       <details style="margin: 1rem 0;">
         <summary style="cursor: pointer; font-weight: bold;">Error Details</summary>
         <pre style="
-          background: #f3f4f6;
+          background: ${surface3};
           padding: 1rem;
           border-radius: 4px;
           overflow-x: auto;
           font-size: 12px;
           margin-top: 0.5rem;
+          color: ${textPrimary};
         ">${error.stack}</pre>
       </details>
       <button onclick="location.reload()" style="
-        background: #2563eb;
-        color: white;
+        background: ${brandPrimary};
+        color: ${textWhite};
         border: none;
         padding: 0.75rem 1.5rem;
         border-radius: 6px;

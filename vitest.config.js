@@ -36,6 +36,7 @@ export default defineConfig({
       "tests/frontend/integration/**/*.test.js",
       "tests/frontend/performance/**/*.test.js",
       "tests/frontend/e2e/**/*.test.js",
+      "tests/frontend/accessibility/**/*.test.js",
     ],
     exclude: ["node_modules", "dist", "data", "output"],
 

@@ -43,29 +43,29 @@ describe("Toast Utilities", () => {
     it("should apply correct styling for info type", () => {
       const toast = showToast("Info message", "info");
 
-      expect(toast.classList.contains("bg-blue-500")).toBe(true);
-      expect(toast.classList.contains("text-white")).toBe(true);
+      expect(toast.style.backgroundColor).toBe("#3b82f6"); // --color-status-info fallback
+      expect(toast.style.color).toBe("#ffffff"); // White text
     });
 
     it("should apply correct styling for success type", () => {
       const toast = showToast("Success message", "success");
 
-      expect(toast.classList.contains("bg-emerald-500")).toBe(true);
-      expect(toast.classList.contains("text-white")).toBe(true);
+      expect(toast.style.backgroundColor).toBe("#10b981"); // --color-status-success fallback
+      expect(toast.style.color).toBe("#ffffff"); // White text
     });
 
     it("should apply correct styling for warning type", () => {
       const toast = showToast("Warning message", "warning");
 
-      expect(toast.classList.contains("bg-amber-500")).toBe(true);
-      expect(toast.classList.contains("text-white")).toBe(true);
+      expect(toast.style.backgroundColor).toBe("#f59e0b"); // --color-status-warning fallback
+      expect(toast.style.color).toBe("#ffffff"); // White text
     });
 
     it("should apply correct styling for error type", () => {
       const toast = showToast("Error message", "error");
 
-      expect(toast.classList.contains("bg-red-500")).toBe(true);
-      expect(toast.classList.contains("text-white")).toBe(true);
+      expect(toast.style.backgroundColor).toBe("#ef4444"); // --color-status-error fallback
+      expect(toast.style.color).toBe("#ffffff"); // White text
     });
 
     it("should return null when container not found", () => {
@@ -303,7 +303,7 @@ describe("Toast Utilities", () => {
 
       expect(toast).toBeTruthy();
       // Should default to info styling
-      expect(toast.classList.contains("bg-blue-500")).toBe(true);
+      expect(toast.style.backgroundColor).toBe("#3b82f6"); // --color-status-info fallback
     });
 
     it("should handle empty message", () => {

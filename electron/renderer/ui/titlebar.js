@@ -146,7 +146,7 @@ async function updateMaximizeIcon() {
  * Update titlebar title
  * @param {string} title - New title
  */
-function updateTitle(title) {
+function _updateTitle(title) {
   const titleElement = document.querySelector(".titlebar-title");
   if (titleElement) {
     titleElement.textContent = title;
@@ -159,7 +159,7 @@ function updateTitle(title) {
 /**
  * Cleanup titlebar (no-op for custom titlebar, just for API consistency)
  */
-function cleanupTitlebar() {
+function _cleanupTitlebar() {
   // Custom titlebar is part of DOM and will be cleaned up automatically
   console.log("[Titlebar] Titlebar cleanup (no action needed for custom titlebar)");
 }

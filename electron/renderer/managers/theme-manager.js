@@ -4,19 +4,51 @@
  */
 
 /**
- * Initialize theme from localStorage
+ * Initialize theme from localStorage or system preference
  * Should be called on application startup
+ * Respects user's explicit choice (localStorage) over system preference
+ * Also sets up listener for system theme changes
  * @param {Object} elements - DOM elements from dom-manager
  */
 export function initializeTheme(elements) {
-  const savedTheme = localStorage.getItem("theme") || "light";
+  const savedTheme = localStorage.getItem("theme");
 
-  if (savedTheme === "dark") {
+  // Determine theme: user preference > system preference > default light
+  let theme;
+  if (savedTheme) {
+    // User has explicitly chosen a theme
+    theme = savedTheme;
+  } else if (window.matchMedia?.("(prefers-color-scheme: dark)").matches) {
+    // System prefers dark mode
+    theme = "dark";
+  } else {
+    // Default to light mode
+    theme = "light";
+  }
+
+  if (theme === "dark") {
     document.documentElement.setAttribute("data-theme", "dark");
     updateThemeToggle(elements, true);
   } else {
     document.documentElement.removeAttribute("data-theme");
     updateThemeToggle(elements, false);
+  }
+
+  // Listen for system theme changes (only applies if user hasn't set explicit preference)
+  if (window.matchMedia) {
+    const darkModeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    darkModeQuery.addEventListener("change", (e) => {
+      // Only auto-switch if user hasn't explicitly set a preference
+      if (!localStorage.getItem("theme")) {
+        if (e.matches) {
+          document.documentElement.setAttribute("data-theme", "dark");
+          updateThemeToggle(elements, true);
+        } else {
+          document.documentElement.removeAttribute("data-theme");
+          updateThemeToggle(elements, false);
+        }
+      }
+    });
   }
 }
 

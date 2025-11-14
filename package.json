@@ -26,6 +26,7 @@
     "@tailwindcss/vite": "^4.1.14",
     "@vitest/coverage-v8": "^4.0.8",
     "@vitest/ui": "^4.0.8",
+    "axe-core": "^4.11.0",
     "electron": "^38.1.2",
     "electron-vite": "^4.0.1",
     "happy-dom": "^20.0.10",
@@ -39,6 +40,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "animejs": "^4.2.2",
     "dompurify": "^3.3.0",
     "highlight.js": "^11.11.1",
     "katex": "^0.16.25",

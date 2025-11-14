@@ -30,6 +30,18 @@ const FUNCTION_ICONS = {
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>',
 };
 
+// Status icon mapping for WCAG 1.4.1 compliance (color-independent indicators)
+const STATUS_ICONS = {
+  executing:
+    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>',
+  completed:
+    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>',
+  error:
+    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+  preparing:
+    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/></svg>',
+};
+
 /**
  * Get SVG icon for a function
  * @param {string} functionName - Function name
@@ -45,6 +57,19 @@ function getFunctionIcon(functionName) {
   }
 
   return FUNCTION_ICONS.default;
+}
+
+/**
+ * Get status icon for WCAG 1.4.1 compliance (color-independent indicators)
+ * @param {string} status - Status name
+ * @returns {string} SVG icon HTML
+ */
+function getStatusIcon(status) {
+  // Map common status variants to standard statuses
+  if (status === "success" || status === "completed") {
+    return STATUS_ICONS.completed;
+  }
+  return STATUS_ICONS[status] || STATUS_ICONS.preparing;
 }
 
 /**
@@ -98,7 +123,8 @@ export function createFunctionCallCard(
 
     const statusDiv = document.createElement("div");
     statusDiv.className = "function-status";
-    statusDiv.textContent = status;
+    // Include status icon for WCAG 1.4.1 compliance (color-independent indicators)
+    statusDiv.innerHTML = `<span class="status-icon">${getStatusIcon(status)}</span><span class="status-text">${status}</span>`;
 
     headerDiv.appendChild(iconDiv);
     headerDiv.appendChild(nameDiv);
@@ -225,7 +251,8 @@ function flushStatusUpdates(activeCalls) {
 
     const statusDiv = card.element.querySelector(".function-status");
     if (statusDiv) {
-      statusDiv.textContent = status;
+      // Update both icon and text for WCAG 1.4.1 compliance
+      statusDiv.innerHTML = `<span class="status-icon">${getStatusIcon(status)}</span><span class="status-text">${status}</span>`;
     }
 
     // Update card styling based on status
