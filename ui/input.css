@@ -40,6 +40,12 @@
   --color-status-warning: var(--color-status-warning);
   --color-status-error: var(--color-status-error);
 
+  /* File Type Colors */
+  --color-file-image: var(--color-file-image);
+  --color-file-code: var(--color-file-code);
+  --color-file-archive: var(--color-file-archive);
+  --color-file-audio: var(--color-file-audio);
+
   /* Keyframe animations that Tailwind doesn't provide */
   @keyframes slideIn {
     from {
@@ -133,21 +139,21 @@
     left: 0;
     right: 0;
     height: 32px;
-    background: #ffffff;
+    background: var(--color-surface-2);
     display: flex;
     align-items: center;
     justify-content: space-between;
     user-select: none;
     z-index: 10000;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--color-border-secondary);
     transition:
       background-color 0.2s,
       border-color 0.2s;
   }
 
   .dark .custom-titlebar {
-    background: #191b29;
-    border-bottom-color: #4f5663;
+    background: var(--color-surface-2);
+    border-bottom-color: var(--color-border-secondary);
   }
 
   .titlebar-drag-region {
@@ -162,12 +168,12 @@
   .titlebar-title {
     font-size: 13px;
     font-weight: 500;
-    color: #4f5663;
+    color: var(--color-text-secondary);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
 
   .dark .titlebar-title {
-    color: #d1d5db;
+    color: var(--color-text-secondary);
   }
 
   .titlebar-controls {
@@ -181,7 +187,7 @@
     height: 100%;
     border: none;
     background: transparent;
-    color: #5a5f68;
+    color: var(--color-text-secondary);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -194,27 +200,27 @@
   }
 
   .dark .titlebar-button {
-    color: #9ca3af;
+    color: var(--color-text-secondary);
   }
 
   .titlebar-button:hover {
-    background: #f3f4f6;
-    color: #191b29;
+    background: var(--color-surface-hover);
+    color: var(--color-text-primary);
   }
 
   .dark .titlebar-button:hover {
-    background: #4f5663;
-    color: #f9fafb;
+    background: var(--color-surface-hover);
+    color: var(--color-text-primary);
   }
 
   .titlebar-close:hover {
-    background: #dc2626;
-    color: #ffffff;
+    background: var(--color-status-error);
+    color: var(--color-text-user);
   }
 
   .dark .titlebar-close:hover {
-    background: #dc2626;
-    color: #ffffff;
+    background: var(--color-status-error);
+    color: var(--color-text-user);
   }
 
   .titlebar-button svg {
@@ -592,12 +598,12 @@
 
   .welcome-logo {
     @apply absolute -left-[5.5rem] top-1/2 -translate-y-1/2 w-16 h-16 rounded-2xl;
-    color: var(--color-text-primary);
+    color: var(--color-welcome-text);
   }
 
   .welcome-greeting {
     @apply text-3xl font-medium m-0;
-    color: var(--color-text-primary);
+    color: var(--color-welcome-text);
     /* GPU acceleration for animations */
     will-change: transform, opacity;
     transform: translate3d(0, 0, 0);
@@ -618,7 +624,7 @@
   /* Compact variant for chat page - absolute minimal padding */
   .welcome-input-section.compact {
     @apply gap-0 py-1 px-2 rounded-lg;
-    background-color: #191b29;
+    background-color: var(--color-surface-2);
   }
 
   .welcome-input-footer {
@@ -891,8 +897,8 @@
   /* Compact variant - very small min height, tight text */
   .welcome-input-section.compact .welcome-input {
     @apply min-h-5 text-sm leading-[1.3] py-1.5;
-    background-color: #191b29;
-    color: #ffffff;
+    background-color: var(--color-surface-2);
+    color: var(--color-text-user);
   }
 
   .welcome-send-btn {
@@ -946,14 +952,54 @@
     @apply opacity-100;
   }
 
+  /* ==========================================
+   * PILL THEME SYSTEM
+   * Pills adapt to context via CSS variable layer
+   * ========================================== */
+
+  /* Default theme: chat view + dark mode welcome (uses standard semantic tokens) */
+  :root,
+  [data-theme="dark"] body.view-welcome {
+    --pill-bg: transparent;
+    --pill-bg-hover: var(--color-surface-hover);
+    --pill-border: var(--color-border-secondary);
+    --pill-border-hover: var(--color-border-hover);
+    --pill-text: var(--color-text-secondary);
+    --pill-text-hover: var(--color-text-primary);
+    --pill-backdrop: none;
+    --pill-focus-ring: var(--color-brand-primary);
+    --pill-focus-border: var(--color-border-focus);
+    --pill-hover-transform: translateY(-1px);
+  }
+
+  /* Welcome page light mode theme (uses welcome-specific tokens) */
+  body.view-welcome {
+    --pill-bg: var(--color-welcome-pill-bg);
+    --pill-bg-hover: var(--color-welcome-pill-bg-hover);
+    --pill-border: var(--color-welcome-pill-border);
+    --pill-border-hover: var(--color-welcome-pill-border-hover);
+    --pill-text: var(--color-welcome-pill-text);
+    --pill-text-hover: var(--color-welcome-pill-text-hover);
+    --pill-backdrop: blur(8px);
+    --pill-focus-ring: var(--color-welcome-pill-focus-ring);
+    --pill-focus-border: var(--color-welcome-pill-border-hover);
+    --pill-hover-transform: translateY(-1px);
+  }
+
+  /* ==========================================
+   * PILL STYLES - Single source of truth
+   * ========================================== */
+
   .suggestion-pills {
     @apply flex gap-2 flex-wrap justify-center mt-2;
   }
 
   .suggestion-pill {
-    @apply flex items-center gap-1.5 py-2 px-3 rounded-lg bg-transparent text-sm font-[450] cursor-pointer transition-all whitespace-nowrap;
-    border: 1px solid var(--color-border-secondary);
-    color: var(--color-text-secondary);
+    @apply flex items-center gap-1.5 py-2 px-3 rounded-lg text-sm font-[450] cursor-pointer transition-all whitespace-nowrap;
+    background-color: var(--pill-bg);
+    border: 1px solid var(--pill-border);
+    color: var(--pill-text);
+    backdrop-filter: var(--pill-backdrop);
     /* GPU acceleration for animations */
     will-change: transform, opacity;
     transform: translate3d(0, 0, 0);
@@ -961,29 +1007,53 @@
   }
 
   .suggestion-pill:hover {
-    border-color: var(--color-border-hover);
-    background-color: var(--color-surface-hover);
-    color: var(--color-text-primary);
+    background-color: var(--pill-bg-hover);
+    border-color: var(--pill-border-hover);
+    color: var(--pill-text-hover);
+    transform: var(--pill-hover-transform);
+  }
+
+  /* Cycle through secondary brand colors for pill borders on hover */
+  .suggestion-pill:nth-child(5n+1):hover {
+    border-color: var(--color-brand-accent-1);
+  }
+
+  .suggestion-pill:nth-child(5n+2):hover {
+    border-color: var(--color-brand-accent-2);
+  }
+
+  .suggestion-pill:nth-child(5n+3):hover {
+    border-color: var(--color-brand-accent-3);
+  }
+
+  .suggestion-pill:nth-child(5n+4):hover {
+    border-color: var(--color-brand-accent-4);
+  }
+
+  .suggestion-pill:nth-child(5n+5):hover {
+    border-color: var(--color-brand-accent-5);
   }
 
   .suggestion-pill:active {
-    color: var(--color-text-primary);
+    color: var(--pill-text-hover);
+    transform: translateY(0);
   }
 
   /* Focus indicator for accessibility (WCAG 2.4.7 AA) */
   .suggestion-pill:focus-visible {
-    box-shadow: 0 0 0 3px var(--color-brand-primary);
+    box-shadow: 0 0 0 3px var(--pill-focus-ring);
     outline: 2px solid transparent; /* High contrast mode fallback */
     opacity: 1 !important; /* Ensure pill is visible when focused during animation */
-    border-color: var(--color-border-focus);
+    border-color: var(--pill-focus-border);
   }
 
   .pill-icon {
-    @apply w-4 h-4 flex items-center justify-center flex-shrink-0 opacity-50 transition-opacity;
+    @apply w-4 h-4 flex items-center justify-center flex-shrink-0 transition-opacity;
+    opacity: 0.7;
   }
 
   .suggestion-pill:hover .pill-icon {
-    @apply opacity-80;
+    opacity: 0.95;
   }
 
   .pill-icon svg {
@@ -995,6 +1065,49 @@
     background-color: var(--color-surface-1);
     color: var(--color-text-secondary);
   }
+
+  /* ==========================================
+   * COLOR UTILITY CLASSES
+   * Convenience classes for semantic tokens
+   * ========================================== */
+
+  /* Background utilities */
+  .bg-surface-1 { background-color: var(--color-surface-1); }
+  .bg-surface-2 { background-color: var(--color-surface-2); }
+  .bg-surface-3 { background-color: var(--color-surface-3); }
+  .bg-surface-overlay { background-color: var(--color-surface-overlay); }
+  .bg-surface-hover { background-color: var(--color-surface-hover); }
+  .bg-surface-active { background-color: var(--color-surface-active); }
+
+  /* Text utilities */
+  .text-primary { color: var(--color-text-primary); }
+  .text-secondary { color: var(--color-text-secondary); }
+  .text-assistant { color: var(--color-text-assistant); }
+  .text-user { color: var(--color-text-user); }
+  .text-on-surface { color: var(--color-text-on-surface); }
+
+  /* Border utilities */
+  .border-primary { border-color: var(--color-border-primary); }
+  .border-secondary { border-color: var(--color-border-secondary); }
+  .border-focus { border-color: var(--color-border-focus); }
+  .border-hover { border-color: var(--color-border-hover); }
+
+  /* Brand utilities */
+  .bg-brand-primary { background-color: var(--color-brand-primary); }
+  .bg-brand-secondary { background-color: var(--color-brand-secondary); }
+  .text-brand-primary { color: var(--color-brand-primary); }
+  .text-brand-secondary { color: var(--color-brand-secondary); }
+
+  /* Status utilities */
+  .text-info { color: var(--color-status-info); }
+  .text-success { color: var(--color-status-success); }
+  .text-warning { color: var(--color-status-warning); }
+  .text-error { color: var(--color-status-error); }
+
+  .bg-info { background-color: var(--color-status-info); }
+  .bg-success { background-color: var(--color-status-success); }
+  .bg-warning { background-color: var(--color-status-warning); }
+  .bg-error { background-color: var(--color-status-error); }
 
   .welcome-files-section {
     @apply mt-8 w-full max-w-[600px];
@@ -1053,9 +1166,9 @@
     display: none !important;
   }
 
-  /* User message bubble gradient - using Tailwind best practices */
+  /* User message bubble gradient - using existing CSS variable */
   .bg-user-gradient {
-    @apply bg-gradient-to-br from-[#0066cc] to-[#0052a3];
+    background: var(--color-brand-gradient);
   }
 
   /* Toast notifications */
@@ -1422,6 +1535,23 @@
   }
 }
 
+/* Background colors for welcome vs chat view - Outside layers for higher specificity */
+body.view-welcome {
+  background: var(--color-body-welcome) !important;
+}
+
+body.view-chat {
+  background: var(--color-body-chat) !important;
+}
+
+[data-theme="dark"] body.view-welcome {
+  background: var(--color-body-welcome) !important;
+}
+
+[data-theme="dark"] body.view-chat {
+  background: var(--color-body-chat) !important;
+}
+
 /* Base styles */
 @layer base {
   :root {
@@ -1434,6 +1564,23 @@
     --color-surface-overlay: rgba(0, 0, 0, 0.05);
     --color-surface-hover: rgba(0, 0, 0, 0.03);
     --color-surface-active: rgba(37, 99, 235, 0.08);
+
+    /* Body background colors - Light Mode */
+    --color-body-welcome: #0066cc;  /* Brand primary for welcome page */
+    --color-body-chat: #fafafa;     /* Softer white for chat view */
+
+    /* Welcome page specific colors - Light Mode */
+    --color-welcome-text: #ffffff;      /* White for greeting on blue background */
+    --color-welcome-secondary: rgba(255, 255, 255, 0.9); /* Slightly transparent white for secondary text */
+
+    /* Welcome pill colors - Light mode (high contrast on blue background) */
+    --color-welcome-pill-bg: transparent;
+    --color-welcome-pill-bg-hover: rgba(255, 255, 255, 0.2);
+    --color-welcome-pill-border: rgba(255, 255, 255, 0.3);
+    --color-welcome-pill-border-hover: rgba(255, 255, 255, 0.5);
+    --color-welcome-pill-text: rgba(255, 255, 255, 0.95);
+    --color-welcome-pill-text-hover: #ffffff;
+    --color-welcome-pill-focus-ring: rgba(255, 255, 255, 0.3);
 
     /* ========================================
      * TEXT COLORS - Light Mode
@@ -1460,6 +1607,13 @@
     --color-brand-gradient: linear-gradient(135deg, #0066cc 0%, #0052a3 100%);
     --color-brand-glow: rgba(0, 102, 204, 0.2);  /* Brand blue at 20% for focus/hover glows */
 
+    /* Secondary brand colors for accents */
+    --color-brand-accent-1: #deff4d;  /* Lime green */
+    --color-brand-accent-2: #c7baff;  /* Light purple */
+    --color-brand-accent-3: #ff4d5f;  /* Coral red */
+    --color-brand-accent-4: #1de1f2;  /* Cyan */
+    --color-brand-accent-5: #012faf;  /* Dark blue */
+
     /* ========================================
      * STATUS COLORS (Same for both modes)
      * ======================================== */
@@ -1485,6 +1639,14 @@
      * OVERLAYS - Light Mode
      * ======================================== */
     --color-overlay-backdrop: rgba(0, 0, 0, 0.5);
+
+    /* ========================================
+     * FILE TYPE COLORS - Light Mode
+     * ======================================== */
+    --color-file-image: #a855f7;   /* Purple for images */
+    --color-file-code: #eab308;    /* Yellow for code */
+    --color-file-archive: #92400e; /* Brown for archives */
+    --color-file-audio: #ec4899;   /* Pink for audio */
   }
 
   [data-theme="dark"] {
@@ -1497,6 +1659,23 @@
     --color-surface-overlay: rgba(255, 255, 255, 0.05);
     --color-surface-hover: rgba(255, 255, 255, 0.03);
     --color-surface-active: rgba(37, 99, 235, 0.12);
+
+    /* Body background colors - Dark Mode */
+    --color-body-welcome: #191b29;  /* Surface-2 for welcome page */
+    --color-body-chat: #191b29;     /* Surface-2 for chat view */
+
+    /* Welcome page specific colors - Dark Mode */
+    --color-welcome-text: #f5f5f5;      /* Use existing text-primary */
+    --color-welcome-secondary: #a0a0a0; /* Use existing text-secondary */
+
+    /* Welcome pill colors - Dark mode (uses standard semantic tokens) */
+    --color-welcome-pill-bg: transparent;
+    --color-welcome-pill-bg-hover: var(--color-surface-hover);
+    --color-welcome-pill-border: var(--color-border-secondary);
+    --color-welcome-pill-border-hover: var(--color-border-hover);
+    --color-welcome-pill-text: var(--color-text-secondary);
+    --color-welcome-pill-text-hover: var(--color-text-primary);
+    --color-welcome-pill-focus-ring: var(--color-brand-primary);
 
     /* ========================================
      * TEXT COLORS - Dark Mode
@@ -1523,6 +1702,14 @@
      * OVERLAYS - Dark Mode
      * ======================================== */
     --color-overlay-backdrop: rgba(0, 0, 0, 0.9);
+
+    /* ========================================
+     * FILE TYPE COLORS - Dark Mode (slightly lighter for contrast)
+     * ======================================== */
+    --color-file-image: #c084fc;   /* Light purple */
+    --color-file-code: #fbbf24;    /* Light yellow */
+    --color-file-archive: #a16207; /* Light brown */
+    --color-file-audio: #f472b6;   /* Light pink */
   }
 
   * {
@@ -1538,23 +1725,6 @@
     padding: 0;
     overflow: hidden;
     transition: all 300ms;
-  }
-
-  /* Background colors for welcome vs chat view */
-  body.view-welcome {
-    background: #f8f8f6;
-  }
-
-  body.view-chat {
-    background: white;
-  }
-
-  [data-theme="dark"] body.view-welcome {
-    background: #191b29;
-  }
-
-  [data-theme="dark"] body.view-chat {
-    background: #191b29;
   }
 
   /* Placeholder text for empty states */

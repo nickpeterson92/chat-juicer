@@ -141,7 +141,7 @@ async function handleRename(sessionItem, sessionId, sessionService, _updateSessi
   input.value = currentTitle;
   input.className = "session-title-input";
   input.style.cssText =
-    "width: 100%; padding: 4px; font-size: 13px; border: 1px solid #4a9eff; border-radius: 4px; background: var(--bg-primary); color: var(--text-primary);";
+    "width: 100%; padding: 4px; font-size: 13px; border: 1px solid var(--color-border-focus); border-radius: 4px; background: var(--bg-primary); color: var(--text-primary);";
 
   // Replace title with input
   titleDiv.style.display = "none";
