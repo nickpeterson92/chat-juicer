@@ -82,8 +82,22 @@ export function registerMessageHandlers(context) {
 
   createHandler("assistant_delta", (message) => {
     if (appState.message.currentAssistant) {
+      const isFirstToken = appState.message.assistantBuffer === "";
       const newBuffer = appState.message.assistantBuffer + message.content;
       appState.setState("message.assistantBuffer", newBuffer);
+
+      // Hide lottie indicator on first token arrival for instant feedback
+      if (isFirstToken) {
+        const currentMsg = appState.message.currentAssistant.closest(".message");
+        const loadingLamp = currentMsg?.querySelector(".loading-lamp");
+        if (loadingLamp) {
+          console.log("[MessageHandlersV2] First token arrived - hiding lottie indicator");
+          loadingLamp.style.transition = "opacity 200ms ease-out";
+          loadingLamp.style.opacity = "0";
+          setTimeout(() => loadingLamp.remove(), 200);
+        }
+      }
+
       updateAssistantMessage(elements.chatContainer, appState.message.currentAssistant, newBuffer);
     }
   });

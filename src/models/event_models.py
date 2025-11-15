@@ -162,14 +162,102 @@ class UserInput(BaseModel):
         return cleaned
 
 
+class FunctionArgumentsDeltaMessage(BaseModel):
+    """Function call arguments streaming - incremental JSON chunks."""
+
+    type: Literal["function_call_arguments_delta"]
+    call_id: str
+    delta: str  # JSON chunk to append
+    output_index: int | None = None
+
+    def to_json(self) -> str:
+        """Convert to JSON for IPC."""
+        json_str: str = self.model_dump_json(exclude_none=True)
+        return json_str
+
+
+class FunctionArgumentsDoneMessage(BaseModel):
+    """Function call arguments complete - signals finalization."""
+
+    type: Literal["function_call_arguments_done"]
+    call_id: str
+    output_index: int | None = None
+
+    def to_json(self) -> str:
+        """Convert to JSON for IPC."""
+        json_str: str = self.model_dump_json(exclude_none=True)
+        return json_str
+
+
+class ReasoningDeltaMessage(BaseModel):
+    """Reasoning text streaming for reasoning models (backend only, no frontend display yet)."""
+
+    type: Literal["reasoning_delta"]
+    delta: str
+    reasoning_index: int | None = None
+    output_index: int | None = None
+
+    def to_json(self) -> str:
+        """Convert to JSON for IPC."""
+        json_str: str = self.model_dump_json(exclude_none=True)
+        return json_str
+
+
+class ReasoningSummaryDeltaMessage(BaseModel):
+    """Reasoning summary streaming (backend only)."""
+
+    type: Literal["reasoning_summary_delta"]
+    delta: str
+    output_index: int | None = None
+
+    def to_json(self) -> str:
+        """Convert to JSON for IPC."""
+        json_str: str = self.model_dump_json(exclude_none=True)
+        return json_str
+
+
+class RefusalDeltaMessage(BaseModel):
+    """Model refusal streaming."""
+
+    type: Literal["refusal_delta"]
+    delta: str
+    content_index: int | None = None
+    output_index: int | None = None
+
+    def to_json(self) -> str:
+        """Convert to JSON for IPC."""
+        json_str: str = self.model_dump_json(exclude_none=True)
+        return json_str
+
+
+class ContentPartMessage(BaseModel):
+    """Content part boundary events."""
+
+    type: Literal["content_part_added", "content_part_done"]
+    content_index: int
+    output_index: int
+    part_type: str | None = None
+
+    def to_json(self) -> str:
+        """Convert to JSON for IPC."""
+        json_str: str = self.model_dump_json(exclude_none=True)
+        return json_str
+
+
 __all__ = [
     "AgentUpdateMessage",
     "AssistantMessage",
+    "ContentPartMessage",
     "ErrorNotification",
+    "FunctionArgumentsDeltaMessage",
+    "FunctionArgumentsDoneMessage",
     "FunctionCallItem",
     "FunctionEventMessage",
     "FunctionOutputItem",
     "HandoffMessage",
+    "ReasoningDeltaMessage",
+    "ReasoningSummaryDeltaMessage",
+    "RefusalDeltaMessage",
     "SessionItem",
     "ToolCallNotification",
     "ToolResultNotification",

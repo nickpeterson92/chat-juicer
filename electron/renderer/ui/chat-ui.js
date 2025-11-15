@@ -107,81 +107,34 @@ export function addMessage(chatContainer, content, type = "assistant") {
  * @param {HTMLElement} currentAssistantElement - The current assistant text element
  * @param {string} content - New content to display
  */
-// Debouncing state for markdown rendering during streaming
-let pendingContent = null;
-let pendingElement = null;
-let pendingContainer = null;
-let pendingCallbackId = null;
-
+/**
+ * Update assistant message with new streaming content - IMMEDIATE RENDERING
+ * Renders tokens immediately as they arrive for smooth streaming UX
+ * @param {HTMLElement} chatContainer - The chat container element
+ * @param {HTMLElement} currentAssistantElement - The current assistant text element
+ * @param {string} content - New content to display
+ */
 export function updateAssistantMessage(chatContainer, currentAssistantElement, content) {
   if (!currentAssistantElement) {
     return;
   }
 
-  // Don't hide loading animation during streaming - let it show the whole time
-  // It will be removed when streaming completes via completeStreamingMessage()
+  // Render immediately - no debouncing for smooth token-by-token display
+  currentAssistantElement.innerHTML = renderMarkdown(content);
 
-  // Store pending update
-  pendingContent = content;
-  pendingElement = currentAssistantElement;
-  pendingContainer = chatContainer;
+  // DO NOT process Mermaid during streaming - it causes race conditions
+  // Mermaid will be processed after streaming completes in handleAssistantEnd
 
-  // DEBOUNCE: Cancel previous callback and schedule new one
-  // This prevents wasteful callbacks during rapid streaming
-  if (pendingCallbackId !== null) {
-    cancelIdleCallback(pendingCallbackId);
-  }
-
-  // Use requestIdleCallback for non-critical updates during streaming
-  // Store callback ID for cancellation to prevent race conditions
-  pendingCallbackId = requestIdleCallback(
-    () => {
-      if (pendingContent && pendingElement) {
-        pendingElement.innerHTML = renderMarkdown(pendingContent);
-
-        // DO NOT process Mermaid during streaming - it causes race conditions
-        // Mermaid will be processed after streaming completes in handleAssistantEnd
-
-        // Batched scroll update
-        if (pendingContainer) {
-          scheduleScroll(pendingContainer);
-        }
-      }
-
-      pendingCallbackId = null;
-      pendingContent = null;
-      pendingElement = null;
-      pendingContainer = null;
-    },
-    { timeout: 50 }
-  ); // Shorter timeout since we're debouncing (was 100ms)
+  // Batched scroll update
+  scheduleScroll(chatContainer);
 }
 
 /**
- * Cancel any pending render callbacks and flush pending content
- * Critical for preventing race conditions when streaming ends
+ * No-op function for backward compatibility
+ * Previously used to flush pending debounced renders, no longer needed with immediate rendering
  */
 export function cancelPendingRender() {
-  if (pendingCallbackId !== null) {
-    // Cancel the debounced callback
-    cancelIdleCallback(pendingCallbackId);
-    pendingCallbackId = null;
-
-    // CRITICAL: Render any pending content immediately before clearing
-    // Otherwise the final streaming content gets lost
-    if (pendingContent && pendingElement) {
-      pendingElement.innerHTML = renderMarkdown(pendingContent);
-
-      if (pendingContainer) {
-        scheduleScroll(pendingContainer);
-      }
-    }
-
-    // Clear state
-    pendingContent = null;
-    pendingElement = null;
-    pendingContainer = null;
-  }
+  // No pending renders with immediate rendering - kept for backward compatibility
 }
 
 /**

@@ -26,12 +26,14 @@ export const MessageHandlerPlugin = createPlugin({
         source: "message-handler-plugin",
       });
 
-      // Emit to analytics
-      eventBus.emit("analytics:event", {
-        category: "message",
-        action: "received",
-        label: messageType,
-      });
+      // Emit to analytics (skip high-frequency streaming events)
+      if (messageType !== "assistant_delta") {
+        eventBus.emit("analytics:event", {
+          category: "message",
+          action: "received",
+          label: messageType,
+        });
+      }
     });
 
     console.log("[MessageHandlerPlugin] Installed");
@@ -69,12 +71,14 @@ export const StateSyncPlugin = createPlugin({
         oldValue,
       });
 
-      // Track for analytics
-      eventBus.emit("analytics:event", {
-        category: "state",
-        action: "changed",
-        label: path,
-      });
+      // Track for analytics (skip high-frequency streaming state changes)
+      if (path !== "message.assistantBuffer") {
+        eventBus.emit("analytics:event", {
+          category: "state",
+          action: "changed",
+          label: path,
+        });
+      }
     });
 
     console.log("[StateSyncPlugin] Installed");

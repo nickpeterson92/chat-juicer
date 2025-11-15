@@ -420,6 +420,28 @@
     color: var(--color-text-on-surface);
   }
 
+  /* Function reasoning (thinking) display */
+  .function-reasoning {
+    @apply hidden;
+  }
+
+  .function-call-card.expanded .function-reasoning {
+    @apply block rounded-md p-2 mt-1.5 text-xs max-h-[120px] overflow-y-auto break-words whitespace-pre-wrap leading-relaxed;
+    background: var(--color-surface-overlay);
+    border: 1px dashed var(--color-border-secondary);
+    color: var(--color-text-secondary);
+    font-style: italic;
+  }
+
+  .function-reasoning-label {
+    @apply text-[10px] font-semibold uppercase tracking-wider mb-1 opacity-70;
+    color: var(--color-text-secondary);
+  }
+
+  .function-reasoning-content {
+    @apply font-normal;
+  }
+
   /* File items */
   .file-item {
     @apply flex items-center gap-2.5 py-2.5 px-3 border rounded-lg transition-all cursor-pointer select-none active:scale-[0.98];
