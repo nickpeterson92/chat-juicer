@@ -490,14 +490,9 @@ export async function initializeEventHandlers({
         }
       }
 
-      try {
-        const result = await sessionService.loadSessions();
-        if (result.success) {
-          updateSessionsList(result.sessions || []);
-        }
-      } catch (error) {
-        console.error("Failed to reload sessions after creation:", error);
-      }
+      // Session list will be updated via session-updated event when title is generated
+      // No need to reload sessions here - SessionService already maintains local state
+      // and session-updated handler (below) will update UI when title is ready
     });
 
     // Session updated event

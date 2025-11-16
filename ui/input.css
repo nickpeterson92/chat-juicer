@@ -301,8 +301,9 @@
   }
 
   .function-call-card:hover {
-    background: var(--color-surface-hover);
-    border-color: var(--color-border-primary);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--color-border-hover);
+    transform: translateY(-1px);
   }
 
   .function-call-card.expanded {
@@ -311,11 +312,7 @@
     border: 1px solid var(--color-border-secondary);
   }
 
-  .function-call-card.expanded:hover {
-    background: var(--color-surface-1);
-    border-color: var(--color-border-secondary);
-    transform: none;
-  }
+  /* No hover effect for expanded cards - they're not interactive */
 
   .function-call-card.executing {
     @apply text-white border-indigo-400/40;

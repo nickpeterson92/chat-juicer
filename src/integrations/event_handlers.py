@@ -359,7 +359,7 @@ _THROTTLED_EVENTS = {
 # - response.refusal.delta (model refusals)
 # - response.reasoning.text.delta (reasoning streaming)
 # - response.reasoning_summary.text.delta (reasoning summaries)
-# - response.function_call_arguments.delta/done (if SDK ever supports it)
+# - response.function_call_arguments.delta/done (SDK ready, Azure API doesn't emit yet as of 2025-01)
 
 
 def build_event_handlers(tracker: CallTracker) -> dict[str, EventHandler]:
