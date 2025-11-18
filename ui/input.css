@@ -197,13 +197,17 @@
 
   /* Session items in sidebar */
   .session-item {
-    @apply p-3 mb-1 rounded-lg cursor-pointer text-sm transition-colors flex items-center justify-between gap-2;
+    @apply p-3 mb-1 rounded-lg cursor-pointer text-sm transition-all duration-200 flex items-center justify-between gap-2;
     color: var(--color-text-primary);
     background-color: transparent;
+    border: 1px solid transparent;
   }
 
   .session-item:hover {
     background-color: var(--color-surface-hover);
+    border-color: var(--color-brand-primary);
+    transform: translateX(2px);
+    box-shadow: 0 0 0 2px var(--color-brand-glow);
   }
 
   .session-item.active {
@@ -982,6 +986,8 @@
   .bg-brand-secondary { background-color: var(--color-brand-secondary); }
   .text-brand-primary { color: var(--color-brand-primary); }
   .text-brand-secondary { color: var(--color-brand-secondary); }
+  .border-brand-primary { border-color: var(--color-brand-primary); }
+  .border-brand-secondary { border-color: var(--color-brand-secondary); }
 
   /* Status utilities */
   .text-info { color: var(--color-status-info); }

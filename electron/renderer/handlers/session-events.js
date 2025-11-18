@@ -69,6 +69,12 @@ export function setupSessionEventHandlers({
   // Handle session switch
   const handleSessionSwitch = async (sessionId) => {
     try {
+      // Close sidebar immediately before loading session data
+      const sidebar = document.getElementById("sidebar");
+      if (sidebar && !sidebar.classList.contains("collapsed")) {
+        sidebar.classList.add("collapsed");
+      }
+
       // Load session data
       const sessionData = await sessionService.switchSession(sessionId);
 

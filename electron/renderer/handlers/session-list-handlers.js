@@ -280,6 +280,12 @@ async function handleSwitch(sessionId, sessionService, updateSessionsList, eleme
     return;
   }
 
+  // Close sidebar immediately before loading session data (better UX - no latency)
+  const sidebar = document.getElementById("sidebar");
+  if (sidebar && !sidebar.classList.contains("collapsed")) {
+    sidebar.classList.add("collapsed");
+  }
+
   try {
     const result = await sessionService.switchSession(sessionId);
 
@@ -419,12 +425,6 @@ async function handleSwitch(sessionId, sessionService, updateSessionsList, eleme
       }
     } else {
       throw new Error(result.error);
-    }
-
-    // Close sidebar after switching (better UX)
-    const sidebar = document.getElementById("sidebar");
-    if (sidebar && !sidebar.classList.contains("collapsed")) {
-      sidebar.classList.add("collapsed");
     }
   } catch (error) {
     console.error("Failed to switch session:", error);
