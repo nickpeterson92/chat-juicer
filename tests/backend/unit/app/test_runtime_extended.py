@@ -61,7 +61,7 @@ class TestProcessUserInputExtended:
         mock_ipc: Mock,
     ) -> None:
         """Test processing user input with persistence error."""
-        from core.session.transaction_coordinator import PersistenceError
+        from core.session import PersistenceError
 
         mock_app_state = Mock()
         mock_app_state.session_manager = Mock()

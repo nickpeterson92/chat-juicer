@@ -125,6 +125,10 @@ RUN_ITEM_STREAM_EVENT = "run_item_stream_event"
 #: Fired when agent configuration or state is updated during execution.
 AGENT_UPDATED_STREAM_EVENT = "agent_updated_stream_event"
 
+#: Top-level streaming event type for raw LLM response deltas (token-by-token streaming).
+#: Contains ResponseTextDeltaEvent with individual token deltas.
+RAW_RESPONSE_EVENT = "raw_response_event"
+
 # ============================================================================
 # Run Item Types (for streaming events)
 # ============================================================================
@@ -232,6 +236,30 @@ MSG_TYPE_HANDOFF_STARTED = "handoff_started"
 #: Message type for multi-agent handoff completion.
 #: Contains results from delegated agent execution.
 MSG_TYPE_HANDOFF_COMPLETED = "handoff_completed"
+
+#: Message type for function call arguments streaming delta.
+#: Contains incremental JSON chunks as function arguments are generated.
+MSG_TYPE_FUNCTION_ARGUMENTS_DELTA = "function_call_arguments_delta"
+
+#: Message type for function call arguments completion signal.
+#: Signals that function arguments JSON is complete and ready for execution.
+MSG_TYPE_FUNCTION_ARGUMENTS_DONE = "function_call_arguments_done"
+
+#: Message type for reasoning text streaming delta (backend only, no frontend display yet).
+#: Contains incremental reasoning text chunks from reasoning models (GPT-5, O1, O3).
+MSG_TYPE_REASONING_DELTA = "reasoning_delta"
+
+#: Message type for reasoning summary streaming delta (backend only).
+#: Contains summary of reasoning process as it's generated.
+MSG_TYPE_REASONING_SUMMARY_DELTA = "reasoning_summary_delta"
+
+#: Message type for model refusal streaming delta.
+#: Contains incremental text when model refuses to answer a request.
+MSG_TYPE_REFUSAL_DELTA = "refusal_delta"
+
+#: Message type for content part boundary events.
+#: Signals when new content parts are added or completed (text chunks, refusals, etc.).
+MSG_TYPE_CONTENT_PART_ADDED = "content_part_added"
 
 # ============================================================================
 # MCP Server Configuration

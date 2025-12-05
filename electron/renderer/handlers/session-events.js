@@ -72,6 +72,18 @@ export function setupSessionEventHandlers({
       // Load session data
       const sessionData = await sessionService.switchSession(sessionId);
 
+      // Only proceed with UI updates if switch was successful
+      if (!sessionData?.success) {
+        console.error("Session switch failed:", sessionData?.error || "Unknown error");
+        return;
+      }
+
+      // Close sidebar after successful switch (UX: only close on success)
+      const sidebar = document.getElementById("sidebar");
+      if (sidebar && !sidebar.classList.contains("collapsed")) {
+        sidebar.classList.add("collapsed");
+      }
+
       // Update active state in UI
       if (currentSessionId) {
         const oldSession = findSessionElement(sessionListContainer, currentSessionId, domAdapter);

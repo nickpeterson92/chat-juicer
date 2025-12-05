@@ -349,7 +349,12 @@ class TestRunItemStreamEventHandling:
     """Tests for run_item_stream_event handler from build_event_handlers."""
 
     def test_handle_run_item_with_message_output(self) -> None:
-        """Test handling run_item event with message output."""
+        """Test handling run_item event with message output.
+
+        NOTE: MESSAGE_OUTPUT_ITEM handling is intentionally disabled in production.
+        Token-by-token streaming now uses raw_response_event with response.output_text.delta.
+        This test verifies the handler returns None for MESSAGE_OUTPUT_ITEM (disabled behavior).
+        """
         from core.constants import MESSAGE_OUTPUT_ITEM, RUN_ITEM_STREAM_EVENT
 
         tracker = CallTracker()
@@ -370,9 +375,8 @@ class TestRunItemStreamEventHandling:
 
         result = handler(mock_event)
 
-        assert result is not None
-        data = json.loads(result)
-        assert data["content"] == "Test message"
+        # MESSAGE_OUTPUT_ITEM is disabled - handler should return None
+        assert result is None
 
     def test_handle_run_item_with_tool_call(self) -> None:
         """Test handling run_item event with tool call."""

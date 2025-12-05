@@ -8,19 +8,25 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import cast
+from typing import Any, Protocol, cast
 
 from core.constants import (
     AGENT_UPDATED_STREAM_EVENT,
     HANDOFF_CALL_ITEM,
     HANDOFF_OUTPUT_ITEM,
-    MESSAGE_OUTPUT_ITEM,
     MSG_TYPE_AGENT_UPDATED,
     MSG_TYPE_ASSISTANT_DELTA,
+    MSG_TYPE_CONTENT_PART_ADDED,
+    MSG_TYPE_FUNCTION_ARGUMENTS_DELTA,
+    MSG_TYPE_FUNCTION_ARGUMENTS_DONE,
     MSG_TYPE_FUNCTION_COMPLETED,
     MSG_TYPE_FUNCTION_DETECTED,
     MSG_TYPE_HANDOFF_COMPLETED,
     MSG_TYPE_HANDOFF_STARTED,
+    MSG_TYPE_REASONING_DELTA,
+    MSG_TYPE_REASONING_SUMMARY_DELTA,
+    MSG_TYPE_REFUSAL_DELTA,
+    RAW_RESPONSE_EVENT,
     REASONING_ITEM,
     RUN_ITEM_STREAM_EVENT,
     TOOL_CALL_ITEM,
@@ -29,7 +35,13 @@ from core.constants import (
 from models.event_models import (
     AgentUpdateMessage,
     AssistantMessage,
+    ContentPartMessage,
+    FunctionArgumentsDeltaMessage,
+    FunctionArgumentsDoneMessage,
     HandoffMessage,
+    ReasoningDeltaMessage,
+    ReasoningSummaryDeltaMessage,
+    RefusalDeltaMessage,
     ToolCallNotification,
     ToolResultNotification,
 )
@@ -46,6 +58,14 @@ from models.sdk_models import (
 )
 from utils.json_utils import json_compact as _json_builder
 from utils.logger import logger
+
+
+# Protocol for type safety
+class ResponseEventData(Protocol):
+    """Protocol for SDK event data with common attributes."""
+
+    type: str
+    delta: str | None
 
 
 @dataclass
@@ -198,11 +218,199 @@ def handle_handoff_output(item: RunItem) -> str | None:
     return msg.to_json()  # type: ignore[no-any-return]
 
 
+def handle_text_delta_event(data: Any) -> str | None:
+    """Handle text content delta events."""
+    delta = getattr(data, "delta", None)
+    if not delta:
+        return None
+
+    msg = AssistantMessage(type=MSG_TYPE_ASSISTANT_DELTA, content=delta)
+    return msg.to_json()  # type: ignore[no-any-return]
+
+
+def handle_function_arguments_delta_event(data: Any) -> str | None:
+    """Handle function call arguments streaming."""
+    call_id = getattr(data, "call_id", None)
+    delta = getattr(data, "delta", None)
+
+    if not call_id or not delta:
+        return None
+
+    msg = FunctionArgumentsDeltaMessage(
+        type=MSG_TYPE_FUNCTION_ARGUMENTS_DELTA,
+        call_id=call_id,
+        delta=delta,
+        output_index=getattr(data, "output_index", None),
+    )
+    return msg.to_json()  # type: ignore[no-any-return]
+
+
+def handle_function_arguments_done_event(data: Any) -> str | None:
+    """Handle function call arguments completion."""
+    call_id = getattr(data, "call_id", None)
+    if not call_id:
+        return None
+
+    msg = FunctionArgumentsDoneMessage(
+        type=MSG_TYPE_FUNCTION_ARGUMENTS_DONE,
+        call_id=call_id,
+        output_index=getattr(data, "output_index", None),
+    )
+    return msg.to_json()  # type: ignore[no-any-return]
+
+
+def handle_reasoning_text_delta_event(data: Any) -> str | None:
+    """Handle reasoning text streaming (backend only, no frontend display)."""
+    delta = getattr(data, "delta", None)
+    if not delta:
+        return None
+
+    msg = ReasoningDeltaMessage(
+        type=MSG_TYPE_REASONING_DELTA,
+        delta=delta,
+        reasoning_index=getattr(data, "reasoning_index", None),
+        output_index=getattr(data, "output_index", None),
+    )
+    return msg.to_json()  # type: ignore[no-any-return]
+
+
+def handle_reasoning_summary_delta_event(data: Any) -> str | None:
+    """Handle reasoning summary streaming (backend only)."""
+    delta = getattr(data, "delta", None)
+    if not delta:
+        return None
+
+    msg = ReasoningSummaryDeltaMessage(
+        type=MSG_TYPE_REASONING_SUMMARY_DELTA,
+        delta=delta,
+        output_index=getattr(data, "output_index", None),
+    )
+    return msg.to_json()  # type: ignore[no-any-return]
+
+
+def handle_refusal_delta_event(data: Any) -> str | None:
+    """Handle model refusal streaming."""
+    delta = getattr(data, "delta", None)
+    if not delta:
+        return None
+
+    msg = RefusalDeltaMessage(
+        type=MSG_TYPE_REFUSAL_DELTA,
+        delta=delta,
+        content_index=getattr(data, "content_index", None),
+        output_index=getattr(data, "output_index", None),
+    )
+    return msg.to_json()  # type: ignore[no-any-return]
+
+
+def handle_content_part_added_event(data: Any) -> str | None:
+    """Handle new content part started."""
+    content_index = getattr(data, "content_index", None)
+    if content_index is None:
+        return None
+
+    msg = ContentPartMessage(
+        type=MSG_TYPE_CONTENT_PART_ADDED,
+        content_index=content_index,
+        output_index=getattr(data, "output_index", 0),
+        part_type=getattr(data, "part_type", "text"),
+    )
+    return msg.to_json()  # type: ignore[no-any-return]
+
+
+def handle_content_part_done_event(data: Any) -> str | None:
+    """Handle content part completion."""
+    content_index = getattr(data, "content_index", None)
+    if content_index is None:
+        return None
+
+    msg = ContentPartMessage(
+        type="content_part_done",
+        content_index=content_index,
+        output_index=getattr(data, "output_index", 0),
+        part_type=getattr(data, "part_type", "text"),
+    )
+    return msg.to_json()  # type: ignore[no-any-return]
+
+
+# Handler registry mapping event types to handler functions
+RAW_EVENT_TYPE_HANDLERS: dict[str, Callable[[Any], str | None]] = {
+    "response.output_text.delta": handle_text_delta_event,  # SDK emits output_text, not text
+    "response.function_call_arguments.delta": handle_function_arguments_delta_event,
+    "response.function_call_arguments.done": handle_function_arguments_done_event,
+    "response.reasoning.text.delta": handle_reasoning_text_delta_event,
+    "response.reasoning_summary.text.delta": handle_reasoning_summary_delta_event,
+    "response.refusal.delta": handle_refusal_delta_event,
+    "response.content_part.added": handle_content_part_added_event,
+    "response.content_part.done": handle_content_part_done_event,
+}
+
+# Event logging throttle - log every Nth occurrence to reduce noise
+_event_counts: dict[str, int] = {}
+_LOG_EVERY_N_EVENTS = 100  # Log handled events every 50 occurrences
+
+# High-frequency events that should be throttled (one per token)
+_THROTTLED_EVENTS = {
+    "response.output_text.delta",  # Token-by-token text streaming (very noisy)
+}
+
+# All other events logged immediately (rare, important for debugging):
+# - response.content_part.added/done (content boundaries)
+# - response.refusal.delta (model refusals)
+# - response.reasoning.text.delta (reasoning streaming)
+# - response.reasoning_summary.text.delta (reasoning summaries)
+# - response.function_call_arguments.delta/done (SDK ready, Azure API doesn't emit yet as of 2025-01)
+
+
 def build_event_handlers(tracker: CallTracker) -> dict[str, EventHandler]:
     """Create a registry of event handlers keyed by event type.
 
     Uses closures to capture `tracker` while conforming to EventHandler.
     """
+
+    def handle_raw_response_event(event: StreamEvent) -> str | None:
+        """Handle raw LLM response events with preserved granularity.
+
+        Uses strategy pattern with handler registry for clean extensibility.
+        Each event type is dispatched to a specific handler function.
+        """
+        try:
+            # Guard clauses for invalid events
+            if getattr(event, "type", None) != RAW_RESPONSE_EVENT or not (data := getattr(event, "data", None)):
+                return None
+
+            event_type = getattr(data, "type", None)
+            if not event_type:
+                logger.warning("Event missing type attribute", extra={"event": event})
+                return None
+
+            # Look up and call the appropriate handler from registry
+            handler = RAW_EVENT_TYPE_HANDLERS.get(event_type)
+            if handler:
+                result = handler(data)
+                if result:
+                    # Selective throttling: only throttle high-frequency events
+                    if event_type in _THROTTLED_EVENTS:
+                        _event_counts[event_type] = _event_counts.get(event_type, 0) + 1
+                        if _event_counts[event_type] % _LOG_EVERY_N_EVENTS == 0:
+                            logger.info(f"Handled {_event_counts[event_type]} {event_type} events")
+                    else:
+                        # Log all non-throttled events immediately (rare, important)
+                        logger.info(f"Handled event: {event_type}")
+                return result
+
+            # Always log unknown event types (important for debugging)
+            logger.info(f"Unknown event type: {event_type}")
+
+            # Fallback: Unknown event types with delta become generic assistant_delta
+            if delta := getattr(data, "delta", None):
+                logger.debug(f"Unknown event type with delta: {event_type}")
+                return AssistantMessage(type=MSG_TYPE_ASSISTANT_DELTA, content=delta).to_json()  # type: ignore[no-any-return]
+
+        except Exception as e:
+            logger.error(f"Error handling raw response event: {e}", exc_info=True)
+
+        return None  # Graceful degradation (single exit point)
 
     def handle_run_item_event(event: StreamEvent) -> str | None:
         # Guard by event type, then cast for attribute access
@@ -212,7 +420,7 @@ def build_event_handlers(tracker: CallTracker) -> dict[str, EventHandler]:
         item: RunItem = rie.item
 
         item_handlers: dict[str, Callable[[], str | None]] = {
-            MESSAGE_OUTPUT_ITEM: lambda: handle_message_output(item),
+            # MESSAGE_OUTPUT_ITEM: lambda: handle_message_output(item),  # Disabled: use raw_response_event for token-by-token
             TOOL_CALL_ITEM: lambda: handle_tool_call(item, tracker),
             REASONING_ITEM: lambda: handle_reasoning(item),
             TOOL_CALL_OUTPUT_ITEM: lambda: handle_tool_output(item, tracker),
@@ -231,6 +439,7 @@ def build_event_handlers(tracker: CallTracker) -> dict[str, EventHandler]:
         return msg.to_json()  # type: ignore[no-any-return]
 
     return {
+        RAW_RESPONSE_EVENT: handle_raw_response_event,
         RUN_ITEM_STREAM_EVENT: handle_run_item_event,
         AGENT_UPDATED_STREAM_EVENT: handle_agent_updated_event,
     }

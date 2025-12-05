@@ -197,13 +197,17 @@
 
   /* Session items in sidebar */
   .session-item {
-    @apply p-3 mb-1 rounded-lg cursor-pointer text-sm transition-colors flex items-center justify-between gap-2;
+    @apply p-3 mb-1 rounded-lg cursor-pointer text-sm transition-all duration-200 flex items-center justify-between gap-2;
     color: var(--color-text-primary);
     background-color: transparent;
+    border: 1px solid transparent;
   }
 
   .session-item:hover {
     background-color: var(--color-surface-hover);
+    border-color: var(--color-brand-primary);
+    transform: translateX(2px);
+    box-shadow: 0 0 0 2px var(--color-brand-glow);
   }
 
   .session-item.active {
@@ -301,8 +305,9 @@
   }
 
   .function-call-card:hover {
-    background: var(--color-surface-hover);
-    border-color: var(--color-border-primary);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--color-border-hover);
+    transform: translateY(-1px);
   }
 
   .function-call-card.expanded {
@@ -311,11 +316,7 @@
     border: 1px solid var(--color-border-secondary);
   }
 
-  .function-call-card.expanded:hover {
-    background: var(--color-surface-1);
-    border-color: var(--color-border-secondary);
-    transform: none;
-  }
+  /* No hover effect for expanded cards - they're not interactive */
 
   .function-call-card.executing {
     @apply text-white border-indigo-400/40;
@@ -418,6 +419,28 @@
     background: var(--color-surface-3);
     border-color: var(--color-border-secondary);
     color: var(--color-text-on-surface);
+  }
+
+  /* Function reasoning (thinking) display */
+  .function-reasoning {
+    @apply hidden;
+  }
+
+  .function-call-card.expanded .function-reasoning {
+    @apply block rounded-md p-2 mt-1.5 text-xs max-h-[120px] overflow-y-auto break-words whitespace-pre-wrap leading-relaxed;
+    background: var(--color-surface-overlay);
+    border: 1px dashed var(--color-border-secondary);
+    color: var(--color-text-secondary);
+    font-style: italic;
+  }
+
+  .function-reasoning-label {
+    @apply text-[10px] font-semibold uppercase tracking-wider mb-1 opacity-70;
+    color: var(--color-text-secondary);
+  }
+
+  .function-reasoning-content {
+    @apply font-normal;
   }
 
   /* File items */
@@ -963,6 +986,8 @@
   .bg-brand-secondary { background-color: var(--color-brand-secondary); }
   .text-brand-primary { color: var(--color-brand-primary); }
   .text-brand-secondary { color: var(--color-brand-secondary); }
+  .border-brand-primary { border-color: var(--color-brand-primary); }
+  .border-brand-secondary { border-color: var(--color-brand-secondary); }
 
   /* Status utilities */
   .text-info { color: var(--color-status-info); }

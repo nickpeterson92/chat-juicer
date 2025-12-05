@@ -13,7 +13,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from app.state import AppState
-from core.session import SessionBuilder
+from core.session_builder import SessionBuilder
 from core.session_commands import (
     create_new_session,
     delete_session_by_id,

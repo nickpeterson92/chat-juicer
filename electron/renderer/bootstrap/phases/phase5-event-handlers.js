@@ -472,13 +472,13 @@ export async function initializeEventHandlers({
 
     // Session created event
     window.addEventListener("session-created", async (event) => {
-      console.log("🎉 Session created event received:", event.detail);
+      console.log("[SessionEvents] Session created event received:", event.detail);
 
       const session = event.detail.session || event.detail;
       const sessionId = session.session_id || event.detail.session_id;
 
       if (sessionId) {
-        console.log("✅ Session created:", sessionId);
+        console.log("[SessionEvents] Session created:", sessionId);
 
         if (components.filePanel) {
           components.filePanel.setSession(sessionId);
@@ -488,21 +488,29 @@ export async function initializeEventHandlers({
           const { updateChatModelSelector } = await import("../../utils/chat-model-updater.js");
           updateChatModelSelector(session);
         }
-      }
 
-      try {
-        const result = await sessionService.loadSessions();
-        if (result.success) {
-          updateSessionsList(result.sessions || []);
+        // Immediately add session to SessionService's local state and update UI
+        // This ensures the session appears right away (even with default title)
+        // When session-updated fires later with generated title, it will update the existing session
+        if (sessionId) {
+          sessionService.updateSession({
+            session_id: sessionId,
+            title: session.title || "New Conversation",
+            last_used: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+            model: session.model,
+            reasoning_effort: session.reasoning_effort,
+            mcp_config: session.mcp_config,
+          });
+          // UI will be updated automatically via SessionService observer pattern
+          updateSessionsList();
         }
-      } catch (error) {
-        console.error("Failed to reload sessions after creation:", error);
       }
     });
 
     // Session updated event
     window.addEventListener("session-updated", (event) => {
-      console.log("📝 Session updated event received:", event.detail);
+      console.log("[SessionEvents] Session updated event received:", event.detail);
 
       // Update UI immediately with SessionService data
       updateSessionsList(sessionService.getSessions());

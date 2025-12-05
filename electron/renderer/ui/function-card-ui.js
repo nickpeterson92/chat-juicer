@@ -34,6 +34,8 @@ const FUNCTION_ICONS = {
 const STATUS_ICONS = {
   executing:
     '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>',
+  thinking:
+    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"/></svg>',
   completed:
     '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>',
   error:
@@ -256,7 +258,7 @@ function flushStatusUpdates(activeCalls) {
     }
 
     // Update card styling based on status
-    if (status === "executing") {
+    if (status === "thinking" || status === "executing") {
       card.element.className =
         card.element.dataset.expanded === "true"
           ? "function-call-card executing expanded"
@@ -303,6 +305,41 @@ function flushStatusUpdates(activeCalls) {
       resultDiv.className = "function-result";
       resultDiv.textContent = `Error: ${data.error}`;
       card.element.appendChild(resultDiv);
+    }
+
+    // Add or update reasoning if provided (live updates during thinking)
+    if (data.reasoning !== undefined) {
+      let reasoningDiv = card.element.querySelector(".function-reasoning");
+
+      if (!reasoningDiv) {
+        // Create reasoning section if it doesn't exist
+        reasoningDiv = document.createElement("div");
+        reasoningDiv.className = "function-reasoning";
+
+        // Add a label for clarity
+        const reasoningLabel = document.createElement("div");
+        reasoningLabel.className = "function-reasoning-label";
+        reasoningLabel.textContent = "Thinking:";
+        reasoningDiv.appendChild(reasoningLabel);
+
+        const reasoningContent = document.createElement("div");
+        reasoningContent.className = "function-reasoning-content";
+        reasoningDiv.appendChild(reasoningContent);
+
+        // Insert reasoning before arguments (if they exist) or at the end
+        const argsDiv = card.element.querySelector(".function-arguments");
+        if (argsDiv) {
+          card.element.insertBefore(reasoningDiv, argsDiv);
+        } else {
+          card.element.appendChild(reasoningDiv);
+        }
+      }
+
+      // Update reasoning content
+      const reasoningContent = reasoningDiv.querySelector(".function-reasoning-content");
+      if (reasoningContent) {
+        reasoningContent.textContent = data.reasoning;
+      }
     }
   }
 

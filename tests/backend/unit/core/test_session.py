@@ -10,7 +10,8 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from core.session import SessionBuilder, TokenAwareSQLiteSession
+from core.session import TokenAwareSQLiteSession
+from core.session_builder import SessionBuilder
 
 
 class TestSessionBuilder:
@@ -63,7 +64,7 @@ class TestSessionBuilder:
         assert builder._session_id == "chat_test"
         assert builder._agent == mock_agent
 
-    @patch("core.session.base.TokenAwareSQLiteSession")
+    @patch("core.session.TokenAwareSQLiteSession")
     def test_builder_build(self, mock_session_class: Mock) -> None:
         """Test building session instance."""
         builder = SessionBuilder("chat_test").with_model("gpt-4o")
