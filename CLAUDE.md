@@ -2,7 +2,9 @@
 
 This file provides guidance to you (Claude) when working with code in this repository.
 
-⚠️ CRITICAL ⚠️ - Open your heart, your mind and your third eye. Take a deep breath and focus.
+⚠️ **CRITICAL** ⚠️ - Open your heart, your mind and your third eye. Take a deep breath and focus.
+
+🚨 **NEVER** use emojis in logging statements! 🚨
 
 ## Project Overview
 

@@ -28,9 +28,10 @@ if (!chatUIComponent._lifecycle) {
  * @param {HTMLElement} chatContainer - The chat container element
  * @param {string} content - Message content
  * @param {string} type - Message type (user|assistant|system|error)
+ * @param {Object} options - Additional options (reserved for future use)
  * @returns {HTMLElement} The message content element
  */
-export function addMessage(chatContainer, content, type = "assistant") {
+export function addMessage(chatContainer, content, type = "assistant", _options = {}) {
   const messageDiv = document.createElement("div");
   // Base message styles + type-specific styles
   const baseClasses = "message mb-6 animate-slideIn [contain:layout_style]";
@@ -71,6 +72,7 @@ export function addMessage(chatContainer, content, type = "assistant") {
         .finally(() => {
           initializeCodeCopyButtons(contentDiv);
           // Scroll again after Mermaid diagrams render (they add height to the message)
+          // Note: No forced scroll - session-level scroll at end handles bulk loading
           scheduleScroll(chatContainer);
         });
     }, 0);
@@ -125,8 +127,8 @@ export function updateAssistantMessage(chatContainer, currentAssistantElement, c
   // DO NOT process Mermaid during streaming - it causes race conditions
   // Mermaid will be processed after streaming completes in handleAssistantEnd
 
-  // Batched scroll update
-  scheduleScroll(chatContainer);
+  // Smart scroll with streaming threshold (handles large content jumps like code blocks)
+  scheduleScroll(chatContainer, { streaming: true });
 }
 
 /**

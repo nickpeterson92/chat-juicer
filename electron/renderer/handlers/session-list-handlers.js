@@ -280,17 +280,17 @@ async function handleSwitch(sessionId, sessionService, updateSessionsList, eleme
     return;
   }
 
-  // Close sidebar immediately before loading session data (better UX - no latency)
-  const sidebar = document.getElementById("sidebar");
-  if (sidebar && !sidebar.classList.contains("collapsed")) {
-    sidebar.classList.add("collapsed");
-  }
-
   try {
     const result = await sessionService.switchSession(sessionId);
 
     if (result.success) {
       console.log("✅ Switched to session:", sessionId);
+
+      // Close sidebar after successful switch (UX: only close on success)
+      const sidebar = document.getElementById("sidebar");
+      if (sidebar && !sidebar.classList.contains("collapsed")) {
+        sidebar.classList.add("collapsed");
+      }
 
       // Update chat model selector to reflect session's config
       if (result.session) {
@@ -377,6 +377,7 @@ async function handleSwitch(sessionId, sessionService, updateSessionsList, eleme
                 if (msg.role === "user") {
                   window.components.chatContainer.addUserMessage(content);
                 } else if (msg.role === "assistant") {
+                  // Don't force scroll per-message - single scroll at end handles it (lines 416-427)
                   window.components.chatContainer.addAssistantMessage(content);
                 }
               } else {
@@ -418,8 +419,9 @@ async function handleSwitch(sessionId, sessionService, updateSessionsList, eleme
         // Use double RAF to ensure layout is fully settled after showChatView
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            scheduleScroll(window.components.chatContainer.getElement());
-            console.log("📜 Scrolled to bottom after loading session");
+            // Force scroll to bottom after session load (always show most recent messages)
+            scheduleScroll(window.components.chatContainer.getElement(), { force: true });
+            console.log("[SessionList] Forced scroll to bottom after loading session");
           });
         });
       }

@@ -47,10 +47,11 @@ export class ChatContainer {
    * Add assistant message
    *
    * @param {string} content - Message content
+   * @param {Object} options - Additional options (reserved for future use)
    * @returns {HTMLElement} The rendered message element
    */
-  addAssistantMessage(content) {
-    return addMessage(this.element, content, "assistant");
+  addAssistantMessage(content, options = {}) {
+    return addMessage(this.element, content, "assistant", options);
   }
 
   /**

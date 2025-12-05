@@ -10,6 +10,7 @@
 import { ChatContainer } from "../../ui/components/chat-container.js";
 import { FilePanel } from "../../ui/components/file-panel.js";
 import { InputArea } from "../../ui/components/input-area.js";
+import { setupScrollDetection } from "../../utils/scroll-utils.js";
 
 /**
  * Initialize UI components
@@ -79,6 +80,10 @@ export async function initializeComponents({ elements, appState, services, ipcAd
     // Initialize components
     components.chatContainer = new ChatContainer(document.getElementById("chat-container"));
     console.log("  ✓ ChatContainer initialized");
+
+    // Setup scroll detection to prevent scroll fighting during streaming
+    setupScrollDetection(components.chatContainer.getElement());
+    console.log("  ✓ Scroll detection enabled");
 
     components.filePanel = new FilePanel(
       document.getElementById("files-panel"),

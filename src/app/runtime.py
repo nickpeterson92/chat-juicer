@@ -18,8 +18,7 @@ from core.constants import (
     CONVERSATION_SUMMARIZATION_THRESHOLD,
     LOG_PREVIEW_LENGTH,
     MAX_CONVERSATION_TURNS,
-    MESSAGE_OUTPUT_ITEM,
-    RUN_ITEM_STREAM_EVENT,
+    RAW_RESPONSE_EVENT,
     SESSION_NAMING_TRIGGER_MESSAGES,
 )
 from core.prompts import SYSTEM_INSTRUCTIONS
@@ -212,19 +211,16 @@ async def process_user_input(app_state: AppState, session: TokenAwareSQLiteSessi
                 if ipc_msg:
                     IPCManager.send_raw(ipc_msg)
 
-                # Accumulate response text for logging
+                # Accumulate response text for logging (token-by-token from raw_response_event)
                 if (
-                    event.type == RUN_ITEM_STREAM_EVENT
-                    and hasattr(event, "item")
-                    and event.item
-                    and event.item.type == MESSAGE_OUTPUT_ITEM
-                    and hasattr(event.item, "raw_item")
+                    event.type == RAW_RESPONSE_EVENT
+                    and hasattr(event, "data")
+                    and event.data
+                    and getattr(event.data, "type", None) == "response.output_text.delta"
                 ):
-                    content = getattr(event.item.raw_item, "content", []) or []  # Ensure we always have a list
-                    for content_item in content:
-                        text = getattr(content_item, "text", "")
-                        if text:
-                            response_text += text
+                    delta = getattr(event.data, "delta", None)
+                    if delta:
+                        response_text += delta
 
         except PersistenceError as e:
             # Layer 2 persistence failure - notify user
