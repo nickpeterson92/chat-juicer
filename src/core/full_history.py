@@ -33,7 +33,7 @@ class DiskFullError(FullHistoryError):
     pass
 
 
-class PermissionError(FullHistoryError):
+class FullHistoryPermissionError(FullHistoryError):
     """Permission denied during write operation."""
 
     pass
@@ -130,7 +130,7 @@ class FullHistoryStore:
 
         Raises:
             DiskFullError: If disk is full
-            PermissionError: If permission denied
+            FullHistoryPermissionError: If permission denied
             CorruptionError: If database is corrupted
             FullHistoryError: For other storage errors
         """
@@ -180,7 +180,7 @@ class FullHistoryStore:
             elif e.errno == errno.EACCES:
                 error_msg = f"Permission denied while saving to full_history for session {session_id}"
                 logger.error(error_msg, exc_info=True)
-                raise PermissionError(error_msg) from e
+                raise FullHistoryPermissionError(error_msg) from e
             else:
                 error_msg = f"OS error while saving to full_history for session {session_id}: {e}"
                 logger.error(error_msg, exc_info=True)

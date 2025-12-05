@@ -22,8 +22,7 @@ from core.constants import (
     SESSION_NAMING_TRIGGER_MESSAGES,
 )
 from core.prompts import SYSTEM_INSTRUCTIONS
-from core.session import TokenAwareSQLiteSession
-from core.session.transaction_coordinator import PersistenceError
+from core.session import PersistenceError, TokenAwareSQLiteSession
 from core.session_commands import handle_session_command
 from integrations.event_handlers import CallTracker, build_event_handlers
 from integrations.mcp_registry import filter_mcp_servers

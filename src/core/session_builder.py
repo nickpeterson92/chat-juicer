@@ -1,4 +1,14 @@
-"""Fluent builder for TokenAwareSQLiteSession construction."""
+"""Fluent builder for TokenAwareSQLiteSession construction.
+
+This module provides a clean, self-documenting API for constructing sessions
+with various configurations. Extracted from the session package consolidation
+for improved maintainability.
+
+Usage patterns:
+    - Production: Full configuration with all dependencies
+    - Testing: Minimal configuration with in-memory storage
+    - Deletion: Basic configuration for cleanup operations
+"""
 
 from __future__ import annotations
 
@@ -16,12 +26,8 @@ class SessionBuilder:
     """Fluent builder for TokenAwareSQLiteSession construction.
 
     Provides a clear, self-documenting way to construct sessions with various configurations.
-    Supports three main usage patterns:
-    - Production: Full configuration with all dependencies
-    - Testing: Minimal configuration with in-memory storage
-    - Deletion: Basic configuration for cleanup operations
 
-    Example:
+    Examples:
         # Production usage
         session = (SessionBuilder("chat_123")
             .with_persistent_storage(CHAT_HISTORY_DB_PATH)
@@ -48,6 +54,9 @@ class SessionBuilder:
 
         Args:
             session_id: Unique identifier for the session
+
+        Raises:
+            ValueError: If session_id is empty
         """
         if not session_id:
             raise ValueError("session_id is required")
@@ -102,6 +111,9 @@ class SessionBuilder:
 
         Returns:
             Self for method chaining
+
+        Raises:
+            ValueError: If model is empty
         """
         if not model:
             raise ValueError("model cannot be empty")
@@ -160,7 +172,7 @@ class SessionBuilder:
             ValueError: If configuration is invalid
         """
         # Import here to avoid circular dependency
-        from .base import TokenAwareSQLiteSession
+        from core.session import TokenAwareSQLiteSession
 
         return TokenAwareSQLiteSession(
             session_id=self._session_id,

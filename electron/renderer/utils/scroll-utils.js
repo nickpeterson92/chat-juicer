@@ -117,11 +117,11 @@ export function scheduleScroll(container, options = {}) {
     return;
   }
 
-  // Update state immediately to handle rapid calls with different options
-  // This ensures a "forced" scroll isn't lost if a standard scroll is already pending
+  // Update state to latest call's values (last caller wins)
+  // This is consistent with scrollTarget and ensures the most recent intent is honored
   scrollTarget = container;
-  scrollForced = scrollForced || force;
-  scrollStreaming = scrollStreaming || streaming;
+  scrollForced = force;
+  scrollStreaming = streaming;
 
   if (!scrollPending) {
     scrollPending = true;

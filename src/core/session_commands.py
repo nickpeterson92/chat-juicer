@@ -20,7 +20,7 @@ from core.constants import (
     INITIAL_SESSION_CHUNK_SIZE,
     REASONING_EFFORT_OPTIONS,
 )
-from core.session import SessionBuilder
+from core.session_builder import SessionBuilder
 from integrations.sdk_token_tracker import connect_session, disconnect_session
 from models.session_models import (
     AppStateProtocol,
