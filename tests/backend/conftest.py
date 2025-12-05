@@ -222,14 +222,69 @@ def session_workspace(temp_dir: Path) -> Generator[Path, None, None]:
 
 
 @pytest.fixture
-def mock_ipc_output(monkeypatch: pytest.MonkeyPatch) -> Generator[list[str], None, None]:
-    """Capture IPC output (print statements) for testing."""
-    outputs: list[str] = []
+def mock_ipc_output(monkeypatch: pytest.MonkeyPatch) -> Generator[list[dict[str, Any]], None, None]:
+    """Capture IPC output (binary V2 messages) for testing.
 
-    def mock_print(msg: str, **kwargs: Any) -> None:
-        outputs.append(msg)
+    Returns list of decoded message dictionaries.
+    """
+    import io
+    import struct
 
-    monkeypatch.setattr("builtins.print", mock_print)
+    import msgpack
+
+    outputs: list[dict[str, Any]] = []
+    buffer = io.BytesIO()
+
+    def mock_write(data: bytes) -> int:
+        buffer.write(data)
+        # Try to parse complete messages from buffer
+        buffer.seek(0)
+        content = buffer.read()
+        buffer.seek(0)
+        buffer.truncate()
+
+        offset = 0
+        while offset + 7 <= len(content):
+            # Parse header
+            version = struct.unpack("!H", content[offset : offset + 2])[0]
+            flags = content[offset + 2]
+            length = struct.unpack("!I", content[offset + 3 : offset + 7])[0]
+
+            if version != 2:
+                # Not a valid V2 message, skip
+                break
+
+            if offset + 7 + length > len(content):
+                # Incomplete message, save remaining for later
+                buffer.write(content[offset:])
+                break
+
+            # Extract payload
+            payload = content[offset + 7 : offset + 7 + length]
+
+            # Decompress if needed
+            if flags & 0x01:
+                import zlib
+
+                payload = zlib.decompress(payload)
+
+            # Decode MessagePack
+            message = msgpack.unpackb(payload, raw=False)
+            outputs.append(message)
+
+            offset += 7 + length
+
+        # Save any remaining incomplete data
+        if offset < len(content):
+            buffer.write(content[offset:])
+
+        return len(data)
+
+    def mock_flush() -> None:
+        pass
+
+    monkeypatch.setattr("sys.stdout.buffer.write", mock_write)
+    monkeypatch.setattr("sys.stdout.buffer.flush", mock_flush)
     yield outputs
 
 

@@ -241,10 +241,7 @@ class TestHandleFileUploadExtended:
             "message": "Saved",
         }
 
-        upload_data = {
-            "filename": "test.txt",
-            "data": "base64data",
-        }
+        upload_data = {"filename": "test.txt", "content": list(b"base64data")}  # bytes array to mirror frontend
 
         result = await handle_file_upload(mock_app_state, upload_data)
 
@@ -279,10 +276,7 @@ class TestHandleFileUploadExtended:
             "message": "Saved",
         }
 
-        upload_data = {
-            "filename": "test.txt",
-            "data": "base64data",
-        }
+        upload_data = {"filename": "test.txt", "content": list(b"base64data")}  # bytes array to mirror frontend
 
         with patch("app.runtime.IPCManager") as mock_ipc:
             result = await handle_file_upload(mock_app_state, upload_data)

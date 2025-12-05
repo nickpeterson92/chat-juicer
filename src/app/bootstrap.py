@@ -97,25 +97,26 @@ async def initialize_application() -> AppState:
             raise ValueError(f"Unknown API provider: {settings.api_provider}")
 
     except Exception as e:
-        print(f"Error: Configuration validation failed: {e}")
-        print("Please check your .env file has required variables:")
+        # Use stderr for error messages (stdout is reserved for binary protocol)
+        sys.stderr.write(f"Error: Configuration validation failed: {e}\n")
+        sys.stderr.write("Please check your .env file has required variables:\n")
         # Try to access settings, but if it's undefined, show default Azure instructions
         try:
             if settings.api_provider == "openai":
-                print("API_PROVIDER=openai")
-                print("OPENAI_API_KEY")
-                print("OPENAI_MODEL")
+                sys.stderr.write("API_PROVIDER=openai\n")
+                sys.stderr.write("OPENAI_API_KEY\n")
+                sys.stderr.write("OPENAI_MODEL\n")
             else:
-                print("API_PROVIDER=azure (default)")
-                print("AZURE_OPENAI_API_KEY")
-                print("AZURE_OPENAI_ENDPOINT")
-                print("AZURE_OPENAI_DEPLOYMENT")
+                sys.stderr.write("API_PROVIDER=azure (default)\n")
+                sys.stderr.write("AZURE_OPENAI_API_KEY\n")
+                sys.stderr.write("AZURE_OPENAI_ENDPOINT\n")
+                sys.stderr.write("AZURE_OPENAI_DEPLOYMENT\n")
         except (NameError, UnboundLocalError):
             # If settings is not defined, show default Azure instructions
-            print("API_PROVIDER=azure (default)")
-            print("AZURE_OPENAI_API_KEY")
-            print("AZURE_OPENAI_ENDPOINT")
-            print("AZURE_OPENAI_DEPLOYMENT")
+            sys.stderr.write("API_PROVIDER=azure (default)\n")
+            sys.stderr.write("AZURE_OPENAI_API_KEY\n")
+            sys.stderr.write("AZURE_OPENAI_ENDPOINT\n")
+            sys.stderr.write("AZURE_OPENAI_DEPLOYMENT\n")
         sys.exit(1)
 
     # Set as default client for Agent/Runner
@@ -137,17 +138,17 @@ async def initialize_application() -> AppState:
     all_mcp_servers = list(mcp_servers_dict.values())
     agent = create_agent(deployment, SYSTEM_INSTRUCTIONS, AGENT_TOOLS, all_mcp_servers)
 
-    # Display connection info based on provider
+    # Display connection info based on provider (use stderr for status messages)
     if settings.api_provider == "azure":
-        print("Connected to Azure OpenAI")
-        print(f"Using deployment: {deployment}")
+        sys.stderr.write("Connected to Azure OpenAI\n")
+        sys.stderr.write(f"Using deployment: {deployment}\n")
     else:
-        print("Connected to OpenAI")
-        print(f"Using model: {deployment}")
+        sys.stderr.write("Connected to OpenAI\n")
+        sys.stderr.write(f"Using model: {deployment}\n")
 
     if mcp_servers_dict:
         server_names = ", ".join(mcp_servers_dict.keys())
-        print(f"MCP Servers: {server_names}")
+        sys.stderr.write(f"MCP Servers: {server_names}\n")
 
     # Initialize full history store for layered persistence
     full_history_store = FullHistoryStore(db_path=CHAT_HISTORY_DB_PATH)

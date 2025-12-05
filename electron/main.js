@@ -6,7 +6,8 @@ const os = require("node:os");
 const Logger = require("./logger");
 const PythonManager = require("../scripts/python-manager");
 const platformConfig = require("../scripts/platform-config");
-const StreamingBufferManager = require("./utils/streaming-buffer");
+const IPCProtocolV2 = require("./utils/ipc-v2-protocol");
+const BinaryMessageParser = require("./utils/binary-message-parser");
 const {
   RESTART_DELAY,
   RESTART_CALLBACK_DELAY,
@@ -22,11 +23,6 @@ const {
   WINDOW_MIN_HEIGHT,
   HIDDEN_FILE_PREFIX,
   JSON_DELIMITER,
-  JSON_DELIMITER_LENGTH,
-  MAX_SESSION_RESPONSE,
-  MAX_FILE_UPLOAD_RESPONSE,
-  BUFFER_CHECK_INTERVAL,
-  BACKPRESSURE_PAUSE_DURATION,
 } = require("./config/main-constants");
 
 // Initialize logger for main process
@@ -137,6 +133,69 @@ async function startPythonBot() {
     pythonProcessPID = pythonProcess.pid;
     logger.logPythonProcess("started", { pid: pythonProcessPID, path: pythonPath });
 
+    // IMPORTANT: Set up stdout listener BEFORE sending protocol negotiation
+    // to avoid race condition where response arrives before listener is attached
+    const binaryParser = new BinaryMessageParser({
+      onMessage: (message) => {
+        const messageType = message.type;
+        logger.trace("Python binary message received", {
+          type: messageType,
+          size: message._size,
+          compressed: message._compressed,
+        });
+
+        // Route messages by type
+        switch (messageType) {
+          case "protocol_negotiation_response":
+            logger.info("Protocol negotiation response received", {
+              selectedVersion: message.selected_version,
+              serverVersion: message.server_version,
+            });
+            // Protocol negotiation successful - no action needed for renderer
+            break;
+
+          case "session_response":
+          case "upload_response":
+            // These are handled by their respective Promise handlers
+            // via the pendingRequests map - emit for those listeners
+            logger.trace("IPC response received", { type: messageType });
+            pythonProcess.emit("binary-response", message);
+            break;
+
+          case "error":
+            // Error from backend
+            logger.error("Backend error received", { error: message.error });
+            if (mainWindow) {
+              mainWindow.webContents.send("bot-error", message.error);
+            }
+            break;
+
+          default:
+            // Forward other messages to renderer (streaming content, function calls, etc.)
+            if (mainWindow) {
+              // Convert to V1-compatible format for renderer (temporary compatibility)
+              // The renderer still expects __JSON__ delimited text
+              const jsonContent = JSON.stringify(message);
+              const v1Output = `${JSON_DELIMITER}${jsonContent}${JSON_DELIMITER}`;
+              mainWindow.webContents.send("bot-output", v1Output);
+              logger.logIPC("send", "bot-output", jsonContent.substring(0, 200), { toRenderer: true });
+            }
+            break;
+        }
+      },
+      onError: (error) => {
+        logger.error("Binary message parse error", { error: error.message, code: error.code });
+      },
+    });
+
+    pythonProcess.stdout.on("data", (data) => {
+      logger.trace("Python stdout received", { bytes: data.length });
+      binaryParser.feed(data);
+    });
+
+    // Now safe to send protocol negotiation - listener is ready
+    sendProtocolNegotiation();
+
     // Start health monitoring
     startHealthCheck();
   } catch (error) {
@@ -146,61 +205,6 @@ async function startPythonBot() {
     }
     return;
   }
-
-  // Handle Python stdout (bot responses)
-  pythonProcess.stdout.on("data", (data) => {
-    const output = data.toString("utf-8");
-    logger.trace("Python stdout received", { length: output.length });
-
-    // Parse and filter individual messages to avoid blocking entire chunks
-    // A single chunk may contain multiple JSON messages (e.g., function events + session_response)
-    let filteredOutput = output;
-
-    // Check if output contains IPC response messages that should not go to renderer
-    if (output.includes('"type":"upload_response"') || output.includes('"type":"session_response"')) {
-      // Find and remove complete JSON messages that are IPC responses
-      // Match pattern: __JSON__<content>__JSON__
-      let result = output;
-      let startIdx = 0;
-
-      while (true) {
-        const start = result.indexOf(JSON_DELIMITER, startIdx);
-        if (start === -1) break;
-
-        const contentStart = start + JSON_DELIMITER_LENGTH;
-        const end = result.indexOf(JSON_DELIMITER, contentStart);
-        if (end === -1) break;
-
-        const content = result.substring(contentStart, end);
-
-        try {
-          const message = JSON.parse(content);
-
-          // If this is an IPC response message, remove it
-          if (message.type === "upload_response" || message.type === "session_response") {
-            logger.trace("Filtering out IPC response message", { type: message.type });
-            // Remove the entire message including both delimiters
-            result = result.substring(0, start) + result.substring(end + JSON_DELIMITER_LENGTH);
-            // Don't advance startIdx - check same position again
-            continue;
-          }
-        } catch (_e) {
-          // Not valid JSON, skip this message
-        }
-
-        // Move past this message
-        startIdx = end + JSON_DELIMITER_LENGTH;
-      }
-
-      filteredOutput = result;
-    }
-
-    // Forward filtered output to renderer (if not empty after filtering)
-    if (mainWindow && filteredOutput.trim()) {
-      mainWindow.webContents.send("bot-output", filteredOutput);
-      logger.logIPC("send", "bot-output", filteredOutput, { toRenderer: true });
-    }
-  });
 
   // stderr now goes directly to terminal for debugging (not captured)
 
@@ -235,6 +239,30 @@ async function startPythonBot() {
       mainWindow.webContents.send("bot-error", `Process error: ${error.message}`);
     }
   });
+}
+
+function sendProtocolNegotiation() {
+  if (!pythonProcess || pythonProcess.killed) {
+    logger.warn("Cannot send protocol negotiation: Python process not running");
+    return;
+  }
+
+  const negotiation = {
+    type: "protocol_negotiation",
+    supported_versions: [2], // V2 only
+    client_version: app.getVersion(),
+  };
+
+  try {
+    const binaryMessage = IPCProtocolV2.encode(negotiation);
+    pythonProcess.stdin.write(binaryMessage);
+    logger.info("Sent protocol negotiation (V2 binary)", {
+      version: 2,
+      size: binaryMessage.length,
+    });
+  } catch (error) {
+    logger.error("Failed to send protocol negotiation", { error: error.message });
+  }
 }
 
 app.whenReady().then(() => {
@@ -281,24 +309,34 @@ app.whenReady().then(() => {
     return mainWindow ? mainWindow.isMaximized() : false;
   });
 
-  // IPC handler for user input
+  // IPC handler for user input (Binary V2)
   ipcMain.on("user-input", (event, message) => {
     logger.logIPC("receive", "user-input", message, { fromRenderer: true });
     logger.logUserInteraction("chat-input", { messageLength: message.length });
 
     if (pythonProcess && !pythonProcess.killed) {
-      // Encode newlines in the message to support multi-line input
-      // Python's input() function only reads one line at a time, so we use a placeholder
-      const encodedMessage = message.replace(/\n/g, "__NEWLINE__");
-      pythonProcess.stdin.write(`${encodedMessage}\n`);
-      logger.debug("Sent input to Python process", { hasNewlines: message.includes("\n") });
+      try {
+        const binaryMessage = IPCProtocolV2.encode({
+          type: "message",
+          role: "user",
+          content: message,
+        });
+        pythonProcess.stdin.write(binaryMessage);
+        logger.debug("Sent user message as V2 binary", {
+          contentLength: message.length,
+          binarySize: binaryMessage.length,
+        });
+      } catch (error) {
+        logger.error("Failed to encode user message", { error: error.message });
+        event.reply("bot-error", `Failed to send message: ${error.message}`);
+      }
     } else {
       logger.error("Python process is not running");
       event.reply("bot-error", "Python process is not running");
     }
   });
 
-  // IPC handler for session commands (with StreamingBufferManager)
+  // IPC handler for session commands (Binary V2)
   ipcMain.handle("session-command", async (_event, { command, data }) => {
     logger.info("Session command received", { command });
 
@@ -308,11 +346,8 @@ app.whenReady().then(() => {
     }
 
     try {
-      // Send command to Python in expected format
-      const dataJson = JSON.stringify(data || {});
-      const sessionCommand = `__SESSION__${command}__${dataJson}__\n`;
-      pythonProcess.stdin.write(sessionCommand);
-      logger.debug("Sent session command to Python", { command, dataJson });
+      // Generate unique request ID to correlate request/response
+      const requestId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
       // Wait for response (with timeout)
       // Summarization needs longer timeout since it calls LLM (network delays, large conversations)
@@ -320,81 +355,47 @@ app.whenReady().then(() => {
 
       return new Promise((resolve, reject) => {
         let timeoutId;
-        let backpressureInterval;
-
-        // Create streaming buffer manager with security limits
-        const bufferManager = new StreamingBufferManager({
-          maxSize: MAX_SESSION_RESPONSE,
-          operationType: `session-${command}`,
-          onMessage: (message) => {
-            // If this is the session_response we're waiting for, resolve
-            if (message.type === "session_response") {
-              cleanup();
-              resolve(message.data);
-            }
-            // Otherwise, continue waiting for more messages
-          },
-          onOverflow: (bytesReceived) => {
-            cleanup();
-            logger.error("Session command response too large", {
-              command,
-              bytesReceived,
-              maxSize: MAX_SESSION_RESPONSE,
-            });
-            reject(
-              new Error(
-                `Response exceeded maximum size of ${MAX_SESSION_RESPONSE} bytes (received ${bytesReceived} bytes). Try smaller requests.`
-              )
-            );
-          },
-        });
 
         // Cleanup function to remove listeners and timers
         const cleanup = () => {
           if (timeoutId) clearTimeout(timeoutId);
-          if (backpressureInterval) clearInterval(backpressureInterval);
-          pythonProcess.stdout.removeListener("data", responseHandler);
+          pythonProcess.removeListener("binary-response", responseHandler);
         };
+
+        // Response handler - resolve for matching request_id; also accept missing request_id for backward compatibility
+        const responseHandler = (message) => {
+          if (
+            message.type === "session_response" &&
+            (message.request_id === requestId || message.request_id === undefined || message.request_id === null)
+          ) {
+            if (message.request_id === undefined || message.request_id === null) {
+              logger.warn("Received session_response without request_id; resolving with fallback", { requestId });
+            }
+            cleanup();
+            resolve(message.data);
+          }
+        };
+
+        // IMPORTANT: Attach listener BEFORE sending to avoid race condition
+        // where Python responds before listener is ready
+        pythonProcess.on("binary-response", responseHandler);
 
         // Set timeout for response
         timeoutId = setTimeout(() => {
           cleanup();
-          logger.warn("Session command timed out", {
-            command,
-            stats: bufferManager.getStats(),
-          });
+          logger.warn("Session command timed out", { command, requestId });
           reject(new Error("Command timed out"));
         }, timeoutMs);
 
-        // Response handler with streaming buffer
-        const responseHandler = (data) => {
-          try {
-            bufferManager.append(data.toString("utf-8"));
-
-            // Apply backpressure if buffer filling too quickly
-            if (bufferManager.shouldApplyBackpressure(BUFFER_CHECK_INTERVAL)) {
-              logger.debug("Applying backpressure to Python stdout", {
-                stats: bufferManager.getStats(),
-              });
-              pythonProcess.stdout.pause();
-              setTimeout(() => {
-                if (pythonProcess?.stdout) {
-                  pythonProcess.stdout.resume();
-                }
-              }, BACKPRESSURE_PAUSE_DURATION);
-            }
-          } catch (error) {
-            cleanup();
-            if (error.code === "BUFFER_OVERFLOW") {
-              // Already handled by onOverflow callback
-              return;
-            }
-            logger.error("Session command error", { error: error.message });
-            reject(error);
-          }
-        };
-
-        pythonProcess.stdout.on("data", responseHandler);
+        // Now send command to Python as binary V2
+        const binaryMessage = IPCProtocolV2.encode({
+          type: "session",
+          command: command,
+          params: data || {},
+          request_id: requestId,
+        });
+        pythonProcess.stdin.write(binaryMessage);
+        logger.debug("Sent session command as V2 binary", { command, requestId, binarySize: binaryMessage.length });
       });
     } catch (error) {
       logger.error("Session command error", { error: error.message });
@@ -402,7 +403,7 @@ app.whenReady().then(() => {
     }
   });
 
-  // IPC handler for file uploads (with StreamingBufferManager)
+  // IPC handler for file uploads (Binary V2)
   ipcMain.handle("upload-file", async (_event, { filename, data, size, type }) => {
     logger.info("File upload requested", { filename, size, type });
 
@@ -412,90 +413,57 @@ app.whenReady().then(() => {
     }
 
     try {
-      // Send upload command to Python
-      const uploadData = { filename, data, size, type };
-      const dataJson = JSON.stringify(uploadData);
-      const uploadCommand = `__UPLOAD__${dataJson}__\n`;
-      pythonProcess.stdin.write(uploadCommand);
-      logger.debug("Sent upload command to Python", { filename, size });
+      // Generate unique request ID to correlate request/response
+      const requestId = `upload_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
       // Wait for response with timeout
       return new Promise((resolve, reject) => {
         let timeoutId;
-        let backpressureInterval;
-
-        // Create streaming buffer manager with security limits
-        const bufferManager = new StreamingBufferManager({
-          maxSize: MAX_FILE_UPLOAD_RESPONSE,
-          operationType: "file-upload",
-          onMessage: (message) => {
-            // If this is the upload_response, resolve
-            if (message.type === "upload_response") {
-              cleanup();
-              resolve(message.data);
-            }
-          },
-          onOverflow: (bytesReceived) => {
-            cleanup();
-            logger.error("File upload response too large", {
-              filename,
-              bytesReceived,
-              maxSize: MAX_FILE_UPLOAD_RESPONSE,
-            });
-            reject(
-              new Error(
-                `Response exceeded maximum size of ${MAX_FILE_UPLOAD_RESPONSE} bytes (received ${bytesReceived} bytes). File may be too large.`
-              )
-            );
-          },
-        });
 
         // Cleanup function
         const cleanup = () => {
           if (timeoutId) clearTimeout(timeoutId);
-          if (backpressureInterval) clearInterval(backpressureInterval);
-          pythonProcess.stdout.removeListener("data", responseHandler);
+          pythonProcess.removeListener("binary-response", responseHandler);
         };
+
+        // Response handler - resolve for matching request_id; also accept missing request_id for backward compatibility
+        const responseHandler = (message) => {
+          if (
+            message.type === "upload_response" &&
+            (message.request_id === requestId || message.request_id === undefined || message.request_id === null)
+          ) {
+            if (message.request_id === undefined || message.request_id === null) {
+              logger.warn("Received upload_response without request_id; resolving with fallback", {
+                requestId,
+                filename,
+              });
+            }
+            cleanup();
+            resolve(message.data);
+          }
+        };
+
+        // IMPORTANT: Attach listener BEFORE sending to avoid race condition
+        // where Python responds before listener is ready
+        pythonProcess.on("binary-response", responseHandler);
 
         // Set timeout
         timeoutId = setTimeout(() => {
           cleanup();
-          logger.warn("File upload timed out", {
-            filename,
-            stats: bufferManager.getStats(),
-          });
+          logger.warn("File upload timed out", { filename, requestId });
           reject(new Error("Upload timed out"));
         }, FILE_UPLOAD_TIMEOUT);
 
-        // Response handler with streaming buffer
-        const responseHandler = (data) => {
-          try {
-            bufferManager.append(data.toString("utf-8"));
-
-            // Apply backpressure if needed
-            if (bufferManager.shouldApplyBackpressure(BUFFER_CHECK_INTERVAL)) {
-              logger.debug("Applying backpressure to Python stdout", {
-                stats: bufferManager.getStats(),
-              });
-              pythonProcess.stdout.pause();
-              setTimeout(() => {
-                if (pythonProcess?.stdout) {
-                  pythonProcess.stdout.resume();
-                }
-              }, BACKPRESSURE_PAUSE_DURATION);
-            }
-          } catch (error) {
-            cleanup();
-            if (error.code === "BUFFER_OVERFLOW") {
-              // Already handled by onOverflow callback
-              return;
-            }
-            logger.error("File upload error", { error: error.message });
-            reject(error);
-          }
-        };
-
-        pythonProcess.stdout.on("data", responseHandler);
+        // Now send upload command to Python as binary V2
+        const binaryMessage = IPCProtocolV2.encode({
+          type: "file_upload",
+          filename: filename,
+          content: data,
+          mime_type: type,
+          request_id: requestId,
+        });
+        pythonProcess.stdin.write(binaryMessage);
+        logger.debug("Sent file upload as V2 binary", { filename, size, requestId, binarySize: binaryMessage.length });
       });
     } catch (error) {
       logger.error("File upload error", { error: error.message });

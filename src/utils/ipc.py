@@ -4,6 +4,9 @@ Manages communication between Electron frontend and Python backend.
 
 This module centralizes all IPC protocol constants and methods.
 All IPC-related code should use this module to ensure consistency.
+
+Protocol V2: Uses binary MessagePack encoding with length-prefixed framing.
+All output goes through binary_io.write_message() for consistency.
 """
 
 from __future__ import annotations
@@ -19,29 +22,28 @@ from core.constants import (
     MSG_TYPE_SESSION_RESPONSE,
     MSG_TYPE_SESSION_UPDATED,
 )
-from models.event_models import AssistantMessage, ErrorNotification
-from utils.json_utils import json_compact
+from models.event_models import ErrorNotification
+from utils.binary_io import write_message
 
 
 class IPCManager:
     """Manages IPC communication with clean abstraction.
 
-    Protocol Specification:
-        - JSON messages: ``__JSON__<payload>__JSON__``
-        - Session commands: ``__SESSION__<command>__<json_data>__``
-        - File uploads: ``__UPLOAD__<json_data>__``
+    Protocol V2 Specification:
+        - All messages use binary MessagePack encoding
+        - 7-byte header: version(2) + flags(1) + length(4)
+        - Automatic compression for messages >1KB
 
-    All IPC constants and helper methods are centralized here
-    to maintain a single source of truth for the protocol.
+    All IPC output methods use binary_io.write_message() for consistency.
     """
 
-    #: Delimiter for JSON messages in IPC protocol
+    #: Delimiter for JSON messages (V1 legacy - kept for parsing incoming commands)
     DELIMITER: ClassVar[str] = "__JSON__"
 
-    #: Prefix for session management commands
+    #: Prefix for session management commands (V1 legacy - kept for parsing)
     SESSION_PREFIX: ClassVar[str] = "__SESSION__"
 
-    #: Prefix for file upload commands
+    #: Prefix for file upload commands (V1 legacy - kept for parsing)
     UPLOAD_PREFIX: ClassVar[str] = "__UPLOAD__"
 
     #: Index of command name in parsed session command
@@ -53,40 +55,47 @@ class IPCManager:
     #: Minimum parts required for valid session command
     MIN_SESSION_PARTS: ClassVar[int] = 4
 
-    # Pre-create common JSON templates to avoid repeated serialization
-    _TEMPLATES: ClassVar[dict[str, str]] = {
-        "assistant_start": AssistantMessage(type=MSG_TYPE_ASSISTANT_START).to_json(),
-        "assistant_end": AssistantMessage(type=MSG_TYPE_ASSISTANT_END).to_json(),
+    # Pre-create common message dicts to avoid repeated dict creation
+    _TEMPLATES: ClassVar[dict[str, dict[str, Any]]] = {
+        "assistant_start": {"type": MSG_TYPE_ASSISTANT_START},
+        "assistant_end": {"type": MSG_TYPE_ASSISTANT_END},
     }
 
     @staticmethod
     def send(message: dict[str, Any]) -> None:
-        """Send a message to the Electron frontend via IPC."""
-        msg = json_compact(message)
-        print(f"{IPCManager.DELIMITER}{msg}{IPCManager.DELIMITER}", flush=True)
+        """Send a message to the Electron frontend via binary V2 IPC."""
+        write_message(message)
 
     @staticmethod
     def send_raw(message: str) -> None:
-        """Send a raw JSON string message (for backwards compatibility)."""
-        print(f"{IPCManager.DELIMITER}{message}{IPCManager.DELIMITER}", flush=True)
+        """Send a raw JSON string message (converts to dict for V2).
+
+        For backwards compatibility - parses JSON and sends as binary V2.
+        """
+        try:
+            msg_dict = json.loads(message)
+            write_message(msg_dict)
+        except json.JSONDecodeError:
+            # If it's not valid JSON, wrap it as content
+            write_message({"type": "raw", "content": message})
 
     @staticmethod
     def send_error(message: str, code: str | None = None, details: dict[str, Any] | None = None) -> None:
         """Send an error message to the frontend with validation."""
-        # Use Pydantic model for validation, but maintain backward compatibility
+        # Use Pydantic model for validation
         error_msg = ErrorNotification(type=MSG_TYPE_ERROR, message=message, code=code, details=details)
-        # Convert to dict and send using existing method to maintain format
-        IPCManager.send(error_msg.model_dump(exclude_none=True))
+        # Send via binary V2
+        write_message(error_msg.model_dump(exclude_none=True))
 
     @staticmethod
     def send_assistant_start() -> None:
         """Send assistant start signal."""
-        IPCManager.send_raw(IPCManager._TEMPLATES["assistant_start"])
+        write_message(IPCManager._TEMPLATES["assistant_start"])
 
     @staticmethod
     def send_assistant_end() -> None:
         """Send assistant end signal."""
-        IPCManager.send_raw(IPCManager._TEMPLATES["assistant_end"])
+        write_message(IPCManager._TEMPLATES["assistant_end"])
 
     @staticmethod
     def send_session_response(data: dict[str, Any]) -> None:
@@ -95,20 +104,16 @@ class IPCManager:
         Args:
             data: Response data dict (success/error info)
         """
-
         response = {"type": MSG_TYPE_SESSION_RESPONSE, "data": data}
         try:
-            # Use compact JSON for IPC efficiency
-            msg = json_compact(response)
-            print(f"{IPCManager.DELIMITER}{msg}{IPCManager.DELIMITER}", flush=True)
-        except (TypeError, ValueError) as e:
+            write_message(response)
+        except Exception as e:
             # Log serialization error and send error response instead
             from utils.logger import logger
 
             logger.error(f"Failed to serialize session response: {e}", exc_info=True)
             error_response = {"type": MSG_TYPE_SESSION_RESPONSE, "data": {"error": f"Serialization failed: {e}"}}
-            error_msg = json_compact(error_response)
-            print(f"{IPCManager.DELIMITER}{error_msg}{IPCManager.DELIMITER}", flush=True)
+            write_message(error_response)
 
     @staticmethod
     def send_session_updated(data: dict[str, Any]) -> None:
@@ -119,13 +124,10 @@ class IPCManager:
         Args:
             data: Session update data dict (success/error info, updated sessions list)
         """
-
         response = {"type": MSG_TYPE_SESSION_UPDATED, "data": data}
         try:
-            # Use compact JSON for IPC efficiency
-            msg = json_compact(response)
-            print(f"{IPCManager.DELIMITER}{msg}{IPCManager.DELIMITER}", flush=True)
-        except (TypeError, ValueError) as e:
+            write_message(response)
+        except Exception as e:
             # Log serialization error
             from utils.logger import logger
 
