@@ -1,19 +1,89 @@
-"""Tests for tool wrappers module.
-
-Tests session-aware tool wrappers.
-"""
-
 from __future__ import annotations
 
-from tools.wrappers import create_session_aware_tools
+import sys
+import types
+
+from typing import Any
+
+import pytest
+
+from tools import wrappers
 
 
-class TestCreateSessionAwareTools:
-    """Tests for create_session_aware_tools function."""
+def _install_function_tool_stub(monkeypatch: pytest.MonkeyPatch, collected: list[Any]) -> None:
+    """Install a stubbed agents.function_tool that records wrapped callables."""
 
-    def test_tool_count(self) -> None:
-        """Test that correct number of tools are created."""
-        wrapped_tools = create_session_aware_tools("chat_test")
+    def function_tool(fn: Any) -> Any:
+        collected.append(fn)
+        return fn
 
-        # Should have 5 tools: list_directory, read_file, search_files, edit_file, generate_document
-        assert len(wrapped_tools) == 5
+    dummy_agents = types.SimpleNamespace(function_tool=function_tool)
+    monkeypatch.setitem(sys.modules, "agents", dummy_agents)
+
+
+@pytest.mark.asyncio
+async def test_session_wrappers_inject_session_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Wrappers should forward the captured session_id into every underlying tool."""
+    calls: dict[str, tuple[Any, ...]] = {}
+    collected: list[Any] = []
+
+    def fake_list_directory(path: str = ".", session_id: str | None = None, show_hidden: bool = False) -> str:
+        calls["list_directory"] = (path, session_id, show_hidden)
+        return "listed"
+
+    async def fake_read_file(
+        file_path: str, session_id: str | None = None, head: int | None = None, tail: int | None = None
+    ) -> str:
+        calls["read_file"] = (file_path, session_id, head, tail)
+        return "read"
+
+    async def fake_search_files(
+        pattern: str,
+        base_path: str = ".",
+        session_id: str | None = None,
+        recursive: bool = True,
+        max_results: int = 100,
+    ) -> str:
+        calls["search_files"] = (pattern, base_path, session_id, recursive, max_results)
+        return "searched"
+
+    async def fake_edit_file(file_path: str, edits: list[Any], session_id: str | None = None) -> str:
+        calls["edit_file"] = (file_path, tuple(edits), session_id)
+        return "edited"
+
+    async def fake_generate_document(
+        content: str, filename: str, create_backup: bool = False, session_id: str | None = None
+    ) -> str:
+        calls["generate_document"] = (content, filename, create_backup, session_id)
+        return "generated"
+
+    monkeypatch.setattr(wrappers, "list_directory", fake_list_directory)
+    monkeypatch.setattr(wrappers, "read_file", fake_read_file)
+    monkeypatch.setattr(wrappers, "search_files", fake_search_files)
+    monkeypatch.setattr(wrappers, "edit_file", fake_edit_file)
+    monkeypatch.setattr(wrappers, "generate_document", fake_generate_document)
+    _install_function_tool_stub(monkeypatch, collected)
+
+    session_id = "session-123"
+    tools = wrappers.create_session_aware_tools(session_id)
+
+    # function_tool stub should have received each wrapper callable
+    assert len(tools) == 5
+    assert len(collected) == 5
+
+    # Invoke wrappers and ensure session_id is forwarded
+    assert tools[0](path="docs", show_hidden=True) == "listed"
+    assert calls["list_directory"] == ("docs", session_id, True)
+
+    assert await tools[1]("notes.txt", head=5) == "read"
+    assert calls["read_file"] == ("notes.txt", session_id, 5, None)
+
+    assert await tools[2]("*.md", base_path=".", recursive=False, max_results=10) == "searched"
+    assert calls["search_files"] == ("*.md", ".", session_id, False, 10)
+
+    edits = [{"oldText": "a", "newText": "b"}]
+    assert await tools[3]("file.txt", edits=edits) == "edited"
+    assert calls["edit_file"] == ("file.txt", tuple(edits), session_id)
+
+    assert await tools[4]("content", "out.md", create_backup=True) == "generated"
+    assert calls["generate_document"] == ("content", "out.md", True, session_id)
