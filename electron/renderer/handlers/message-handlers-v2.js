@@ -179,6 +179,15 @@ export function registerMessageHandlers(context) {
   // ===== Function Call Handlers =====
 
   createHandler("function_detected", (message) => {
+    // DEBUG: Log function detection for troubleshooting
+    console.log("[FunctionCard] function_detected event received:", {
+      call_id: message.call_id,
+      name: message.name,
+      hasArguments: !!message.arguments,
+      hasChatContainer: !!elements.chatContainer,
+      hasActiveCalls: !!appState.functions?.activeCalls,
+    });
+
     // Use service if available
     if (services?.functionCallService) {
       services.functionCallService.createCall(message.call_id, message.name, message.arguments || {});
@@ -221,6 +230,24 @@ export function registerMessageHandlers(context) {
   });
 
   createHandler("function_completed", (message) => {
+    // IMPORTANT: Update UI status FIRST, before FunctionCallService moves call to completedCalls
+    // FunctionCallService.setCallResult/setCallError deletes from activeCalls, breaking UI updates
+    if (message.success) {
+      const result = message.result || message.output || "Success";
+      updateFunctionCallStatus(appState.functions.activeCalls, message.call_id, "completed", { result }, true);
+    } else {
+      updateFunctionCallStatus(
+        appState.functions.activeCalls,
+        message.call_id,
+        "error",
+        {
+          error: message.error || message.result || message.output || "Unknown error",
+        },
+        true
+      );
+    }
+
+    // Now update the FunctionCallService state (this moves call from activeCalls to completedCalls)
     if (services?.functionCallService) {
       if (message.success) {
         const result = message.result || message.output || "Success";
@@ -229,15 +256,6 @@ export function registerMessageHandlers(context) {
         const error = message.error || message.result || message.output || "Unknown error";
         services.functionCallService.setCallError(message.call_id, error);
       }
-    }
-
-    if (message.success) {
-      const result = message.result || message.output || "Success";
-      updateFunctionCallStatus(appState.functions.activeCalls, message.call_id, "completed", { result });
-    } else {
-      updateFunctionCallStatus(appState.functions.activeCalls, message.call_id, "error", {
-        error: message.error || message.result || message.output || "Unknown error",
-      });
     }
 
     scheduleFunctionCardCleanup(appState.functions.activeCalls, appState.functions.activeTimers, message.call_id);
@@ -251,20 +269,34 @@ export function registerMessageHandlers(context) {
   });
 
   createHandler("function_executed", (message) => {
+    // IMPORTANT: Update UI status FIRST, before FunctionCallService moves call to completedCalls
+    if (message.success) {
+      updateFunctionCallStatus(
+        appState.functions.activeCalls,
+        message.call_id,
+        "completed",
+        {
+          result: message.result_preview || "Success",
+        },
+        true
+      );
+    } else {
+      updateFunctionCallStatus(
+        appState.functions.activeCalls,
+        message.call_id,
+        "error",
+        { error: message.error },
+        true
+      );
+    }
+
+    // Now update the FunctionCallService state (this moves call from activeCalls to completedCalls)
     if (services?.functionCallService) {
       if (message.success) {
         services.functionCallService.setCallResult(message.call_id, message.result_preview || "Success");
       } else {
         services.functionCallService.setCallError(message.call_id, message.error || "Unknown error");
       }
-    }
-
-    if (message.success) {
-      updateFunctionCallStatus(appState.functions.activeCalls, message.call_id, "completed", {
-        result: message.result_preview || "Success",
-      });
-    } else {
-      updateFunctionCallStatus(appState.functions.activeCalls, message.call_id, "error", { error: message.error });
     }
 
     scheduleFunctionCardCleanup(appState.functions.activeCalls, appState.functions.activeTimers, message.call_id);

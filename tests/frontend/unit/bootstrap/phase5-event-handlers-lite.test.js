@@ -34,6 +34,14 @@ vi.mock("@/ui/titlebar.js", () => ({
   initializeTitlebar: mockInitializeTitlebar,
 }));
 
+// Mock MessageHandlerPlugin to prevent eventBus.on() calls
+vi.mock("@/plugins/core-plugins.js", () => ({
+  MessageHandlerPlugin: {
+    install: vi.fn().mockResolvedValue(undefined),
+    name: "message-handler",
+  },
+}));
+
 const mockUpdateChatModelSelector = vi.fn();
 vi.mock("@/utils/chat-model-updater.js", () => ({
   updateChatModelSelector: mockUpdateChatModelSelector,
