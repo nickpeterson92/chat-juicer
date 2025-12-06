@@ -121,6 +121,26 @@ export class LifecycleManager {
   }
 
   /**
+   * Register an unsubscriber for a component (e.g., DOM/event listener cleanup)
+   * @param {Object} component - Component instance
+   * @param {Function} unsubscribe - Cleanup function to invoke on unmount
+   */
+  addUnsubscriber(component, unsubscribe) {
+    if (!component || typeof unsubscribe !== "function") return;
+
+    const componentId = this.componentIds.get(component);
+    if (!componentId) {
+      console.warn("[Lifecycle] addUnsubscriber called on unregistered component");
+      return;
+    }
+
+    const entry = this.components.get(componentId);
+    if (!entry || !entry.mounted) return;
+
+    entry.unsubscribers.add(unsubscribe);
+  }
+
+  /**
    * Unmount a component and cleanup all resources
    * @param {Object} component - Component object to unmount
    */

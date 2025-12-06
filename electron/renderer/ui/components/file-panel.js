@@ -33,8 +33,6 @@ export class FilePanel {
 
     // AppState integration (optional)
     this.appState = options.appState || null;
-    this.unsubscribers = [];
-    this.domUnsubscribers = [];
 
     if (!this._lifecycle) {
       ComponentLifecycle.mount(this, "FilePanel", globalLifecycleManager);
@@ -49,11 +47,11 @@ export class FilePanel {
    * @private
    */
   setupEventListeners() {
-    this.domUnsubscribers = this.domUnsubscribers || [];
     const addDOMListener = (element, event, handler, options) => {
       if (!element) return;
       element.addEventListener(event, handler, options);
-      this.domUnsubscribers.push(() => element.removeEventListener(event, handler, options));
+      // Register DOM listener cleanup with lifecycle manager
+      globalLifecycleManager.addUnsubscriber(this, () => element.removeEventListener(event, handler, options));
     };
 
     // Toggle panel collapse/expand
@@ -92,7 +90,7 @@ export class FilePanel {
       this.setSession(sessionId);
     });
 
-    this.unsubscribers.push(unsubscribeSession);
+    globalLifecycleManager.addUnsubscriber(this, unsubscribeSession);
   }
 
   /**
@@ -353,30 +351,6 @@ export class FilePanel {
   destroy() {
     // Close all file handles first
     this.closeAllHandles();
-
-    // Clean up AppState subscriptions
-    if (this.unsubscribers) {
-      this.unsubscribers.forEach((unsub) => {
-        try {
-          unsub();
-        } catch (error) {
-          console.error("FilePanel cleanup error", error);
-        }
-      });
-      this.unsubscribers = [];
-    }
-
-    // Clean up DOM listeners
-    if (this.domUnsubscribers) {
-      this.domUnsubscribers.forEach((unsub) => {
-        try {
-          unsub();
-        } catch (error) {
-          console.error("FilePanel DOM cleanup error", error);
-        }
-      });
-      this.domUnsubscribers = [];
-    }
 
     // Optionally unmount if not handled by global unmount
     if (this._lifecycle) {

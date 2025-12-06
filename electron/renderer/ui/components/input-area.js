@@ -36,8 +36,6 @@ export class InputArea {
 
     // AppState integration (optional)
     this.appState = options.appState || null;
-    this.unsubscribers = [];
-    this.domUnsubscribers = [];
 
     if (!this._lifecycle) {
       ComponentLifecycle.mount(this, "InputArea", globalLifecycleManager);
@@ -52,11 +50,10 @@ export class InputArea {
    * @private
    */
   setupEventListeners() {
-    this.domUnsubscribers = this.domUnsubscribers || [];
     const addDOMListener = (element, event, handler, options) => {
       if (!element) return;
       element.addEventListener(event, handler, options);
-      this.domUnsubscribers.push(() => element.removeEventListener(event, handler, options));
+      globalLifecycleManager.addUnsubscriber(this, () => element.removeEventListener(event, handler, options));
     };
 
     // Send button click
@@ -91,7 +88,7 @@ export class InputArea {
       }
     });
 
-    this.unsubscribers.push(unsubscribeStreaming);
+    globalLifecycleManager.addUnsubscriber(this, unsubscribeStreaming);
   }
 
   /**
@@ -285,22 +282,6 @@ export class InputArea {
    * Destroy component and clean up subscriptions
    */
   destroy() {
-    // Clean up AppState subscriptions
-    if (this.unsubscribers) {
-      this.unsubscribers.forEach((unsub) => {
-        unsub();
-      });
-      this.unsubscribers = [];
-    }
-
-    // Clean up DOM listeners
-    if (this.domUnsubscribers) {
-      this.domUnsubscribers.forEach((unsub) => {
-        unsub();
-      });
-      this.domUnsubscribers = [];
-    }
-
     // Clean up model selector
     if (this.modelSelector && typeof this.modelSelector.destroy === "function") {
       this.modelSelector.destroy();
