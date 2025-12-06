@@ -34,9 +34,7 @@ export async function showWelcomeView(elements, appState) {
   appState.setState("ui.currentView", "welcome");
 
   // Clear any previous welcome model config (start fresh)
-  if (window.app?.appState) {
-    window.app.appState.setState("ui.welcomeModelConfig", null);
-  }
+  appState.setState("ui.welcomeModelConfig", null);
 
   // Get system username
   let userName = "User"; // Fallback
@@ -49,9 +47,8 @@ export async function showWelcomeView(elements, appState) {
   // Show welcome page
   showWelcomePage(elements.welcomePageContainer, userName);
 
-  // Add CSS class to container for view switching
-  document.body.classList.add("view-welcome");
-  document.body.classList.remove("view-chat");
+  // Update body view class via AppState (reactive DOM will apply it)
+  appState.setState("ui.bodyViewClass", "view-welcome");
 
   // Load configuration metadata and initialize ModelSelector
   // OPTIMIZATION: Try cached config first (instant), fallback to fetch if needed
@@ -172,9 +169,8 @@ export function showChatView(elements, appState) {
   // Update state
   appState.setState("ui.currentView", "chat");
 
-  // Update CSS classes
-  document.body.classList.remove("view-welcome");
-  document.body.classList.add("view-chat");
+  // Update body view class via AppState (reactive DOM will apply it)
+  appState.setState("ui.bodyViewClass", "view-chat");
 
   // Focus chat input (Phase 7: use InputArea component if available)
   if (window.components?.inputArea) {
@@ -482,10 +478,8 @@ function attachWelcomePageListeners(elements, appState) {
       showChatView(elements, appState);
 
       // Collapse sidebar to give chat more space (matches behavior when switching sessions)
-      if (elements.sidebar) {
-        elements.sidebar.classList.add("collapsed");
-        window.electronAPI.log("debug", "Sidebar collapsed after starting chat from welcome page");
-      }
+      appState.setState("ui.sidebarCollapsed", true);
+      window.electronAPI.log("debug", "Sidebar collapsed after starting chat from welcome page");
 
       // Add user message to chat (Phase 7: use ChatContainer component if available)
       if (window.components?.chatContainer) {

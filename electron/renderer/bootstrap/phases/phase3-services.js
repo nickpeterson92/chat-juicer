@@ -27,12 +27,12 @@ export async function initializeServices({ ipcAdapter, storageAdapter, appState 
   try {
     const messageService = new MessageService({ ipcAdapter, storageAdapter });
     const fileService = new FileService({ ipcAdapter, storageAdapter, appState });
-    const functionCallService = new FunctionCallService({ ipcAdapter, storageAdapter });
+    const functionCallService = new FunctionCallService({ storageAdapter, appState });
     const sessionService = new SessionService({ ipcAdapter, storageAdapter, appState });
 
     console.log("  ✓ MessageService created");
     console.log("  ✓ FileService created (with AppState)");
-    console.log("  ✓ FunctionCallService created");
+    console.log("  ✓ FunctionCallService created (with AppState)");
     console.log("  ✓ SessionService created (with AppState)");
 
     return {

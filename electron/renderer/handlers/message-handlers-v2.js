@@ -339,6 +339,7 @@ export function registerMessageHandlers(context) {
     // Transition to chat view if from first message
     if (!isFromFileUpload && appState.ui && appState.ui.currentView === "welcome") {
       appState.setState("ui.currentView", "chat");
+      appState.setState("ui.bodyViewClass", "view-chat");
     } else if (isFromFileUpload) {
       appState.setState("ui.welcomeFilesSectionVisible", true);
     }

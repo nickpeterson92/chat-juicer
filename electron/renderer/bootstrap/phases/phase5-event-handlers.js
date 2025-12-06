@@ -61,16 +61,17 @@ export async function initializeEventHandlers({
     const sidebar = document.getElementById("sidebar");
     if (sidebarToggle && sidebar) {
       addListener(sidebarToggle, "click", () => {
-        sidebar.classList.toggle("collapsed");
+        const currentState = appState.getState("ui.sidebarCollapsed");
+        appState.setState("ui.sidebarCollapsed", !currentState);
       });
     }
 
     // Click away to close panels
     addListener(document, "click", (e) => {
-      // Close sidebar
-      if (sidebar && !sidebar.classList.contains("collapsed")) {
+      // Close sidebar (using AppState)
+      if (sidebar && !appState.getState("ui.sidebarCollapsed")) {
         if (!sidebar.contains(e.target) && !sidebarToggle?.contains(e.target)) {
-          sidebar.classList.add("collapsed");
+          appState.setState("ui.sidebarCollapsed", true);
         }
       }
 
@@ -105,6 +106,25 @@ export async function initializeEventHandlers({
     // ======================
     // 1.5. Reactive DOM Bindings (AppState → DOM)
     // ======================
+
+    // Bind ui.bodyViewClass to document.body
+    const updateBodyViewClass = (viewClass) => {
+      document.body.classList.remove("view-welcome", "view-chat");
+      document.body.classList.add(viewClass);
+    };
+    // Apply initial state immediately
+    updateBodyViewClass(appState.getState("ui.bodyViewClass"));
+    stateUnsubscribers.push(appState.subscribe("ui.bodyViewClass", updateBodyViewClass));
+
+    // Bind ui.sidebarCollapsed to sidebar element
+    const updateSidebarCollapsed = (collapsed) => {
+      if (sidebar) {
+        sidebar.classList.toggle("collapsed", collapsed);
+      }
+    };
+    // Apply initial state immediately
+    updateSidebarCollapsed(appState.getState("ui.sidebarCollapsed"));
+    stateUnsubscribers.push(appState.subscribe("ui.sidebarCollapsed", updateSidebarCollapsed));
 
     // Bind ui.aiThinkingActive to DOM
     const updateAiThinking = (active) => {
@@ -373,9 +393,8 @@ export async function initializeEventHandlers({
           const { showWelcomeView } = await import("../../managers/view-manager.js");
           await showWelcomeView(elements, appState, services);
 
-          if (sidebar && !sidebar.classList.contains("collapsed")) {
-            sidebar.classList.add("collapsed");
-          }
+          // Collapse sidebar when showing welcome view
+          appState.setState("ui.sidebarCollapsed", true);
 
           console.log("New session started");
         } catch (error) {

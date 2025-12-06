@@ -83,6 +83,7 @@ export class BoundedMap extends Map {
  * @typedef {Object} FunctionState
  * @property {BoundedMap} activeCalls - Active function calls
  * @property {BoundedMap} argumentsBuffer - Function arguments buffer
+ * @property {BoundedMap} completedCalls - Completed function calls (last 100)
  * @property {Set} activeTimers - Active timers
  *
  * @typedef {Object} UIState
@@ -90,6 +91,7 @@ export class BoundedMap extends Map {
  * @property {boolean} toolsPanelCollapsed - Tools panel collapsed state
  * @property {('welcome'|'chat')} currentView - Current view
  * @property {boolean} sidebarCollapsed - Sidebar collapsed state
+ * @property {string} bodyViewClass - Document body view class for CSS transitions
  * @property {Object|null} cachedModelConfig - Cached model configuration
  * @property {Object|null} welcomeModelConfig - Welcome page model configuration
  * @property {boolean} isInitialized - Bootstrap complete flag
@@ -106,6 +108,9 @@ export class BoundedMap extends Map {
  * @property {boolean} isUploading - Upload in progress
  * @property {number|null} uploadProgress - Upload progress (0-100 or null)
  * @property {string|null} activeDirectory - Currently active directory path
+ * @property {Array<Object>} sourcesList - Source files for current session
+ * @property {Array<Object>} outputList - Output files for current session
+ * @property {boolean} isLoadingFiles - File list loading state
  */
 export class AppState {
   constructor() {
@@ -139,6 +144,7 @@ export class AppState {
     this.functions = {
       activeCalls: new BoundedMap(MAX_FUNCTION_CALLS),
       argumentsBuffer: new BoundedMap(MAX_FUNCTION_BUFFERS),
+      completedCalls: new BoundedMap(100), // Keep last 100 completed calls
       activeTimers: new Set(),
     };
 
@@ -148,6 +154,7 @@ export class AppState {
       toolsPanelCollapsed: false,
       currentView: "welcome", // "welcome" | "chat"
       sidebarCollapsed: false, // Sidebar collapsed state
+      bodyViewClass: "view-welcome", // Document body view class for CSS transitions
       cachedModelConfig: null, // Cached model configuration
       welcomeModelConfig: null, // Welcome page model configuration
       isInitialized: false, // Bootstrap complete flag
@@ -168,6 +175,9 @@ export class AppState {
       isUploading: false, // Upload in progress
       uploadProgress: null, // Upload progress (0-100 or null)
       activeDirectory: null, // Currently active directory path
+      sourcesList: [], // Source files for current session
+      outputList: [], // Output files for current session
+      isLoadingFiles: false, // File list loading state
     };
 
     // State change listeners

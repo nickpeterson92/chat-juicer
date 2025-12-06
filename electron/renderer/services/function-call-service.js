@@ -7,6 +7,11 @@
  * - Call status tracking (pending, streaming, completed, error)
  * - Arguments buffering and parsing
  * - Call result management
+ *
+ * State Management:
+ * - All function call state is now stored in AppState (single source of truth)
+ * - FunctionCallService reads/writes state via appState.getState() and appState.setState()
+ * - Uses appState.functions.activeCalls, argumentsBuffer, and completedCalls (BoundedMaps)
  */
 
 /**
@@ -29,14 +34,21 @@ export class FunctionCallService {
   /**
    * @param {Object} dependencies
    * @param {Object} dependencies.storageAdapter - Storage adapter for state persistence
+   * @param {Object} dependencies.appState - Application state manager
    */
-  constructor({ storageAdapter }) {
-    this.storage = storageAdapter;
+  constructor({ storageAdapter, appState }) {
+    if (!appState) {
+      throw new Error("FunctionCallService requires appState in constructor");
+    }
+    if (!storageAdapter) {
+      throw new Error("FunctionCallService requires storageAdapter in constructor");
+    }
 
-    // Call tracking
-    this.activeCalls = new Map(); // call_id -> {name, args, status, result, timestamp}
-    this.argumentsBuffer = new Map(); // call_id -> buffered arguments string
-    this.completedCalls = new Map(); // call_id -> {name, args, result, duration}
+    this.storage = storageAdapter;
+    this.appState = appState;
+
+    // NO internal state storage - use appState instead
+    // State is stored in appState.functions.{activeCalls, argumentsBuffer, completedCalls}
   }
 
   /**
@@ -68,7 +80,8 @@ export class FunctionCallService {
       endTime: null,
     };
 
-    this.activeCalls.set(callId, call);
+    const activeCalls = this.appState.getState("functions.activeCalls");
+    activeCalls.set(callId, call);
     return call;
   }
 
@@ -80,7 +93,8 @@ export class FunctionCallService {
    * @returns {Object|null} Updated call data or null
    */
   updateCallStatus(callId, status) {
-    const call = this.activeCalls.get(callId);
+    const activeCalls = this.appState.getState("functions.activeCalls");
+    const call = activeCalls.get(callId);
 
     if (!call) {
       return null;
@@ -93,17 +107,15 @@ export class FunctionCallService {
       call.duration = call.endTime - call.startTime;
 
       // Move to completed calls
-      this.completedCalls.set(callId, { ...call });
+      const completedCalls = this.appState.getState("functions.completedCalls");
+      completedCalls.set(callId, { ...call });
 
       // Remove from active calls
-      this.activeCalls.delete(callId);
-      this.argumentsBuffer.delete(callId);
+      activeCalls.delete(callId);
+      const argumentsBuffer = this.appState.getState("functions.argumentsBuffer");
+      argumentsBuffer.delete(callId);
 
-      // Keep completed calls limited
-      if (this.completedCalls.size > 100) {
-        const oldestKey = this.completedCalls.keys().next().value;
-        this.completedCalls.delete(oldestKey);
-      }
+      // BoundedMap handles automatic eviction, no manual limit needed
     }
 
     return call;
@@ -117,12 +129,14 @@ export class FunctionCallService {
    * @returns {string} Full buffered arguments
    */
   appendArgumentsDelta(callId, delta) {
-    const current = this.argumentsBuffer.get(callId) || "";
+    const argumentsBuffer = this.appState.getState("functions.argumentsBuffer");
+    const current = argumentsBuffer.get(callId) || "";
     const updated = current + delta;
-    this.argumentsBuffer.set(callId, updated);
+    argumentsBuffer.set(callId, updated);
 
     // Update active call if exists
-    const call = this.activeCalls.get(callId);
+    const activeCalls = this.appState.getState("functions.activeCalls");
+    const call = activeCalls.get(callId);
     if (call) {
       call.args = updated;
       call.status = CallStatus.STREAMING;
@@ -139,7 +153,8 @@ export class FunctionCallService {
    * @returns {Object|string} Parsed arguments or original string on error
    */
   finalizeArguments(callId) {
-    const buffered = this.argumentsBuffer.get(callId) || "{}";
+    const argumentsBuffer = this.appState.getState("functions.argumentsBuffer");
+    const buffered = argumentsBuffer.get(callId) || "{}";
     let parsed = buffered;
 
     try {
@@ -149,13 +164,14 @@ export class FunctionCallService {
       console.warn(`Failed to parse arguments for call ${callId}:`, error);
     }
 
-    const call = this.activeCalls.get(callId);
+    const activeCalls = this.appState.getState("functions.activeCalls");
+    const call = activeCalls.get(callId);
     if (call) {
       call.args = parsed;
     }
 
     // Clear buffer
-    this.argumentsBuffer.delete(callId);
+    argumentsBuffer.delete(callId);
 
     return parsed;
   }
@@ -168,7 +184,8 @@ export class FunctionCallService {
    * @returns {Object|null} Updated call or null
    */
   setCallResult(callId, result) {
-    const call = this.activeCalls.get(callId);
+    const activeCalls = this.appState.getState("functions.activeCalls");
+    const call = activeCalls.get(callId);
 
     if (!call) {
       return null;
@@ -180,11 +197,13 @@ export class FunctionCallService {
     call.duration = call.endTime - call.startTime;
 
     // Move to completed
-    this.completedCalls.set(callId, { ...call });
+    const completedCalls = this.appState.getState("functions.completedCalls");
+    completedCalls.set(callId, { ...call });
 
     // Remove from active
-    this.activeCalls.delete(callId);
-    this.argumentsBuffer.delete(callId);
+    activeCalls.delete(callId);
+    const argumentsBuffer = this.appState.getState("functions.argumentsBuffer");
+    argumentsBuffer.delete(callId);
 
     return call;
   }
@@ -197,7 +216,8 @@ export class FunctionCallService {
    * @returns {Object|null} Updated call or null
    */
   setCallError(callId, error) {
-    const call = this.activeCalls.get(callId);
+    const activeCalls = this.appState.getState("functions.activeCalls");
+    const call = activeCalls.get(callId);
 
     if (!call) {
       return null;
@@ -209,11 +229,13 @@ export class FunctionCallService {
     call.duration = call.endTime - call.startTime;
 
     // Move to completed
-    this.completedCalls.set(callId, { ...call });
+    const completedCalls = this.appState.getState("functions.completedCalls");
+    completedCalls.set(callId, { ...call });
 
     // Remove from active
-    this.activeCalls.delete(callId);
-    this.argumentsBuffer.delete(callId);
+    activeCalls.delete(callId);
+    const argumentsBuffer = this.appState.getState("functions.argumentsBuffer");
+    argumentsBuffer.delete(callId);
 
     return call;
   }
@@ -225,7 +247,9 @@ export class FunctionCallService {
    * @returns {Object|null} Call data or null
    */
   getCall(callId) {
-    return this.activeCalls.get(callId) || this.completedCalls.get(callId) || null;
+    const activeCalls = this.appState.getState("functions.activeCalls");
+    const completedCalls = this.appState.getState("functions.completedCalls");
+    return activeCalls.get(callId) || completedCalls.get(callId) || null;
   }
 
   /**
@@ -234,7 +258,8 @@ export class FunctionCallService {
    * @returns {Array<Object>} Array of active calls
    */
   getActiveCalls() {
-    return Array.from(this.activeCalls.values());
+    const activeCalls = this.appState.getState("functions.activeCalls");
+    return Array.from(activeCalls.values());
   }
 
   /**
@@ -244,7 +269,8 @@ export class FunctionCallService {
    * @returns {Array<Object>} Array of completed calls (most recent first)
    */
   getCompletedCalls(limit = 20) {
-    const completed = Array.from(this.completedCalls.values());
+    const completedCalls = this.appState.getState("functions.completedCalls");
+    const completed = Array.from(completedCalls.values());
     return completed.slice(-limit).reverse();
   }
 
@@ -255,7 +281,9 @@ export class FunctionCallService {
    * @returns {boolean} True if call exists
    */
   hasCall(callId) {
-    return this.activeCalls.has(callId) || this.completedCalls.has(callId);
+    const activeCalls = this.appState.getState("functions.activeCalls");
+    const completedCalls = this.appState.getState("functions.completedCalls");
+    return activeCalls.has(callId) || completedCalls.has(callId);
   }
 
   /**
@@ -265,9 +293,13 @@ export class FunctionCallService {
    * @returns {boolean} True if removed
    */
   removeCall(callId) {
-    const activeRemoved = this.activeCalls.delete(callId);
-    const completedRemoved = this.completedCalls.delete(callId);
-    this.argumentsBuffer.delete(callId);
+    const activeCalls = this.appState.getState("functions.activeCalls");
+    const completedCalls = this.appState.getState("functions.completedCalls");
+    const argumentsBuffer = this.appState.getState("functions.argumentsBuffer");
+
+    const activeRemoved = activeCalls.delete(callId);
+    const completedRemoved = completedCalls.delete(callId);
+    argumentsBuffer.delete(callId);
 
     return activeRemoved || completedRemoved;
   }
@@ -276,15 +308,18 @@ export class FunctionCallService {
    * Clear all active calls
    */
   clearActiveCalls() {
-    this.activeCalls.clear();
-    this.argumentsBuffer.clear();
+    const activeCalls = this.appState.getState("functions.activeCalls");
+    const argumentsBuffer = this.appState.getState("functions.argumentsBuffer");
+    activeCalls.clear();
+    argumentsBuffer.clear();
   }
 
   /**
    * Clear all completed calls
    */
   clearCompletedCalls() {
-    this.completedCalls.clear();
+    const completedCalls = this.appState.getState("functions.completedCalls");
+    completedCalls.clear();
   }
 
   /**
@@ -293,7 +328,9 @@ export class FunctionCallService {
    * @returns {Object} Statistics about calls
    */
   getCallStats() {
-    const completed = Array.from(this.completedCalls.values());
+    const activeCalls = this.appState.getState("functions.activeCalls");
+    const completedCalls = this.appState.getState("functions.completedCalls");
+    const completed = Array.from(completedCalls.values());
 
     const totalCompleted = completed.filter((c) => c.status === CallStatus.COMPLETED).length;
     const totalErrors = completed.filter((c) => c.status === CallStatus.ERROR).length;
@@ -303,7 +340,7 @@ export class FunctionCallService {
     const avgDuration = durations.length > 0 ? durations.reduce((a, b) => a + b, 0) / durations.length : 0;
 
     return {
-      active: this.activeCalls.size,
+      active: activeCalls.size,
       completed: totalCompleted,
       errors: totalErrors,
       cancelled: totalCancelled,
@@ -341,7 +378,8 @@ export class FunctionCallService {
    * @returns {boolean} True if call is older than threshold
    */
   isCallStale(callId, threshold = 60000) {
-    const call = this.activeCalls.get(callId);
+    const activeCalls = this.appState.getState("functions.activeCalls");
+    const call = activeCalls.get(callId);
 
     if (!call) {
       return false;
@@ -355,8 +393,11 @@ export class FunctionCallService {
    * Reset service state
    */
   reset() {
-    this.activeCalls.clear();
-    this.argumentsBuffer.clear();
-    this.completedCalls.clear();
+    const activeCalls = this.appState.getState("functions.activeCalls");
+    const argumentsBuffer = this.appState.getState("functions.argumentsBuffer");
+    const completedCalls = this.appState.getState("functions.completedCalls");
+    activeCalls.clear();
+    argumentsBuffer.clear();
+    completedCalls.clear();
   }
 }
