@@ -469,10 +469,8 @@ REASONING_EFFORT_OPTIONS: dict[str, str] = {
 # Model Token Limits (Input Context Windows)
 # ============================================================================
 #
-#: **Note**: IPC protocol constants are defined in :class:`utils.ipc.IPCManager`.
-#: See :attr:`IPCManager.DELIMITER <utils.ipc.IPCManager.DELIMITER>` and
-#: :attr:`IPCManager.SESSION_PREFIX <utils.ipc.IPCManager.SESSION_PREFIX>`
-#: for IPC communication patterns.
+#: **Note**: IPC uses binary V2 protocol (MessagePack + length-prefixed framing).
+#: See :class:`utils.ipc.IPCManager` for IPC communication methods.
 
 #: Model-specific input token limits for conversation tracking.
 #: These are INPUT limits (not output) since we track conversation context,

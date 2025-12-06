@@ -22,7 +22,6 @@ const {
   WINDOW_MIN_WIDTH,
   WINDOW_MIN_HEIGHT,
   HIDDEN_FILE_PREFIX,
-  JSON_DELIMITER,
 } = require("./config/main-constants");
 
 // Initialize logger for main process
@@ -36,6 +35,10 @@ let pythonProcess;
 let pythonProcessPID = null;
 let isShuttingDown = false;
 let processHealthCheckInterval = null;
+
+// Request-response correlation map for IPC
+// Key: request_id, Value: { resolve, reject, timeoutId, type }
+const pendingRequests = new Map();
 
 function createWindow() {
   // Platform detection for cross-platform borderless window support
@@ -155,12 +158,20 @@ async function startPythonBot() {
             break;
 
           case "session_response":
-          case "upload_response":
-            // These are handled by their respective Promise handlers
-            // via the pendingRequests map - emit for those listeners
-            logger.trace("IPC response received", { type: messageType });
-            pythonProcess.emit("binary-response", message);
+          case "upload_response": {
+            // Route to pending request via request_id correlation
+            const requestId = message.request_id;
+            const pending = pendingRequests.get(requestId);
+            if (pending) {
+              clearTimeout(pending.timeoutId);
+              pendingRequests.delete(requestId);
+              pending.resolve(message.data);
+              logger.trace("IPC response routed", { type: messageType, requestId });
+            } else {
+              logger.warn("Received response with unknown request_id", { type: messageType, requestId });
+            }
             break;
+          }
 
           case "error":
             // Error from backend
@@ -171,14 +182,10 @@ async function startPythonBot() {
             break;
 
           default:
-            // Forward other messages to renderer (streaming content, function calls, etc.)
+            // Forward messages to renderer as objects (V2 native - no conversion)
             if (mainWindow) {
-              // Convert to V1-compatible format for renderer (temporary compatibility)
-              // The renderer still expects __JSON__ delimited text
-              const jsonContent = JSON.stringify(message);
-              const v1Output = `${JSON_DELIMITER}${jsonContent}${JSON_DELIMITER}`;
-              mainWindow.webContents.send("bot-output", v1Output);
-              logger.logIPC("send", "bot-output", jsonContent.substring(0, 200), { toRenderer: true });
+              mainWindow.webContents.send("bot-message", message);
+              logger.logIPC("send", "bot-message", message.type, { toRenderer: true });
             }
             break;
         }
@@ -216,6 +223,14 @@ async function startPythonBot() {
     pythonProcess = null;
     pythonProcessPID = null;
     stopHealthCheck();
+
+    // Reject all pending requests on process exit
+    for (const [requestId, pending] of pendingRequests) {
+      clearTimeout(pending.timeoutId);
+      pending.reject(new Error("Backend process exited"));
+      logger.debug("Rejected pending request due to process exit", { requestId, type: pending.type });
+    }
+    pendingRequests.clear();
 
     if (mainWindow && !isShuttingDown) {
       mainWindow.webContents.send("bot-disconnected");
@@ -354,40 +369,17 @@ app.whenReady().then(() => {
       const timeoutMs = command === "summarize" ? SUMMARIZE_COMMAND_TIMEOUT : SESSION_COMMAND_TIMEOUT;
 
       return new Promise((resolve, reject) => {
-        let timeoutId;
-
-        // Cleanup function to remove listeners and timers
-        const cleanup = () => {
-          if (timeoutId) clearTimeout(timeoutId);
-          pythonProcess.removeListener("binary-response", responseHandler);
-        };
-
-        // Response handler - resolve for matching request_id; also accept missing request_id for backward compatibility
-        const responseHandler = (message) => {
-          if (
-            message.type === "session_response" &&
-            (message.request_id === requestId || message.request_id === undefined || message.request_id === null)
-          ) {
-            if (message.request_id === undefined || message.request_id === null) {
-              logger.warn("Received session_response without request_id; resolving with fallback", { requestId });
-            }
-            cleanup();
-            resolve(message.data);
-          }
-        };
-
-        // IMPORTANT: Attach listener BEFORE sending to avoid race condition
-        // where Python responds before listener is ready
-        pythonProcess.on("binary-response", responseHandler);
-
         // Set timeout for response
-        timeoutId = setTimeout(() => {
-          cleanup();
+        const timeoutId = setTimeout(() => {
+          pendingRequests.delete(requestId);
           logger.warn("Session command timed out", { command, requestId });
           reject(new Error("Command timed out"));
         }, timeoutMs);
 
-        // Now send command to Python as binary V2
+        // Register in pending requests map BEFORE sending
+        pendingRequests.set(requestId, { resolve, reject, timeoutId, type: "session" });
+
+        // Send command to Python as binary V2
         const binaryMessage = IPCProtocolV2.encode({
           type: "session",
           command: command,
@@ -418,43 +410,17 @@ app.whenReady().then(() => {
 
       // Wait for response with timeout
       return new Promise((resolve, reject) => {
-        let timeoutId;
-
-        // Cleanup function
-        const cleanup = () => {
-          if (timeoutId) clearTimeout(timeoutId);
-          pythonProcess.removeListener("binary-response", responseHandler);
-        };
-
-        // Response handler - resolve for matching request_id; also accept missing request_id for backward compatibility
-        const responseHandler = (message) => {
-          if (
-            message.type === "upload_response" &&
-            (message.request_id === requestId || message.request_id === undefined || message.request_id === null)
-          ) {
-            if (message.request_id === undefined || message.request_id === null) {
-              logger.warn("Received upload_response without request_id; resolving with fallback", {
-                requestId,
-                filename,
-              });
-            }
-            cleanup();
-            resolve(message.data);
-          }
-        };
-
-        // IMPORTANT: Attach listener BEFORE sending to avoid race condition
-        // where Python responds before listener is ready
-        pythonProcess.on("binary-response", responseHandler);
-
         // Set timeout
-        timeoutId = setTimeout(() => {
-          cleanup();
+        const timeoutId = setTimeout(() => {
+          pendingRequests.delete(requestId);
           logger.warn("File upload timed out", { filename, requestId });
           reject(new Error("Upload timed out"));
         }, FILE_UPLOAD_TIMEOUT);
 
-        // Now send upload command to Python as binary V2
+        // Register in pending requests map BEFORE sending
+        pendingRequests.set(requestId, { resolve, reject, timeoutId, type: "upload" });
+
+        // Send upload command to Python as binary V2
         const binaryMessage = IPCProtocolV2.encode({
           type: "file_upload",
           filename: filename,

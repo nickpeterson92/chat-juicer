@@ -26,10 +26,6 @@ const WINDOW_MIN_HEIGHT = 600; // Minimum window height
 // File system constants
 const HIDDEN_FILE_PREFIX = "."; // Prefix for hidden files/directories (Unix convention)
 
-// IPC protocol constants
-const JSON_DELIMITER = "__JSON__";
-const JSON_DELIMITER_LENGTH = JSON_DELIMITER.length; // 8 characters
-
 // Buffer security limits (DoS protection)
 // Prevents memory exhaustion from unbounded IPC buffer accumulation
 const MAX_BUFFER_SIZE = 10 * 1024 * 1024; // 10MB - absolute maximum buffer size
@@ -53,8 +49,6 @@ module.exports = {
   WINDOW_MIN_WIDTH,
   WINDOW_MIN_HEIGHT,
   HIDDEN_FILE_PREFIX,
-  JSON_DELIMITER,
-  JSON_DELIMITER_LENGTH,
   MAX_BUFFER_SIZE,
   MAX_MESSAGE_SIZE,
   MAX_SESSION_RESPONSE,

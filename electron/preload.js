@@ -13,9 +13,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.send("restart-bot");
   },
 
-  // Listen for bot output
-  onBotOutput: (callback) => {
-    ipcRenderer.on("bot-output", (_event, data) => callback(data));
+  // V2: Listen for bot messages (objects, not text)
+  onBotMessage: (callback) => {
+    ipcRenderer.on("bot-message", (_event, message) => callback(message));
   },
 
   // Listen for bot errors
@@ -99,7 +99,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   removeAllListeners: () => {
-    const channels = ["bot-output", "bot-error", "bot-disconnected", "bot-restarted"];
+    const channels = ["bot-message", "bot-error", "bot-disconnected", "bot-restarted"];
     channels.forEach((channel) => {
       ipcRenderer.removeAllListeners(channel);
     });

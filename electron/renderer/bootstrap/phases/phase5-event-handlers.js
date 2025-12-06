@@ -380,51 +380,17 @@ export async function initializeEventHandlers({
     console.log("  ✓ EventBus message handlers registered");
 
     // ======================
-    // 6. IPC Listeners
+    // 6. IPC Listeners (V2 Binary Protocol)
     // ======================
 
-    // JSON buffer for parsing multi-line messages
-    let jsonBuffer = "";
-    const MAX_BUFFER_SIZE = 1024 * 1024; // 1MB safety limit
+    // V2: Receive messages as objects directly (no parsing needed)
+    ipcAdapter.onBotMessage((message) => {
+      console.log("✅ Received message:", message.type);
 
-    ipcAdapter.onPythonStdout((output) => {
-      try {
-        const lines = output.toString().split("\n");
-
-        for (let line of lines) {
-          if (!line.trim()) continue;
-
-          line = line.replace(/^__JSON__/, "").replace(/__JSON__$/, "");
-
-          if (jsonBuffer || line.startsWith("{")) {
-            jsonBuffer += line;
-
-            if (jsonBuffer.length > MAX_BUFFER_SIZE) {
-              console.error("JSON buffer overflow detected");
-              jsonBuffer = "";
-              continue;
-            }
-
-            try {
-              const message = JSON.parse(jsonBuffer);
-              console.log("✅ Parsed message:", message.type);
-              jsonBuffer = "";
-
-              eventBus.emit("message:received", message, {
-                source: "backend",
-                timestamp: Date.now(),
-              });
-            } catch (e) {
-              if (!e.message.includes("Unexpected end of JSON")) {
-                console.error("Failed to parse JSON:", e);
-                jsonBuffer = "";
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Error handling bot output:", error);
-      }
+      eventBus.emit("message:received", message, {
+        source: "backend",
+        timestamp: Date.now(),
+      });
     });
 
     ipcAdapter.onPythonStderr((error) => {

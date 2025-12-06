@@ -242,15 +242,15 @@ export class IPCAdapter {
   }
 
   /**
-   * Register handler for Python stdout/bot output messages
-   * @param {Function} callback - Handler function (content: any) => void
+   * Register handler for V2 bot messages (objects)
+   * @param {Function} callback - Handler function (message: object) => void
    */
-  onPythonStdout(callback) {
-    if (!this.api?.onBotOutput) {
-      console.warn("IPC API not available: onBotOutput");
+  onBotMessage(callback) {
+    if (!this.api?.onBotMessage) {
+      console.warn("IPC API not available: onBotMessage");
       return;
     }
-    this.api.onBotOutput(callback);
+    this.api.onBotMessage(callback);
   }
 
   /**

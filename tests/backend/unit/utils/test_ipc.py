@@ -1,12 +1,10 @@
 """Tests for IPC utility functions.
 
-Tests IPC message formatting, parsing, and communication protocol.
+Tests IPC message formatting and communication protocol.
 Protocol V2 uses binary MessagePack encoding with length-prefixed framing.
 """
 
 from __future__ import annotations
-
-import json
 
 from typing import Any
 
@@ -79,75 +77,8 @@ class TestIPCManagerSend:
         assert output["type"] == "assistant_end"
 
 
-class TestIPCManagerSessionCommands:
-    """Tests for session command handling."""
-
-    def test_is_session_command_true(self) -> None:
-        """Test identifying session command."""
-        assert IPCManager.is_session_command("__SESSION__new__{}__")
-        assert IPCManager.is_session_command("__SESSION__switch__data__")
-
-    def test_is_session_command_false(self) -> None:
-        """Test rejecting non-session commands."""
-        assert not IPCManager.is_session_command("regular input")
-        assert not IPCManager.is_session_command("__JSON__data__JSON__")
-        assert not IPCManager.is_session_command("SESSION__new__")
-
-    def test_parse_session_command_new(self) -> None:
-        """Test parsing 'new' session command."""
-        raw_input = "__SESSION__new__{}__"
-        result = IPCManager.parse_session_command(raw_input)
-
-        assert result is not None
-        command, data = result
-        assert command == "new"
-        assert data == {}
-
-    def test_parse_session_command_switch(self) -> None:
-        """Test parsing 'switch' session command."""
-        data_json = json.dumps({"session_id": "chat_123"})
-        raw_input = f"__SESSION__switch__{data_json}__"
-        result = IPCManager.parse_session_command(raw_input)
-
-        assert result is not None
-        command, data = result
-        assert command == "switch"
-        assert data["session_id"] == "chat_123"
-
-    def test_parse_session_command_delete(self) -> None:
-        """Test parsing 'delete' session command."""
-        data_json = json.dumps({"session_id": "chat_abc"})
-        raw_input = f"__SESSION__delete__{data_json}__"
-        result = IPCManager.parse_session_command(raw_input)
-
-        assert result is not None
-        command, _data = result
-        assert command == "delete"
-
-    def test_parse_session_command_list(self) -> None:
-        """Test parsing 'list' session command."""
-        raw_input = "__SESSION__list__{}__"
-        result = IPCManager.parse_session_command(raw_input)
-
-        assert result is not None
-        command, _data = result
-        assert command == "list"
-
-    def test_parse_session_command_invalid_json(self) -> None:
-        """Test parsing session command with invalid JSON."""
-        raw_input = "__SESSION__new__invalid_json__"
-        result = IPCManager.parse_session_command(raw_input)
-
-        assert result is None
-
-    def test_parse_session_command_missing_parts(self) -> None:
-        """Test parsing session command with missing parts."""
-        raw_input = "__SESSION__new__"
-        result = IPCManager.parse_session_command(raw_input)
-
-        # Should still parse if data part is missing (defaults to {})
-        # Implementation may vary
-        assert result is not None or result is None
+class TestIPCManagerSessionResponses:
+    """Tests for session response methods."""
 
     def test_send_session_response_success(self, mock_ipc_output: list[dict[str, Any]]) -> None:
         """Test sending successful session response."""
@@ -179,44 +110,8 @@ class TestIPCManagerSessionCommands:
         assert output["type"] == "session_updated"
 
 
-class TestIPCManagerUploadCommands:
-    """Tests for file upload command handling."""
-
-    def test_is_upload_command_true(self) -> None:
-        """Test identifying upload command."""
-        assert IPCManager.is_upload_command("__UPLOAD__data__")
-        assert IPCManager.is_upload_command("__UPLOAD__{}__")
-
-    def test_is_upload_command_false(self) -> None:
-        """Test rejecting non-upload commands."""
-        assert not IPCManager.is_upload_command("regular input")
-        assert not IPCManager.is_upload_command("__SESSION__new__")
-        assert not IPCManager.is_upload_command("UPLOAD__data__")
-
-    def test_parse_upload_command(self) -> None:
-        """Test parsing upload command."""
-        data = {"filename": "test.txt", "data": "base64data"}
-        data_json = json.dumps(data)
-        raw_input = f"__UPLOAD__{data_json}__"
-        result = IPCManager.parse_upload_command(raw_input)
-
-        assert result is not None
-        assert result["filename"] == "test.txt"
-        assert result["data"] == "base64data"
-
-    def test_parse_upload_command_invalid_json(self) -> None:
-        """Test parsing upload command with invalid JSON."""
-        raw_input = "__UPLOAD__invalid_json__"
-        result = IPCManager.parse_upload_command(raw_input)
-
-        assert result is None
-
-    def test_parse_upload_command_missing_delimiter(self) -> None:
-        """Test parsing upload command with missing delimiter."""
-        raw_input = "__UPLOAD__data"
-        result = IPCManager.parse_upload_command(raw_input)
-
-        assert result is None
+class TestIPCManagerUploadResponses:
+    """Tests for file upload response methods."""
 
     def test_send_upload_response_success(self, mock_ipc_output: list[dict[str, Any]]) -> None:
         """Test sending successful upload response."""
@@ -243,20 +138,8 @@ class TestIPCManagerUploadCommands:
         assert output["data"]["success"] is False
 
 
-class TestIPCManagerConstants:
-    """Tests for IPCManager constants."""
-
-    def test_delimiter_constant(self) -> None:
-        """Test that delimiter constant is correct (V1 legacy for parsing)."""
-        assert IPCManager.DELIMITER == "__JSON__"
-
-    def test_session_prefix_constant(self) -> None:
-        """Test that session prefix constant is correct."""
-        assert IPCManager.SESSION_PREFIX == "__SESSION__"
-
-    def test_upload_prefix_constant(self) -> None:
-        """Test that upload prefix constant is correct."""
-        assert IPCManager.UPLOAD_PREFIX == "__UPLOAD__"
+class TestIPCManagerTemplates:
+    """Tests for IPCManager templates."""
 
     def test_template_precompilation(self) -> None:
         """Test that common templates are precompiled as dicts."""
@@ -271,26 +154,6 @@ class TestIPCManagerConstants:
 
 class TestIPCManagerComplexScenarios:
     """Tests for complex IPC scenarios."""
-
-    def test_nested_json_in_session_command(self) -> None:
-        """Test session command with nested JSON data."""
-        data = {
-            "session": {
-                "id": "chat_123",
-                "metadata": {
-                    "created_at": "2025-01-01",
-                    "tags": ["test", "demo"],
-                },
-            }
-        }
-        data_json = json.dumps(data)
-        raw_input = f"__SESSION__create__{data_json}__"
-        result = IPCManager.parse_session_command(raw_input)
-
-        assert result is not None
-        _, parsed_data = result
-        assert parsed_data["session"]["id"] == "chat_123"
-        assert len(parsed_data["session"]["metadata"]["tags"]) == 2
 
     def test_unicode_in_messages(self, mock_ipc_output: list[dict[str, Any]]) -> None:
         """Test handling unicode in messages."""

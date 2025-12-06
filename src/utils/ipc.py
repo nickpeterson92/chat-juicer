@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 
-from typing import Any, ClassVar, cast
+from typing import Any, ClassVar
 
 from core.constants import (
     MSG_TYPE_ASSISTANT_END,
@@ -36,24 +36,6 @@ class IPCManager:
 
     All IPC output methods use binary_io.write_message() for consistency.
     """
-
-    #: Delimiter for JSON messages (V1 legacy - kept for parsing incoming commands)
-    DELIMITER: ClassVar[str] = "__JSON__"
-
-    #: Prefix for session management commands (V1 legacy - kept for parsing)
-    SESSION_PREFIX: ClassVar[str] = "__SESSION__"
-
-    #: Prefix for file upload commands (V1 legacy - kept for parsing)
-    UPLOAD_PREFIX: ClassVar[str] = "__UPLOAD__"
-
-    #: Index of command name in parsed session command
-    SESSION_CMD_INDEX: ClassVar[int] = 2
-
-    #: Index of JSON data in parsed session command
-    SESSION_DATA_INDEX: ClassVar[int] = 3
-
-    #: Minimum parts required for valid session command
-    MIN_SESSION_PARTS: ClassVar[int] = 4
 
     # Pre-create common message dicts to avoid repeated dict creation
     _TEMPLATES: ClassVar[dict[str, dict[str, Any]]] = {
@@ -132,85 +114,6 @@ class IPCManager:
             from utils.logger import logger
 
             logger.error(f"Failed to serialize session update: {e}", exc_info=True)
-
-    @staticmethod
-    def is_session_command(raw_input: str) -> bool:
-        """Check if input is a session management command.
-
-        Args:
-            raw_input: Raw input string from stdin
-
-        Returns:
-            True if input is a session command
-        """
-        return raw_input.startswith(IPCManager.SESSION_PREFIX)
-
-    @staticmethod
-    def parse_session_command(raw_input: str) -> tuple[str, dict[str, Any]] | None:
-        """Parse session management command from raw input.
-
-        Protocol format: ``__SESSION__<command>__<json_data>__``
-
-        Args:
-            raw_input: Raw input string from stdin
-
-        Returns:
-            Tuple of (command, data) if valid, None if invalid
-
-        Example:
-            >>> IPCManager.parse_session_command("__SESSION__new__{}__")
-            ('new', {})
-        """
-        parts = raw_input.split("__")
-
-        if len(parts) < IPCManager.MIN_SESSION_PARTS:
-            return None
-
-        command = parts[IPCManager.SESSION_CMD_INDEX]
-        data_json = parts[IPCManager.SESSION_DATA_INDEX] if len(parts) > IPCManager.SESSION_DATA_INDEX else "{}"
-
-        try:
-            data = json.loads(data_json) if data_json else {}
-            return (command, data)
-        except json.JSONDecodeError:
-            return None
-
-    @staticmethod
-    def is_upload_command(raw_input: str) -> bool:
-        """Check if input is a file upload command.
-
-        Args:
-            raw_input: Raw input string from stdin
-
-        Returns:
-            True if input is an upload command
-        """
-        return raw_input.startswith(IPCManager.UPLOAD_PREFIX)
-
-    @staticmethod
-    def parse_upload_command(raw_input: str) -> dict[str, Any] | None:
-        """Parse file upload command from raw input.
-
-        Protocol format: ``__UPLOAD__<json_data>__``
-
-        Args:
-            raw_input: Raw input string from stdin
-
-        Returns:
-            Upload data dict if valid, None if invalid
-
-        Example:
-            >>> IPCManager.parse_upload_command("__UPLOAD__{'file': 'test.txt'}__")
-            {'file': 'test.txt'}
-        """
-        try:
-            # Find JSON payload between delimiters
-            json_start = raw_input.index(IPCManager.UPLOAD_PREFIX) + len(IPCManager.UPLOAD_PREFIX)
-            json_end = raw_input.index("__", json_start)
-            upload_json = raw_input[json_start:json_end]
-            return cast(dict[str, Any], json.loads(upload_json))
-        except (ValueError, json.JSONDecodeError, IndexError):
-            return None
 
     @staticmethod
     def send_upload_response(data: dict[str, Any]) -> None:
