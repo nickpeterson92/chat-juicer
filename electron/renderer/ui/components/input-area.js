@@ -15,6 +15,7 @@ export class InputArea {
    * @param {Object} options.ipcAdapter - IPC adapter for backend communication
    * @param {Object} options.sessionService - Session service for getting current session
    * @param {Function} options.getModelConfig - Function to get current model config
+   * @param {Object} options.appState - AppState instance for reactive state management
    */
   constructor(textarea, sendButton, onSendCallback, options = {}) {
     if (!textarea || !sendButton) {
@@ -31,7 +32,12 @@ export class InputArea {
     this.sessionService = options.sessionService;
     this.modelSelector = null; // Will be initialized if dependencies provided
 
+    // AppState integration (optional)
+    this.appState = options.appState || null;
+    this.unsubscribers = [];
+
     this.setupEventListeners();
+    this.setupStateSubscriptions();
   }
 
   /**
@@ -57,6 +63,25 @@ export class InputArea {
 
     // Initial state
     this.updateSendButtonState();
+  }
+
+  /**
+   * Setup AppState subscriptions
+   * @private
+   */
+  setupStateSubscriptions() {
+    if (!this.appState) return;
+
+    // Subscribe to message streaming state to auto enable/disable input
+    const unsubscribeStreaming = this.appState.subscribe("message.isStreaming", (isStreaming) => {
+      if (isStreaming) {
+        this.disable();
+      } else {
+        this.enable();
+      }
+    });
+
+    this.unsubscribers.push(unsubscribeStreaming);
   }
 
   /**
@@ -228,14 +253,14 @@ export class InputArea {
    */
   async initializeModelSelector(models, reasoningLevels) {
     if (!this.modelSelectorContainer || !this.ipcAdapter || !this.sessionService) {
-      console.warn("⚠️ Model selector dependencies not provided, skipping initialization");
+      console.warn("Model selector dependencies not provided, skipping initialization");
       return;
     }
 
     // Create ModelSelector component (chat page mode with auto-sync)
     this.modelSelector = new ModelSelector(this.modelSelectorContainer, {
       onChange: (model, reasoningEffort) => {
-        console.log("🔄 Chat page model selection changed:", { model, reasoningEffort });
+        console.log("Chat page model selection changed:", { model, reasoningEffort });
       },
       ipcAdapter: this.ipcAdapter,
       sessionService: this.sessionService, // Pass SessionService for getting current session ID
@@ -243,6 +268,24 @@ export class InputArea {
     });
 
     await this.modelSelector.initialize(models, reasoningLevels);
-    console.log("✅ ModelSelector initialized on chat page");
+    console.log("ModelSelector initialized on chat page");
+  }
+
+  /**
+   * Destroy component and clean up subscriptions
+   */
+  destroy() {
+    // Clean up AppState subscriptions
+    if (this.unsubscribers) {
+      this.unsubscribers.forEach((unsub) => {
+        unsub();
+      });
+      this.unsubscribers = [];
+    }
+
+    // Clean up model selector
+    if (this.modelSelector && typeof this.modelSelector.destroy === "function") {
+      this.modelSelector.destroy();
+    }
   }
 }

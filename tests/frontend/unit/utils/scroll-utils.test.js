@@ -10,6 +10,7 @@ describe("Scroll Utilities", () => {
   let rafCallbacks;
   let rafId;
   let scheduleScroll;
+  let setupScrollDetection;
 
   beforeEach(async () => {
     // Reset modules to ensure clean state
@@ -38,6 +39,7 @@ describe("Scroll Utilities", () => {
     // Import module AFTER mocking RAF
     const module = await import("@utils/scroll-utils.js");
     scheduleScroll = module.scheduleScroll;
+    setupScrollDetection = module.setupScrollDetection;
   });
 
   afterEach(() => {
@@ -144,6 +146,25 @@ describe("Scroll Utilities", () => {
       // Second scroll (after first completes)
       scheduleScroll(container);
       expect(window.requestAnimationFrame).toHaveBeenCalledTimes(2);
+    });
+
+    it("should skip auto-scroll when user is actively scrolling", () => {
+      setupScrollDetection(container);
+      container.dispatchEvent(new Event("scroll"));
+
+      scheduleScroll(container);
+
+      // No RAF scheduled when userScrolling flag is set
+      expect(window.requestAnimationFrame).toHaveBeenCalledTimes(0);
+    });
+
+    it("should force scroll even when not near bottom", () => {
+      container.scrollTop = 0; // far from bottom
+
+      scheduleScroll(container, { force: true });
+      flushAnimationFrames();
+
+      expect(container.scrollTop).toBe(container.scrollHeight);
     });
   });
 

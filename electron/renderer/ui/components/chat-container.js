@@ -11,17 +11,63 @@ import {
   updateAssistantMessage,
 } from "../chat-ui.js";
 import { clearFunctionCards } from "../function-card-ui.js";
-
 export class ChatContainer {
   /**
    * @param {HTMLElement} element - Existing chat container element (#chat-container)
+   * @param {Object} options - Optional configuration
+   * @param {Object} options.appState - AppState instance for reactive state management
    */
-  constructor(element) {
+  constructor(element, options = {}) {
     if (!element) {
       throw new Error("ChatContainer requires an existing DOM element");
     }
     this.element = element;
     this.currentStreamingMessage = null;
+
+    // AppState integration (optional)
+    this.appState = options.appState || null;
+    this.unsubscribers = [];
+
+    this.setupStateSubscriptions();
+  }
+
+  /**
+   * Setup AppState subscriptions
+   * @private
+   */
+  setupStateSubscriptions() {
+    if (!this.appState) return;
+
+    // Subscribe to new assistant messages - auto-scroll to bottom
+    const unsubscribeCurrentAssistant = this.appState.subscribe("message.currentAssistant", (element) => {
+      // Keep internal streaming reference in sync with AppState (even if created outside this component)
+      this.currentStreamingMessage = element || null;
+
+      if (element) {
+        // New assistant message element created, scroll to show it
+        this.scrollToBottom();
+      }
+    });
+    this.unsubscribers.push(unsubscribeCurrentAssistant);
+
+    // Subscribe to streaming buffer updates - update message content
+    const unsubscribeAssistantBuffer = this.appState.subscribe("message.assistantBuffer", (buffer) => {
+      const current = this.appState.getState("message.currentAssistant");
+      if (current && buffer !== undefined) {
+        // Update the streaming message with new content
+        this.updateStreamingMessage(buffer);
+      }
+    });
+    this.unsubscribers.push(unsubscribeAssistantBuffer);
+
+    // Subscribe to streaming state - manage streaming UI state
+    const unsubscribeIsStreaming = this.appState.subscribe("message.isStreaming", (isStreaming) => {
+      if (!isStreaming && this.currentStreamingMessage) {
+        // Streaming completed, finalize the message
+        this.completeStreaming();
+      }
+    });
+    this.unsubscribers.push(unsubscribeIsStreaming);
   }
 
   /**
@@ -116,12 +162,42 @@ export class ChatContainer {
   }
 
   /**
+   * Scroll to bottom of chat container
+   * Used by subscription to auto-scroll on new messages
+   */
+  scrollToBottom() {
+    if (this.element) {
+      // Smooth scroll to bottom
+      this.element.scrollTo({
+        top: this.element.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  }
+
+  /**
    * Get the underlying DOM element
    *
    * @returns {HTMLElement} The chat container element
    */
   getElement() {
     return this.element;
+  }
+
+  /**
+   * Destroy component and clean up subscriptions
+   */
+  destroy() {
+    // Clean up AppState subscriptions
+    if (this.unsubscribers) {
+      this.unsubscribers.forEach((unsub) => {
+        unsub();
+      });
+      this.unsubscribers = [];
+    }
+
+    // Clear current streaming reference
+    this.currentStreamingMessage = null;
   }
 }
 

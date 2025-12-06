@@ -77,8 +77,10 @@ export async function initializeComponents({ elements, appState, services, ipcAd
       }
     }
 
-    // Initialize components
-    components.chatContainer = new ChatContainer(document.getElementById("chat-container"));
+    // Initialize components with appState
+    components.chatContainer = new ChatContainer(document.getElementById("chat-container"), {
+      appState,
+    });
     console.log("  ✓ ChatContainer initialized");
 
     // Setup scroll detection to prevent scroll fighting during streaming
@@ -91,7 +93,10 @@ export async function initializeComponents({ elements, appState, services, ipcAd
       document.getElementById("files-container"),
       document.getElementById("refresh-files-btn"),
       document.getElementById("tab-sources"),
-      document.getElementById("tab-output")
+      document.getElementById("tab-output"),
+      {
+        appState,
+      }
     );
     console.log("  ✓ FilePanel initialized");
 
@@ -106,10 +111,11 @@ export async function initializeComponents({ elements, appState, services, ipcAd
         ipcAdapter: ipcAdapter,
         sessionService: services.sessionService, // Pass SessionService for model selector to get currentSessionId
         getModelConfig: null, // Will be injected after model config loads
+        appState,
       });
       console.log("  ✓ InputArea initialized with sendMessage callback");
     } else {
-      console.warn("  ⚠️ InputArea not initialized (missing send-btn or user-input)");
+      console.warn("  InputArea not initialized (missing send-btn or user-input)");
       components.inputArea = null;
     }
 

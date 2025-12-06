@@ -1,20 +1,25 @@
 /**
  * FunctionCallService Unit Tests
+ * Updated for AppState integration (Phase 2 migration)
  */
 
 import { MockStorageAdapter } from "@test-helpers/MockStorageAdapter.js";
 import { beforeEach, describe, expect, it } from "vitest";
+import { AppState, BoundedMap } from "@/core/state.js";
 import { CallStatus, FunctionCallService } from "@/services/function-call-service.js";
 
 describe("FunctionCallService", () => {
   let functionCallService;
   let mockStorage;
+  let appState;
 
   beforeEach(() => {
     mockStorage = new MockStorageAdapter();
+    appState = new AppState();
 
     functionCallService = new FunctionCallService({
       storageAdapter: mockStorage,
+      appState: appState,
     });
   });
 
@@ -23,10 +28,24 @@ describe("FunctionCallService", () => {
       expect(functionCallService.storage).toBe(mockStorage);
     });
 
-    it("should initialize call tracking", () => {
-      expect(functionCallService.activeCalls).toBeInstanceOf(Map);
-      expect(functionCallService.argumentsBuffer).toBeInstanceOf(Map);
-      expect(functionCallService.completedCalls).toBeInstanceOf(Map);
+    it("should initialize with appState", () => {
+      expect(functionCallService.appState).toBe(appState);
+    });
+
+    it("should throw error if appState not provided", () => {
+      expect(() => new FunctionCallService({ storageAdapter: mockStorage })).toThrow(
+        "FunctionCallService requires appState in constructor"
+      );
+    });
+
+    it("should use AppState for call tracking", () => {
+      const activeCalls = appState.getState("functions.activeCalls");
+      const argumentsBuffer = appState.getState("functions.argumentsBuffer");
+      const completedCalls = appState.getState("functions.completedCalls");
+
+      expect(activeCalls).toBeInstanceOf(BoundedMap);
+      expect(argumentsBuffer).toBeInstanceOf(BoundedMap);
+      expect(completedCalls).toBeInstanceOf(BoundedMap);
     });
   });
 
@@ -108,7 +127,8 @@ describe("FunctionCallService", () => {
         functionCallService.updateCallStatus(`call-${i}`, CallStatus.COMPLETED);
       }
 
-      expect(functionCallService.completedCalls.size).toBeLessThanOrEqual(100);
+      const completedCalls = appState.getState("functions.completedCalls");
+      expect(completedCalls.size).toBeLessThanOrEqual(100);
     });
   });
 
@@ -172,7 +192,8 @@ describe("FunctionCallService", () => {
 
       functionCallService.finalizeArguments("call-1");
 
-      expect(functionCallService.argumentsBuffer.has("call-1")).toBe(false);
+      const argumentsBuffer = appState.getState("functions.argumentsBuffer");
+      expect(argumentsBuffer.has("call-1")).toBe(false);
     });
 
     it("should handle non-existent call", () => {

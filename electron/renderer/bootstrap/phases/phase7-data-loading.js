@@ -75,7 +75,7 @@ export async function loadInitialData({ elements, appState, services, components
 
     // 4. Show welcome page
     const { showWelcomeView } = await import("../../managers/view-manager.js");
-    await showWelcomeView(elements, appState, services);
+    await showWelcomeView(elements, appState);
     console.log("  ✓ Welcome view initialized");
 
     return {

@@ -6,12 +6,18 @@
 export class ConnectionStatus {
   /**
    * @param {Object} domAdapter - DOM adapter for rendering
+   * @param {Object} options - Optional configuration
+   * @param {Object} options.appState - AppState instance for reactive state management
    */
-  constructor(domAdapter) {
+  constructor(domAdapter, options = {}) {
     this.dom = domAdapter;
     this.element = null;
     this.isConnected = true;
     this.lastError = null;
+
+    // AppState integration (optional)
+    this.appState = options.appState || null;
+    this.unsubscribers = [];
   }
 
   /**
@@ -36,7 +42,39 @@ export class ConnectionStatus {
     this.dom.appendChild(container, text);
 
     this.element = container;
+    this.setupStateSubscriptions();
     return container;
+  }
+
+  /**
+   * Setup AppState subscriptions
+   * @private
+   */
+  setupStateSubscriptions() {
+    if (!this.appState || !this.element) return;
+
+    // Subscribe to connection status changes
+    const unsubscribeConnection = this.appState.subscribe("connection.status", (status) => {
+      switch (status) {
+        case "CONNECTED":
+          this.setConnected();
+          break;
+        case "DISCONNECTED":
+          this.setDisconnected();
+          break;
+        case "RECONNECTING":
+          this.setReconnecting();
+          break;
+        case "ERROR":
+          this.setDisconnected("Connection error");
+          break;
+        default:
+        // Note: Unknown connection status (should not happen in normal operation)
+        // Using comment instead of console.warn as per project logging standards
+      }
+    });
+
+    this.unsubscribers.push(unsubscribeConnection);
   }
 
   /**
@@ -131,6 +169,15 @@ export class ConnectionStatus {
    * Destroy the component and remove from DOM
    */
   destroy() {
+    // Clean up AppState subscriptions
+    if (this.unsubscribers) {
+      this.unsubscribers.forEach((unsub) => {
+        unsub();
+      });
+      this.unsubscribers = [];
+    }
+
+    // Remove DOM element
     if (this.element) {
       this.dom.remove(this.element);
       this.element = null;

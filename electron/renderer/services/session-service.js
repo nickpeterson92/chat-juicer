@@ -14,28 +14,39 @@
  *
  * Handles:
  * - Session CRUD operations
- * - Session state management
+ * - Session state management (via AppState)
  * - Session history loading with pagination
  * - Session validation
+ *
+ * State Management:
+ * - All session state is now stored in AppState (single source of truth)
+ * - SessionService reads/writes state via appState.getState() and appState.setState()
+ * - Observer pattern is deprecated (use appState.subscribe() instead)
  */
 export class SessionService {
   /**
    * @param {Object} dependencies
    * @param {Object} dependencies.ipcAdapter - IPC adapter for backend communication
    * @param {Object} dependencies.storageAdapter - Storage adapter for state persistence
+   * @param {Object} dependencies.appState - Application state manager
    */
-  constructor({ ipcAdapter, storageAdapter }) {
+  constructor({ ipcAdapter, storageAdapter, appState }) {
+    if (!appState) {
+      throw new Error("SessionService requires appState (state manager) in constructor");
+    }
+    if (!ipcAdapter) {
+      throw new Error("SessionService requires ipcAdapter in constructor");
+    }
+    if (!storageAdapter) {
+      throw new Error("SessionService requires storageAdapter in constructor");
+    }
+
     this.ipc = ipcAdapter;
     this.storage = storageAdapter;
+    this.appState = appState;
 
-    // Session state
-    this.currentSessionId = null;
-    this.sessions = [];
-    this.totalSessions = 0;
-    this.hasMoreSessions = false;
-    this.isLoadingSessions = false;
-
-    // Observer pattern for state change notifications
+    // DEPRECATED: Observer pattern (use appState.subscribe() instead)
+    // Kept for backwards compatibility during migration
     this.observers = new Set();
   }
 
@@ -59,13 +70,16 @@ export class SessionService {
    * @private
    * @param {string} changeType - Type of change (sessions_loaded, session_created, etc.)
    * @param {Object} data - Change-specific data
+   *
+   * @deprecated Use appState.subscribe() instead
    */
   _notifyObservers(changeType, data) {
+    // Read state from AppState (single source of truth)
     const state = {
-      currentSessionId: this.currentSessionId,
-      sessions: [...this.sessions],
-      totalSessions: this.totalSessions,
-      hasMoreSessions: this.hasMoreSessions,
+      currentSessionId: this.appState.getState("session.current"),
+      sessions: [...this.appState.getState("session.list")],
+      totalSessions: this.appState.getState("session.totalCount"),
+      hasMoreSessions: this.appState.getState("session.hasMore"),
     };
 
     this.observers.forEach((observer) => {
@@ -85,38 +99,35 @@ export class SessionService {
    * @returns {Promise<Object>} Result with sessions array
    */
   async loadSessions(offset = 0, limit = 50) {
-    if (this.isLoadingSessions) {
+    if (this.appState.getState("session.isLoading")) {
       return { success: false, error: "Already loading sessions", sessions: [] };
     }
 
-    try {
-      this.isLoadingSessions = true;
+    this.appState.setState("session.isLoading", true);
 
+    try {
       const response = await this.ipc.sendSessionCommand("list", { offset, limit });
 
       if (response?.sessions) {
         // Append or replace sessions based on offset
-        if (offset === 0) {
-          this.sessions = response.sessions;
-        } else {
-          this.sessions.push(...response.sessions);
-        }
+        const currentList = this.appState.getState("session.list");
+        const newList = offset === 0 ? response.sessions : [...currentList, ...response.sessions];
 
-        // Update pagination state
-        this.totalSessions = response.total_count || response.sessions.length;
-        this.hasMoreSessions = response.has_more || false;
+        this.appState.setState("session.list", newList);
+        this.appState.setState("session.totalCount", response.total_count || newList.length);
+        this.appState.setState("session.hasMore", response.has_more || false);
 
-        // Notify observers
-        this._notifyObservers("sessions_loaded", { offset, limit, sessions: this.sessions });
+        // Notify observers (deprecated, but kept for backwards compatibility)
+        this._notifyObservers("sessions_loaded", { offset, limit, sessions: newList });
 
-        return { success: true, sessions: this.sessions, hasMore: this.hasMoreSessions };
+        return { success: true, sessions: newList, hasMore: response.has_more || false };
       }
 
       return { success: false, error: "Invalid response format", sessions: [] };
     } catch (error) {
       return { success: false, error: error.message, sessions: [] };
     } finally {
-      this.isLoadingSessions = false;
+      this.appState.setState("session.isLoading", false);
     }
   }
 
@@ -126,11 +137,15 @@ export class SessionService {
    * @returns {Promise<Object>} Result with new sessions
    */
   async loadMoreSessions() {
-    if (!this.hasMoreSessions || this.isLoadingSessions) {
+    const hasMore = this.appState.getState("session.hasMore");
+    const isLoading = this.appState.getState("session.isLoading");
+
+    if (!hasMore || isLoading) {
       return { success: false, error: "No more sessions or already loading", sessions: [] };
     }
 
-    const nextOffset = this.sessions.length;
+    const sessions = this.appState.getState("session.list");
+    const nextOffset = sessions.length;
     return this.loadSessions(nextOffset, 50);
   }
 
@@ -155,9 +170,9 @@ export class SessionService {
       const response = await this.ipc.sendSessionCommand("new", data);
 
       if (response?.session_id) {
-        this.currentSessionId = response.session_id;
+        this.appState.setState("session.current", response.session_id);
 
-        // Notify observers
+        // Notify observers (deprecated, but kept for backwards compatibility)
         this._notifyObservers("session_created", { sessionId: response.session_id });
 
         return {
@@ -185,7 +200,8 @@ export class SessionService {
       return { success: false, error: "No session ID provided" };
     }
 
-    if (sessionId === this.currentSessionId) {
+    const currentSessionId = this.appState.getState("session.current");
+    if (sessionId === currentSessionId) {
       return { success: false, error: "Already on this session" };
     }
 
@@ -193,9 +209,9 @@ export class SessionService {
       const response = await this.ipc.sendSessionCommand("switch", { session_id: sessionId });
 
       if (response?.session) {
-        this.currentSessionId = sessionId;
+        this.appState.setState("session.current", sessionId);
 
-        // Notify observers
+        // Notify observers (deprecated, but kept for backwards compatibility)
         this._notifyObservers("session_switched", { sessionId, session: response.session });
 
         return {
@@ -229,15 +245,18 @@ export class SessionService {
       const response = await this.ipc.sendSessionCommand("delete", { session_id: sessionId });
 
       if (response?.success) {
-        // Remove from local cache
-        this.sessions = this.sessions.filter((s) => s.session_id !== sessionId);
+        // Remove from AppState session list
+        const sessions = this.appState.getState("session.list");
+        const filteredSessions = sessions.filter((s) => s.session_id !== sessionId);
+        this.appState.setState("session.list", filteredSessions);
 
         // Clear current if deleting active session
-        if (this.currentSessionId === sessionId) {
-          this.currentSessionId = null;
+        const currentSessionId = this.appState.getState("session.current");
+        if (currentSessionId === sessionId) {
+          this.appState.setState("session.current", null);
         }
 
-        // Notify observers
+        // Notify observers (deprecated, but kept for backwards compatibility)
         this._notifyObservers("session_deleted", { sessionId });
 
         return { success: true };
@@ -271,11 +290,10 @@ export class SessionService {
       const response = await this.ipc.sendSessionCommand("rename", { session_id: sessionId, title: title.trim() });
 
       if (response?.success) {
-        // Update local cache
-        const session = this.sessions.find((s) => s.session_id === sessionId);
-        if (session) {
-          session.title = title.trim();
-        }
+        // Update session in AppState (immutably - create new objects)
+        const sessions = this.appState.getState("session.list");
+        const updatedSessions = sessions.map((s) => (s.session_id === sessionId ? { ...s, title: title.trim() } : s));
+        this.appState.setState("session.list", updatedSessions);
 
         return { success: true, title: title.trim() };
       } else if (response?.error) {
@@ -319,9 +337,9 @@ export class SessionService {
       const response = await this.ipc.sendSessionCommand("clear", {});
 
       if (response?.success) {
-        this.currentSessionId = null;
+        this.appState.setState("session.current", null);
 
-        // Notify observers
+        // Notify observers (deprecated, but kept for backwards compatibility)
         this._notifyObservers("session_cleared", {});
 
         return { success: true };
@@ -364,24 +382,35 @@ export class SessionService {
   }
 
   /**
-   * Update session in local cache (for real-time updates from backend)
+   * Update session in AppState (for real-time updates from backend)
    * @param {Object} sessionData - Updated session data
    */
   updateSession(sessionData) {
     if (!sessionData?.session_id) return;
 
-    const index = this.sessions.findIndex((s) => s.session_id === sessionData.session_id);
+    const sessions = this.appState.getState("session.list");
+    const index = sessions.findIndex((s) => s.session_id === sessionData.session_id);
 
+    let updatedSessions;
     if (index >= 0) {
       // Update existing session
-      this.sessions[index] = { ...this.sessions[index], ...sessionData };
+      updatedSessions = [...sessions];
+      updatedSessions[index] = { ...sessions[index], ...sessionData };
     } else {
       // Add new session
-      this.sessions.push(sessionData);
-      this.sessions.sort((a, b) => new Date(b.last_used) - new Date(a.last_used));
+      updatedSessions = [...sessions, sessionData];
     }
 
-    // Notify observers
+    // Sort by last_used to ensure most recently used sessions appear first
+    const getLastUsedTimestamp = (session) => {
+      const timestamp = session?.last_used ? new Date(session.last_used).getTime() : 0;
+      return Number.isFinite(timestamp) ? timestamp : 0;
+    };
+    updatedSessions.sort((a, b) => getLastUsedTimestamp(b) - getLastUsedTimestamp(a));
+
+    this.appState.setState("session.list", updatedSessions);
+
+    // Notify observers (deprecated, but kept for backwards compatibility)
     this._notifyObservers("session_updated", { session: sessionData });
   }
 
@@ -391,7 +420,7 @@ export class SessionService {
    * @returns {string|null} Current session ID or null
    */
   getCurrentSessionId() {
-    return this.currentSessionId;
+    return this.appState.getState("session.current");
   }
 
   /**
@@ -400,7 +429,8 @@ export class SessionService {
    * @returns {Array<Object>} Sessions array
    */
   getSessions() {
-    return [...this.sessions];
+    const sessions = this.appState.getState("session.list");
+    return [...sessions];
   }
 
   /**
@@ -410,7 +440,8 @@ export class SessionService {
    * @returns {Object|null} Session object or null
    */
   getSession(sessionId) {
-    return this.sessions.find((s) => s.session_id === sessionId) || null;
+    const sessions = this.appState.getState("session.list");
+    return sessions.find((s) => s.session_id === sessionId) || null;
   }
 
   /**
@@ -419,11 +450,12 @@ export class SessionService {
    * @returns {Object} Pagination info
    */
   getPaginationState() {
+    const sessions = this.appState.getState("session.list");
     return {
-      total: this.totalSessions,
-      loaded: this.sessions.length,
-      hasMore: this.hasMoreSessions,
-      isLoading: this.isLoadingSessions,
+      total: this.appState.getState("session.totalCount"),
+      loaded: sessions.length,
+      hasMore: this.appState.getState("session.hasMore"),
+      isLoading: this.appState.getState("session.isLoading"),
     };
   }
 
@@ -431,10 +463,10 @@ export class SessionService {
    * Reset service state
    */
   reset() {
-    this.currentSessionId = null;
-    this.sessions = [];
-    this.totalSessions = 0;
-    this.hasMoreSessions = false;
-    this.isLoadingSessions = false;
+    this.appState.setState("session.current", null);
+    this.appState.setState("session.list", []);
+    this.appState.setState("session.totalCount", 0);
+    this.appState.setState("session.hasMore", false);
+    this.appState.setState("session.isLoading", false);
   }
 }

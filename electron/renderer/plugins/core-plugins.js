@@ -384,22 +384,8 @@ export const MetricsBridgePlugin = createPlugin({
   description: "Bridges EventBus performance metrics to MetricsCollector",
 
   async install(app) {
-    const { eventBus } = app;
-
-    // Import globalMetrics
-    const { globalMetrics } = await import("../utils/performance/index.js");
-
-    // Listen to all performance metric events
-    eventBus.on("performance:metric", ({ data }) => {
-      const { name, value, unit, metadata } = data;
-      // Use correct API: record(name, value, unit, metadata)
-      globalMetrics.record(name, value, unit || "count", metadata || {});
-    });
-
-    // Store metrics on app
-    app.metrics = globalMetrics;
-
-    console.log("[MetricsBridgePlugin] Installed - wired to globalMetrics");
+    // Performance metrics disabled; plugin is a no-op for compatibility.
+    console.log("[MetricsBridgePlugin] Skipped (performance metrics disabled)");
   },
 });
 

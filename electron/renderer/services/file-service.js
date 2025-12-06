@@ -7,6 +7,11 @@
  * - File list management
  * - File metadata extraction
  * - Directory operations
+ *
+ * State Management:
+ * - activeDirectory is stored in AppState (single source of truth)
+ * - FileService reads/writes via appState.getState() and appState.setState()
+ * - fileCache remains internal (it's a cache, not UI state)
  */
 
 /**
@@ -18,13 +23,24 @@ export class FileService {
    * @param {Object} dependencies
    * @param {Object} dependencies.ipcAdapter - IPC adapter for backend communication
    * @param {Object} dependencies.storageAdapter - Storage adapter for state persistence
+   * @param {Object} dependencies.appState - Application state manager
    */
-  constructor({ ipcAdapter, storageAdapter }) {
+  constructor({ ipcAdapter, storageAdapter, appState }) {
+    if (!appState) {
+      throw new Error("FileService requires appState (state manager) in constructor");
+    }
+    if (!ipcAdapter) {
+      throw new Error("FileService requires ipcAdapter in constructor");
+    }
+    if (!storageAdapter) {
+      throw new Error("FileService requires storageAdapter in constructor");
+    }
+
     this.ipc = ipcAdapter;
     this.storage = storageAdapter;
+    this.appState = appState;
 
-    // File state
-    this.activeDirectory = null;
+    // Internal cache (not UI state)
     this.fileCache = new Map();
   }
 
@@ -224,7 +240,7 @@ export class FileService {
       });
 
       if (result?.files) {
-        this.activeDirectory = directory;
+        this.appState.setState("files.activeDirectory", directory);
         this.cacheFileList(directory, result.files);
         return { success: true, files: result.files };
       }
@@ -369,7 +385,7 @@ export class FileService {
    * @returns {string|null} Active directory path
    */
   getActiveDirectory() {
-    return this.activeDirectory;
+    return this.appState.getState("files.activeDirectory");
   }
 
   /**
@@ -378,14 +394,14 @@ export class FileService {
    * @param {string} directory - Directory path
    */
   setActiveDirectory(directory) {
-    this.activeDirectory = directory;
+    this.appState.setState("files.activeDirectory", directory);
   }
 
   /**
    * Reset service state
    */
   reset() {
-    this.activeDirectory = null;
+    this.appState.setState("files.activeDirectory", null);
     this.fileCache.clear();
   }
 }

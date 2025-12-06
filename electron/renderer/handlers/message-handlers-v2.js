@@ -24,7 +24,11 @@ import { scheduleScroll } from "../utils/scroll-utils.js";
  * @param {Object} context - Application context
  */
 export function registerMessageHandlers(context) {
-  const { appState, elements, services, ipcAdapter } = context;
+  const { appState, elements, services, ipcAdapter, components } = context;
+
+  // Prefer the ChatContainer component when available to keep internal streaming state in sync
+  const getChatContainerComponent = () =>
+    components?.chatContainer || (typeof window !== "undefined" ? window.components?.chatContainer : null);
 
   // Helper to create scoped handler
   const createHandler = (type, handler) => {
@@ -62,19 +66,22 @@ export function registerMessageHandlers(context) {
   createHandler("assistant_start", (_message) => {
     // Track Python status - streaming started
     appState.setState("python.status", "busy_streaming");
-    console.log("🔄 Python status: busy_streaming");
-
-    // Hide AI thinking indicator
-    if (elements.aiThinking) {
-      elements.aiThinking.classList.remove("active");
-    }
-
+    appState.setState("message.isStreaming", true);
     appState.setState("message.isTyping", false);
 
-    // Create streaming message
-    const textSpan = createStreamingAssistantMessage(elements.chatContainer);
+    // Create streaming message before toggling lamp visibility so the element exists
+    const chatContainerComponent = getChatContainerComponent();
+    const textSpan =
+      chatContainerComponent?.createStreamingMessage?.() || createStreamingAssistantMessage(elements.chatContainer);
     appState.setState("message.currentAssistant", textSpan);
     appState.setState("message.assistantBuffer", "");
+
+    // Reset loading lamp visibility for this streaming message so the first token transition can run
+    appState.setState("ui.loadingLampVisible", true);
+    console.log("Python status: busy_streaming");
+
+    // Hide AI thinking indicator
+    appState.setState("ui.aiThinkingActive", false);
 
     // Emit performance tracking event
     globalEventBus.emit("performance:message_render_start");
@@ -88,14 +95,11 @@ export function registerMessageHandlers(context) {
 
       // Hide lottie indicator on first token arrival for instant feedback
       if (isFirstToken) {
-        const currentMsg = appState.message.currentAssistant.closest(".message");
-        const loadingLamp = currentMsg?.querySelector(".loading-lamp");
-        if (loadingLamp) {
-          console.log("[MessageHandlersV2] First token arrived - hiding lottie indicator");
-          loadingLamp.style.transition = "opacity 200ms ease-out";
-          loadingLamp.style.opacity = "0";
-          setTimeout(() => loadingLamp.remove(), 200);
-        }
+        // Update state - subscriptions will handle DOM manipulation
+        appState.setState("ui.loadingLampVisible", false);
+
+        // NOTE: UI update handled by subscription in bootstrap/phases/phase5a-subscriptions.js
+        // Subscription listens to ui.loadingLampVisible and applies transition + removal
       }
 
       updateAssistantMessage(elements.chatContainer, appState.message.currentAssistant, newBuffer);
@@ -111,18 +115,17 @@ export function registerMessageHandlers(context) {
 
     // Track Python status - streaming ended
     appState.setState("python.status", "idle");
-    console.log("✅ Python status: idle");
+    appState.setState("message.isStreaming", false);
+    console.log("Python status: idle");
 
     // Process queued commands
     if (ipcAdapter && ipcAdapter.commandQueue.length > 0) {
-      console.log("📦 Processing queued commands after streaming...");
+      console.log("Processing queued commands after streaming...");
       await ipcAdapter.processQueue();
     }
 
     // Hide AI thinking indicator
-    if (elements.aiThinking) {
-      elements.aiThinking.classList.remove("active");
-    }
+    appState.setState("ui.aiThinkingActive", false);
 
     // Cancel pending renders
     cancelPendingRender();
@@ -156,9 +159,7 @@ export function registerMessageHandlers(context) {
       message: message.message,
     });
 
-    if (elements.aiThinking) {
-      elements.aiThinking.classList.remove("active");
-    }
+    appState.setState("ui.aiThinkingActive", false);
 
     appState.setState("message.isTyping", false);
 
@@ -302,7 +303,7 @@ export function registerMessageHandlers(context) {
     if (window.components?.chatContainer) {
       window.components.chatContainer.addSystemMessage(content);
     } else {
-      console.error("⚠️ ChatContainer component not available - message not displayed");
+      console.error("ChatContainer component not available - message not displayed");
     }
 
     globalEventBus.emit("analytics:event", {
@@ -319,7 +320,7 @@ export function registerMessageHandlers(context) {
     if (window.components?.chatContainer) {
       window.components.chatContainer.addErrorMessage(content);
     } else {
-      console.error("⚠️ ChatContainer component not available - message not displayed");
+      console.error("ChatContainer component not available - message not displayed");
     }
 
     globalEventBus.emit("error:rate_limit", {
@@ -343,11 +344,9 @@ export function registerMessageHandlers(context) {
     // Transition to chat view if from first message
     if (!isFromFileUpload && appState.ui && appState.ui.currentView === "welcome") {
       appState.setState("ui.currentView", "chat");
+      appState.setState("ui.bodyViewClass", "view-chat");
     } else if (isFromFileUpload) {
-      const welcomeFilesSection = document.getElementById("welcome-files-section");
-      if (welcomeFilesSection) {
-        welcomeFilesSection.style.display = "block";
-      }
+      appState.setState("ui.welcomeFilesSectionVisible", true);
     }
 
     // Emit custom event for session list update

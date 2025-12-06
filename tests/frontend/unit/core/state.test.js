@@ -180,6 +180,10 @@ describe("AppState", () => {
       expect(appState.message).toEqual({
         currentAssistant: null,
         assistantBuffer: "",
+        isTyping: false,
+        isStreaming: false,
+        lastUser: null,
+        lastAssistant: null,
       });
     });
 
@@ -198,6 +202,11 @@ describe("AppState", () => {
 
     it("should default to light theme if not in localStorage", () => {
       expect(appState.ui.theme).toBe("light");
+    });
+
+    it("should initialize UI state with Phase 3 properties", () => {
+      expect(appState.ui.aiThinkingActive).toBe(false);
+      expect(appState.ui.welcomeFilesSectionVisible).toBe(false);
     });
 
     it("should initialize listeners map", () => {
@@ -462,6 +471,85 @@ describe("AppState", () => {
 
       expect(callback1).not.toHaveBeenCalled();
       expect(callback2).toHaveBeenCalledWith("dark", "light", "ui.theme");
+    });
+  });
+
+  describe("Phase 3: UI State Properties", () => {
+    describe("aiThinkingActive", () => {
+      it("should update aiThinkingActive state", () => {
+        appState.setState("ui.aiThinkingActive", true);
+
+        expect(appState.getState("ui.aiThinkingActive")).toBe(true);
+      });
+
+      it("should notify listeners when aiThinkingActive changes", () => {
+        const callback = vi.fn();
+        appState.subscribe("ui.aiThinkingActive", callback);
+
+        appState.setState("ui.aiThinkingActive", true);
+
+        expect(callback).toHaveBeenCalledWith(true, false, "ui.aiThinkingActive");
+      });
+
+      it("should toggle aiThinkingActive multiple times", () => {
+        const callback = vi.fn();
+        appState.subscribe("ui.aiThinkingActive", callback);
+
+        appState.setState("ui.aiThinkingActive", true);
+        appState.setState("ui.aiThinkingActive", false);
+        appState.setState("ui.aiThinkingActive", true);
+
+        expect(callback).toHaveBeenCalledTimes(3);
+        expect(appState.getState("ui.aiThinkingActive")).toBe(true);
+      });
+    });
+
+    describe("welcomeFilesSectionVisible", () => {
+      it("should update welcomeFilesSectionVisible state", () => {
+        appState.setState("ui.welcomeFilesSectionVisible", true);
+
+        expect(appState.getState("ui.welcomeFilesSectionVisible")).toBe(true);
+      });
+
+      it("should notify listeners when welcomeFilesSectionVisible changes", () => {
+        const callback = vi.fn();
+        appState.subscribe("ui.welcomeFilesSectionVisible", callback);
+
+        appState.setState("ui.welcomeFilesSectionVisible", true);
+
+        expect(callback).toHaveBeenCalledWith(true, false, "ui.welcomeFilesSectionVisible");
+      });
+
+      it("should start with welcomeFilesSectionVisible false", () => {
+        expect(appState.getState("ui.welcomeFilesSectionVisible")).toBe(false);
+      });
+    });
+
+    describe("Phase 3 State Validation", () => {
+      it("should validate aiThinkingActive path", () => {
+        expect(appState.validatePath("ui.aiThinkingActive")).toBe(true);
+      });
+
+      it("should validate welcomeFilesSectionVisible path", () => {
+        expect(appState.validatePath("ui.welcomeFilesSectionVisible")).toBe(true);
+      });
+
+      it("should include Phase 3 properties in valid paths", () => {
+        const validPaths = appState.getValidPaths();
+
+        expect(validPaths).toContain("ui.aiThinkingActive");
+        expect(validPaths).toContain("ui.welcomeFilesSectionVisible");
+      });
+
+      it("should include Phase 3 properties in debug snapshot", () => {
+        appState.setState("ui.aiThinkingActive", true);
+        appState.setState("ui.welcomeFilesSectionVisible", true);
+
+        const snapshot = appState.debugSnapshot();
+
+        expect(snapshot.ui.aiThinkingActive).toBe(true);
+        expect(snapshot.ui.welcomeFilesSectionVisible).toBe(true);
+      });
     });
   });
 });

@@ -1,9 +1,25 @@
 /**
  * Services barrel export
  * Central export point for all business logic services
+ *
+ * Phase 2 State Management Migration (2025-12-06):
+ * - SessionService: Now requires appState in constructor
+ *   - All session state (current, list, totalCount, hasMore, isLoading) managed via AppState
+ *   - Observer pattern deprecated in favor of appState.subscribe()
+ *   - Backwards compatible during transition period
+ *
+ * - FileService: Now requires appState in constructor
+ *   - activeDirectory managed via AppState (files.activeDirectory)
+ *   - fileCache remains internal (cache, not UI state)
+ *
+ * Constructor Requirements:
+ * - SessionService({ ipcAdapter, storageAdapter, appState })
+ * - FileService({ ipcAdapter, storageAdapter, appState })
+ * - MessageService({ ipcAdapter, storageAdapter }) - unchanged
+ * - FunctionCallService({ ipcAdapter, storageAdapter }) - unchanged
  */
 
 export { FileService } from "./file-service.js";
 export { CallStatus, FunctionCallService } from "./function-call-service.js";
 export { MessageService } from "./message-service.js";
-export { SessionService, sessionState } from "./session-service.js";
+export { SessionService } from "./session-service.js";

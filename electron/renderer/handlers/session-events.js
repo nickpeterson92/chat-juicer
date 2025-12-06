@@ -20,6 +20,7 @@ import {
  * @param {Object} dependencies.filePanel - File panel component
  * @param {Object} dependencies.ipcAdapter - IPC adapter
  * @param {Object} dependencies.domAdapter - DOM adapter
+ * @param {Object} dependencies.appState - Application state manager
  * @returns {Object} Event handler cleanup function
  */
 export function setupSessionEventHandlers({
@@ -29,6 +30,7 @@ export function setupSessionEventHandlers({
   filePanel,
   ipcAdapter,
   domAdapter,
+  appState,
 }) {
   const handlers = [];
   let currentSessionId = null;
@@ -79,10 +81,11 @@ export function setupSessionEventHandlers({
       }
 
       // Close sidebar after successful switch (UX: only close on success)
-      const sidebar = document.getElementById("sidebar");
-      if (sidebar && !sidebar.classList.contains("collapsed")) {
-        sidebar.classList.add("collapsed");
-      }
+      // Update state - subscription will handle DOM manipulation
+      appState.setState("ui.sidebarCollapsed", true);
+
+      // NOTE: UI update handled by subscription in bootstrap/phases/phase5a-subscriptions.js
+      // Subscription listens to ui.sidebarCollapsed and toggles sidebar.classList
 
       // Update active state in UI
       if (currentSessionId) {

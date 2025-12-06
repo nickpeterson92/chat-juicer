@@ -23,7 +23,6 @@ import { validatePhaseResult } from "./bootstrap/validators.js";
 import { globalLifecycleManager } from "./core/lifecycle-manager.js";
 import { AppState } from "./core/state.js";
 import { getCSSVariable } from "./utils/css-variables.js";
-import { globalMetrics } from "./utils/performance/index.js";
 
 /**
  * Phase-based bootstrap orchestrator
@@ -32,7 +31,7 @@ import { globalMetrics } from "./utils/performance/index.js";
 export async function bootstrapSimple() {
   console.log("🚀 Bootstrapping Chat Juicer (Phase-Based Architecture)...");
 
-  globalMetrics.startTimer("bootstrap");
+  const bootstrapStart = performance.now();
   const phaseResults = {};
 
   try {
@@ -63,7 +62,10 @@ export async function bootstrapSimple() {
     // ==========================================
     console.log("\n📦 Phase 3: Initializing services...");
     const { initializeServices } = await import("./bootstrap/phases/phase3-services.js");
-    phaseResults.services = await initializeServices(phaseResults.adapters);
+    phaseResults.services = await initializeServices({
+      ...phaseResults.adapters,
+      appState: phaseResults.stateDOM.appState,
+    });
     validatePhaseResult("services", phaseResults.services, {
       required: ["messageService", "fileService", "functionCallService", "sessionService"],
     });
@@ -131,13 +133,27 @@ export async function bootstrapSimple() {
     // Finalization
     // ==========================================
     const app = phaseResults.plugins.app;
-    app.cleanup = phaseResults.eventHandlers.cleanup;
+
+    // Unified cleanup (idempotent via event handler guard)
+    const runAppCleanup = () => {
+      try {
+        if (typeof phaseResults.eventHandlers?.cleanup === "function") {
+          phaseResults.eventHandlers.cleanup();
+        } else {
+          globalLifecycleManager.unmountAll();
+        }
+      } catch (cleanupError) {
+        console.error("[Bootstrap] Cleanup failed:", cleanupError);
+      }
+    };
+
+    app.cleanup = runAppCleanup;
     app.lifecycleManager = globalLifecycleManager;
 
     // Setup cleanup on window unload
     window.addEventListener("beforeunload", () => {
-      console.log("[Bootstrap] Window unloading, cleaning up lifecycle...");
-      globalLifecycleManager.unmountAll();
+      console.log("[Bootstrap] Window unloading, running cleanup...");
+      runAppCleanup();
     });
 
     // Validate critical colors (development safety check)
@@ -148,7 +164,7 @@ export async function bootstrapSimple() {
       console.warn("[Bootstrap] Color validation failed (non-critical):", error);
     }
 
-    const bootstrapDuration = globalMetrics.endTimer("bootstrap");
+    const bootstrapDuration = performance.now() - bootstrapStart;
     console.log(`\n⏱️  Bootstrap time: ${bootstrapDuration.toFixed(2)}ms`);
 
     app.eventBus.emit("app:bootstrap:complete", { duration: bootstrapDuration });

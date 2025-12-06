@@ -1,17 +1,37 @@
 /**
  * DOM Manager
  * Centralized DOM element management with initialization
+ *
+ * This is intentionally a pure element registry with no state management.
+ * DOM element references are stored here for easy access throughout the application.
+ * State management is handled by AppState in core/state.js, with reactive DOM
+ * bindings registered in bootstrap/phases/phase5-event-handlers.js.
+ *
+ * ARCHITECTURE NOTES:
+ * - This module is a simple element registry (no business logic)
+ * - All DOM manipulation should go through AppState subscriptions
+ * - Direct DOM manipulation should ONLY occur in subscription handlers
+ * - This module will NOT be deprecated (it serves a valid purpose)
+ *
+ * DEPRECATION POLICY:
+ * - No methods in this file are deprecated
+ * - This is a stable, foundational module for element reference management
+ * - If you need to manipulate DOM, use AppState.setState() and register subscriptions
  */
 
 /**
  * DOM elements registry
  * All DOM elements used throughout the application
+ *
+ * @type {Object.<string, HTMLElement>}
  */
 export const elements = {};
 
 /**
  * Initialize all DOM element references
  * Should be called once on application startup
+ *
+ * @returns {void}
  */
 export function initializeElements() {
   elements.chatContainer = document.getElementById("chat-container");

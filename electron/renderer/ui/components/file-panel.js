@@ -13,8 +13,10 @@ export class FilePanel {
    * @param {HTMLElement} refreshButton - Refresh button (#refresh-files-btn)
    * @param {HTMLElement} sourcesTab - Sources tab button (#tab-sources)
    * @param {HTMLElement} outputTab - Output tab button (#tab-output)
+   * @param {Object} options - Optional configuration
+   * @param {Object} options.appState - AppState instance for reactive state management
    */
-  constructor(panelElement, toggleButton, filesContainer, refreshButton, sourcesTab, outputTab) {
+  constructor(panelElement, toggleButton, filesContainer, refreshButton, sourcesTab, outputTab, options = {}) {
     if (!panelElement || !filesContainer) {
       throw new Error("FilePanel requires panel and container elements");
     }
@@ -27,7 +29,12 @@ export class FilePanel {
     this.outputTab = outputTab;
     this.currentSessionId = null;
 
+    // AppState integration (optional)
+    this.appState = options.appState || null;
+    this.unsubscribers = [];
+
     this.setupEventListeners();
+    this.setupStateSubscriptions();
   }
 
   /**
@@ -44,8 +51,12 @@ export class FilePanel {
 
     // Refresh files
     if (this.refreshButton) {
-      this.refreshButton.addEventListener("click", () => {
-        this.refresh();
+      this.refreshButton.addEventListener("click", async () => {
+        try {
+          await this.refresh();
+        } catch (error) {
+          console.error("FilePanel refresh failed", error);
+        }
       });
     }
 
@@ -59,15 +70,35 @@ export class FilePanel {
   }
 
   /**
+   * Setup AppState subscriptions
+   * @private
+   */
+  setupStateSubscriptions() {
+    if (!this.appState) return;
+
+    // Subscribe to current session changes for auto-refresh
+    const unsubscribeSession = this.appState.subscribe("session.current", (sessionId) => {
+      console.log("FilePanel detected session change:", sessionId);
+      this.setSession(sessionId);
+    });
+
+    this.unsubscribers.push(unsubscribeSession);
+  }
+
+  /**
    * Toggle panel visibility
    */
-  toggle() {
+  async toggle() {
     const wasCollapsed = this.panel.classList.contains("collapsed");
     this.panel.classList.toggle("collapsed");
 
     // Auto-refresh when opening
     if (wasCollapsed && this.currentSessionId) {
-      this.refresh();
+      try {
+        await this.refresh();
+      } catch (error) {
+        console.error("FilePanel refresh failed", error);
+      }
     }
   }
 
@@ -99,7 +130,7 @@ export class FilePanel {
    *
    * @param {HTMLElement} tab - Tab element to activate
    */
-  switchTab(tab) {
+  async switchTab(tab) {
     const tabs = [this.sourcesTab, this.outputTab].filter(Boolean);
     let directory = tab.dataset.directory;
 
@@ -124,7 +155,11 @@ export class FilePanel {
 
     // Load files from directory
     console.log(`📂 Switching to ${tab.dataset.directory} tab, directory: ${directory}`);
-    loadFiles(directory, this.filesContainer);
+    try {
+      await loadFiles(directory, this.filesContainer);
+    } catch (error) {
+      console.error("Failed to load files for tab switch", error);
+    }
   }
 
   /**
@@ -132,7 +167,7 @@ export class FilePanel {
    *
    * @param {string|null} sessionId - Session ID (null to clear)
    */
-  setSession(sessionId) {
+  async setSession(sessionId) {
     console.log("📌 FilePanel.setSession() called:", sessionId);
     this.currentSessionId = sessionId;
 
@@ -141,7 +176,7 @@ export class FilePanel {
       const activeTab = this.getActiveTab();
       console.log("📌 FilePanel active tab:", activeTab?.dataset.directory);
       if (activeTab) {
-        this.switchTab(activeTab);
+        await this.switchTab(activeTab);
       }
     } else {
       console.log("📌 FilePanel session cleared");
@@ -161,9 +196,9 @@ export class FilePanel {
   /**
    * Refresh files in current directory
    */
-  refresh() {
+  async refresh() {
     if (!this.currentSessionId) {
-      console.warn("⚠️ FilePanel.refresh() called but no currentSessionId set");
+      console.warn("FilePanel.refresh() called but no currentSessionId set");
       return;
     }
 
@@ -171,25 +206,35 @@ export class FilePanel {
     const dirType = activeTab?.dataset.directory || "sources";
     const directory = `data/files/${this.currentSessionId}/${dirType}`;
 
-    console.log(`🔄 Refreshing files panel (${dirType} tab)`, {
+    console.log(`Refreshing files panel (${dirType} tab)`, {
       sessionId: this.currentSessionId,
       directory,
       containerId: this.filesContainer?.id,
     });
-    loadFiles(directory, this.filesContainer);
+
+    try {
+      return await loadFiles(directory, this.filesContainer);
+    } catch (error) {
+      console.error("FilePanel refresh failed", error);
+      throw error;
+    }
   }
 
   /**
    * Load files for current session
    */
-  loadSessionFiles() {
+  async loadSessionFiles() {
     if (!this.currentSessionId) return;
 
     const activeTab = this.getActiveTab();
     const dirType = activeTab?.dataset.directory || "sources";
     const directory = `data/files/${this.currentSessionId}/${dirType}`;
 
-    loadFiles(directory, this.filesContainer);
+    try {
+      await loadFiles(directory, this.filesContainer);
+    } catch (error) {
+      console.error("Failed to load session files", error);
+    }
   }
 
   /**
@@ -233,7 +278,9 @@ export class FilePanel {
     // For now, just refresh the file list
     // This will trigger a backend call to get the updated file list
     console.log("📄 File added, refreshing file panel:", fileData);
-    this.refresh();
+    this.refresh().catch((error) => {
+      console.error("FilePanel refresh failed after addFile", error);
+    });
   }
 
   /**
@@ -241,11 +288,15 @@ export class FilePanel {
    * @param {string} fileId - File ID
    * @param {string} status - New status
    */
-  updateFile(fileId, status) {
+  async updateFile(fileId, status) {
     console.log(`📄 File ${fileId} status updated to: ${status}`);
     // If upload is complete, refresh the list
     if (status === "loaded") {
-      this.refresh();
+      try {
+        await this.refresh();
+      } catch (error) {
+        console.error("FilePanel refresh failed after updateFile", error);
+      }
     }
   }
 
@@ -253,9 +304,13 @@ export class FilePanel {
    * Remove a file from the list
    * @param {string} fileId - File ID to remove
    */
-  removeFile(fileId) {
+  async removeFile(fileId) {
     console.log("📄 File removed, refreshing file panel:", fileId);
-    this.refresh();
+    try {
+      await this.refresh();
+    } catch (error) {
+      console.error("FilePanel refresh failed after removeFile", error);
+    }
   }
 
   /**
@@ -278,10 +333,30 @@ export class FilePanel {
 
   /**
    * Get current session ID
+   * Reads from AppState if available, falls back to internal state
    *
    * @returns {string|null} Current session ID
    */
   getCurrentSession() {
+    if (this.appState) {
+      return this.appState.getState("session.current");
+    }
     return this.currentSessionId;
+  }
+
+  /**
+   * Destroy component and clean up subscriptions
+   */
+  destroy() {
+    // Close all file handles first
+    this.closeAllHandles();
+
+    // Clean up AppState subscriptions
+    if (this.unsubscribers) {
+      this.unsubscribers.forEach((unsub) => {
+        unsub();
+      });
+      this.unsubscribers = [];
+    }
   }
 }

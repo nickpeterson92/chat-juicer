@@ -33,7 +33,7 @@ export async function initializeEventHandlers({
   eventBus,
   sendMessage: _sendMessage,
 }) {
-  console.log("📦 Phase 5: Initializing event handlers...");
+  console.log("Phase 5: Initializing event handlers...");
 
   // Mount event handlers component with lifecycle management
   ComponentLifecycle.mount(eventHandlersComponent, "EventHandlers", globalLifecycleManager);
@@ -41,7 +41,9 @@ export async function initializeEventHandlers({
   // Use SessionService as single source of truth
   const sessionService = services.sessionService;
 
-  const listeners = []; // Track for cleanup
+  const listeners = []; // Track DOM listeners for cleanup
+  const stateUnsubscribers = []; // Track AppState subscriptions for cleanup
+  let hasCleanedUp = false; // Idempotent cleanup guard
 
   // Helper to track listeners
   function addListener(element, event, handler, options) {
@@ -60,16 +62,18 @@ export async function initializeEventHandlers({
     const sidebar = document.getElementById("sidebar");
     if (sidebarToggle && sidebar) {
       addListener(sidebarToggle, "click", () => {
-        sidebar.classList.toggle("collapsed");
+        // Use DOM state as source of truth to avoid stale/null state requiring double clicks
+        const isCollapsed = sidebar.classList.contains("collapsed");
+        appState.setState("ui.sidebarCollapsed", !isCollapsed);
       });
     }
 
     // Click away to close panels
     addListener(document, "click", (e) => {
-      // Close sidebar
-      if (sidebar && !sidebar.classList.contains("collapsed")) {
+      // Close sidebar (using AppState)
+      if (sidebar && !appState.getState("ui.sidebarCollapsed")) {
         if (!sidebar.contains(e.target) && !sidebarToggle?.contains(e.target)) {
-          sidebar.classList.add("collapsed");
+          appState.setState("ui.sidebarCollapsed", true);
         }
       }
 
@@ -100,6 +104,86 @@ export async function initializeEventHandlers({
     }
 
     console.log("  ✓ UI interaction listeners attached");
+
+    // ======================
+    // 1.5. Reactive DOM Bindings (AppState → DOM)
+    // ======================
+
+    // Bind ui.bodyViewClass to document.body
+    const updateBodyViewClass = (viewClass) => {
+      document.body.classList.remove("view-welcome", "view-chat");
+      document.body.classList.add(viewClass);
+    };
+    // Apply initial state immediately
+    updateBodyViewClass(appState.getState("ui.bodyViewClass"));
+    stateUnsubscribers.push(appState.subscribe("ui.bodyViewClass", updateBodyViewClass));
+
+    // Bind ui.sidebarCollapsed to sidebar element
+    const updateSidebarCollapsed = (collapsed) => {
+      if (sidebar) {
+        const isCollapsed = collapsed ?? false; // Default to expanded unless explicitly true
+        sidebar.classList.toggle("collapsed", isCollapsed);
+      }
+    };
+    // Apply initial state immediately
+    updateSidebarCollapsed(appState.getState("ui.sidebarCollapsed"));
+    stateUnsubscribers.push(appState.subscribe("ui.sidebarCollapsed", updateSidebarCollapsed));
+
+    // Bind ui.aiThinkingActive to DOM
+    const updateAiThinking = (active) => {
+      if (elements.aiThinking) {
+        elements.aiThinking.classList.toggle("active", active);
+      }
+    };
+    // Apply initial state immediately
+    updateAiThinking(appState.getState("ui.aiThinkingActive"));
+    stateUnsubscribers.push(appState.subscribe("ui.aiThinkingActive", updateAiThinking));
+
+    // Bind ui.welcomeFilesSectionVisible to DOM
+    const updateWelcomeFilesSection = (visible) => {
+      const welcomeFilesSection = document.getElementById("welcome-files-section");
+      if (welcomeFilesSection) {
+        welcomeFilesSection.style.display = visible ? "block" : "none";
+      }
+    };
+    // Apply initial state immediately
+    updateWelcomeFilesSection(appState.getState("ui.welcomeFilesSectionVisible"));
+    stateUnsubscribers.push(appState.subscribe("ui.welcomeFilesSectionVisible", updateWelcomeFilesSection));
+
+    // Bind ui.loadingLampVisible to streaming message loading indicator
+    const updateLoadingLampVisibility = (visible) => {
+      const currentAssistant = appState.getState("message.currentAssistant");
+      const messageElement = currentAssistant?.closest(".message");
+      const loadingLamp =
+        messageElement?.querySelector(".loading-lamp") ||
+        document.querySelector("[data-streaming='true'] .loading-lamp");
+
+      if (!loadingLamp) {
+        return;
+      }
+
+      if (visible) {
+        // Ensure lamp is shown for active streaming
+        loadingLamp.style.removeProperty("transition");
+        loadingLamp.style.opacity = "1";
+        loadingLamp.style.display = "inline-block";
+        return;
+      }
+
+      // Fade out and remove when visibility is disabled
+      loadingLamp.style.transition = "opacity 200ms ease-out";
+      loadingLamp.style.opacity = "0";
+      window.setTimeout(() => {
+        if (loadingLamp.isConnected) {
+          loadingLamp.remove();
+        }
+      }, 200);
+    };
+    // Apply initial state immediately
+    updateLoadingLampVisibility(appState.getState("ui.loadingLampVisible"));
+    stateUnsubscribers.push(appState.subscribe("ui.loadingLampVisible", updateLoadingLampVisibility));
+
+    console.log("  ✓ Reactive DOM bindings registered");
 
     // ======================
     // 2. Drag & Drop File Upload
@@ -141,7 +225,7 @@ export async function initializeEventHandlers({
         if (hideDropZoneTimer) {
           clearTimeout(hideDropZoneTimer);
         }
-        hideDropZoneTimer = eventHandlersComponent.setTimeout(() => {
+        hideDropZoneTimer = window.setTimeout(() => {
           fileDropZone.classList.remove("active");
           dragCounter = 0;
           hideDropZoneTimer = null;
@@ -192,7 +276,7 @@ export async function initializeEventHandlers({
       const files = Array.from(e.dataTransfer.files);
       if (files.length === 0) return;
 
-      console.log("🗂️ Files dropped:", files.length, "files");
+      console.log("Files dropped:", files.length, "files");
 
       const isOnWelcomePage = document.body.classList.contains("view-welcome");
 
@@ -203,7 +287,7 @@ export async function initializeEventHandlers({
           const result = await sessionService.createSession({});
 
           if (result.success) {
-            console.log("✅ Session created:", result.sessionId);
+            console.log("Session created:", result.sessionId);
 
             if (components.filePanel) {
               components.filePanel.setSession(result.sessionId);
@@ -218,7 +302,7 @@ export async function initializeEventHandlers({
             throw new Error(result.error || "Unknown error creating session");
           }
         } catch (error) {
-          console.error("❌ Failed to create session:", error);
+          console.error("Failed to create session:", error);
           alert(`Failed to create session for file upload: ${error.message}`);
           return;
         }
@@ -233,7 +317,7 @@ export async function initializeEventHandlers({
           const result = await services.fileService.uploadFile(file, sessionService.getCurrentSessionId());
 
           if (result.success) {
-            console.log(`✅ File uploaded: ${file.name}`);
+            console.log(`File uploaded: ${file.name}`);
             uploadedCount++;
 
             // Refresh the appropriate file container
@@ -241,21 +325,26 @@ export async function initializeEventHandlers({
               const directory = `data/files/${sessionService.getCurrentSessionId()}/sources`;
 
               if (isOnWelcomePage) {
-                const welcomeFilesSection = document.getElementById("welcome-files-section");
-                if (welcomeFilesSection) {
-                  welcomeFilesSection.style.display = "block";
-                }
+                appState.setState("ui.welcomeFilesSectionVisible", true);
 
                 const welcomeFilesContainer = document.getElementById("welcome-files-container");
                 if (welcomeFilesContainer) {
-                  eventHandlersComponent.setTimeout(() => {
-                    loadFiles(directory, welcomeFilesContainer);
+                  window.setTimeout(async () => {
+                    try {
+                      await loadFiles(directory, welcomeFilesContainer);
+                    } catch (error) {
+                      console.error("Failed to load files after upload", error);
+                    }
                   }, 100);
                 }
               } else {
                 if (components.filePanel) {
-                  eventHandlersComponent.setTimeout(() => {
-                    components.filePanel.refresh();
+                  window.setTimeout(async () => {
+                    try {
+                      await components.filePanel.refresh();
+                    } catch (error) {
+                      console.error("Failed to refresh file panel after upload", error);
+                    }
                   }, 100);
                 }
               }
@@ -346,13 +435,12 @@ export async function initializeEventHandlers({
           }
 
           const { showWelcomeView } = await import("../../managers/view-manager.js");
-          await showWelcomeView(elements, appState, services);
+          await showWelcomeView(elements, appState);
 
-          if (sidebar && !sidebar.classList.contains("collapsed")) {
-            sidebar.classList.add("collapsed");
-          }
+          // Collapse sidebar when showing welcome view
+          appState.setState("ui.sidebarCollapsed", true);
 
-          console.log("✅ New session started");
+          console.log("New session started");
         } catch (error) {
           console.error("Failed to create new session:", error);
         }
@@ -369,6 +457,7 @@ export async function initializeEventHandlers({
       appState,
       elements,
       ipcAdapter,
+      components,
       services: {
         messageService: services.messageService,
         fileService: services.fileService,
@@ -385,7 +474,7 @@ export async function initializeEventHandlers({
 
     // V2: Receive messages as objects directly (no parsing needed)
     ipcAdapter.onBotMessage((message) => {
-      console.log("✅ Received message:", message.type);
+      console.log("Received message:", message.type);
 
       eventBus.emit("message:received", message, {
         source: "backend",
@@ -490,23 +579,65 @@ export async function initializeEventHandlers({
 
     const sessionsList = document.getElementById("sessions-list");
     if (sessionsList) {
-      setupSessionListHandlers(sessionsList, sessionService, updateSessionsList, elements, appState, ipcAdapter);
+      setupSessionListHandlers({
+        sessionListContainer: sessionsList,
+        sessionService,
+        updateSessionsList,
+        elements,
+        appState,
+        ipcAdapter,
+      });
     }
 
     console.log("  ✓ Session list handlers attached");
 
     // Cleanup function
     const cleanup = () => {
-      console.log("🧹 Cleaning up event handlers...");
+      if (hasCleanedUp) {
+        console.log("Cleanup already executed, skipping duplicate call");
+        return;
+      }
+      hasCleanedUp = true;
+
+      console.log("Cleaning up event handlers...");
+      // Clear any pending drop zone timer
+      if (hideDropZoneTimer) {
+        clearTimeout(hideDropZoneTimer);
+        hideDropZoneTimer = null;
+      }
+      // Remove DOM event listeners
       for (const { element, event, handler } of listeners) {
         element?.removeEventListener(event, handler);
       }
       listeners.length = 0;
+      // Unsubscribe from AppState changes
+      for (const unsubscribe of stateUnsubscribers) {
+        unsubscribe();
+      }
+      stateUnsubscribers.length = 0;
+
+      // Destroy component-level subscriptions (AppState)
+      const destroyComponent = (component, name) => {
+        if (component && typeof component.destroy === "function") {
+          try {
+            component.destroy();
+          } catch (error) {
+            console.error(`Failed to destroy ${name}:`, error);
+          }
+        }
+      };
+
+      destroyComponent(components.chatContainer, "ChatContainer");
+      destroyComponent(components.filePanel, "FilePanel");
+      destroyComponent(components.inputArea, "InputArea");
+
+      // Unmount any lifecycle-managed components/timers
+      globalLifecycleManager.unmountAll();
     };
 
     return { cleanup, updateSessionsList };
   } catch (error) {
-    console.error("❌ Phase 5 failed:", error);
+    console.error("Phase 5 failed:", error);
     throw new Error(`Event handler initialization failed: ${error.message}`);
   }
 }

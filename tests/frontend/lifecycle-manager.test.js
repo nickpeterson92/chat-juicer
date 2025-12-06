@@ -129,6 +129,84 @@ describe("LifecycleManager", () => {
     });
   });
 
+  describe("Warnings and guards", () => {
+    it("should warn and still fire timer when setTimeout called on unregistered component", async () => {
+      vi.useFakeTimers();
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const callback = vi.fn();
+
+      const timerId = manager.setTimeout({}, callback, 5);
+
+      expect(typeof timerId).toBe("number");
+      vi.runAllTimers();
+      expect(callback).toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalled();
+      vi.useRealTimers();
+    });
+
+    it("should warn and return null when setTimeout called on unmounted component", () => {
+      const component = {};
+      manager.register(component, "Unmounted");
+      manager.unmount(component);
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      const timerId = manager.setTimeout(component, () => {}, 10);
+
+      expect(timerId).toBeNull();
+      expect(warnSpy).toHaveBeenCalled();
+    });
+
+    it("should noop when clearing timer for unknown component", () => {
+      expect(() => manager.clearTimer({}, 123)).not.toThrow();
+    });
+
+    it("should warn but not throw when unmounting unknown component", () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      expect(() => manager.unmount({})).not.toThrow();
+      expect(warnSpy).toHaveBeenCalled();
+    });
+
+    it("should allow unmountAll on empty manager", () => {
+      manager.unmountAll();
+      expect(manager.components.size).toBe(0);
+    });
+
+    it("should warn on duplicate registration of the same component", () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const component = {};
+
+      const firstId = manager.register(component, "Dup");
+      const secondId = manager.register(component, "Dup");
+
+      expect(secondId).toBe(firstId);
+      expect(warnSpy).toHaveBeenCalled();
+    });
+
+    it("should warn when component entry is missing during unmount", () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const component = {};
+      const id = manager.register(component, "MissingEntry");
+
+      manager.components.delete(id);
+
+      expect(() => manager.unmount(component)).not.toThrow();
+      expect(warnSpy).toHaveBeenCalled();
+    });
+
+    it("should continue unmount even if an unsubscribe handler throws", () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const component = {};
+      const id = manager.register(component, "ThrowingUnsub");
+      const entry = manager.components.get(id);
+      entry.unsubscribers.add(() => {
+        throw new Error("unsubscribe failure");
+      });
+
+      expect(() => manager.unmount(component)).not.toThrow();
+      expect(errorSpy).toHaveBeenCalled();
+    });
+  });
+
   describe("EventBus Integration", () => {
     it("should create scoped EventBus that auto-unsubscribes", () => {
       const component = {};

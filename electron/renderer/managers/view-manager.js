@@ -1,6 +1,14 @@
 /**
  * View Manager
  * Manages view state and transitions between welcome and chat views
+ *
+ * STATE MANAGEMENT ARCHITECTURE (Phase 5 Complete):
+ * - Uses AppState.setState() for all state updates (lines 34, 38, 51, 170, 173, 481)
+ * - NO direct DOM manipulation (all via AppState subscriptions)
+ * - Reactive DOM updates registered in bootstrap/phases/phase5-event-handlers.js:
+ *   - ui.bodyViewClass → document.body.classList (lines 110-117)
+ *   - ui.sidebarCollapsed → sidebar.classList.toggle() (lines 119-127)
+ *
  */
 
 import { ComponentLifecycle } from "../core/component-lifecycle.js";
@@ -24,9 +32,9 @@ const welcomePageListeners = [];
  * @param {Object} appState - Application state
  */
 export async function showWelcomeView(elements, appState) {
-  console.log("🚀 showWelcomeView called");
+  console.log("showWelcomeView called");
   if (!elements.welcomePageContainer) {
-    console.error("❌ welcomePageContainer not found!");
+    console.error("welcomePageContainer not found!");
     return;
   }
 
@@ -34,9 +42,7 @@ export async function showWelcomeView(elements, appState) {
   appState.setState("ui.currentView", "welcome");
 
   // Clear any previous welcome model config (start fresh)
-  if (window.app?.appState) {
-    window.app.appState.setState("ui.welcomeModelConfig", null);
-  }
+  appState.setState("ui.welcomeModelConfig", null);
 
   // Get system username
   let userName = "User"; // Fallback
@@ -49,9 +55,8 @@ export async function showWelcomeView(elements, appState) {
   // Show welcome page
   showWelcomePage(elements.welcomePageContainer, userName);
 
-  // Add CSS class to container for view switching
-  document.body.classList.add("view-welcome");
-  document.body.classList.remove("view-chat");
+  // Update body view class via AppState (reactive DOM will apply it)
+  appState.setState("ui.bodyViewClass", "view-welcome");
 
   // Load configuration metadata and initialize ModelSelector
   // OPTIMIZATION: Try cached config first (instant), fallback to fetch if needed
@@ -105,13 +110,13 @@ export async function showWelcomeView(elements, appState) {
       const welcomeFilesSection = document.getElementById("welcome-files-section");
 
       if (welcomeFilesContainer && welcomeFilesSection) {
-        // Show the files section immediately when there's an active session
-        welcomeFilesSection.style.display = "block";
+        // Show the files section immediately when there's an active session (via AppState)
+        appState.setState("ui.welcomeFilesSectionVisible", true);
 
         // Then load the files (will show placeholder if empty)
-        import("../managers/file-manager.js").then(({ loadFiles }) => {
+        import("../managers/file-manager.js").then(async ({ loadFiles }) => {
           const directory = `data/files/${currentSessionId}/sources`;
-          loadFiles(directory, welcomeFilesContainer);
+          await loadFiles(directory, welcomeFilesContainer);
         });
       }
     }
@@ -172,9 +177,8 @@ export function showChatView(elements, appState) {
   // Update state
   appState.setState("ui.currentView", "chat");
 
-  // Update CSS classes
-  document.body.classList.remove("view-welcome");
-  document.body.classList.add("view-chat");
+  // Update body view class via AppState (reactive DOM will apply it)
+  appState.setState("ui.bodyViewClass", "view-chat");
 
   // Focus chat input (Phase 7: use InputArea component if available)
   if (window.components?.inputArea) {
@@ -482,10 +486,8 @@ function attachWelcomePageListeners(elements, appState) {
       showChatView(elements, appState);
 
       // Collapse sidebar to give chat more space (matches behavior when switching sessions)
-      if (elements.sidebar) {
-        elements.sidebar.classList.add("collapsed");
-        window.electronAPI.log("debug", "Sidebar collapsed after starting chat from welcome page");
-      }
+      appState.setState("ui.sidebarCollapsed", true);
+      window.electronAPI.log("debug", "Sidebar collapsed after starting chat from welcome page");
 
       // Add user message to chat (Phase 7: use ChatContainer component if available)
       if (window.components?.chatContainer) {
