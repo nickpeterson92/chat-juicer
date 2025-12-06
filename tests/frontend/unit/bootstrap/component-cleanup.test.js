@@ -91,7 +91,7 @@ describe("bootstrap cleanup", () => {
     expect(components.chatContainer.destroy).toHaveBeenCalledTimes(1);
     expect(components.filePanel.destroy).toHaveBeenCalledTimes(1);
     expect(components.inputArea.destroy).toHaveBeenCalledTimes(1);
-    expect(components.connectionStatus.destroy).toHaveBeenCalledTimes(1);
+    expect(components.connectionStatus.destroy).not.toHaveBeenCalled();
   });
 
   it("does not call destroy more than once when cleanup is repeated", () => {
@@ -101,6 +101,6 @@ describe("bootstrap cleanup", () => {
     expect(components.chatContainer.destroy).toHaveBeenCalledTimes(1);
     expect(components.filePanel.destroy).toHaveBeenCalledTimes(1);
     expect(components.inputArea.destroy).toHaveBeenCalledTimes(1);
-    expect(components.connectionStatus.destroy).toHaveBeenCalledTimes(1);
+    expect(components.connectionStatus.destroy).not.toHaveBeenCalled();
   });
 });
