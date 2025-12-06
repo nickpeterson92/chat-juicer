@@ -65,7 +65,7 @@ def create_agent(
     # Configure model settings with reasoning effort only for reasoning models
     if is_reasoning_model:
         model_settings = ModelSettings(reasoning=Reasoning(effort=validated_effort))
-        logger.info(f"Reasoning model detected - reasoning_effort set to '{effort_level}'")
+        logger.info(f"Reasoning model detected - reasoning_effort set to '{validated_effort}'")
         # Create agent with reasoning configuration
         agent = Agent(
             name="Chat Juicer",
