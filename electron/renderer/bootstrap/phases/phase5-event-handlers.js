@@ -12,6 +12,7 @@ import { globalLifecycleManager } from "../../core/lifecycle-manager.js";
 import { registerMessageHandlers } from "../../handlers/message-handlers-v2.js";
 import { setupSessionListHandlers } from "../../handlers/session-list-handlers.js";
 import { loadFiles } from "../../managers/file-manager.js";
+import { MessageHandlerPlugin } from "../../plugins/core-plugins.js";
 import { renderEmptySessionList, renderSessionList } from "../../ui/renderers/session-list-renderer.js";
 import { initializeTitlebar } from "../../ui/titlebar.js";
 
@@ -452,6 +453,13 @@ export async function initializeEventHandlers({
     // ======================
     // 5. EventBus Message Handlers
     // ======================
+
+    // CRITICAL: Install MessageHandlerPlugin BEFORE registering handlers.
+    // This plugin routes "message:received" events to "message:{type}" events.
+    // Without this, handlers for "message:function_detected" etc. will never fire.
+    const app = { eventBus };
+    await MessageHandlerPlugin.install(app);
+    console.log("  ✓ MessageHandlerPlugin installed (message routing enabled)");
 
     registerMessageHandlers({
       appState,

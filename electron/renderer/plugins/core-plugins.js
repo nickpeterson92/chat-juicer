@@ -8,18 +8,33 @@ import { createPlugin } from "./plugin-interface.js";
  * Message Handler Plugin
  * Bridges old message handler system with event bus
  */
+// Track installation state to prevent duplicate subscriptions
+let messageHandlerPluginInstalled = false;
+let messageHandlerUnsubscribe;
+
 export const MessageHandlerPlugin = createPlugin({
   name: "message-handler",
   version: "1.0.0",
   description: "Bridges message handlers with event bus",
 
   async install(app) {
+    // Prevent duplicate installation (plugin may be installed in Phase 5 and Phase 6)
+    if (messageHandlerPluginInstalled) {
+      console.log("[MessageHandlerPlugin] Already installed, skipping");
+      return;
+    }
+
     const { eventBus } = app;
 
     // Subscribe to all message events and route to handlers
-    eventBus.on("message:received", async ({ data }) => {
+    messageHandlerUnsubscribe = eventBus.on("message:received", async ({ data }) => {
       const message = data;
       const messageType = message.type;
+
+      // DEBUG: Log function-related messages for troubleshooting
+      if (messageType?.includes("function")) {
+        console.log("[MessageHandlerPlugin] Routing function message:", messageType, message);
+      }
 
       // Emit specific message type event
       eventBus.emit(`message:${messageType}`, message, {
@@ -36,11 +51,19 @@ export const MessageHandlerPlugin = createPlugin({
       }
     });
 
+    messageHandlerPluginInstalled = true;
     console.log("[MessageHandlerPlugin] Installed");
   },
 
   async uninstall(_app) {
-    // Cleanup handled by eventBus.off()
+    // Remove event subscription so re-install can re-register cleanly
+    if (messageHandlerUnsubscribe) {
+      messageHandlerUnsubscribe();
+      messageHandlerUnsubscribe = undefined;
+    }
+
+    // Reset installation guard
+    messageHandlerPluginInstalled = false;
     console.log("[MessageHandlerPlugin] Uninstalled");
   },
 });
@@ -383,7 +406,7 @@ export const MetricsBridgePlugin = createPlugin({
   version: "1.0.0",
   description: "Bridges EventBus performance metrics to MetricsCollector",
 
-  async install(app) {
+  async install(_app) {
     // Performance metrics disabled; plugin is a no-op for compatibility.
     console.log("[MetricsBridgePlugin] Skipped (performance metrics disabled)");
   },

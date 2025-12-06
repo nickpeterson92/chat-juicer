@@ -101,7 +101,9 @@ export function createFunctionCallCard(
 
   let card = activeCalls.get(callId);
 
-  if (!card) {
+  // Check if card exists AND has an element - FunctionCallService may have created
+  // a call object without a DOM element, so we need to create the element
+  if (!card || !card.element) {
     // Create new inline card (collapsed by default)
     const cardDiv = document.createElement("div");
     cardDiv.className = "function-call-card executing";
@@ -160,10 +162,13 @@ export function createFunctionCallCard(
     }
     chatContainer.scrollTop = chatContainer.scrollHeight;
 
+    // Merge with existing card properties (from FunctionCallService) or create new
+    const existingCard = activeCalls.get(callId);
     card = {
+      ...existingCard, // Preserve FunctionCallService properties (id, args, status, etc.)
       element: cardDiv,
       name: functionName,
-      timestamp: Date.now(),
+      timestamp: existingCard?.timestamp || Date.now(),
       expanded: false,
       cleanupTimerId: null, // Track timer for cancellation
     };
@@ -226,13 +231,17 @@ function toggleFunctionCard(cardElement, activeCalls, activeTimers, callId) {
  * @param {string} callId - Call identifier
  * @param {string} status - New status
  * @param {Object} data - Additional data (arguments, result, error)
+ * @param {boolean} forceFlush - If true, apply update immediately (for completion events)
  */
-export function updateFunctionCallStatus(activeCalls, callId, status, data = {}) {
+export function updateFunctionCallStatus(activeCalls, callId, status, data = {}, forceFlush = false) {
   // Queue update instead of applying immediately
   pendingUpdates.set(callId, { status, data });
 
-  // Schedule batch update if not already scheduled
-  if (!updateScheduled) {
+  if (forceFlush) {
+    // Immediately flush for completion events (before card gets deleted from activeCalls)
+    flushStatusUpdates(activeCalls);
+  } else if (!updateScheduled) {
+    // Schedule batch update if not already scheduled
     updateScheduled = true;
     requestAnimationFrame(() => {
       flushStatusUpdates(activeCalls);
@@ -249,7 +258,11 @@ export function updateFunctionCallStatus(activeCalls, callId, status, data = {})
 function flushStatusUpdates(activeCalls) {
   for (const [callId, { status, data }] of pendingUpdates.entries()) {
     const card = activeCalls.get(callId);
-    if (!card) continue;
+    // Skip if card doesn't exist or has no DOM element
+    if (!card || !card.element) {
+      console.warn("[FunctionCard] flushStatusUpdates: No card element for", callId);
+      continue;
+    }
 
     const statusDiv = card.element.querySelector(".function-status");
     if (statusDiv) {
@@ -258,14 +271,16 @@ function flushStatusUpdates(activeCalls) {
     }
 
     // Update card styling based on status
-    if (status === "thinking" || status === "executing") {
+    console.log("[FunctionCard] Updating status:", { callId, status, hasElement: !!card.element });
+    if (status === "thinking" || status === "executing" || status === "executing...") {
       card.element.className =
         card.element.dataset.expanded === "true"
           ? "function-call-card executing expanded"
           : "function-call-card executing";
-    } else if (status === "completed") {
+    } else if (status === "completed" || status === "success") {
       card.element.className =
         card.element.dataset.expanded === "true" ? "function-call-card success expanded" : "function-call-card success";
+      console.log("[FunctionCard] Set success class for", callId);
     } else if (status === "error") {
       card.element.className =
         card.element.dataset.expanded === "true" ? "function-call-card error expanded" : "function-call-card error";
@@ -356,7 +371,8 @@ function flushStatusUpdates(activeCalls) {
  */
 export function updateFunctionArguments(activeCalls, argumentsBuffer, callId, delta, isDone = false) {
   const card = activeCalls.get(callId);
-  if (!card) return;
+  // Skip if card doesn't exist or has no DOM element
+  if (!card || !card.element) return;
 
   // Initialize buffer for this call if needed
   if (!argumentsBuffer.has(callId)) {
