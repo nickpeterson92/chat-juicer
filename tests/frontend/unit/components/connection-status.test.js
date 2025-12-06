@@ -3,7 +3,8 @@
  * Phase 4 State Management Migration
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { globalLifecycleManager } from "@/core/lifecycle-manager.js";
 import { AppState } from "@/core/state.js";
 import { ConnectionStatus } from "@/ui/components/connection-status.js";
 
@@ -49,6 +50,11 @@ describe("ConnectionStatus", () => {
   beforeEach(() => {
     domAdapter = new MockDOMAdapter();
     appState = new AppState();
+    globalLifecycleManager.unmountAll();
+  });
+
+  afterEach(() => {
+    globalLifecycleManager.unmountAll();
   });
 
   describe("constructor", () => {
@@ -57,7 +63,10 @@ describe("ConnectionStatus", () => {
 
       expect(connectionStatus.dom).toBe(domAdapter);
       expect(connectionStatus.appState).toBeNull();
-      expect(connectionStatus.unsubscribers).toEqual([]);
+
+      const snapshot = globalLifecycleManager.getDebugSnapshot();
+      const entry = snapshot.components.find((c) => c.name === "ConnectionStatus");
+      expect(entry?.listeners ?? 0).toBe(0);
     });
 
     it("should initialize with appState", () => {
@@ -87,7 +96,9 @@ describe("ConnectionStatus", () => {
 
       connectionStatus.render();
 
-      expect(connectionStatus.unsubscribers).toHaveLength(1); // connection.status subscription
+      const snapshot = globalLifecycleManager.getDebugSnapshot();
+      const entry = snapshot.components.find((c) => c.name === "ConnectionStatus");
+      expect(entry?.listeners).toBe(1); // connection.status subscription
     });
   });
 
@@ -194,11 +205,15 @@ describe("ConnectionStatus", () => {
 
       connectionStatus.render();
 
-      expect(connectionStatus.unsubscribers).toHaveLength(1);
+      const snapshotBefore = globalLifecycleManager.getDebugSnapshot();
+      const entryBefore = snapshotBefore.components.find((c) => c.name === "ConnectionStatus");
+      expect(entryBefore?.listeners).toBe(1);
 
       connectionStatus.destroy();
 
-      expect(connectionStatus.unsubscribers).toEqual([]);
+      const snapshotAfter = globalLifecycleManager.getDebugSnapshot();
+      const entryAfter = snapshotAfter.components.find((c) => c.name === "ConnectionStatus");
+      expect(entryAfter).toBeUndefined();
     });
 
     it("should remove DOM element", () => {

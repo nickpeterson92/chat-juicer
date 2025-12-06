@@ -3,7 +3,8 @@
  * Phase 4 State Management Migration
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { globalLifecycleManager } from "@/core/lifecycle-manager.js";
 import { AppState } from "@/core/state.js";
 import { InputArea } from "@/ui/components/input-area.js";
 
@@ -22,6 +23,11 @@ describe("InputArea", () => {
 
     onSendCallback = vi.fn();
     appState = new AppState();
+    globalLifecycleManager.unmountAll();
+  });
+
+  afterEach(() => {
+    globalLifecycleManager.unmountAll();
   });
 
   describe("constructor", () => {
@@ -32,7 +38,10 @@ describe("InputArea", () => {
       expect(inputArea.sendButton).toBe(sendButton);
       expect(inputArea.onSendCallback).toBe(onSendCallback);
       expect(inputArea.appState).toBeNull();
-      expect(inputArea.unsubscribers).toEqual([]);
+
+      const snapshot = globalLifecycleManager.getDebugSnapshot();
+      const entry = snapshot.components.find((c) => c.name === "InputArea");
+      expect(entry?.listeners ?? 0).toBe(0);
     });
 
     it("should initialize with appState", () => {
@@ -41,7 +50,9 @@ describe("InputArea", () => {
       });
 
       expect(inputArea.appState).toBe(appState);
-      expect(inputArea.unsubscribers).toHaveLength(1); // isStreaming subscription
+      const snapshot = globalLifecycleManager.getDebugSnapshot();
+      const entry = snapshot.components.find((c) => c.name === "InputArea");
+      expect(entry?.listeners).toBe(1); // isStreaming subscription
     });
 
     it("should throw error without required elements", () => {
@@ -142,11 +153,15 @@ describe("InputArea", () => {
         appState,
       });
 
-      expect(inputArea.unsubscribers).toHaveLength(1);
+      const snapshotBefore = globalLifecycleManager.getDebugSnapshot();
+      const entryBefore = snapshotBefore.components.find((c) => c.name === "InputArea");
+      expect(entryBefore?.listeners).toBe(1);
 
       inputArea.destroy();
 
-      expect(inputArea.unsubscribers).toEqual([]);
+      const snapshotAfter = globalLifecycleManager.getDebugSnapshot();
+      const entryAfter = snapshotAfter.components.find((c) => c.name === "InputArea");
+      expect(entryAfter).toBeUndefined();
     });
 
     it("should work without appState", () => {

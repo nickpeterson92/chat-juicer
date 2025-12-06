@@ -3,7 +3,8 @@
  * Phase 4 State Management Migration
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { globalLifecycleManager } from "@/core/lifecycle-manager.js";
 import { AppState } from "@/core/state.js";
 import { ChatContainer } from "@/ui/components/chat-container.js";
 
@@ -31,6 +32,11 @@ describe("ChatContainer", () => {
 
     // Reset mocks
     vi.clearAllMocks();
+    globalLifecycleManager.unmountAll();
+  });
+
+  afterEach(() => {
+    globalLifecycleManager.unmountAll();
   });
 
   describe("constructor", () => {
@@ -39,8 +45,11 @@ describe("ChatContainer", () => {
 
       expect(chatContainer.element).toBe(containerElement);
       expect(chatContainer.appState).toBeNull();
-      expect(chatContainer.unsubscribers).toEqual([]);
       expect(chatContainer.currentStreamingMessage).toBeNull();
+
+      const snapshot = globalLifecycleManager.getDebugSnapshot();
+      const entry = snapshot.components.find((c) => c.name === "ChatContainer");
+      expect(entry?.listeners ?? 0).toBe(0);
     });
 
     it("should initialize with appState", () => {
@@ -49,9 +58,10 @@ describe("ChatContainer", () => {
       });
 
       expect(chatContainer.appState).toBe(appState);
+      const snapshot = globalLifecycleManager.getDebugSnapshot();
+      const entry = snapshot.components.find((c) => c.name === "ChatContainer");
       // Should have registered 3 subscriptions: currentAssistant, assistantBuffer, isStreaming
-      expect(chatContainer.unsubscribers).toHaveLength(3);
-      expect(chatContainer.unsubscribers.every((fn) => typeof fn === "function")).toBe(true);
+      expect(entry?.listeners).toBe(3);
     });
 
     it("should throw error without element", () => {
@@ -185,11 +195,13 @@ describe("ChatContainer", () => {
       });
 
       // Add a mock subscription
-      chatContainer.unsubscribers.push(() => {});
+      globalLifecycleManager.addUnsubscriber(chatContainer, () => {});
 
       chatContainer.destroy();
 
-      expect(chatContainer.unsubscribers).toEqual([]);
+      const snapshot = globalLifecycleManager.getDebugSnapshot();
+      const entry = snapshot.components.find((c) => c.name === "ChatContainer");
+      expect(entry).toBeUndefined();
     });
 
     it("should clear streaming message reference", () => {
@@ -217,7 +229,9 @@ describe("ChatContainer", () => {
       });
 
       expect(chatContainer.appState).toBe(appState);
-      expect(chatContainer.unsubscribers).toHaveLength(3);
+      const snapshot = globalLifecycleManager.getDebugSnapshot();
+      const entry = snapshot.components.find((c) => c.name === "ChatContainer");
+      expect(entry?.listeners).toBe(3);
     });
   });
 });
