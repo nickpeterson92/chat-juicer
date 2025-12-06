@@ -72,11 +72,10 @@ export function mount(component, name, lifecycleManager) {
     try {
       component.onMount();
     } catch (err) {
-      console.error(`[ComponentLifecycle] onMount error in ${name}:`, err);
+      console.error(`ComponentLifecycle onMount error in ${name}:`, err);
     }
   }
 
-  console.log(`[ComponentLifecycle] Mounted: ${name} (${componentId})`);
   return componentId;
 }
 
@@ -96,7 +95,7 @@ export function unmount(component, lifecycleManager) {
     try {
       component.onUnmount();
     } catch (err) {
-      console.error(`[ComponentLifecycle] onUnmount error:`, err);
+      console.error("ComponentLifecycle onUnmount error:", err);
     }
   }
 
@@ -107,8 +106,6 @@ export function unmount(component, lifecycleManager) {
   delete component._lifecycle;
   delete component.setTimeout;
   delete component.clearTimer;
-
-  console.log("[ComponentLifecycle] Component unmounted");
 }
 
 /**

@@ -10,12 +10,10 @@
  */
 export function updateChatModelSelector(session) {
   if (!session) {
-    console.log("⚠️ No session provided to updateChatModelSelector");
     return;
   }
 
   const { model, reasoning_effort } = session;
-  console.log("📝 Updating chat model selector:", { model, reasoning_effort });
 
   // Get ModelSelector instance from InputArea component
   const inputArea = window.app?.components?.inputArea;
@@ -25,9 +23,9 @@ export function updateChatModelSelector(session) {
     // Use ModelSelector's updateSelection method
     modelSelector.updateSelection(model, reasoning_effort);
   } else {
-    console.warn("⚠️ ModelSelector instance not found, falling back to DOM manipulation");
+    console.warn("ModelSelector instance not found, falling back to DOM manipulation");
 
-    // Fallback: Direct DOM manipulation (for compatibility during transition)
+    // Fallback: Direct DOM manipulation (deprecated - for compatibility)
     const modelCards = document.querySelectorAll("#chat-model-selector .model-card");
     modelCards.forEach((card) => {
       const wrapper = card.closest(".model-card-wrapper");
@@ -62,6 +60,4 @@ export function updateChatModelSelector(session) {
       });
     }
   }
-
-  console.log("✅ Chat model selector updated");
 }

@@ -68,7 +68,6 @@ export class LifecycleManager {
     // Store reverse lookup
     this.componentIds.set(component, componentId);
 
-    console.log(`[Lifecycle] Registered component: ${componentId}`);
     return componentId;
   }
 
@@ -157,11 +156,6 @@ export class LifecycleManager {
       return;
     }
 
-    console.log(`[Lifecycle] Unmounting component: ${componentId}`, {
-      timers: entry.timers.size,
-      listeners: entry.unsubscribers.size,
-    });
-
     // Clear all timers
     for (const timerId of entry.timers) {
       window.clearTimeout(timerId);
@@ -184,16 +178,12 @@ export class LifecycleManager {
     // Remove from registry
     this.components.delete(componentId);
     this.componentIds.delete(component);
-
-    console.log(`[Lifecycle] Component unmounted: ${componentId}`);
   }
 
   /**
    * Unmount all registered components
    */
   unmountAll() {
-    console.log(`[Lifecycle] Unmounting all components (${this.components.size} total)`);
-
     // Copy keys to avoid mutation during iteration
     const componentIds = Array.from(this.components.keys());
 

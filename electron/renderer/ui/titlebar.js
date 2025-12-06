@@ -21,12 +21,8 @@ export function initializeTitlebar() {
 
   // On macOS, use native traffic lights - no custom titlebar needed
   if (isMac) {
-    console.log("[Titlebar] Using native macOS traffic lights");
     return;
   }
-
-  // On Windows/Linux, create custom titlebar
-  console.log(`[Titlebar] Creating custom titlebar for ${platform}`);
 
   // Mount titlebar component with lifecycle management
   ComponentLifecycle.mount(titlebarComponent, "Titlebar", globalLifecycleManager);
@@ -69,8 +65,6 @@ export function initializeTitlebar() {
 
   // Update maximize icon based on window state
   updateMaximizeIcon();
-
-  console.log("[Titlebar] Custom titlebar created successfully");
 }
 
 /**
@@ -161,5 +155,4 @@ function _updateTitle(title) {
  */
 function _cleanupTitlebar() {
   // Custom titlebar is part of DOM and will be cleaned up automatically
-  console.log("[Titlebar] Titlebar cleanup (no action needed for custom titlebar)");
 }

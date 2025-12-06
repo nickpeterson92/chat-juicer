@@ -15,8 +15,6 @@ import { getCorePlugins, PluginRegistry } from "../../plugins/index.js";
  * @returns {Promise<import('../types.js').PluginsPhaseResult>}
  */
 export async function initializePlugins({ eventBus, appState, services, adapters, elements, components }) {
-  console.log("Phase 6: Initializing plugins...");
-
   try {
     // Build app object
     const app = {
@@ -35,14 +33,12 @@ export async function initializePlugins({ eventBus, appState, services, adapters
 
     // Expose globally IMMEDIATELY (before plugins need it)
     window.app = app;
-    console.log("  ✓ window.app exposed");
 
     // Initialize plugin registry
     const pluginRegistry = new PluginRegistry(app);
     app.pluginRegistry = pluginRegistry;
 
     // Install core plugins
-    console.log("  Installing core plugins...");
     const corePlugins = getCorePlugins();
     const pluginResults = [];
 
@@ -50,15 +46,11 @@ export async function initializePlugins({ eventBus, appState, services, adapters
       try {
         await pluginRegistry.register(plugin);
         pluginResults.push({ name: plugin.name, status: "success" });
-        console.log(`    ✓ ${plugin.name}`);
       } catch (error) {
         pluginResults.push({ name: plugin.name, status: "error", error: error.message });
-        console.error(`    ✗ ${plugin.name}:`, error.message);
+        console.error(`Plugin ${plugin.name} failed:`, error.message);
       }
     }
-
-    const successCount = pluginResults.filter((r) => r.status === "success").length;
-    console.log(`  ✓ ${successCount}/${corePlugins.length} core plugins installed`);
 
     return {
       pluginRegistry,

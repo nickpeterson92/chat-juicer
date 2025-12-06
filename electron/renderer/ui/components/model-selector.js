@@ -67,8 +67,6 @@ export class ModelSelector {
 
     // Update initial label
     this.updateSelectedLabel();
-
-    console.log("✅ ModelSelector initialized with", this.models.length, "models");
   }
 
   /**
@@ -482,11 +480,8 @@ export class ModelSelector {
   async syncToBackend(model, reasoningEffort) {
     const currentSessionId = this.sessionService?.getCurrentSessionId();
     if (!currentSessionId) {
-      console.log("⚠️ No active session, model change ignored");
       return;
     }
-
-    console.log("🔄 Updating session config:", { model, reasoning_effort: reasoningEffort });
 
     try {
       const response = await this.ipcAdapter.sendSessionCommand("update_config", {
@@ -495,13 +490,11 @@ export class ModelSelector {
         reasoning_effort: reasoningEffort,
       });
 
-      if (response?.session_id) {
-        console.log("✅ Session config updated:", { model, reasoning_effort: reasoningEffort });
-      } else {
-        console.error("❌ Failed to update config:", response?.error);
+      if (!response?.session_id) {
+        console.error("Failed to update config:", response?.error);
       }
     } catch (error) {
-      console.error("❌ Error updating config:", error);
+      console.error("Error updating config:", error);
     }
   }
 
@@ -533,8 +526,6 @@ export class ModelSelector {
    * @param {string} reasoningEffort - Reasoning effort to select
    */
   updateSelection(model, reasoningEffort) {
-    console.log("📝 Updating ModelSelector:", { model, reasoning_effort: reasoningEffort });
-
     // Update model card selection
     const modelCards = this.container.querySelectorAll(".model-card");
     modelCards.forEach((card) => {
@@ -565,7 +556,5 @@ export class ModelSelector {
 
     // Update label
     this.updateSelectedLabel();
-
-    console.log("✅ ModelSelector updated");
   }
 }

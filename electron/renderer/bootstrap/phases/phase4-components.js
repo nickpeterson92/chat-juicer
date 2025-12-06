@@ -18,8 +18,6 @@ import { setupScrollDetection } from "../../utils/scroll-utils.js";
  * @returns {Promise<import('../types.js').ComponentsPhaseResult>}
  */
 export async function initializeComponents({ elements, appState, services, ipcAdapter }) {
-  console.log("📦 Phase 4: Initializing components...");
-
   try {
     // Import view manager for sendMessage
     const { showChatView } = await import("../../managers/view-manager.js");
@@ -31,14 +29,12 @@ export async function initializeComponents({ elements, appState, services, ipcAd
     // This must be defined before InputArea initialization
     async function sendMessage(message, clearInput) {
       if (!message || !message.trim()) {
-        console.log("Empty message, ignoring");
         return;
       }
 
       try {
         // Switch to chat view if on welcome page
         if (document.body.classList.contains("view-welcome")) {
-          console.log("On welcome page, switching to chat view");
           await showChatView(elements, appState);
         }
 
@@ -46,18 +42,15 @@ export async function initializeComponents({ elements, appState, services, ipcAd
         if (components.chatContainer) {
           components.chatContainer.addUserMessage(message.trim());
         } else {
-          console.error("⚠️ ChatContainer component not available");
+          console.error("ChatContainer component not available");
         }
 
         // Send via MessageService using SessionService
-        console.log("Sending message via MessageService...");
         const currentSessionId = services.sessionService.getCurrentSessionId();
         const sendResult = await services.messageService.sendMessage(message.trim(), currentSessionId);
 
-        if (sendResult.success) {
-          console.log("✅ Message sent successfully");
-        } else {
-          console.error("❌ Message send failed:", sendResult.error);
+        if (!sendResult.success) {
+          console.error("Message send failed:", sendResult.error);
           alert(`Failed to send message: ${sendResult.error}`);
         }
 
@@ -81,11 +74,9 @@ export async function initializeComponents({ elements, appState, services, ipcAd
     components.chatContainer = new ChatContainer(document.getElementById("chat-container"), {
       appState,
     });
-    console.log("  ✓ ChatContainer initialized");
 
     // Setup scroll detection to prevent scroll fighting during streaming
     setupScrollDetection(components.chatContainer.getElement());
-    console.log("  ✓ Scroll detection enabled");
 
     components.filePanel = new FilePanel(
       document.getElementById("files-panel"),
@@ -98,7 +89,6 @@ export async function initializeComponents({ elements, appState, services, ipcAd
         appState,
       }
     );
-    console.log("  ✓ FilePanel initialized");
 
     // Initialize InputArea with sendMessage callback
     const sendBtn = document.getElementById("send-btn");
@@ -113,9 +103,8 @@ export async function initializeComponents({ elements, appState, services, ipcAd
         getModelConfig: null, // Will be injected after model config loads
         appState,
       });
-      console.log("  ✓ InputArea initialized with sendMessage callback");
     } else {
-      console.warn("  InputArea not initialized (missing send-btn or user-input)");
+      console.warn("InputArea not initialized (missing send-btn or user-input)");
       components.inputArea = null;
     }
 
@@ -127,7 +116,7 @@ export async function initializeComponents({ elements, appState, services, ipcAd
       sendMessage, // Export for use in Phase 5 (event handlers)
     };
   } catch (error) {
-    console.error("❌ Phase 4 failed:", error);
+    console.error("Phase 4 failed:", error);
     throw new Error(`Component initialization failed: ${error.message}`);
   }
 }

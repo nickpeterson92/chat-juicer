@@ -13,12 +13,9 @@
  * @returns {Promise<import('../types.js').DataLoadingPhaseResult>}
  */
 export async function loadInitialData({ elements, appState, services, components, ipcAdapter, updateSessionsList }) {
-  console.log("📦 Phase 7: Loading initial data...");
-
   try {
     // 1. Send renderer ready signal
     ipcAdapter.send("renderer-ready");
-    console.log("  ✓ Renderer ready signal sent");
 
     // 2. Load model config metadata (prefetch for instant selectors)
     let cachedModelConfig = null;
@@ -40,11 +37,9 @@ export async function loadInitialData({ elements, appState, services, components
 
         // Cache in appState for welcome page
         appState.setState("ui.cachedModelConfig", cachedModelConfig);
-
-        console.log("  ✓ Model config loaded:", cachedModelConfig.models?.length || 0, "models");
       }
     } catch (error) {
-      console.warn("  ⚠️ Failed to load model config (non-critical):", error.message);
+      console.warn("Failed to load model config (non-critical):", error.message);
       // Non-critical - continue without model config
     }
 
@@ -58,32 +53,28 @@ export async function loadInitialData({ elements, appState, services, components
         // Update sessions list UI
         updateSessionsList(sessions);
 
-        console.log("  ✓ Loaded", sessions.length, "sessions");
-
         // Load files for active session
         const currentSessionId = services.sessionService.getCurrentSessionId();
         if (currentSessionId && components.filePanel) {
           components.filePanel.setSession(currentSessionId);
           components.filePanel.loadSessionFiles();
-          console.log("  ✓ Files loaded for active session");
         }
       }
     } catch (error) {
-      console.warn("  ⚠️ Failed to load sessions (non-critical):", error.message);
+      console.warn("Failed to load sessions (non-critical):", error.message);
       // Non-critical - continue with empty session list
     }
 
     // 4. Show welcome page
     const { showWelcomeView } = await import("../../managers/view-manager.js");
     await showWelcomeView(elements, appState);
-    console.log("  ✓ Welcome view initialized");
 
     return {
       sessions,
       modelConfig: cachedModelConfig,
     };
   } catch (error) {
-    console.error("❌ Phase 7 failed:", error);
+    console.error("Phase 7 failed:", error);
     throw new Error(`Data loading failed: ${error.message}`);
   }
 }

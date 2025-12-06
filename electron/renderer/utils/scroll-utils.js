@@ -85,8 +85,6 @@ export function setupScrollDetection(container) {
 
   // Listen for user scroll events
   container.addEventListener("scroll", () => handleUserScroll(container), { passive: true });
-
-  console.log("[ScrollUtils] Scroll detection enabled for container");
 }
 
 /**
@@ -104,18 +102,11 @@ export function scheduleScroll(container, options = {}) {
   const { force = false, streaming = false } = options;
 
   // Check if user is actively scrolling (prevents scroll fighting)
-  if (!force && userScrolling.get(container)) {
-    console.log("[ScrollUtils] Smart scroll: Skipping auto-scroll - user is actively scrolling");
-    return;
-  }
+  if (!force && userScrolling.get(container)) return;
 
   // Only auto-scroll if user is near bottom (or forced)
   // Use larger threshold during streaming to handle large content jumps
-  if (!force && !isNearBottom(container, streaming)) {
-    const threshold = streaming ? STREAMING_THRESHOLD : SCROLL_THRESHOLD;
-    console.log(`[ScrollUtils] Smart scroll: Skipping auto-scroll - user is reading above (threshold: ${threshold}px)`);
-    return;
-  }
+  if (!force && !isNearBottom(container, streaming)) return;
 
   // Update state to latest call's values (last caller wins)
   // This is consistent with scrollTarget and ensures the most recent intent is honored
@@ -142,11 +133,6 @@ export function scheduleScroll(container, options = {}) {
           }
         }, 50);
 
-        if (scrollForced) {
-          console.log("[ScrollUtils] Forced scroll to bottom");
-        } else if (scrollStreaming) {
-          console.log("[ScrollUtils] Streaming scroll (adaptive threshold)");
-        }
         scrollTarget = null;
         scrollForced = false;
         scrollStreaming = false;
