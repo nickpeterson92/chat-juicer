@@ -26,6 +26,16 @@ export class FileService {
    * @param {Object} dependencies.appState - Application state manager
    */
   constructor({ ipcAdapter, storageAdapter, appState }) {
+    if (!appState) {
+      throw new Error("FileService requires appState (state manager) in constructor");
+    }
+    if (!ipcAdapter) {
+      throw new Error("FileService requires ipcAdapter in constructor");
+    }
+    if (!storageAdapter) {
+      throw new Error("FileService requires storageAdapter in constructor");
+    }
+
     this.ipc = ipcAdapter;
     this.storage = storageAdapter;
     this.appState = appState;

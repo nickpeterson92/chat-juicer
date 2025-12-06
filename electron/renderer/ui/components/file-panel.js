@@ -13,8 +13,10 @@ export class FilePanel {
    * @param {HTMLElement} refreshButton - Refresh button (#refresh-files-btn)
    * @param {HTMLElement} sourcesTab - Sources tab button (#tab-sources)
    * @param {HTMLElement} outputTab - Output tab button (#tab-output)
+   * @param {Object} options - Optional configuration
+   * @param {Object} options.appState - AppState instance for reactive state management
    */
-  constructor(panelElement, toggleButton, filesContainer, refreshButton, sourcesTab, outputTab) {
+  constructor(panelElement, toggleButton, filesContainer, refreshButton, sourcesTab, outputTab, options = {}) {
     if (!panelElement || !filesContainer) {
       throw new Error("FilePanel requires panel and container elements");
     }
@@ -27,7 +29,12 @@ export class FilePanel {
     this.outputTab = outputTab;
     this.currentSessionId = null;
 
+    // AppState integration (optional)
+    this.appState = options.appState || null;
+    this.unsubscribers = [];
+
     this.setupEventListeners();
+    this.setupStateSubscriptions();
   }
 
   /**
@@ -56,6 +63,22 @@ export class FilePanel {
         this.switchTab(tab);
       });
     }
+  }
+
+  /**
+   * Setup AppState subscriptions
+   * @private
+   */
+  setupStateSubscriptions() {
+    if (!this.appState) return;
+
+    // Subscribe to current session changes for auto-refresh
+    const unsubscribeSession = this.appState.subscribe("session.current", (sessionId) => {
+      console.log("FilePanel detected session change:", sessionId);
+      this.setSession(sessionId);
+    });
+
+    this.unsubscribers.push(unsubscribeSession);
   }
 
   /**
@@ -278,10 +301,30 @@ export class FilePanel {
 
   /**
    * Get current session ID
+   * Reads from AppState if available, falls back to internal state
    *
    * @returns {string|null} Current session ID
    */
   getCurrentSession() {
+    if (this.appState) {
+      return this.appState.getState("session.current");
+    }
     return this.currentSessionId;
+  }
+
+  /**
+   * Destroy component and clean up subscriptions
+   */
+  destroy() {
+    // Close all file handles first
+    this.closeAllHandles();
+
+    // Clean up AppState subscriptions
+    if (this.unsubscribers) {
+      this.unsubscribers.forEach((unsub) => {
+        unsub();
+      });
+      this.unsubscribers = [];
+    }
   }
 }

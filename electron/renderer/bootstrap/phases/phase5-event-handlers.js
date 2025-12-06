@@ -107,23 +107,25 @@ export async function initializeEventHandlers({
     // ======================
 
     // Bind ui.aiThinkingActive to DOM
-    stateUnsubscribers.push(
-      appState.subscribe("ui.aiThinkingActive", (active) => {
-        if (elements.aiThinking) {
-          elements.aiThinking.classList.toggle("active", active);
-        }
-      })
-    );
+    const updateAiThinking = (active) => {
+      if (elements.aiThinking) {
+        elements.aiThinking.classList.toggle("active", active);
+      }
+    };
+    // Apply initial state immediately
+    updateAiThinking(appState.getState("ui.aiThinkingActive"));
+    stateUnsubscribers.push(appState.subscribe("ui.aiThinkingActive", updateAiThinking));
 
     // Bind ui.welcomeFilesSectionVisible to DOM
-    stateUnsubscribers.push(
-      appState.subscribe("ui.welcomeFilesSectionVisible", (visible) => {
-        const welcomeFilesSection = document.getElementById("welcome-files-section");
-        if (welcomeFilesSection) {
-          welcomeFilesSection.style.display = visible ? "block" : "none";
-        }
-      })
-    );
+    const updateWelcomeFilesSection = (visible) => {
+      const welcomeFilesSection = document.getElementById("welcome-files-section");
+      if (welcomeFilesSection) {
+        welcomeFilesSection.style.display = visible ? "block" : "none";
+      }
+    };
+    // Apply initial state immediately
+    updateWelcomeFilesSection(appState.getState("ui.welcomeFilesSectionVisible"));
+    stateUnsubscribers.push(appState.subscribe("ui.welcomeFilesSectionVisible", updateWelcomeFilesSection));
 
     console.log("  ✓ Reactive DOM bindings registered");
 
@@ -520,7 +522,12 @@ export async function initializeEventHandlers({
 
     // Cleanup function
     const cleanup = () => {
-      console.log("🧹 Cleaning up event handlers...");
+      console.log("Cleaning up event handlers...");
+      // Clear any pending drop zone timer
+      if (hideDropZoneTimer) {
+        clearTimeout(hideDropZoneTimer);
+        hideDropZoneTimer = null;
+      }
       // Remove DOM event listeners
       for (const { element, event, handler } of listeners) {
         element?.removeEventListener(event, handler);

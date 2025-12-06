@@ -15,13 +15,33 @@ import { clearFunctionCards } from "../function-card-ui.js";
 export class ChatContainer {
   /**
    * @param {HTMLElement} element - Existing chat container element (#chat-container)
+   * @param {Object} options - Optional configuration
+   * @param {Object} options.appState - AppState instance for reactive state management
    */
-  constructor(element) {
+  constructor(element, options = {}) {
     if (!element) {
       throw new Error("ChatContainer requires an existing DOM element");
     }
     this.element = element;
     this.currentStreamingMessage = null;
+
+    // AppState integration (optional)
+    this.appState = options.appState || null;
+    this.unsubscribers = [];
+
+    this.setupStateSubscriptions();
+  }
+
+  /**
+   * Setup AppState subscriptions
+   * @private
+   */
+  setupStateSubscriptions() {
+    if (!this.appState) return;
+
+    // Subscribe to relevant message state if needed in the future
+    // For now, ChatContainer is primarily controlled imperatively via its methods
+    // which are called by message handlers that already use AppState
   }
 
   /**
@@ -122,6 +142,22 @@ export class ChatContainer {
    */
   getElement() {
     return this.element;
+  }
+
+  /**
+   * Destroy component and clean up subscriptions
+   */
+  destroy() {
+    // Clean up AppState subscriptions
+    if (this.unsubscribers) {
+      this.unsubscribers.forEach((unsub) => {
+        unsub();
+      });
+      this.unsubscribers = [];
+    }
+
+    // Clear current streaming reference
+    this.currentStreamingMessage = null;
   }
 }
 

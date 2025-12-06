@@ -62,7 +62,8 @@ export function registerMessageHandlers(context) {
   createHandler("assistant_start", (_message) => {
     // Track Python status - streaming started
     appState.setState("python.status", "busy_streaming");
-    console.log("🔄 Python status: busy_streaming");
+    appState.setState("message.isStreaming", true);
+    console.log("Python status: busy_streaming");
 
     // Hide AI thinking indicator
     appState.setState("ui.aiThinkingActive", false);
@@ -109,11 +110,12 @@ export function registerMessageHandlers(context) {
 
     // Track Python status - streaming ended
     appState.setState("python.status", "idle");
-    console.log("✅ Python status: idle");
+    appState.setState("message.isStreaming", false);
+    console.log("Python status: idle");
 
     // Process queued commands
     if (ipcAdapter && ipcAdapter.commandQueue.length > 0) {
-      console.log("📦 Processing queued commands after streaming...");
+      console.log("Processing queued commands after streaming...");
       await ipcAdapter.processQueue();
     }
 
@@ -296,7 +298,7 @@ export function registerMessageHandlers(context) {
     if (window.components?.chatContainer) {
       window.components.chatContainer.addSystemMessage(content);
     } else {
-      console.error("⚠️ ChatContainer component not available - message not displayed");
+      console.error("ChatContainer component not available - message not displayed");
     }
 
     globalEventBus.emit("analytics:event", {
@@ -313,7 +315,7 @@ export function registerMessageHandlers(context) {
     if (window.components?.chatContainer) {
       window.components.chatContainer.addErrorMessage(content);
     } else {
-      console.error("⚠️ ChatContainer component not available - message not displayed");
+      console.error("ChatContainer component not available - message not displayed");
     }
 
     globalEventBus.emit("error:rate_limit", {

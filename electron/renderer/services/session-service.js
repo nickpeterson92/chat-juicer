@@ -31,6 +31,16 @@ export class SessionService {
    * @param {Object} dependencies.appState - Application state manager
    */
   constructor({ ipcAdapter, storageAdapter, appState }) {
+    if (!appState) {
+      throw new Error("SessionService requires appState (state manager) in constructor");
+    }
+    if (!ipcAdapter) {
+      throw new Error("SessionService requires ipcAdapter in constructor");
+    }
+    if (!storageAdapter) {
+      throw new Error("SessionService requires storageAdapter in constructor");
+    }
+
     this.ipc = ipcAdapter;
     this.storage = storageAdapter;
     this.appState = appState;
@@ -389,8 +399,14 @@ export class SessionService {
     } else {
       // Add new session
       updatedSessions = [...sessions, sessionData];
-      updatedSessions.sort((a, b) => new Date(b.last_used) - new Date(a.last_used));
     }
+
+    // Sort by last_used to ensure most recently used sessions appear first
+    const getLastUsedTimestamp = (session) => {
+      const timestamp = session?.last_used ? new Date(session.last_used).getTime() : 0;
+      return Number.isFinite(timestamp) ? timestamp : 0;
+    };
+    updatedSessions.sort((a, b) => getLastUsedTimestamp(b) - getLastUsedTimestamp(a));
 
     this.appState.setState("session.list", updatedSessions);
 

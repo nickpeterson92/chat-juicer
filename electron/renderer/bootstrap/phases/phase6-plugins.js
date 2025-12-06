@@ -16,7 +16,7 @@ import { DebugDashboard } from "../../utils/debug/index.js";
  * @returns {Promise<import('../types.js').PluginsPhaseResult>}
  */
 export async function initializePlugins({ eventBus, appState, services, adapters, elements, components }) {
-  console.log("📦 Phase 6: Initializing plugins...");
+  console.log("Phase 6: Initializing plugins...");
 
   try {
     // Build app object
@@ -43,7 +43,7 @@ export async function initializePlugins({ eventBus, appState, services, adapters
     app.pluginRegistry = pluginRegistry;
 
     // Install core plugins
-    console.log("  🔌 Installing core plugins...");
+    console.log("  Installing core plugins...");
     const corePlugins = getCorePlugins();
     const pluginResults = [];
 
@@ -67,7 +67,7 @@ export async function initializePlugins({ eventBus, appState, services, adapters
       debugDashboard = new DebugDashboard(app);
       debugDashboard.init();
       app.debug = debugDashboard;
-      console.log("  🔍 Debug dashboard initialized (window.__DEBUG__)");
+      console.log("  Debug dashboard initialized (window.__DEBUG__)");
     }
 
     return {
@@ -77,7 +77,7 @@ export async function initializePlugins({ eventBus, appState, services, adapters
       app, // Return full app object for final assembly
     };
   } catch (error) {
-    console.error("❌ Phase 6 failed:", error);
+    console.error("Phase 6 failed:", error);
     throw new Error(`Plugin initialization failed: ${error.message}`);
   }
 }
