@@ -3,6 +3,8 @@
  * Wraps existing DOM elements and manages input behavior
  */
 
+import { ComponentLifecycle } from "../../core/component-lifecycle.js";
+import { globalLifecycleManager } from "../../core/lifecycle-manager.js";
 import { ModelSelector } from "./model-selector.js";
 
 export class InputArea {
@@ -34,7 +36,10 @@ export class InputArea {
 
     // AppState integration (optional)
     this.appState = options.appState || null;
-    this.unsubscribers = [];
+
+    if (!this._lifecycle) {
+      ComponentLifecycle.mount(this, "InputArea", globalLifecycleManager);
+    }
 
     this.setupEventListeners();
     this.setupStateSubscriptions();
@@ -45,18 +50,20 @@ export class InputArea {
    * @private
    */
   setupEventListeners() {
+    const addDOMListener = (element, event, handler, options) => {
+      if (!element) return;
+      element.addEventListener(event, handler, options);
+      globalLifecycleManager.addUnsubscriber(this, () => element.removeEventListener(event, handler, options));
+    };
+
     // Send button click
-    this.sendButton.addEventListener("click", () => {
-      this.handleSend();
-    });
+    addDOMListener(this.sendButton, "click", () => this.handleSend());
 
     // Enter key (Shift+Enter for new line)
-    this.textarea.addEventListener("keydown", (e) => {
-      this.handleKeyDown(e);
-    });
+    addDOMListener(this.textarea, "keydown", (e) => this.handleKeyDown(e));
 
     // Auto-resize on input + update send button state
-    this.textarea.addEventListener("input", () => {
+    addDOMListener(this.textarea, "input", () => {
       this.adjustHeight();
       this.updateSendButtonState();
     });
@@ -81,7 +88,7 @@ export class InputArea {
       }
     });
 
-    this.unsubscribers.push(unsubscribeStreaming);
+    globalLifecycleManager.addUnsubscriber(this, unsubscribeStreaming);
   }
 
   /**
@@ -275,17 +282,13 @@ export class InputArea {
    * Destroy component and clean up subscriptions
    */
   destroy() {
-    // Clean up AppState subscriptions
-    if (this.unsubscribers) {
-      this.unsubscribers.forEach((unsub) => {
-        unsub();
-      });
-      this.unsubscribers = [];
-    }
-
     // Clean up model selector
     if (this.modelSelector && typeof this.modelSelector.destroy === "function") {
       this.modelSelector.destroy();
+    }
+
+    if (this._lifecycle) {
+      ComponentLifecycle.unmount(this, globalLifecycleManager);
     }
   }
 }

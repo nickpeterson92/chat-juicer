@@ -3,7 +3,8 @@
  * Phase 4 State Management Migration
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { globalLifecycleManager } from "@/core/lifecycle-manager.js";
 import { AppState } from "@/core/state.js";
 import { loadFiles } from "@/managers/file-manager.js";
 import { FilePanel } from "@/ui/components/file-panel.js";
@@ -51,6 +52,11 @@ describe("FilePanel", () => {
 
     loadFilesMock.mockClear();
     loadFilesMock.mockResolvedValue(undefined);
+    globalLifecycleManager.unmountAll();
+  });
+
+  afterEach(() => {
+    globalLifecycleManager.unmountAll();
   });
 
   describe("constructor", () => {
@@ -59,7 +65,11 @@ describe("FilePanel", () => {
 
       expect(filePanel.panel).toBe(panelElement);
       expect(filePanel.appState).toBeNull();
-      expect(filePanel.unsubscribers).toEqual([]);
+
+      const snapshot = globalLifecycleManager.getDebugSnapshot();
+      const entry = snapshot.components.find((c) => c.name === "FilePanel");
+      // 4 DOM listeners: toggle, refresh, two tabs
+      expect(entry?.listeners ?? 0).toBe(4);
     });
 
     it("should initialize with appState", () => {
@@ -74,7 +84,10 @@ describe("FilePanel", () => {
       );
 
       expect(filePanel.appState).toBe(appState);
-      expect(filePanel.unsubscribers).toHaveLength(1); // session.current subscription
+      const snapshot = globalLifecycleManager.getDebugSnapshot();
+      const entry = snapshot.components.find((c) => c.name === "FilePanel");
+      // 5 total: 4 DOM + 1 appState subscription
+      expect(entry?.listeners).toBe(5); // session.current subscription + DOM listeners
     });
 
     it("should throw error without required elements", () => {
@@ -192,11 +205,15 @@ describe("FilePanel", () => {
         { appState }
       );
 
-      expect(filePanel.unsubscribers).toHaveLength(1);
+      const snapshotBefore = globalLifecycleManager.getDebugSnapshot();
+      const entryBefore = snapshotBefore.components.find((c) => c.name === "FilePanel");
+      expect(entryBefore?.listeners).toBe(5);
 
       filePanel.destroy();
 
-      expect(filePanel.unsubscribers).toEqual([]);
+      const snapshotAfter = globalLifecycleManager.getDebugSnapshot();
+      const entryAfter = snapshotAfter.components.find((c) => c.name === "FilePanel");
+      expect(entryAfter).toBeUndefined();
     });
 
     it("should call closeAllHandles", () => {

@@ -3,6 +3,8 @@
  * Wraps existing DOM element and delegates to chat-ui.js and function-card-ui.js utilities
  */
 
+import { ComponentLifecycle } from "../../core/component-lifecycle.js";
+import { globalLifecycleManager } from "../../core/lifecycle-manager.js";
 import {
   addMessage,
   clearChat,
@@ -26,7 +28,10 @@ export class ChatContainer {
 
     // AppState integration (optional)
     this.appState = options.appState || null;
-    this.unsubscribers = [];
+
+    if (!this._lifecycle) {
+      ComponentLifecycle.mount(this, "ChatContainer", globalLifecycleManager);
+    }
 
     this.setupStateSubscriptions();
   }
@@ -48,7 +53,7 @@ export class ChatContainer {
         this.scrollToBottom();
       }
     });
-    this.unsubscribers.push(unsubscribeCurrentAssistant);
+    globalLifecycleManager.addUnsubscriber(this, unsubscribeCurrentAssistant);
 
     // Subscribe to streaming buffer updates - update message content
     const unsubscribeAssistantBuffer = this.appState.subscribe("message.assistantBuffer", (buffer) => {
@@ -58,7 +63,7 @@ export class ChatContainer {
         this.updateStreamingMessage(buffer);
       }
     });
-    this.unsubscribers.push(unsubscribeAssistantBuffer);
+    globalLifecycleManager.addUnsubscriber(this, unsubscribeAssistantBuffer);
 
     // Subscribe to streaming state - manage streaming UI state
     const unsubscribeIsStreaming = this.appState.subscribe("message.isStreaming", (isStreaming) => {
@@ -67,7 +72,7 @@ export class ChatContainer {
         this.completeStreaming();
       }
     });
-    this.unsubscribers.push(unsubscribeIsStreaming);
+    globalLifecycleManager.addUnsubscriber(this, unsubscribeIsStreaming);
   }
 
   /**
@@ -188,16 +193,12 @@ export class ChatContainer {
    * Destroy component and clean up subscriptions
    */
   destroy() {
-    // Clean up AppState subscriptions
-    if (this.unsubscribers) {
-      this.unsubscribers.forEach((unsub) => {
-        unsub();
-      });
-      this.unsubscribers = [];
-    }
-
     // Clear current streaming reference
     this.currentStreamingMessage = null;
+
+    if (this._lifecycle) {
+      ComponentLifecycle.unmount(this, globalLifecycleManager);
+    }
   }
 }
 

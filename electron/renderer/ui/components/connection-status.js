@@ -3,6 +3,9 @@
  * Self-contained component that manages its own DOM
  */
 
+import { ComponentLifecycle } from "../../core/component-lifecycle.js";
+import { globalLifecycleManager } from "../../core/lifecycle-manager.js";
+
 export class ConnectionStatus {
   /**
    * @param {Object} domAdapter - DOM adapter for rendering
@@ -17,7 +20,10 @@ export class ConnectionStatus {
 
     // AppState integration (optional)
     this.appState = options.appState || null;
-    this.unsubscribers = [];
+
+    if (!this._lifecycle) {
+      ComponentLifecycle.mount(this, "ConnectionStatus", globalLifecycleManager);
+    }
   }
 
   /**
@@ -74,7 +80,7 @@ export class ConnectionStatus {
       }
     });
 
-    this.unsubscribers.push(unsubscribeConnection);
+    globalLifecycleManager.addUnsubscriber(this, unsubscribeConnection);
   }
 
   /**
@@ -169,18 +175,14 @@ export class ConnectionStatus {
    * Destroy the component and remove from DOM
    */
   destroy() {
-    // Clean up AppState subscriptions
-    if (this.unsubscribers) {
-      this.unsubscribers.forEach((unsub) => {
-        unsub();
-      });
-      this.unsubscribers = [];
-    }
-
     // Remove DOM element
     if (this.element) {
       this.dom.remove(this.element);
       this.element = null;
+    }
+
+    if (this._lifecycle) {
+      ComponentLifecycle.unmount(this, globalLifecycleManager);
     }
   }
 }
