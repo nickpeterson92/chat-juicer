@@ -63,7 +63,10 @@ export async function bootstrapSimple() {
     // ==========================================
     console.log("\n📦 Phase 3: Initializing services...");
     const { initializeServices } = await import("./bootstrap/phases/phase3-services.js");
-    phaseResults.services = await initializeServices(phaseResults.adapters);
+    phaseResults.services = await initializeServices({
+      ...phaseResults.adapters,
+      appState: phaseResults.stateDOM.appState,
+    });
     validatePhaseResult("services", phaseResults.services, {
       required: ["messageService", "fileService", "functionCallService", "sessionService"],
     });

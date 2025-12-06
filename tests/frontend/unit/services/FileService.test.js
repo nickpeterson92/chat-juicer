@@ -1,35 +1,41 @@
 /**
  * FileService Unit Tests
+ * Updated for Phase 2 State Management Migration
  */
 
 import { MockIPCAdapter } from "@test-helpers/MockIPCAdapter.js";
 import { MockStorageAdapter } from "@test-helpers/MockStorageAdapter.js";
 import { beforeEach, describe, expect, it } from "vitest";
+import { AppState } from "@/core/state.js";
 import { FileService } from "@/services/file-service.js";
 
 describe("FileService", () => {
   let fileService;
   let mockIPC;
   let mockStorage;
+  let appState;
 
   beforeEach(() => {
     mockIPC = new MockIPCAdapter();
     mockStorage = new MockStorageAdapter();
+    appState = new AppState();
 
     fileService = new FileService({
       ipcAdapter: mockIPC,
       storageAdapter: mockStorage,
+      appState,
     });
   });
 
   describe("constructor", () => {
-    it("should initialize with adapters", () => {
+    it("should initialize with adapters and appState", () => {
       expect(fileService.ipc).toBe(mockIPC);
       expect(fileService.storage).toBe(mockStorage);
+      expect(fileService.appState).toBe(appState);
     });
 
-    it("should initialize file state", () => {
-      expect(fileService.activeDirectory).toBeNull();
+    it("should initialize file cache and have activeDirectory in AppState", () => {
+      expect(appState.getState("files.activeDirectory")).toBeNull();
       expect(fileService.fileCache).toBeInstanceOf(Map);
     });
   });
@@ -240,7 +246,7 @@ describe("FileService", () => {
 
       expect(result.success).toBe(true);
       expect(result.files).toHaveLength(2);
-      expect(fileService.activeDirectory).toBe("sources");
+      expect(appState.getState("files.activeDirectory")).toBe("sources");
     });
 
     it("should require session ID", async () => {
@@ -386,10 +392,11 @@ describe("FileService", () => {
   });
 
   describe("getActiveDirectory", () => {
-    it("should return active directory", () => {
+    it("should return active directory from AppState", () => {
       fileService.setActiveDirectory("sources");
 
       expect(fileService.getActiveDirectory()).toBe("sources");
+      expect(appState.getState("files.activeDirectory")).toBe("sources");
     });
 
     it("should return null initially", () => {
@@ -398,21 +405,21 @@ describe("FileService", () => {
   });
 
   describe("setActiveDirectory", () => {
-    it("should set active directory", () => {
+    it("should set active directory in AppState", () => {
       fileService.setActiveDirectory("output");
 
-      expect(fileService.activeDirectory).toBe("output");
+      expect(appState.getState("files.activeDirectory")).toBe("output");
     });
   });
 
   describe("reset", () => {
-    it("should reset all service state", () => {
+    it("should reset all service state in AppState", () => {
       fileService.setActiveDirectory("sources");
       fileService.cacheFileList("sources", [{ name: "file1.txt" }]);
 
       fileService.reset();
 
-      expect(fileService.activeDirectory).toBeNull();
+      expect(appState.getState("files.activeDirectory")).toBeNull();
       expect(fileService.getCachedFileList("sources")).toBeNull();
     });
   });

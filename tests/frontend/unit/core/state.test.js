@@ -180,6 +180,10 @@ describe("AppState", () => {
       expect(appState.message).toEqual({
         currentAssistant: null,
         assistantBuffer: "",
+        isTyping: false,
+        isStreaming: false,
+        lastUser: null,
+        lastAssistant: null,
       });
     });
 

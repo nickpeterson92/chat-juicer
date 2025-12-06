@@ -2,7 +2,7 @@
  * Phase 3: Services
  * Create service layer for business operations
  *
- * Dependencies: Phase 1 (adapters)
+ * Dependencies: Phase 1 (adapters), Phase 2 (appState)
  * Outputs: MessageService, FileService, FunctionCallService, SessionService
  * Criticality: HIGH (services are core functionality)
  */
@@ -14,23 +14,26 @@ import { SessionService } from "../../services/session-service.js";
 
 /**
  * Initialize services
- * @param {import('../types.js').AdapterPhaseResult} deps - Dependencies from Phase 1
+ * @param {Object} deps - Dependencies
+ * @param {Object} deps.ipcAdapter - IPC adapter from Phase 1
+ * @param {Object} deps.storageAdapter - Storage adapter from Phase 1
+ * @param {Object} deps.appState - Application state from Phase 2
  * @returns {Promise<import('../types.js').ServicesPhaseResult>}
  * @throws {Error} If service initialization fails
  */
-export async function initializeServices({ ipcAdapter, storageAdapter }) {
+export async function initializeServices({ ipcAdapter, storageAdapter, appState }) {
   console.log("📦 Phase 3: Initializing services...");
 
   try {
     const messageService = new MessageService({ ipcAdapter, storageAdapter });
-    const fileService = new FileService({ ipcAdapter, storageAdapter });
+    const fileService = new FileService({ ipcAdapter, storageAdapter, appState });
     const functionCallService = new FunctionCallService({ ipcAdapter, storageAdapter });
-    const sessionService = new SessionService({ ipcAdapter, storageAdapter });
+    const sessionService = new SessionService({ ipcAdapter, storageAdapter, appState });
 
     console.log("  ✓ MessageService created");
-    console.log("  ✓ FileService created");
+    console.log("  ✓ FileService created (with AppState)");
     console.log("  ✓ FunctionCallService created");
-    console.log("  ✓ SessionService created");
+    console.log("  ✓ SessionService created (with AppState)");
 
     return {
       messageService,

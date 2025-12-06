@@ -15,15 +15,7 @@ import { DebugDashboard } from "../../utils/debug/index.js";
  * @param {Object} deps - Dependencies from previous phases
  * @returns {Promise<import('../types.js').PluginsPhaseResult>}
  */
-export async function initializePlugins({
-  eventBus,
-  appState,
-  services,
-  adapters,
-  elements,
-  components,
-  sessionState,
-}) {
+export async function initializePlugins({ eventBus, appState, services, adapters, elements, components }) {
   console.log("📦 Phase 6: Initializing plugins...");
 
   try {
@@ -36,7 +28,6 @@ export async function initializePlugins({
       adapters,
       elements,
       components,
-      sessionState,
       config: {
         version: "1.0.0",
         environment: import.meta.env.MODE,

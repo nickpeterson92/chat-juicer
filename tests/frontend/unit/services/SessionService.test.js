@@ -1,44 +1,50 @@
 /**
  * SessionService Unit Tests
+ * Updated for Phase 2 State Management Migration
  */
 
 import { MockIPCAdapter } from "@test-helpers/MockIPCAdapter.js";
 import { MockStorageAdapter } from "@test-helpers/MockStorageAdapter.js";
 import { beforeEach, describe, expect, it } from "vitest";
+import { AppState } from "@/core/state.js";
 import { SessionService } from "@/services/session-service.js";
 
 describe("SessionService", () => {
   let sessionService;
   let mockIPC;
   let mockStorage;
+  let appState;
 
   beforeEach(() => {
     mockIPC = new MockIPCAdapter();
     mockStorage = new MockStorageAdapter();
+    appState = new AppState();
 
     sessionService = new SessionService({
       ipcAdapter: mockIPC,
       storageAdapter: mockStorage,
+      appState,
     });
   });
 
   describe("constructor", () => {
-    it("should initialize with adapters", () => {
+    it("should initialize with adapters and appState", () => {
       expect(sessionService.ipc).toBe(mockIPC);
       expect(sessionService.storage).toBe(mockStorage);
+      expect(sessionService.appState).toBe(appState);
     });
 
-    it("should initialize session state", () => {
-      expect(sessionService.currentSessionId).toBeNull();
-      expect(sessionService.sessions).toEqual([]);
-      expect(sessionService.totalSessions).toBe(0);
-      expect(sessionService.hasMoreSessions).toBe(false);
-      expect(sessionService.isLoadingSessions).toBe(false);
+    it("should have session state in AppState", () => {
+      expect(appState.getState("session.current")).toBeNull();
+      expect(appState.getState("session.list")).toEqual([]);
+      expect(appState.getState("session.totalCount")).toBe(0);
+      expect(appState.getState("session.hasMore")).toBe(false);
+      expect(appState.getState("session.isLoading")).toBe(false);
     });
   });
 
   describe("loadSessions", () => {
-    it("should load sessions from backend", async () => {
+    it("should load sessions from backend and update AppState", async () => {
       const mockSessions = [
         { session_id: "session-1", title: "Chat 1" },
         { session_id: "session-2", title: "Chat 2" },
@@ -54,7 +60,9 @@ describe("SessionService", () => {
 
       expect(result.success).toBe(true);
       expect(result.sessions).toEqual(mockSessions);
-      expect(sessionService.sessions).toEqual(mockSessions);
+      expect(appState.getState("session.list")).toEqual(mockSessions);
+      expect(appState.getState("session.totalCount")).toBe(2);
+      expect(appState.getState("session.hasMore")).toBe(false);
     });
 
     it("should handle pagination", async () => {
@@ -88,7 +96,10 @@ describe("SessionService", () => {
       });
       await sessionService.loadSessions(1, 1);
 
-      expect(sessionService.sessions).toHaveLength(2);
+      const sessions = appState.getState("session.list");
+      expect(sessions).toHaveLength(2);
+      expect(sessions[0].session_id).toBe("session-1");
+      expect(sessions[1].session_id).toBe("session-2");
     });
 
     it("should prevent concurrent loads", async () => {
@@ -98,8 +109,8 @@ describe("SessionService", () => {
         has_more: false,
       });
 
-      // Start first load (doesn't complete yet)
-      sessionService.isLoadingSessions = true;
+      // Set loading state via AppState
+      appState.setState("session.isLoading", true);
 
       const result = await sessionService.loadSessions();
 
@@ -119,8 +130,8 @@ describe("SessionService", () => {
 
   describe("loadMoreSessions", () => {
     it("should load next page", async () => {
-      sessionService.sessions = [{ session_id: "session-1" }];
-      sessionService.hasMoreSessions = true;
+      appState.setState("session.list", [{ session_id: "session-1" }]);
+      appState.setState("session.hasMore", true);
 
       mockIPC.setResponse("session-command", {
         sessions: [{ session_id: "session-2" }],
@@ -131,11 +142,12 @@ describe("SessionService", () => {
       const result = await sessionService.loadMoreSessions();
 
       expect(result.success).toBe(true);
-      expect(sessionService.sessions).toHaveLength(2);
+      const sessions = appState.getState("session.list");
+      expect(sessions).toHaveLength(2);
     });
 
     it("should not load if no more sessions", async () => {
-      sessionService.hasMoreSessions = false;
+      appState.setState("session.hasMore", false);
 
       const result = await sessionService.loadMoreSessions();
 
@@ -144,7 +156,7 @@ describe("SessionService", () => {
   });
 
   describe("createSession", () => {
-    it("should create new session", async () => {
+    it("should create new session and update AppState", async () => {
       mockIPC.setResponse("session-command", {
         session_id: "new-session",
         title: "New Chat",
@@ -154,7 +166,7 @@ describe("SessionService", () => {
 
       expect(result.success).toBe(true);
       expect(result.sessionId).toBe("new-session");
-      expect(sessionService.currentSessionId).toBe("new-session");
+      expect(appState.getState("session.current")).toBe("new-session");
     });
 
     it("should pass all options to backend", async () => {
@@ -185,7 +197,7 @@ describe("SessionService", () => {
   });
 
   describe("switchSession", () => {
-    it("should switch to different session", async () => {
+    it("should switch to different session and update AppState", async () => {
       mockIPC.setResponse("session-command", {
         session: { session_id: "session-2" },
         full_history: [{ role: "user", content: "Hello" }],
@@ -197,11 +209,11 @@ describe("SessionService", () => {
       expect(result.success).toBe(true);
       expect(result.session.session_id).toBe("session-2");
       expect(result.fullHistory).toHaveLength(1);
-      expect(sessionService.currentSessionId).toBe("session-2");
+      expect(appState.getState("session.current")).toBe("session-2");
     });
 
     it("should reject switching to current session", async () => {
-      sessionService.currentSessionId = "session-1";
+      appState.setState("session.current", "session-1");
 
       const result = await sessionService.switchSession("session-1");
 
@@ -218,24 +230,25 @@ describe("SessionService", () => {
   });
 
   describe("deleteSession", () => {
-    it("should delete session", async () => {
-      sessionService.sessions = [{ session_id: "session-1" }, { session_id: "session-2" }];
+    it("should delete session and update AppState", async () => {
+      appState.setState("session.list", [{ session_id: "session-1" }, { session_id: "session-2" }]);
       mockIPC.setResponse("session-command", { success: true });
 
       const result = await sessionService.deleteSession("session-1");
 
       expect(result.success).toBe(true);
-      expect(sessionService.sessions).toHaveLength(1);
-      expect(sessionService.sessions[0].session_id).toBe("session-2");
+      const sessions = appState.getState("session.list");
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].session_id).toBe("session-2");
     });
 
     it("should clear current session if deleting active", async () => {
-      sessionService.currentSessionId = "session-1";
+      appState.setState("session.current", "session-1");
       mockIPC.setResponse("session-command", { success: true });
 
       await sessionService.deleteSession("session-1");
 
-      expect(sessionService.currentSessionId).toBeNull();
+      expect(appState.getState("session.current")).toBeNull();
     });
 
     it("should handle backend error response", async () => {
@@ -249,24 +262,26 @@ describe("SessionService", () => {
   });
 
   describe("renameSession", () => {
-    it("should rename session", async () => {
-      sessionService.sessions = [{ session_id: "session-1", title: "Old Title" }];
+    it("should rename session and update AppState", async () => {
+      appState.setState("session.list", [{ session_id: "session-1", title: "Old Title" }]);
       mockIPC.setResponse("session-command", { success: true });
 
       const result = await sessionService.renameSession("session-1", "New Title");
 
       expect(result.success).toBe(true);
-      expect(sessionService.sessions[0].title).toBe("New Title");
+      const sessions = appState.getState("session.list");
+      expect(sessions[0].title).toBe("New Title");
     });
 
     it("should trim title", async () => {
-      sessionService.sessions = [{ session_id: "session-1", title: "Old" }];
+      appState.setState("session.list", [{ session_id: "session-1", title: "Old" }]);
       mockIPC.setResponse("session-command", { success: true });
 
       const result = await sessionService.renameSession("session-1", "  New Title  ");
 
       expect(result.title).toBe("New Title");
-      expect(sessionService.sessions[0].title).toBe("New Title");
+      const sessions = appState.getState("session.list");
+      expect(sessions[0].title).toBe("New Title");
     });
 
     it("should reject empty title", async () => {
@@ -308,14 +323,14 @@ describe("SessionService", () => {
   });
 
   describe("clearCurrentSession", () => {
-    it("should clear current session", async () => {
-      sessionService.currentSessionId = "session-1";
+    it("should clear current session in AppState", async () => {
+      appState.setState("session.current", "session-1");
       mockIPC.setResponse("session-command", { success: true });
 
       const result = await sessionService.clearCurrentSession();
 
       expect(result.success).toBe(true);
-      expect(sessionService.currentSessionId).toBeNull();
+      expect(appState.getState("session.current")).toBeNull();
     });
   });
 
@@ -352,8 +367,8 @@ describe("SessionService", () => {
   });
 
   describe("getCurrentSessionId", () => {
-    it("should return current session ID", () => {
-      sessionService.currentSessionId = "session-1";
+    it("should return current session ID from AppState", () => {
+      appState.setState("session.current", "session-1");
 
       expect(sessionService.getCurrentSessionId()).toBe("session-1");
     });
@@ -364,22 +379,23 @@ describe("SessionService", () => {
   });
 
   describe("getSessions", () => {
-    it("should return copy of sessions array", () => {
-      sessionService.sessions = [{ session_id: "session-1" }];
+    it("should return copy of sessions array from AppState", () => {
+      const mockSessions = [{ session_id: "session-1" }];
+      appState.setState("session.list", mockSessions);
 
       const sessions = sessionService.getSessions();
 
-      expect(sessions).toEqual(sessionService.sessions);
-      expect(sessions).not.toBe(sessionService.sessions); // Copy, not reference
+      expect(sessions).toEqual(mockSessions);
+      expect(sessions).not.toBe(mockSessions); // Copy, not reference
     });
   });
 
   describe("getSession", () => {
-    it("should return session by ID", () => {
-      sessionService.sessions = [
+    it("should return session by ID from AppState", () => {
+      appState.setState("session.list", [
         { session_id: "session-1", title: "Chat 1" },
         { session_id: "session-2", title: "Chat 2" },
-      ];
+      ]);
 
       const session = sessionService.getSession("session-2");
 
@@ -395,11 +411,11 @@ describe("SessionService", () => {
   });
 
   describe("getPaginationState", () => {
-    it("should return pagination information", () => {
-      sessionService.totalSessions = 100;
-      sessionService.sessions = new Array(50);
-      sessionService.hasMoreSessions = true;
-      sessionService.isLoadingSessions = false;
+    it("should return pagination information from AppState", () => {
+      appState.setState("session.totalCount", 100);
+      appState.setState("session.list", new Array(50));
+      appState.setState("session.hasMore", true);
+      appState.setState("session.isLoading", false);
 
       const state = sessionService.getPaginationState();
 
@@ -411,19 +427,19 @@ describe("SessionService", () => {
   });
 
   describe("reset", () => {
-    it("should reset all service state", () => {
-      sessionService.currentSessionId = "session-1";
-      sessionService.sessions = [{ session_id: "session-1" }];
-      sessionService.totalSessions = 1;
-      sessionService.hasMoreSessions = true;
+    it("should reset all service state in AppState", () => {
+      appState.setState("session.current", "session-1");
+      appState.setState("session.list", [{ session_id: "session-1" }]);
+      appState.setState("session.totalCount", 1);
+      appState.setState("session.hasMore", true);
 
       sessionService.reset();
 
-      expect(sessionService.currentSessionId).toBeNull();
-      expect(sessionService.sessions).toEqual([]);
-      expect(sessionService.totalSessions).toBe(0);
-      expect(sessionService.hasMoreSessions).toBe(false);
-      expect(sessionService.isLoadingSessions).toBe(false);
+      expect(appState.getState("session.current")).toBeNull();
+      expect(appState.getState("session.list")).toEqual([]);
+      expect(appState.getState("session.totalCount")).toBe(0);
+      expect(appState.getState("session.hasMore")).toBe(false);
+      expect(appState.getState("session.isLoading")).toBe(false);
     });
   });
 });
