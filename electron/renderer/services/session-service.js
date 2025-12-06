@@ -21,7 +21,6 @@
  * State Management:
  * - All session state is now stored in AppState (single source of truth)
  * - SessionService reads/writes state via appState.getState() and appState.setState()
- * - Observer pattern is deprecated (use appState.subscribe() instead)
  */
 export class SessionService {
   /**
@@ -44,51 +43,6 @@ export class SessionService {
     this.ipc = ipcAdapter;
     this.storage = storageAdapter;
     this.appState = appState;
-
-    // DEPRECATED: Observer pattern (use appState.subscribe() instead)
-    // Kept for backwards compatibility during migration
-    this.observers = new Set();
-  }
-
-  /**
-   * Subscribe to state changes
-   * @param {Function} observer - Callback function(changeType, data, state)
-   * @returns {Function} Unsubscribe function
-   */
-  subscribe(observer) {
-    if (typeof observer !== "function") {
-      throw new TypeError("Observer must be a function");
-    }
-    this.observers.add(observer);
-
-    // Return unsubscribe function
-    return () => this.observers.delete(observer);
-  }
-
-  /**
-   * Notify all observers of state change
-   * @private
-   * @param {string} changeType - Type of change (sessions_loaded, session_created, etc.)
-   * @param {Object} data - Change-specific data
-   *
-   * @deprecated Use appState.subscribe() instead
-   */
-  _notifyObservers(changeType, data) {
-    // Read state from AppState (single source of truth)
-    const state = {
-      currentSessionId: this.appState.getState("session.current"),
-      sessions: [...this.appState.getState("session.list")],
-      totalSessions: this.appState.getState("session.totalCount"),
-      hasMoreSessions: this.appState.getState("session.hasMore"),
-    };
-
-    this.observers.forEach((observer) => {
-      try {
-        observer(changeType, data, state);
-      } catch (error) {
-        console.error("[SessionService] Observer error:", error);
-      }
-    });
   }
 
   /**
@@ -116,9 +70,6 @@ export class SessionService {
         this.appState.setState("session.list", newList);
         this.appState.setState("session.totalCount", response.total_count || newList.length);
         this.appState.setState("session.hasMore", response.has_more || false);
-
-        // Notify observers (deprecated, but kept for backwards compatibility)
-        this._notifyObservers("sessions_loaded", { offset, limit, sessions: newList });
 
         return { success: true, sessions: newList, hasMore: response.has_more || false };
       }
@@ -172,9 +123,6 @@ export class SessionService {
       if (response?.session_id) {
         this.appState.setState("session.current", response.session_id);
 
-        // Notify observers (deprecated, but kept for backwards compatibility)
-        this._notifyObservers("session_created", { sessionId: response.session_id });
-
         return {
           success: true,
           sessionId: response.session_id,
@@ -210,9 +158,6 @@ export class SessionService {
 
       if (response?.session) {
         this.appState.setState("session.current", sessionId);
-
-        // Notify observers (deprecated, but kept for backwards compatibility)
-        this._notifyObservers("session_switched", { sessionId, session: response.session });
 
         return {
           success: true,
@@ -255,9 +200,6 @@ export class SessionService {
         if (currentSessionId === sessionId) {
           this.appState.setState("session.current", null);
         }
-
-        // Notify observers (deprecated, but kept for backwards compatibility)
-        this._notifyObservers("session_deleted", { sessionId });
 
         return { success: true };
       } else if (response?.error) {
@@ -339,9 +281,6 @@ export class SessionService {
       if (response?.success) {
         this.appState.setState("session.current", null);
 
-        // Notify observers (deprecated, but kept for backwards compatibility)
-        this._notifyObservers("session_cleared", {});
-
         return { success: true };
       } else if (response?.error) {
         return { success: false, error: response.error };
@@ -409,9 +348,6 @@ export class SessionService {
     updatedSessions.sort((a, b) => getLastUsedTimestamp(b) - getLastUsedTimestamp(a));
 
     this.appState.setState("session.list", updatedSessions);
-
-    // Notify observers (deprecated, but kept for backwards compatibility)
-    this._notifyObservers("session_updated", { session: sessionData });
   }
 
   /**
