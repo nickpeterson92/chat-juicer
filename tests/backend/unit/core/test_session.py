@@ -260,6 +260,48 @@ class TestTokenAwareSQLiteSession:
         assert session.total_tokens == initial_tokens + 100
 
     @patch("agents.SQLiteSession.__init__", return_value=None)
+    @patch("agents.SQLiteSession.add_items", new_callable=AsyncMock)
+    @patch("agents.SQLiteSession.get_items", new_callable=AsyncMock)
+    async def test_add_items_requires_full_history_store(
+        self, mock_get_items: AsyncMock, mock_add_items: AsyncMock, mock_init: Mock
+    ) -> None:
+        """Writing without Layer 2 configured should raise in normal mode."""
+        mock_get_items.return_value = []
+
+        session = TokenAwareSQLiteSession(
+            session_id="chat_test",
+            db_path=":memory:",
+            model="gpt-4o",
+            full_history_store=None,
+        )
+        session.session_id = "chat_test"
+
+        with pytest.raises(RuntimeError):
+            await session.add_items([{"role": "user", "content": "hi"}])
+
+    @patch("agents.SQLiteSession.__init__", return_value=None)
+    @patch("agents.SQLiteSession.add_items", new_callable=AsyncMock)
+    @patch("agents.SQLiteSession.get_items", new_callable=AsyncMock)
+    async def test_add_items_layer2_failure_is_non_fatal(
+        self, mock_get_items: AsyncMock, mock_add_items: AsyncMock, mock_init: Mock
+    ) -> None:
+        """Layer 2 errors should be logged but not raise."""
+        mock_get_items.return_value = []
+        failing_full_history = Mock()
+        failing_full_history.save_message.side_effect = ValueError("Layer2 boom")
+
+        session = TokenAwareSQLiteSession(
+            session_id="chat_test",
+            db_path=":memory:",
+            model="gpt-4o",
+            full_history_store=failing_full_history,
+        )
+
+        await session.add_items([{"role": "user", "content": "hi"}])
+        # Layer 1 add_items should have been invoked once
+        mock_add_items.assert_awaited_once()
+
+    @patch("agents.SQLiteSession.__init__", return_value=None)
     @patch("agents.SQLiteSession.get_items", new_callable=AsyncMock)
     def test_skip_full_history_context_manager(self, mock_get_items: AsyncMock, mock_init: Mock) -> None:
         """Test skip_full_history context manager."""

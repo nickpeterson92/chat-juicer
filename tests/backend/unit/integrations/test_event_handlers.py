@@ -427,3 +427,85 @@ class TestAgentUpdatedEventHandling:
         data = json.loads(result)
         assert data["type"] == "agent_updated"
         assert data["name"] == "NewAgent"
+
+
+class TestRawResponseEventHandling:
+    """Tests for raw response event handler dispatch."""
+
+    def test_raw_response_event_missing_type_returns_none(self) -> None:
+        """Event without data.type should be ignored."""
+        from core.constants import RAW_RESPONSE_EVENT
+
+        tracker = CallTracker()
+        handlers = build_event_handlers(tracker)
+        handler = handlers[RAW_RESPONSE_EVENT]
+
+        event = Mock()
+        event.type = RAW_RESPONSE_EVENT
+        event.data = Mock()
+        event.data.type = None
+
+        assert handler(event) is None
+
+    def test_raw_response_event_unknown_type_with_delta_fallbacks(self) -> None:
+        """Unknown event types with delta fall back to assistant_delta."""
+        from core.constants import RAW_RESPONSE_EVENT
+
+        tracker = CallTracker()
+        handlers = build_event_handlers(tracker)
+        handler = handlers[RAW_RESPONSE_EVENT]
+
+        event = Mock()
+        event.type = RAW_RESPONSE_EVENT
+        event.data = Mock()
+        event.data.type = "response.unknown"
+        event.data.delta = "hi there"
+
+        result = handler(event)
+        assert result is not None
+        payload = json.loads(result)
+        assert payload["type"] == "assistant_delta"
+        assert payload["content"] == "hi there"
+
+
+class TestFunctionArgumentsEvents:
+    """Tests for function argument streaming handlers."""
+
+    def test_function_arguments_delta_event_valid(self) -> None:
+        from core.constants import RAW_RESPONSE_EVENT
+
+        tracker = CallTracker()
+        handlers = build_event_handlers(tracker)
+        handler = handlers[RAW_RESPONSE_EVENT]
+
+        event = Mock()
+        event.type = RAW_RESPONSE_EVENT
+        event.data = Mock()
+        event.data.type = "response.function_call_arguments.delta"
+        event.data.call_id = "call-1"
+        event.data.delta = '{"foo": "bar"}'
+        event.data.output_index = 2
+
+        result = handler(event)
+        assert result is not None
+        payload = json.loads(result)
+        assert payload["type"] == "function_call_arguments_delta"
+        assert payload["call_id"] == "call-1"
+        assert payload["delta"] == '{"foo": "bar"}'
+        assert payload["output_index"] == 2
+
+    def test_function_arguments_delta_event_missing_call_id_returns_none(self) -> None:
+        from core.constants import RAW_RESPONSE_EVENT
+
+        tracker = CallTracker()
+        handlers = build_event_handlers(tracker)
+        handler = handlers[RAW_RESPONSE_EVENT]
+
+        event = Mock()
+        event.type = RAW_RESPONSE_EVENT
+        event.data = Mock()
+        event.data.type = "response.function_call_arguments.delta"
+        event.data.call_id = None
+        event.data.delta = None
+
+        assert handler(event) is None
