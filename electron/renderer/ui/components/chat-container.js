@@ -3,6 +3,8 @@
  * Wraps existing DOM element and delegates to chat-ui.js and function-card-ui.js utilities
  */
 
+import { ComponentLifecycle } from "../../core/component-lifecycle.js";
+import { globalLifecycleManager } from "../../core/lifecycle-manager.js";
 import {
   addMessage,
   clearChat,
@@ -27,6 +29,10 @@ export class ChatContainer {
     // AppState integration (optional)
     this.appState = options.appState || null;
     this.unsubscribers = [];
+
+    if (!this._lifecycle) {
+      ComponentLifecycle.mount(this, "ChatContainer", globalLifecycleManager);
+    }
 
     this.setupStateSubscriptions();
   }
@@ -198,6 +204,10 @@ export class ChatContainer {
 
     // Clear current streaming reference
     this.currentStreamingMessage = null;
+
+    if (this._lifecycle) {
+      ComponentLifecycle.unmount(this, globalLifecycleManager);
+    }
   }
 }
 

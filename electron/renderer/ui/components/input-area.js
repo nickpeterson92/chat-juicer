@@ -3,6 +3,8 @@
  * Wraps existing DOM elements and manages input behavior
  */
 
+import { ComponentLifecycle } from "../../core/component-lifecycle.js";
+import { globalLifecycleManager } from "../../core/lifecycle-manager.js";
 import { ModelSelector } from "./model-selector.js";
 
 export class InputArea {
@@ -35,6 +37,11 @@ export class InputArea {
     // AppState integration (optional)
     this.appState = options.appState || null;
     this.unsubscribers = [];
+    this.domUnsubscribers = [];
+
+    if (!this._lifecycle) {
+      ComponentLifecycle.mount(this, "InputArea", globalLifecycleManager);
+    }
 
     this.setupEventListeners();
     this.setupStateSubscriptions();
@@ -45,18 +52,21 @@ export class InputArea {
    * @private
    */
   setupEventListeners() {
+    this.domUnsubscribers = this.domUnsubscribers || [];
+    const addDOMListener = (element, event, handler, options) => {
+      if (!element) return;
+      element.addEventListener(event, handler, options);
+      this.domUnsubscribers.push(() => element.removeEventListener(event, handler, options));
+    };
+
     // Send button click
-    this.sendButton.addEventListener("click", () => {
-      this.handleSend();
-    });
+    addDOMListener(this.sendButton, "click", () => this.handleSend());
 
     // Enter key (Shift+Enter for new line)
-    this.textarea.addEventListener("keydown", (e) => {
-      this.handleKeyDown(e);
-    });
+    addDOMListener(this.textarea, "keydown", (e) => this.handleKeyDown(e));
 
     // Auto-resize on input + update send button state
-    this.textarea.addEventListener("input", () => {
+    addDOMListener(this.textarea, "input", () => {
       this.adjustHeight();
       this.updateSendButtonState();
     });
@@ -283,9 +293,21 @@ export class InputArea {
       this.unsubscribers = [];
     }
 
+    // Clean up DOM listeners
+    if (this.domUnsubscribers) {
+      this.domUnsubscribers.forEach((unsub) => {
+        unsub();
+      });
+      this.domUnsubscribers = [];
+    }
+
     // Clean up model selector
     if (this.modelSelector && typeof this.modelSelector.destroy === "function") {
       this.modelSelector.destroy();
+    }
+
+    if (this._lifecycle) {
+      ComponentLifecycle.unmount(this, globalLifecycleManager);
     }
   }
 }

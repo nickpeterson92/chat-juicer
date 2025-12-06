@@ -3,6 +3,8 @@
  * Wraps existing DOM structure and integrates with file-manager.js
  */
 
+import { ComponentLifecycle } from "../../core/component-lifecycle.js";
+import { globalLifecycleManager } from "../../core/lifecycle-manager.js";
 import { loadFiles } from "../../managers/file-manager.js";
 
 export class FilePanel {
@@ -32,6 +34,11 @@ export class FilePanel {
     // AppState integration (optional)
     this.appState = options.appState || null;
     this.unsubscribers = [];
+    this.domUnsubscribers = [];
+
+    if (!this._lifecycle) {
+      ComponentLifecycle.mount(this, "FilePanel", globalLifecycleManager);
+    }
 
     this.setupEventListeners();
     this.setupStateSubscriptions();
@@ -42,16 +49,21 @@ export class FilePanel {
    * @private
    */
   setupEventListeners() {
+    this.domUnsubscribers = this.domUnsubscribers || [];
+    const addDOMListener = (element, event, handler, options) => {
+      if (!element) return;
+      element.addEventListener(event, handler, options);
+      this.domUnsubscribers.push(() => element.removeEventListener(event, handler, options));
+    };
+
     // Toggle panel collapse/expand
     if (this.toggleButton) {
-      this.toggleButton.addEventListener("click", () => {
-        this.toggle();
-      });
+      addDOMListener(this.toggleButton, "click", () => this.toggle());
     }
 
     // Refresh files
     if (this.refreshButton) {
-      this.refreshButton.addEventListener("click", async () => {
+      addDOMListener(this.refreshButton, "click", async () => {
         try {
           await this.refresh();
         } catch (error) {
@@ -63,9 +75,7 @@ export class FilePanel {
     // Tab switching
     const tabs = [this.sourcesTab, this.outputTab].filter(Boolean);
     for (const tab of tabs) {
-      tab.addEventListener("click", () => {
-        this.switchTab(tab);
-      });
+      addDOMListener(tab, "click", () => this.switchTab(tab));
     }
   }
 
@@ -251,13 +261,6 @@ export class FilePanel {
       preview.remove();
     });
 
-    // Force garbage collection by removing all event listeners
-    const clonedContainer = this.filesContainer.cloneNode(false);
-    if (this.filesContainer.parentNode) {
-      this.filesContainer.parentNode.replaceChild(clonedContainer, this.filesContainer);
-      this.filesContainer = clonedContainer;
-    }
-
     console.log("✅ FilePanel: All file handles closed");
   }
 
@@ -354,9 +357,30 @@ export class FilePanel {
     // Clean up AppState subscriptions
     if (this.unsubscribers) {
       this.unsubscribers.forEach((unsub) => {
-        unsub();
+        try {
+          unsub();
+        } catch (error) {
+          console.error("FilePanel cleanup error", error);
+        }
       });
       this.unsubscribers = [];
+    }
+
+    // Clean up DOM listeners
+    if (this.domUnsubscribers) {
+      this.domUnsubscribers.forEach((unsub) => {
+        try {
+          unsub();
+        } catch (error) {
+          console.error("FilePanel DOM cleanup error", error);
+        }
+      });
+      this.domUnsubscribers = [];
+    }
+
+    // Optionally unmount if not handled by global unmount
+    if (this._lifecycle) {
+      ComponentLifecycle.unmount(this, globalLifecycleManager);
     }
   }
 }
