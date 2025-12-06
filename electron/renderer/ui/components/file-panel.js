@@ -184,9 +184,9 @@ export class FilePanel {
   /**
    * Refresh files in current directory
    */
-  refresh() {
+  async refresh() {
     if (!this.currentSessionId) {
-      console.warn("⚠️ FilePanel.refresh() called but no currentSessionId set");
+      console.warn("FilePanel.refresh() called but no currentSessionId set");
       return;
     }
 
@@ -194,12 +194,18 @@ export class FilePanel {
     const dirType = activeTab?.dataset.directory || "sources";
     const directory = `data/files/${this.currentSessionId}/${dirType}`;
 
-    console.log(`🔄 Refreshing files panel (${dirType} tab)`, {
+    console.log(`Refreshing files panel (${dirType} tab)`, {
       sessionId: this.currentSessionId,
       directory,
       containerId: this.filesContainer?.id,
     });
-    loadFiles(directory, this.filesContainer);
+
+    try {
+      return await loadFiles(directory, this.filesContainer);
+    } catch (error) {
+      console.error("FilePanel refresh failed", error);
+      throw error;
+    }
   }
 
   /**

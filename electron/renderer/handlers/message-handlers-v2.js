@@ -24,7 +24,11 @@ import { scheduleScroll } from "../utils/scroll-utils.js";
  * @param {Object} context - Application context
  */
 export function registerMessageHandlers(context) {
-  const { appState, elements, services, ipcAdapter } = context;
+  const { appState, elements, services, ipcAdapter, components } = context;
+
+  // Prefer the ChatContainer component when available to keep internal streaming state in sync
+  const getChatContainerComponent = () =>
+    components?.chatContainer || (typeof window !== "undefined" ? window.components?.chatContainer : null);
 
   // Helper to create scoped handler
   const createHandler = (type, handler) => {
@@ -63,17 +67,21 @@ export function registerMessageHandlers(context) {
     // Track Python status - streaming started
     appState.setState("python.status", "busy_streaming");
     appState.setState("message.isStreaming", true);
+    appState.setState("message.isTyping", false);
+
+    // Create streaming message before toggling lamp visibility so the element exists
+    const chatContainerComponent = getChatContainerComponent();
+    const textSpan =
+      chatContainerComponent?.createStreamingMessage?.() || createStreamingAssistantMessage(elements.chatContainer);
+    appState.setState("message.currentAssistant", textSpan);
+    appState.setState("message.assistantBuffer", "");
+
+    // Reset loading lamp visibility for this streaming message so the first token transition can run
+    appState.setState("ui.loadingLampVisible", true);
     console.log("Python status: busy_streaming");
 
     // Hide AI thinking indicator
     appState.setState("ui.aiThinkingActive", false);
-
-    appState.setState("message.isTyping", false);
-
-    // Create streaming message
-    const textSpan = createStreamingAssistantMessage(elements.chatContainer);
-    appState.setState("message.currentAssistant", textSpan);
-    appState.setState("message.assistantBuffer", "");
 
     // Emit performance tracking event
     globalEventBus.emit("performance:message_render_start");
@@ -87,14 +95,11 @@ export function registerMessageHandlers(context) {
 
       // Hide lottie indicator on first token arrival for instant feedback
       if (isFirstToken) {
-        const currentMsg = appState.message.currentAssistant.closest(".message");
-        const loadingLamp = currentMsg?.querySelector(".loading-lamp");
-        if (loadingLamp) {
-          console.log("[MessageHandlersV2] First token arrived - hiding lottie indicator");
-          loadingLamp.style.transition = "opacity 200ms ease-out";
-          loadingLamp.style.opacity = "0";
-          setTimeout(() => loadingLamp.remove(), 200);
-        }
+        // Update state - subscriptions will handle DOM manipulation
+        appState.setState("ui.loadingLampVisible", false);
+
+        // NOTE: UI update handled by subscription in bootstrap/phases/phase5a-subscriptions.js
+        // Subscription listens to ui.loadingLampVisible and applies transition + removal
       }
 
       updateAssistantMessage(elements.chatContainer, appState.message.currentAssistant, newBuffer);

@@ -162,7 +162,7 @@ describe("AppState - Phase 1 Extensions", () => {
 
   describe("UI State Extensions", () => {
     it("should initialize extended UI state", () => {
-      expect(appState.ui.sidebarCollapsed).toBe(false);
+      expect(appState.ui.sidebarCollapsed).toBe(true);
       expect(appState.ui.cachedModelConfig).toBeNull();
       expect(appState.ui.welcomeModelConfig).toBeNull();
       expect(appState.ui.isInitialized).toBe(false);

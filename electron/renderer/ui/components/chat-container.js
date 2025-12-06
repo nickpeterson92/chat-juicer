@@ -39,9 +39,45 @@ export class ChatContainer {
   setupStateSubscriptions() {
     if (!this.appState) return;
 
-    // Subscribe to relevant message state if needed in the future
-    // For now, ChatContainer is primarily controlled imperatively via its methods
-    // which are called by message handlers that already use AppState
+    // Subscribe to new assistant messages - auto-scroll to bottom
+    const unsubscribeCurrentAssistant = this.appState.subscribe("message.currentAssistant", (element) => {
+      // Keep internal streaming reference in sync with AppState (even if created outside this component)
+      this.currentStreamingMessage = element || null;
+
+      if (element) {
+        // New assistant message element created, scroll to show it
+        this.scrollToBottom();
+      }
+    });
+    this.unsubscribers.push(unsubscribeCurrentAssistant);
+
+    // Subscribe to streaming buffer updates - update message content
+    const unsubscribeAssistantBuffer = this.appState.subscribe("message.assistantBuffer", (buffer) => {
+      const current = this.appState.getState("message.currentAssistant");
+      if (current && buffer !== undefined) {
+        // Update the streaming message with new content
+        this.updateStreamingMessage(buffer);
+      }
+    });
+    this.unsubscribers.push(unsubscribeAssistantBuffer);
+
+    // Subscribe to streaming state - manage streaming UI state
+    const unsubscribeIsStreaming = this.appState.subscribe("message.isStreaming", (isStreaming) => {
+      if (!isStreaming && this.currentStreamingMessage) {
+        // Streaming completed, finalize the message
+        this.completeStreaming();
+      }
+    });
+    this.unsubscribers.push(unsubscribeIsStreaming);
+
+    // Subscribe to theme changes - update message rendering if needed
+    const unsubscribeTheme = this.appState.subscribe("ui.theme", (theme) => {
+      // Theme changes are handled globally via CSS variables
+      // But we could re-render code blocks if needed
+      // For now, CSS handles theme switching automatically
+      console.log(`ChatContainer: Theme changed to ${theme}`);
+    });
+    this.unsubscribers.push(unsubscribeTheme);
   }
 
   /**
@@ -133,6 +169,20 @@ export class ChatContainer {
     clearChat(this.element);
     clearFunctionCards(this.element);
     this.currentStreamingMessage = null;
+  }
+
+  /**
+   * Scroll to bottom of chat container
+   * Used by subscription to auto-scroll on new messages
+   */
+  scrollToBottom() {
+    if (this.element) {
+      // Smooth scroll to bottom
+      this.element.scrollTo({
+        top: this.element.scrollHeight,
+        behavior: "smooth",
+      });
+    }
   }
 
   /**

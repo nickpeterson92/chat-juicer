@@ -1,6 +1,14 @@
 /**
  * View Manager
  * Manages view state and transitions between welcome and chat views
+ *
+ * STATE MANAGEMENT ARCHITECTURE (Phase 5 Complete):
+ * - Uses AppState.setState() for all state updates (lines 34, 38, 51, 170, 173, 481)
+ * - NO direct DOM manipulation (all via AppState subscriptions)
+ * - Reactive DOM updates registered in bootstrap/phases/phase5-event-handlers.js:
+ *   - ui.bodyViewClass → document.body.classList (lines 110-117)
+ *   - ui.sidebarCollapsed → sidebar.classList.toggle() (lines 119-127)
+ *
  */
 
 import { ComponentLifecycle } from "../core/component-lifecycle.js";
@@ -102,8 +110,8 @@ export async function showWelcomeView(elements, appState) {
       const welcomeFilesSection = document.getElementById("welcome-files-section");
 
       if (welcomeFilesContainer && welcomeFilesSection) {
-        // Show the files section immediately when there's an active session
-        welcomeFilesSection.style.display = "block";
+        // Show the files section immediately when there's an active session (via AppState)
+        appState.setState("ui.welcomeFilesSectionVisible", true);
 
         // Then load the files (will show placeholder if empty)
         import("../managers/file-manager.js").then(({ loadFiles }) => {

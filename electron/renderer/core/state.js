@@ -97,6 +97,7 @@ export class BoundedMap extends Map {
  * @property {boolean} isInitialized - Bootstrap complete flag
  * @property {boolean} aiThinkingActive - AI thinking indicator state
  * @property {boolean} welcomeFilesSectionVisible - Welcome files section visibility
+ * @property {boolean} loadingLampVisible - Loading lamp visibility state
  *
  * @typedef {Object} PythonState
  * @property {('idle'|'busy_streaming'|'busy_summarizing')} status - Python backend status
@@ -153,13 +154,14 @@ export class AppState {
       theme: localStorage.getItem("theme") || "light",
       toolsPanelCollapsed: false,
       currentView: "welcome", // "welcome" | "chat"
-      sidebarCollapsed: false, // Sidebar collapsed state
+      sidebarCollapsed: true, // Sidebar collapsed state (start minimized)
       bodyViewClass: "view-welcome", // Document body view class for CSS transitions
       cachedModelConfig: null, // Cached model configuration
       welcomeModelConfig: null, // Welcome page model configuration
       isInitialized: false, // Bootstrap complete flag
       aiThinkingActive: false, // AI thinking indicator state
       welcomeFilesSectionVisible: false, // Welcome files section visibility
+      loadingLampVisible: false, // Loading lamp visibility state (set true on streaming start)
     };
 
     // Python backend state (for command queuing)

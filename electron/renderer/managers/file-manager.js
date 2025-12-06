@@ -2,6 +2,17 @@
  * File Manager
  * Manages file operations UI (listing, deleting, uploading)
  * Uses AppState for reactive file list management
+ *
+ * STATE MANAGEMENT ARCHITECTURE (Phase 5 Complete):
+ * - Primary method: loadFilesIntoState() → AppState (lines 28-59)
+ * - Pure render function: renderFileList() → DOM (lines 74-114)
+ * - Legacy methods: loadFiles(), loadSessionFiles() (deprecated, lines 305-368)
+ *
+ * REACTIVE PATTERN:
+ * 1. Load files into state: `await loadFilesIntoState(appState, directory, 'sources')`
+ * 2. Subscribe to changes: `appState.subscribe('files.sourcesList', (files) => { renderFileList(files, container, options) })`
+ * 3. Render is automatic when state changes
+ *
  */
 
 import {
@@ -250,7 +261,7 @@ async function handleDeleteFile(filename, directory = "sources", container = nul
         onDelete(filename, directory);
       } else if (container) {
         // Fallback: refresh the files list with legacy method
-        loadFiles(directory, container);
+        await loadFiles(directory, container);
       }
     } else {
       // If file doesn't exist (ENOENT), just refresh the list without error
@@ -259,7 +270,7 @@ async function handleDeleteFile(filename, directory = "sources", container = nul
         if (typeof onDelete === "function") {
           onDelete(filename, directory);
         } else if (container) {
-          loadFiles(directory, container);
+          await loadFiles(directory, container);
         }
       } else {
         showToast(
@@ -278,7 +289,7 @@ async function handleDeleteFile(filename, directory = "sources", container = nul
       if (typeof onDelete === "function") {
         onDelete(filename, directory);
       } else if (container) {
-        loadFiles(directory, container);
+        await loadFiles(directory, container);
       }
     } else {
       showToast(MSG_FILE_DELETE_ERROR.replace("{filename}", filename), "error", 4000);
@@ -296,8 +307,18 @@ async function handleDeleteFile(filename, directory = "sources", container = nul
  * @param {string} sessionId - Session ID to load files for
  * @param {HTMLElement} container - Container element to render files into
  * @deprecated Use loadFilesIntoState() with AppState subscriptions instead
+ *
+ * Migration path:
+ * 1. Get AppState instance: `const appState = window.app?.appState`
+ * 2. Call: `await loadFilesIntoState(appState, directory, 'sources')`
+ * 3. Subscribe to state changes: `appState.subscribe('files.sourcesList', (files) => { renderFileList(files, container, options) })`
  */
 export async function loadSessionFiles(sessionId, container) {
+  console.warn(
+    "[FileManager] loadSessionFiles() is deprecated. Use loadFilesIntoState() with AppState subscriptions instead.",
+    { sessionId, containerId: container?.id }
+  );
+
   if (!container || !sessionId) return;
 
   const sessionDirectory = `data/files/${sessionId}/sources`;
@@ -309,8 +330,19 @@ export async function loadSessionFiles(sessionId, container) {
  * @param {string} directory - Directory to load files from
  * @param {HTMLElement} container - Container element to render files into
  * @deprecated Use loadFilesIntoState() + renderFileList() with AppState subscriptions instead
+ *
+ * Migration path:
+ * 1. Get AppState instance: `const appState = window.app?.appState`
+ * 2. Call: `await loadFilesIntoState(appState, directory, 'sources')`
+ * 3. Subscribe to state changes: `appState.subscribe('files.sourcesList', (files) => { renderFileList(files, container, options) })`
+ *
+ * This function remains for backward compatibility but logs deprecation warnings.
  */
 export async function loadFiles(directory = "sources", container = null) {
+  console.warn(
+    "[FileManager] loadFiles() is deprecated. Use loadFilesIntoState() with AppState subscriptions instead.",
+    { directory, containerId: container?.id }
+  );
   // Dynamic import to avoid circular dependency with index.js
   const { elements } = await import("./dom-manager.js");
 

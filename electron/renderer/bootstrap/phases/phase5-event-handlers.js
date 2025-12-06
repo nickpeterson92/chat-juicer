@@ -61,8 +61,9 @@ export async function initializeEventHandlers({
     const sidebar = document.getElementById("sidebar");
     if (sidebarToggle && sidebar) {
       addListener(sidebarToggle, "click", () => {
-        const currentState = appState.getState("ui.sidebarCollapsed");
-        appState.setState("ui.sidebarCollapsed", !currentState);
+        // Use DOM state as source of truth to avoid stale/null state requiring double clicks
+        const isCollapsed = sidebar.classList.contains("collapsed");
+        appState.setState("ui.sidebarCollapsed", !isCollapsed);
       });
     }
 
@@ -119,7 +120,8 @@ export async function initializeEventHandlers({
     // Bind ui.sidebarCollapsed to sidebar element
     const updateSidebarCollapsed = (collapsed) => {
       if (sidebar) {
-        sidebar.classList.toggle("collapsed", collapsed);
+        const isCollapsed = collapsed ?? false; // Default to expanded unless explicitly true
+        sidebar.classList.toggle("collapsed", isCollapsed);
       }
     };
     // Apply initial state immediately
@@ -146,6 +148,39 @@ export async function initializeEventHandlers({
     // Apply initial state immediately
     updateWelcomeFilesSection(appState.getState("ui.welcomeFilesSectionVisible"));
     stateUnsubscribers.push(appState.subscribe("ui.welcomeFilesSectionVisible", updateWelcomeFilesSection));
+
+    // Bind ui.loadingLampVisible to streaming message loading indicator
+    const updateLoadingLampVisibility = (visible) => {
+      const currentAssistant = appState.getState("message.currentAssistant");
+      const messageElement = currentAssistant?.closest(".message");
+      const loadingLamp =
+        messageElement?.querySelector(".loading-lamp") ||
+        document.querySelector("[data-streaming='true'] .loading-lamp");
+
+      if (!loadingLamp) {
+        return;
+      }
+
+      if (visible) {
+        // Ensure lamp is shown for active streaming
+        loadingLamp.style.removeProperty("transition");
+        loadingLamp.style.opacity = "1";
+        loadingLamp.style.display = "inline-block";
+        return;
+      }
+
+      // Fade out and remove when visibility is disabled
+      loadingLamp.style.transition = "opacity 200ms ease-out";
+      loadingLamp.style.opacity = "0";
+      window.setTimeout(() => {
+        if (loadingLamp.isConnected) {
+          loadingLamp.remove();
+        }
+      }, 200);
+    };
+    // Apply initial state immediately
+    updateLoadingLampVisibility(appState.getState("ui.loadingLampVisible"));
+    stateUnsubscribers.push(appState.subscribe("ui.loadingLampVisible", updateLoadingLampVisibility));
 
     console.log("  ✓ Reactive DOM bindings registered");
 
@@ -189,7 +224,7 @@ export async function initializeEventHandlers({
         if (hideDropZoneTimer) {
           clearTimeout(hideDropZoneTimer);
         }
-        hideDropZoneTimer = eventHandlersComponent.setTimeout(() => {
+        hideDropZoneTimer = window.setTimeout(() => {
           fileDropZone.classList.remove("active");
           dragCounter = 0;
           hideDropZoneTimer = null;
@@ -293,14 +328,22 @@ export async function initializeEventHandlers({
 
                 const welcomeFilesContainer = document.getElementById("welcome-files-container");
                 if (welcomeFilesContainer) {
-                  eventHandlersComponent.setTimeout(() => {
-                    loadFiles(directory, welcomeFilesContainer);
+                  window.setTimeout(async () => {
+                    try {
+                      await loadFiles(directory, welcomeFilesContainer);
+                    } catch (error) {
+                      console.error("Failed to load files after upload", error);
+                    }
                   }, 100);
                 }
               } else {
                 if (components.filePanel) {
-                  eventHandlersComponent.setTimeout(() => {
-                    components.filePanel.refresh();
+                  window.setTimeout(async () => {
+                    try {
+                      await components.filePanel.refresh();
+                    } catch (error) {
+                      console.error("Failed to refresh file panel after upload", error);
+                    }
                   }, 100);
                 }
               }
@@ -413,6 +456,7 @@ export async function initializeEventHandlers({
       appState,
       elements,
       ipcAdapter,
+      components,
       services: {
         messageService: services.messageService,
         fileService: services.fileService,

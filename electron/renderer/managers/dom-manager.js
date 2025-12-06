@@ -6,6 +6,17 @@
  * DOM element references are stored here for easy access throughout the application.
  * State management is handled by AppState in core/state.js, with reactive DOM
  * bindings registered in bootstrap/phases/phase5-event-handlers.js.
+ *
+ * ARCHITECTURE NOTES:
+ * - This module is a simple element registry (no business logic)
+ * - All DOM manipulation should go through AppState subscriptions
+ * - Direct DOM manipulation should ONLY occur in subscription handlers
+ * - This module will NOT be deprecated (it serves a valid purpose)
+ *
+ * DEPRECATION POLICY:
+ * - No methods in this file are deprecated
+ * - This is a stable, foundational module for element reference management
+ * - If you need to manipulate DOM, use AppState.setState() and register subscriptions
  */
 
 /**

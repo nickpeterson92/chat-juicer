@@ -5,12 +5,15 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppState } from "@/core/state.js";
+import { loadFiles } from "@/managers/file-manager.js";
 import { FilePanel } from "@/ui/components/file-panel.js";
 
 // Mock file-manager module
 vi.mock("@/managers/file-manager.js", () => ({
-  loadFiles: vi.fn(),
+  loadFiles: vi.fn().mockResolvedValue(undefined),
 }));
+
+const loadFilesMock = loadFiles;
 
 describe("FilePanel", () => {
   let panelElement;
@@ -45,6 +48,9 @@ describe("FilePanel", () => {
     outputTab.dataset.directory = "output";
 
     appState = new AppState();
+
+    loadFilesMock.mockClear();
+    loadFilesMock.mockResolvedValue(undefined);
   });
 
   describe("constructor", () => {
@@ -222,6 +228,54 @@ describe("FilePanel", () => {
       filePanel.closeAllHandles();
 
       expect(filesContainer.querySelectorAll("[data-file-handle]")).toHaveLength(0);
+    });
+  });
+
+  describe("refresh", () => {
+    it("should await loadFiles for the active tab", async () => {
+      const filePanel = new FilePanel(
+        panelElement,
+        toggleButton,
+        filesContainer,
+        refreshButton,
+        sourcesTab,
+        outputTab,
+        { appState }
+      );
+
+      filePanel.setSession("session-123");
+      loadFilesMock.mockClear();
+      loadFilesMock.mockResolvedValueOnce("done");
+
+      const result = await filePanel.refresh();
+
+      expect(loadFilesMock).toHaveBeenCalledWith("data/files/session-123/sources", filesContainer);
+      expect(result).toBe("done");
+    });
+
+    it("should resolve immediately when no session is set", async () => {
+      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, sourcesTab, outputTab);
+
+      await filePanel.refresh();
+
+      expect(loadFilesMock).not.toHaveBeenCalled();
+    });
+
+    it("should propagate errors from loadFiles", async () => {
+      const filePanel = new FilePanel(
+        panelElement,
+        toggleButton,
+        filesContainer,
+        refreshButton,
+        sourcesTab,
+        outputTab,
+        { appState }
+      );
+      filePanel.setSession("session-err");
+      loadFilesMock.mockClear();
+      loadFilesMock.mockRejectedValueOnce(new Error("load failed"));
+
+      await expect(filePanel.refresh()).rejects.toThrow("load failed");
     });
   });
 });

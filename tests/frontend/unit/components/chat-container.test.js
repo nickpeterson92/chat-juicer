@@ -49,7 +49,9 @@ describe("ChatContainer", () => {
       });
 
       expect(chatContainer.appState).toBe(appState);
-      expect(chatContainer.unsubscribers).toEqual([]); // No subscriptions yet
+      // Should have registered 4 subscriptions: currentAssistant, assistantBuffer, isStreaming, theme
+      expect(chatContainer.unsubscribers).toHaveLength(4);
+      expect(chatContainer.unsubscribers.every((fn) => typeof fn === "function")).toBe(true);
     });
 
     it("should throw error without element", () => {
