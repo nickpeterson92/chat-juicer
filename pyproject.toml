@@ -211,6 +211,10 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+# Define test markers
+markers = [
+    "integration: Integration tests requiring full system setup",
+]
 # Show extra test summary info
 addopts = [
     "-ra",  # Show summary of all test outcomes

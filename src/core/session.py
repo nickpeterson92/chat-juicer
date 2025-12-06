@@ -47,6 +47,7 @@ from core.prompts import CONVERSATION_SUMMARIZATION_REQUEST
 from core.session_manager import SessionManager
 from models.event_models import FunctionEventMessage
 from models.session_models import FullHistoryProtocol, SessionUpdate
+from utils.binary_io import write_message
 from utils.json_utils import json_compact
 from utils.logger import logger
 from utils.token_utils import count_tokens
@@ -676,7 +677,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
             Call ID for event tracking
         """
         call_id = f"sum_{uuid.uuid4().hex[:8]}"
-        msg = json_compact(
+        write_message(
             {
                 "type": "function_detected",
                 "name": "summarize_conversation",
@@ -690,7 +691,6 @@ class TokenAwareSQLiteSession(SQLiteSession):
                 ),
             }
         )
-        print(f"__JSON__{msg}__JSON__", flush=True)
         return call_id
 
     async def _emit_completion_event(
@@ -715,8 +715,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
             error=error,
             output=output,
         )
-        msg = event.to_json()
-        print(f"__JSON__{msg}__JSON__", flush=True)
+        write_message(event.model_dump(exclude_none=True))
 
     async def _generate_summary(self, items: list[TResponseInputItem]) -> str:
         """Generate summary using Agent/Runner pattern.

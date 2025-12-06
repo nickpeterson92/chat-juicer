@@ -29,3 +29,6 @@ pydantic-settings>=2.0.0  # Settings management with environment variables
 
 # MCP Servers (REQUIRED for web fetching capabilities)
 mcp-server-fetch>=2025.4.0  # MCP server for HTTP/web content retrieval
+
+# Binary Serialization (REQUIRED for IPC Protocol V2)
+msgpack>=1.0.0  # MessagePack serialization for binary IPC protocol

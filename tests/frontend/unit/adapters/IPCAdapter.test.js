@@ -24,7 +24,7 @@ describe("IPCAdapter", () => {
       getVersion: "1.0.0", // Not a function, it's a property
       openFileDialog: vi.fn().mockResolvedValue(null),
       saveFileDialog: vi.fn().mockResolvedValue(null),
-      onBotOutput: vi.fn(),
+      onBotMessage: vi.fn(),
       onBotError: vi.fn(),
       onBotDisconnected: vi.fn(),
     };
@@ -187,10 +187,10 @@ describe("IPCAdapter", () => {
   });
 
   describe("Event Handlers", () => {
-    it("should register bot output handler", () => {
+    it("should register bot message handler", () => {
       const callback = vi.fn();
-      adapter.onPythonStdout(callback);
-      expect(mockAPI.onBotOutput).toHaveBeenCalledWith(callback);
+      adapter.onBotMessage(callback);
+      expect(mockAPI.onBotMessage).toHaveBeenCalledWith(callback);
     });
 
     it("should register bot error handler", () => {
@@ -209,8 +209,8 @@ describe("IPCAdapter", () => {
       const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       const adapterNoAPI = new IPCAdapter({});
 
-      adapterNoAPI.onPythonStdout(() => {});
-      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("IPC API not available: onBotOutput"));
+      adapterNoAPI.onBotMessage(() => {});
+      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("IPC API not available: onBotMessage"));
 
       adapterNoAPI.onPythonStderr(() => {});
       expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("IPC API not available: onBotError"));
