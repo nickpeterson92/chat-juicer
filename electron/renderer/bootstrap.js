@@ -23,7 +23,6 @@ import { validatePhaseResult } from "./bootstrap/validators.js";
 import { globalLifecycleManager } from "./core/lifecycle-manager.js";
 import { AppState } from "./core/state.js";
 import { getCSSVariable } from "./utils/css-variables.js";
-import { globalMetrics } from "./utils/performance/index.js";
 
 /**
  * Phase-based bootstrap orchestrator
@@ -32,7 +31,7 @@ import { globalMetrics } from "./utils/performance/index.js";
 export async function bootstrapSimple() {
   console.log("🚀 Bootstrapping Chat Juicer (Phase-Based Architecture)...");
 
-  globalMetrics.startTimer("bootstrap");
+  const bootstrapStart = performance.now();
   const phaseResults = {};
 
   try {
@@ -165,7 +164,7 @@ export async function bootstrapSimple() {
       console.warn("[Bootstrap] Color validation failed (non-critical):", error);
     }
 
-    const bootstrapDuration = globalMetrics.endTimer("bootstrap");
+    const bootstrapDuration = performance.now() - bootstrapStart;
     console.log(`\n⏱️  Bootstrap time: ${bootstrapDuration.toFixed(2)}ms`);
 
     app.eventBus.emit("app:bootstrap:complete", { duration: bootstrapDuration });

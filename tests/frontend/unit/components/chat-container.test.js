@@ -49,8 +49,8 @@ describe("ChatContainer", () => {
       });
 
       expect(chatContainer.appState).toBe(appState);
-      // Should have registered 4 subscriptions: currentAssistant, assistantBuffer, isStreaming, theme
-      expect(chatContainer.unsubscribers).toHaveLength(4);
+      // Should have registered 3 subscriptions: currentAssistant, assistantBuffer, isStreaming
+      expect(chatContainer.unsubscribers).toHaveLength(3);
       expect(chatContainer.unsubscribers.every((fn) => typeof fn === "function")).toBe(true);
     });
 
@@ -211,13 +211,13 @@ describe("ChatContainer", () => {
   });
 
   describe("AppState integration", () => {
-    it("should work with appState for future enhancements", () => {
+    it("should register appState subscriptions for streaming state", () => {
       const chatContainer = new ChatContainer(containerElement, {
         appState,
       });
 
-      // Currently no subscriptions, but component is ready for future state integration
       expect(chatContainer.appState).toBe(appState);
+      expect(chatContainer.unsubscribers).toHaveLength(3);
     });
   });
 });

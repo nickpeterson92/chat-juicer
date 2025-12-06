@@ -31,7 +31,7 @@ describe("bootstrap cleanup", () => {
   let components;
   let cleanup;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Minimal DOM required for handler registration
     document.body.innerHTML = `
       <div id="sidebar"></div>

@@ -130,7 +130,7 @@ export class FilePanel {
    *
    * @param {HTMLElement} tab - Tab element to activate
    */
-  switchTab(tab) {
+  async switchTab(tab) {
     const tabs = [this.sourcesTab, this.outputTab].filter(Boolean);
     let directory = tab.dataset.directory;
 
@@ -155,7 +155,11 @@ export class FilePanel {
 
     // Load files from directory
     console.log(`📂 Switching to ${tab.dataset.directory} tab, directory: ${directory}`);
-    loadFiles(directory, this.filesContainer);
+    try {
+      await loadFiles(directory, this.filesContainer);
+    } catch (error) {
+      console.error("Failed to load files for tab switch", error);
+    }
   }
 
   /**
@@ -163,7 +167,7 @@ export class FilePanel {
    *
    * @param {string|null} sessionId - Session ID (null to clear)
    */
-  setSession(sessionId) {
+  async setSession(sessionId) {
     console.log("📌 FilePanel.setSession() called:", sessionId);
     this.currentSessionId = sessionId;
 
@@ -172,7 +176,7 @@ export class FilePanel {
       const activeTab = this.getActiveTab();
       console.log("📌 FilePanel active tab:", activeTab?.dataset.directory);
       if (activeTab) {
-        this.switchTab(activeTab);
+        await this.switchTab(activeTab);
       }
     } else {
       console.log("📌 FilePanel session cleared");
@@ -219,14 +223,18 @@ export class FilePanel {
   /**
    * Load files for current session
    */
-  loadSessionFiles() {
+  async loadSessionFiles() {
     if (!this.currentSessionId) return;
 
     const activeTab = this.getActiveTab();
     const dirType = activeTab?.dataset.directory || "sources";
     const directory = `data/files/${this.currentSessionId}/${dirType}`;
 
-    loadFiles(directory, this.filesContainer);
+    try {
+      await loadFiles(directory, this.filesContainer);
+    } catch (error) {
+      console.error("Failed to load session files", error);
+    }
   }
 
   /**

@@ -435,7 +435,7 @@ export async function initializeEventHandlers({
           }
 
           const { showWelcomeView } = await import("../../managers/view-manager.js");
-          await showWelcomeView(elements, appState, services);
+          await showWelcomeView(elements, appState);
 
           // Collapse sidebar when showing welcome view
           appState.setState("ui.sidebarCollapsed", true);
@@ -630,7 +630,6 @@ export async function initializeEventHandlers({
       destroyComponent(components.chatContainer, "ChatContainer");
       destroyComponent(components.filePanel, "FilePanel");
       destroyComponent(components.inputArea, "InputArea");
-      destroyComponent(components.connectionStatus, "ConnectionStatus");
 
       // Unmount any lifecycle-managed components/timers
       globalLifecycleManager.unmountAll();

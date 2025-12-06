@@ -11,7 +11,6 @@ import {
   updateAssistantMessage,
 } from "../chat-ui.js";
 import { clearFunctionCards } from "../function-card-ui.js";
-
 export class ChatContainer {
   /**
    * @param {HTMLElement} element - Existing chat container element (#chat-container)
@@ -69,15 +68,6 @@ export class ChatContainer {
       }
     });
     this.unsubscribers.push(unsubscribeIsStreaming);
-
-    // Subscribe to theme changes - update message rendering if needed
-    const unsubscribeTheme = this.appState.subscribe("ui.theme", (theme) => {
-      // Theme changes are handled globally via CSS variables
-      // But we could re-render code blocks if needed
-      // For now, CSS handles theme switching automatically
-      console.log(`ChatContainer: Theme changed to ${theme}`);
-    });
-    this.unsubscribers.push(unsubscribeTheme);
   }
 
   /**

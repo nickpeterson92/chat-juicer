@@ -69,8 +69,8 @@ export class ConnectionStatus {
           this.setDisconnected("Connection error");
           break;
         default:
-          // Note: Unknown connection status (should not happen in normal operation)
-// Using comment instead of console.warn as per project logging standards
+        // Note: Unknown connection status (should not happen in normal operation)
+        // Using comment instead of console.warn as per project logging standards
       }
     });
 

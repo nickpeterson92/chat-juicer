@@ -32,9 +32,9 @@ const welcomePageListeners = [];
  * @param {Object} appState - Application state
  */
 export async function showWelcomeView(elements, appState) {
-  console.log("🚀 showWelcomeView called");
+  console.log("showWelcomeView called");
   if (!elements.welcomePageContainer) {
-    console.error("❌ welcomePageContainer not found!");
+    console.error("welcomePageContainer not found!");
     return;
   }
 
@@ -114,9 +114,9 @@ export async function showWelcomeView(elements, appState) {
         appState.setState("ui.welcomeFilesSectionVisible", true);
 
         // Then load the files (will show placeholder if empty)
-        import("../managers/file-manager.js").then(({ loadFiles }) => {
+        import("../managers/file-manager.js").then(async ({ loadFiles }) => {
           const directory = `data/files/${currentSessionId}/sources`;
-          loadFiles(directory, welcomeFilesContainer);
+          await loadFiles(directory, welcomeFilesContainer);
         });
       }
     }

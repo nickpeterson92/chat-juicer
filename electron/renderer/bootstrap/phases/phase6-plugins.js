@@ -1,6 +1,6 @@
 /**
- * Phase 6: Plugins & Debug
- * Initialize plugin system and debug tools
+ * Phase 6: Plugins
+ * Initialize plugin system
  *
  * Dependencies: All previous phases (full app object required)
  * Outputs: PluginRegistry, DebugDashboard
@@ -8,7 +8,6 @@
  */
 
 import { getCorePlugins, PluginRegistry } from "../../plugins/index.js";
-import { DebugDashboard } from "../../utils/debug/index.js";
 
 /**
  * Initialize plugins and debug dashboard
@@ -61,18 +60,8 @@ export async function initializePlugins({ eventBus, appState, services, adapters
     const successCount = pluginResults.filter((r) => r.status === "success").length;
     console.log(`  ✓ ${successCount}/${corePlugins.length} core plugins installed`);
 
-    // Initialize debug dashboard (dev mode only)
-    let debugDashboard = null;
-    if (import.meta.env.DEV) {
-      debugDashboard = new DebugDashboard(app);
-      debugDashboard.init();
-      app.debug = debugDashboard;
-      console.log("  Debug dashboard initialized (window.__DEBUG__)");
-    }
-
     return {
       pluginRegistry,
-      debugDashboard,
       pluginResults,
       app, // Return full app object for final assembly
     };

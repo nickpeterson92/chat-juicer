@@ -15,7 +15,7 @@ import { AppState } from "../../../electron/renderer/core/state.js";
 describe("State Management Integration Tests", () => {
   describe("State Flow: Session Creation", () => {
     let appState;
-    let subscriptionCalls;
+    let eventBus;
     let subscriptionCalls;
 
     beforeEach(() => {

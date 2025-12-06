@@ -588,15 +588,7 @@ it('should emit and receive events', () => {
 ### Monitoring
 
 ```javascript
-import { globalMetrics } from './utils/performance';
-
-// Track operation timing
-globalMetrics.startTimer('session-switch');
-await sessionService.switchSession(sessionId);
-const duration = globalMetrics.endTimer('session-switch');
-
-// Record metrics
-globalMetrics.record('messages-rendered', count, 'count');
+// Performance metrics removed.
 ```
 
 ---
