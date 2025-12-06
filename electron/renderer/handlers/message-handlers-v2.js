@@ -65,9 +65,7 @@ export function registerMessageHandlers(context) {
     console.log("🔄 Python status: busy_streaming");
 
     // Hide AI thinking indicator
-    if (elements.aiThinking) {
-      elements.aiThinking.classList.remove("active");
-    }
+    appState.setState("ui.aiThinkingActive", false);
 
     appState.setState("message.isTyping", false);
 
@@ -120,9 +118,7 @@ export function registerMessageHandlers(context) {
     }
 
     // Hide AI thinking indicator
-    if (elements.aiThinking) {
-      elements.aiThinking.classList.remove("active");
-    }
+    appState.setState("ui.aiThinkingActive", false);
 
     // Cancel pending renders
     cancelPendingRender();
@@ -156,9 +152,7 @@ export function registerMessageHandlers(context) {
       message: message.message,
     });
 
-    if (elements.aiThinking) {
-      elements.aiThinking.classList.remove("active");
-    }
+    appState.setState("ui.aiThinkingActive", false);
 
     appState.setState("message.isTyping", false);
 
@@ -344,10 +338,7 @@ export function registerMessageHandlers(context) {
     if (!isFromFileUpload && appState.ui && appState.ui.currentView === "welcome") {
       appState.setState("ui.currentView", "chat");
     } else if (isFromFileUpload) {
-      const welcomeFilesSection = document.getElementById("welcome-files-section");
-      if (welcomeFilesSection) {
-        welcomeFilesSection.style.display = "block";
-      }
+      appState.setState("ui.welcomeFilesSectionVisible", true);
     }
 
     // Emit custom event for session list update

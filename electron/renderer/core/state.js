@@ -93,6 +93,8 @@ export class BoundedMap extends Map {
  * @property {Object|null} cachedModelConfig - Cached model configuration
  * @property {Object|null} welcomeModelConfig - Welcome page model configuration
  * @property {boolean} isInitialized - Bootstrap complete flag
+ * @property {boolean} aiThinkingActive - AI thinking indicator state
+ * @property {boolean} welcomeFilesSectionVisible - Welcome files section visibility
  *
  * @typedef {Object} PythonState
  * @property {('idle'|'busy_streaming'|'busy_summarizing')} status - Python backend status
@@ -149,6 +151,8 @@ export class AppState {
       cachedModelConfig: null, // Cached model configuration
       welcomeModelConfig: null, // Welcome page model configuration
       isInitialized: false, // Bootstrap complete flag
+      aiThinkingActive: false, // AI thinking indicator state
+      welcomeFilesSectionVisible: false, // Welcome files section visibility
     };
 
     // Python backend state (for command queuing)

@@ -33,7 +33,7 @@ export async function initializeEventHandlers({
   eventBus,
   sendMessage: _sendMessage,
 }) {
-  console.log("📦 Phase 5: Initializing event handlers...");
+  console.log("Phase 5: Initializing event handlers...");
 
   // Mount event handlers component with lifecycle management
   ComponentLifecycle.mount(eventHandlersComponent, "EventHandlers", globalLifecycleManager);
@@ -41,7 +41,8 @@ export async function initializeEventHandlers({
   // Use SessionService as single source of truth
   const sessionService = services.sessionService;
 
-  const listeners = []; // Track for cleanup
+  const listeners = []; // Track DOM listeners for cleanup
+  const stateUnsubscribers = []; // Track AppState subscriptions for cleanup
 
   // Helper to track listeners
   function addListener(element, event, handler, options) {
@@ -100,6 +101,31 @@ export async function initializeEventHandlers({
     }
 
     console.log("  ✓ UI interaction listeners attached");
+
+    // ======================
+    // 1.5. Reactive DOM Bindings (AppState → DOM)
+    // ======================
+
+    // Bind ui.aiThinkingActive to DOM
+    stateUnsubscribers.push(
+      appState.subscribe("ui.aiThinkingActive", (active) => {
+        if (elements.aiThinking) {
+          elements.aiThinking.classList.toggle("active", active);
+        }
+      })
+    );
+
+    // Bind ui.welcomeFilesSectionVisible to DOM
+    stateUnsubscribers.push(
+      appState.subscribe("ui.welcomeFilesSectionVisible", (visible) => {
+        const welcomeFilesSection = document.getElementById("welcome-files-section");
+        if (welcomeFilesSection) {
+          welcomeFilesSection.style.display = visible ? "block" : "none";
+        }
+      })
+    );
+
+    console.log("  ✓ Reactive DOM bindings registered");
 
     // ======================
     // 2. Drag & Drop File Upload
@@ -192,7 +218,7 @@ export async function initializeEventHandlers({
       const files = Array.from(e.dataTransfer.files);
       if (files.length === 0) return;
 
-      console.log("🗂️ Files dropped:", files.length, "files");
+      console.log("Files dropped:", files.length, "files");
 
       const isOnWelcomePage = document.body.classList.contains("view-welcome");
 
@@ -203,7 +229,7 @@ export async function initializeEventHandlers({
           const result = await sessionService.createSession({});
 
           if (result.success) {
-            console.log("✅ Session created:", result.sessionId);
+            console.log("Session created:", result.sessionId);
 
             if (components.filePanel) {
               components.filePanel.setSession(result.sessionId);
@@ -218,7 +244,7 @@ export async function initializeEventHandlers({
             throw new Error(result.error || "Unknown error creating session");
           }
         } catch (error) {
-          console.error("❌ Failed to create session:", error);
+          console.error("Failed to create session:", error);
           alert(`Failed to create session for file upload: ${error.message}`);
           return;
         }
@@ -233,7 +259,7 @@ export async function initializeEventHandlers({
           const result = await services.fileService.uploadFile(file, sessionService.getCurrentSessionId());
 
           if (result.success) {
-            console.log(`✅ File uploaded: ${file.name}`);
+            console.log(`File uploaded: ${file.name}`);
             uploadedCount++;
 
             // Refresh the appropriate file container
@@ -241,10 +267,7 @@ export async function initializeEventHandlers({
               const directory = `data/files/${sessionService.getCurrentSessionId()}/sources`;
 
               if (isOnWelcomePage) {
-                const welcomeFilesSection = document.getElementById("welcome-files-section");
-                if (welcomeFilesSection) {
-                  welcomeFilesSection.style.display = "block";
-                }
+                appState.setState("ui.welcomeFilesSectionVisible", true);
 
                 const welcomeFilesContainer = document.getElementById("welcome-files-container");
                 if (welcomeFilesContainer) {
@@ -352,7 +375,7 @@ export async function initializeEventHandlers({
             sidebar.classList.add("collapsed");
           }
 
-          console.log("✅ New session started");
+          console.log("New session started");
         } catch (error) {
           console.error("Failed to create new session:", error);
         }
@@ -385,7 +408,7 @@ export async function initializeEventHandlers({
 
     // V2: Receive messages as objects directly (no parsing needed)
     ipcAdapter.onBotMessage((message) => {
-      console.log("✅ Received message:", message.type);
+      console.log("Received message:", message.type);
 
       eventBus.emit("message:received", message, {
         source: "backend",
@@ -498,15 +521,21 @@ export async function initializeEventHandlers({
     // Cleanup function
     const cleanup = () => {
       console.log("🧹 Cleaning up event handlers...");
+      // Remove DOM event listeners
       for (const { element, event, handler } of listeners) {
         element?.removeEventListener(event, handler);
       }
       listeners.length = 0;
+      // Unsubscribe from AppState changes
+      for (const unsubscribe of stateUnsubscribers) {
+        unsubscribe();
+      }
+      stateUnsubscribers.length = 0;
     };
 
     return { cleanup, updateSessionsList };
   } catch (error) {
-    console.error("❌ Phase 5 failed:", error);
+    console.error("Phase 5 failed:", error);
     throw new Error(`Event handler initialization failed: ${error.message}`);
   }
 }
