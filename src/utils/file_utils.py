@@ -143,7 +143,9 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
 
             return target_path, None
 
-    except Exception as e:
+    except (ValueError, OSError) as e:
+        # ValueError: invalid path components
+        # OSError: filesystem errors (permission denied, too long path, etc.)
         return Path(), f"Path validation failed: {e!s}"
 
 
@@ -186,7 +188,9 @@ def validate_file_path(
 
         return target_path, None
 
-    except Exception as e:
+    except (ValueError, OSError) as e:
+        # ValueError: invalid path components
+        # OSError: filesystem errors (file not found, permission denied, etc.)
         return Path(), f"Path validation failed: {e!s}"
 
 
@@ -207,7 +211,12 @@ async def read_file_content(target_path: Path) -> tuple[str, str | None]:
         return content, None
     except UnicodeDecodeError:
         return "", "File is not text/UTF-8 encoded"
-    except Exception as e:
+    except FileNotFoundError:
+        return "", f"File not found: {target_path}"
+    except PermissionError:
+        return "", f"Permission denied: {target_path}"
+    except OSError as e:
+        # OSError covers IOError and other filesystem errors
         return "", f"Failed to read file: {e!s}"
 
 
@@ -228,7 +237,10 @@ async def write_file_content(target_path: Path, content: str) -> tuple[None, str
         async with aiofiles.open(target_path, "w", encoding="utf-8") as f:
             await f.write(content)
         return None, None
-    except Exception as e:
+    except PermissionError:
+        return None, f"Permission denied: {target_path}"
+    except OSError as e:
+        # OSError covers disk full, path too long, and other filesystem errors
         return None, f"Failed to write file: {e!s}"
 
 
@@ -264,7 +276,9 @@ def validate_directory_path(
 
         return target_path, None
 
-    except Exception as e:
+    except (ValueError, OSError) as e:
+        # ValueError: invalid path components
+        # OSError: filesystem errors (permission denied, etc.)
         return Path(), f"Path validation failed: {e!s}"
 
 
@@ -362,8 +376,13 @@ async def file_operation(
                             original_text=result_data.get("text_found", result_data.get("anchor")),
                             new_text=result_data.get("text_inserted", result_data.get("replacement")),
                         ).to_json()
-            except Exception as e:
+            except (ValueError, TypeError) as e:
+                # ValueError: invalid operation arguments
+                # TypeError: type mismatch in operation
                 response = TextEditResponse(success=False, file_path=str(file_path), error=str(e)).to_json()
+            except OSError as e:
+                # OSError: filesystem errors during operation
+                response = TextEditResponse(success=False, file_path=str(file_path), error=f"File error: {e}").to_json()
 
     # Single exit point
     return response
@@ -421,5 +440,8 @@ def save_uploaded_file(
             "message": f"Saved {filename} ({file_size:,} bytes)",
         }
 
-    except Exception as e:
+    except PermissionError as e:
+        return {"success": False, "error": f"Permission denied: {e!s}"}
+    except OSError as e:
+        # OSError covers disk full, path too long, and other filesystem errors
         return {"success": False, "error": f"Failed to save file: {e!s}"}

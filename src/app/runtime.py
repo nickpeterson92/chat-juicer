@@ -366,12 +366,21 @@ async def update_session_metadata(app_state: AppState, session: TokenAwareSQLite
             )
             # Pass ALL items to Agent/Runner (SDK handles filtering)
             # This ensures tool calls/results have proper context
-            # Fire and forget - non-blocking background task
+            # Non-blocking background task with error handling
             import asyncio
 
-            asyncio.create_task(  # noqa: RUF006
-                app_state.session_manager.generate_session_title(session.session_id, items)
-            )
+            async def generate_title_with_error_handling(sid: str, messages: list[dict[str, Any]]) -> None:
+                """Background task wrapper that catches and logs errors."""
+                try:
+                    await app_state.session_manager.generate_session_title(sid, messages)
+                    logger.info(f"Background title generation completed for session {sid}")
+                except Exception as e:
+                    logger.error(f"Background title generation failed for session {sid}: {e}", exc_info=True)
+                    # Don't re-raise - this is a background task that shouldn't crash the app
+
+            # Fire-and-forget: RUF006 suppressed because error handling is inside the task wrapper.
+            # The task self-completes and logs its own errors - no external monitoring needed.
+            asyncio.create_task(generate_title_with_error_handling(session.session_id, items))  # noqa: RUF006
 
 
 def send_session_created_event(app_state: AppState, session_id: str) -> None:

@@ -466,6 +466,61 @@ REASONING_EFFORT_OPTIONS: dict[str, str] = {
 }
 
 # ============================================================================
+# Model Configuration (Frontend Display)
+# ============================================================================
+
+#: Model metadata with display names, descriptions, and feature flags.
+#: Used by frontend for model selection UI and configuration.
+MODEL_METADATA: dict[str, dict[str, str | bool]] = {
+    "gpt-5-pro": {
+        "displayName": "GPT-5 Pro",
+        "description": "Most capable for complex tasks",
+        "isPrimary": True,
+    },
+    "gpt-5": {
+        "displayName": "GPT-5",
+        "description": "Deep reasoning for hard problems",
+        "isPrimary": True,
+    },
+    "gpt-5-mini": {
+        "displayName": "GPT-5 Mini",
+        "description": "Smart and fast for everyday use",
+        "isPrimary": True,
+    },
+    "gpt-5-codex": {
+        "displayName": "GPT-5 Codex",
+        "description": "Optimized for code generation",
+        "isPrimary": False,
+    },
+    "gpt-4.1": {
+        "displayName": "GPT-4.1",
+        "description": "Previous generation, still capable",
+        "isPrimary": False,
+    },
+    "gpt-4.1-mini": {
+        "displayName": "GPT-4.1 Mini",
+        "description": "Faster responses for simple tasks",
+        "isPrimary": False,
+    },
+}
+
+#: Ordered list of supported models for frontend display.
+#: Controls the order of models in the model selection UI.
+SUPPORTED_MODELS: list[str] = [
+    "gpt-5-pro",
+    "gpt-5",
+    "gpt-5-mini",
+    "gpt-5-codex",
+    "gpt-4.1",
+    "gpt-4.1-mini",
+]
+
+#: Models that support reasoning effort configuration.
+#: GPT-5 family has reasoning, GPT-4.1 family does not.
+#: Used to conditionally show reasoning effort selector in UI.
+MODELS_WITH_REASONING: list[str] = ["gpt-5", "gpt-5-pro", "gpt-5-codex", "gpt-5-mini"]
+
+# ============================================================================
 # Model Token Limits (Input Context Windows)
 # ============================================================================
 #

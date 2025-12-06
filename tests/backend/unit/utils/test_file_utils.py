@@ -362,7 +362,7 @@ class TestReadFileContent:
 
         _result, error = await read_file_content(nonexistent)
         assert error is not None
-        assert "Failed to read file" in error or "No such file" in error
+        assert "Failed to read file" in error or "No such file" in error or "File not found" in error
 
 
 class TestSaveUploadedFile:
