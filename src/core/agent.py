@@ -52,13 +52,12 @@ def create_agent(
     # Use session-specific reasoning_effort if provided, otherwise use default
     effort_level = reasoning_effort if reasoning_effort is not None else "medium"
 
-    # Validate effort_level using TypeGuard
-    if not is_valid_reasoning_effort(effort_level):
+    # Validate and narrow type using TypeGuard
+    if is_valid_reasoning_effort(effort_level):
+        validated_effort: ReasoningEffort = effort_level
+    else:
         logger.warning(f"Invalid reasoning_effort '{effort_level}', defaulting to 'medium'")
-        effort_level = "medium"
-
-    # Type is now narrowed to ReasoningEffort by the TypeGuard
-    validated_effort: ReasoningEffort = effort_level if is_valid_reasoning_effort(effort_level) else "medium"
+        validated_effort = "medium"
 
     # Check if this is a reasoning model that supports reasoning_effort
     is_reasoning_model = any(deployment.startswith(model) for model in REASONING_MODELS)
@@ -66,7 +65,7 @@ def create_agent(
     # Configure model settings with reasoning effort only for reasoning models
     if is_reasoning_model:
         model_settings = ModelSettings(reasoning=Reasoning(effort=validated_effort))
-        logger.info(f"Reasoning model detected - reasoning_effort set to '{effort_level}'")
+        logger.info(f"Reasoning model detected - reasoning_effort set to '{validated_effort}'")
         # Create agent with reasoning configuration
         agent = Agent(
             name="Chat Juicer",
