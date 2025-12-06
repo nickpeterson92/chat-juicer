@@ -51,8 +51,12 @@ export class FilePanel {
 
     // Refresh files
     if (this.refreshButton) {
-      this.refreshButton.addEventListener("click", () => {
-        this.refresh();
+      this.refreshButton.addEventListener("click", async () => {
+        try {
+          await this.refresh();
+        } catch (error) {
+          console.error("FilePanel refresh failed", error);
+        }
       });
     }
 
@@ -84,13 +88,17 @@ export class FilePanel {
   /**
    * Toggle panel visibility
    */
-  toggle() {
+  async toggle() {
     const wasCollapsed = this.panel.classList.contains("collapsed");
     this.panel.classList.toggle("collapsed");
 
     // Auto-refresh when opening
     if (wasCollapsed && this.currentSessionId) {
-      this.refresh();
+      try {
+        await this.refresh();
+      } catch (error) {
+        console.error("FilePanel refresh failed", error);
+      }
     }
   }
 
@@ -262,7 +270,9 @@ export class FilePanel {
     // For now, just refresh the file list
     // This will trigger a backend call to get the updated file list
     console.log("📄 File added, refreshing file panel:", fileData);
-    this.refresh();
+    this.refresh().catch((error) => {
+      console.error("FilePanel refresh failed after addFile", error);
+    });
   }
 
   /**
@@ -270,11 +280,15 @@ export class FilePanel {
    * @param {string} fileId - File ID
    * @param {string} status - New status
    */
-  updateFile(fileId, status) {
+  async updateFile(fileId, status) {
     console.log(`📄 File ${fileId} status updated to: ${status}`);
     // If upload is complete, refresh the list
     if (status === "loaded") {
-      this.refresh();
+      try {
+        await this.refresh();
+      } catch (error) {
+        console.error("FilePanel refresh failed after updateFile", error);
+      }
     }
   }
 
@@ -282,9 +296,13 @@ export class FilePanel {
    * Remove a file from the list
    * @param {string} fileId - File ID to remove
    */
-  removeFile(fileId) {
+  async removeFile(fileId) {
     console.log("📄 File removed, refreshing file panel:", fileId);
-    this.refresh();
+    try {
+      await this.refresh();
+    } catch (error) {
+      console.error("FilePanel refresh failed after removeFile", error);
+    }
   }
 
   /**

@@ -134,13 +134,27 @@ export async function bootstrapSimple() {
     // Finalization
     // ==========================================
     const app = phaseResults.plugins.app;
-    app.cleanup = phaseResults.eventHandlers.cleanup;
+
+    // Unified cleanup (idempotent via event handler guard)
+    const runAppCleanup = () => {
+      try {
+        if (typeof phaseResults.eventHandlers?.cleanup === "function") {
+          phaseResults.eventHandlers.cleanup();
+        } else {
+          globalLifecycleManager.unmountAll();
+        }
+      } catch (cleanupError) {
+        console.error("[Bootstrap] Cleanup failed:", cleanupError);
+      }
+    };
+
+    app.cleanup = runAppCleanup;
     app.lifecycleManager = globalLifecycleManager;
 
     // Setup cleanup on window unload
     window.addEventListener("beforeunload", () => {
-      console.log("[Bootstrap] Window unloading, cleaning up lifecycle...");
-      globalLifecycleManager.unmountAll();
+      console.log("[Bootstrap] Window unloading, running cleanup...");
+      runAppCleanup();
     });
 
     // Validate critical colors (development safety check)

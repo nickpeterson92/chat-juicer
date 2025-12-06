@@ -43,6 +43,7 @@ export async function initializeEventHandlers({
 
   const listeners = []; // Track DOM listeners for cleanup
   const stateUnsubscribers = []; // Track AppState subscriptions for cleanup
+  let hasCleanedUp = false; // Idempotent cleanup guard
 
   // Helper to track listeners
   function addListener(element, event, handler, options) {
@@ -578,13 +579,26 @@ export async function initializeEventHandlers({
 
     const sessionsList = document.getElementById("sessions-list");
     if (sessionsList) {
-      setupSessionListHandlers(sessionsList, sessionService, updateSessionsList, elements, appState, ipcAdapter);
+      setupSessionListHandlers({
+        sessionListContainer: sessionsList,
+        sessionService,
+        updateSessionsList,
+        elements,
+        appState,
+        ipcAdapter,
+      });
     }
 
     console.log("  ✓ Session list handlers attached");
 
     // Cleanup function
     const cleanup = () => {
+      if (hasCleanedUp) {
+        console.log("Cleanup already executed, skipping duplicate call");
+        return;
+      }
+      hasCleanedUp = true;
+
       console.log("Cleaning up event handlers...");
       // Clear any pending drop zone timer
       if (hideDropZoneTimer) {
@@ -601,6 +615,25 @@ export async function initializeEventHandlers({
         unsubscribe();
       }
       stateUnsubscribers.length = 0;
+
+      // Destroy component-level subscriptions (AppState)
+      const destroyComponent = (component, name) => {
+        if (component && typeof component.destroy === "function") {
+          try {
+            component.destroy();
+          } catch (error) {
+            console.error(`Failed to destroy ${name}:`, error);
+          }
+        }
+      };
+
+      destroyComponent(components.chatContainer, "ChatContainer");
+      destroyComponent(components.filePanel, "FilePanel");
+      destroyComponent(components.inputArea, "InputArea");
+      destroyComponent(components.connectionStatus, "ConnectionStatus");
+
+      // Unmount any lifecycle-managed components/timers
+      globalLifecycleManager.unmountAll();
     };
 
     return { cleanup, updateSessionsList };

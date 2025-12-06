@@ -7,21 +7,29 @@
 /**
  * Setup event handlers for session list using event delegation
  *
- * @param {HTMLElement} sessionsList - Sessions list container
- * @param {Object} sessionService - Session service instance (SSOT)
- * @param {Function} updateSessionsList - Function to refresh sessions list
- * @param {Object} elements - DOM elements
- * @param {Object} appState - Application state
- * @param {Object} ipcAdapter - IPC adapter for command queue processing
+ * @param {Object} deps - Dependency container
+ * @param {HTMLElement} deps.sessionListContainer - Sessions list container
+ * @param {Object} deps.sessionService - Session service instance (SSOT)
+ * @param {Function} deps.updateSessionsList - Function to refresh sessions list
+ * @param {Object} deps.elements - DOM elements
+ * @param {Object} deps.appState - Application state
+ * @param {Object} deps.ipcAdapter - IPC adapter for command queue processing
  */
-export function setupSessionListHandlers(
-  sessionsList,
+export function setupSessionListHandlers({
+  sessionListContainer,
   sessionService,
   updateSessionsList,
   elements,
   appState,
-  ipcAdapter
-) {
+  ipcAdapter,
+}) {
+  const sessionsList = sessionListContainer;
+
+  if (!sessionsList) {
+    console.warn("setupSessionListHandlers called without a sessionListContainer");
+    return;
+  }
+
   // Click handler for session switching and actions
   sessionsList.addEventListener("click", async (e) => {
     const target = e.target;
