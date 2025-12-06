@@ -182,18 +182,6 @@ export const SUBSCRIPTION_REGISTRY = {
       },
     ],
   },
-
-  /**
-   * Deprecated observer patterns
-   * These should NOT be used for new code
-   */
-  deprecated: [
-    {
-      pattern: "SessionService.observers",
-      replacement: 'appState.subscribe("session.current", handler)',
-      reason: "Observer pattern deprecated in favor of AppState subscriptions",
-    },
-  ],
 };
 
 /**

@@ -279,7 +279,7 @@ export class SessionService {
 
     const result = await this.ipc.sendSessionCommand('create', { title });
 
-    // Emit event (observers will handle side effects)
+    // Emit event (subscribers handle side effects via EventBus listeners)
     globalEventBus.emit('session:created', {
       sessionId: result.session_id,
       title: result.title,

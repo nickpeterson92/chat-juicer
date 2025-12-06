@@ -293,7 +293,7 @@ export async function initializeEventHandlers({
               components.filePanel.setSession(result.sessionId);
             }
 
-            // Reload sessions list (SessionService will notify observers)
+            // Reload sessions list (AppState subscriptions will update UI)
             const sessionsResult = await sessionService.loadSessions();
             if (sessionsResult.success) {
               updateSessionsList(sessionsResult.sessions || []);
@@ -557,7 +557,7 @@ export async function initializeEventHandlers({
             reasoning_effort: session.reasoning_effort,
             mcp_config: session.mcp_config,
           });
-          // UI will be updated automatically via SessionService observer pattern
+          // UI will be updated automatically via AppState subscriptions
           updateSessionsList();
         }
       }
