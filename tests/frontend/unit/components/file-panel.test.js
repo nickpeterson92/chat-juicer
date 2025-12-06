@@ -68,7 +68,8 @@ describe("FilePanel", () => {
 
       const snapshot = globalLifecycleManager.getDebugSnapshot();
       const entry = snapshot.components.find((c) => c.name === "FilePanel");
-      expect(entry?.listeners ?? 0).toBe(0);
+      // 4 DOM listeners: toggle, refresh, two tabs
+      expect(entry?.listeners ?? 0).toBe(4);
     });
 
     it("should initialize with appState", () => {
@@ -85,7 +86,8 @@ describe("FilePanel", () => {
       expect(filePanel.appState).toBe(appState);
       const snapshot = globalLifecycleManager.getDebugSnapshot();
       const entry = snapshot.components.find((c) => c.name === "FilePanel");
-      expect(entry?.listeners).toBe(1); // session.current subscription
+      // 5 total: 4 DOM + 1 appState subscription
+      expect(entry?.listeners).toBe(5); // session.current subscription + DOM listeners
     });
 
     it("should throw error without required elements", () => {
@@ -205,7 +207,7 @@ describe("FilePanel", () => {
 
       const snapshotBefore = globalLifecycleManager.getDebugSnapshot();
       const entryBefore = snapshotBefore.components.find((c) => c.name === "FilePanel");
-      expect(entryBefore?.listeners).toBe(1);
+      expect(entryBefore?.listeners).toBe(5);
 
       filePanel.destroy();
 

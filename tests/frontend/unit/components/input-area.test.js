@@ -41,7 +41,8 @@ describe("InputArea", () => {
 
       const snapshot = globalLifecycleManager.getDebugSnapshot();
       const entry = snapshot.components.find((c) => c.name === "InputArea");
-      expect(entry?.listeners ?? 0).toBe(0);
+      // 3 DOM listeners: click, keydown, input
+      expect(entry?.listeners ?? 0).toBe(3);
     });
 
     it("should initialize with appState", () => {
@@ -52,7 +53,8 @@ describe("InputArea", () => {
       expect(inputArea.appState).toBe(appState);
       const snapshot = globalLifecycleManager.getDebugSnapshot();
       const entry = snapshot.components.find((c) => c.name === "InputArea");
-      expect(entry?.listeners).toBe(1); // isStreaming subscription
+      // 4 total: 3 DOM + 1 appState subscription
+      expect(entry?.listeners).toBe(4); // isStreaming subscription + DOM listeners
     });
 
     it("should throw error without required elements", () => {
@@ -155,7 +157,7 @@ describe("InputArea", () => {
 
       const snapshotBefore = globalLifecycleManager.getDebugSnapshot();
       const entryBefore = snapshotBefore.components.find((c) => c.name === "InputArea");
-      expect(entryBefore?.listeners).toBe(1);
+      expect(entryBefore?.listeners).toBe(4);
 
       inputArea.destroy();
 
