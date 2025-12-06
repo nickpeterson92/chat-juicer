@@ -32,13 +32,11 @@ export function registerMessageHandlers(context) {
 
   // Helper to create scoped handler
   const createHandler = (type, handler) => {
-    console.log(`[MessageHandlersV2] Registering handler for: message:${type}`);
     globalEventBus.on(`message:${type}`, (eventData) => {
       // Unwrap the message from EventBus event wrapper
       // EventData is either { data: message, ... } or just the message
       const message = eventData.data || eventData;
 
-      console.log(`[MessageHandlersV2] Handler triggered for: message:${type}`, message);
       try {
         handler(message, context);
 
@@ -78,7 +76,6 @@ export function registerMessageHandlers(context) {
 
     // Reset loading lamp visibility for this streaming message so the first token transition can run
     appState.setState("ui.loadingLampVisible", true);
-    console.log("Python status: busy_streaming");
 
     // Hide AI thinking indicator
     appState.setState("ui.aiThinkingActive", false);
@@ -116,11 +113,9 @@ export function registerMessageHandlers(context) {
     // Track Python status - streaming ended
     appState.setState("python.status", "idle");
     appState.setState("message.isStreaming", false);
-    console.log("Python status: idle");
 
     // Process queued commands
     if (ipcAdapter && ipcAdapter.commandQueue.length > 0) {
-      console.log("Processing queued commands after streaming...");
       await ipcAdapter.processQueue();
     }
 
@@ -167,7 +162,7 @@ export function registerMessageHandlers(context) {
     if (window.components?.chatContainer) {
       window.components.chatContainer.addErrorMessage(message.message);
     } else {
-      console.error("⚠️ ChatContainer component not available - message not displayed");
+      console.error("ChatContainer component not available - message not displayed");
     }
 
     // Track error
@@ -179,15 +174,6 @@ export function registerMessageHandlers(context) {
   // ===== Function Call Handlers =====
 
   createHandler("function_detected", (message) => {
-    // DEBUG: Log function detection for troubleshooting
-    console.log("[FunctionCard] function_detected event received:", {
-      call_id: message.call_id,
-      name: message.name,
-      hasArguments: !!message.arguments,
-      hasChatContainer: !!elements.chatContainer,
-      hasActiveCalls: !!appState.functions?.activeCalls,
-    });
-
     // Use service if available
     if (services?.functionCallService) {
       services.functionCallService.createCall(message.call_id, message.name, message.arguments || {});
@@ -425,8 +411,6 @@ export function registerMessageHandlers(context) {
   createHandler("function_call_added", () => {});
   createHandler("session_response", () => {});
   createHandler("agent_updated", () => {});
-
-  console.log("[MessageHandlersV2] All message handlers registered with EventBus");
 }
 
 /**

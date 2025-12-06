@@ -358,6 +358,56 @@ All tools registered in `tools/registry.py` for automatic discovery by Agent/Run
 - Token-aware content optimization (removes redundant whitespace, headers)
 - Professional documentation generation with Mermaid diagram support
 
+## Frontend Logging Guidelines
+
+The frontend uses a minimal logging strategy to keep the console clean and useful:
+
+### Logging Rules
+
+1. **Only log errors** - Use `console.error()` for actual errors that need attention
+2. **No progress logs** - Don't log phase completions, plugin installations, or component mounting
+3. **No debug logs in production** - Remove or guard verbose debug logs with `import.meta.env.DEV`
+4. **Use consistent prefixes** - Format: `[ModuleName] Error description`
+5. **Never use emojis** - Keep logs professional and grep-friendly
+
+### Allowed Logging
+
+```javascript
+// Errors - always allowed
+console.error("[session] Failed to create session:", error);
+console.error("[Bootstrap] Failed:", error);
+
+// Warnings - for recoverable issues
+console.warn("[Bootstrap] Continuing in degraded mode:", message);
+
+// Debug (dev-only) - guard with import.meta.env.DEV
+if (import.meta.env.DEV) {
+  console.debug("[EventBus] debug:event", data);
+}
+```
+
+### Forbidden Logging
+
+```javascript
+// NO: Progress/status logs
+console.log("Phase 5 complete");
+console.log("[Plugin] Installed");
+
+// NO: Verbose debug logs
+console.log("Received message:", message);
+console.log("Creating function card:", { callId, name });
+
+// NO: Emojis in logs
+console.log("Starting...");
+console.log("Complete");
+```
+
+### Important Logging Infrastructure
+
+- **Main process**: Use `electron/logger.js` Logger class with levels and file rotation
+- **Renderer process**: Use `window.electronAPI.log()` for important events that need persistence
+- **Development**: Debug API available at `window.__CHAT_JUICER_DEBUG__` for interactive debugging
+
 ## Essential Commands
 
 ### Running the Application

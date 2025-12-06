@@ -86,7 +86,6 @@ export class FilePanel {
 
     // Subscribe to current session changes for auto-refresh
     const unsubscribeSession = this.appState.subscribe("session.current", (sessionId) => {
-      console.log("FilePanel detected session change:", sessionId);
       this.setSession(sessionId);
     });
 
@@ -150,7 +149,6 @@ export class FilePanel {
 
     // Only load files if there's an active session
     if (!this.currentSessionId) {
-      console.log(`📂 Tab switched to ${tab.dataset.directory} (no session, not loading files)`);
       return;
     }
 
@@ -161,8 +159,6 @@ export class FilePanel {
       directory = `data/files/${this.currentSessionId}/output`;
     }
 
-    // Load files from directory
-    console.log(`📂 Switching to ${tab.dataset.directory} tab, directory: ${directory}`);
     try {
       await loadFiles(directory, this.filesContainer);
     } catch (error) {
@@ -176,18 +172,14 @@ export class FilePanel {
    * @param {string|null} sessionId - Session ID (null to clear)
    */
   async setSession(sessionId) {
-    console.log("📌 FilePanel.setSession() called:", sessionId);
     this.currentSessionId = sessionId;
 
     // Refresh current tab with new session context
     if (sessionId) {
       const activeTab = this.getActiveTab();
-      console.log("📌 FilePanel active tab:", activeTab?.dataset.directory);
       if (activeTab) {
         await this.switchTab(activeTab);
       }
-    } else {
-      console.log("📌 FilePanel session cleared");
     }
   }
 
@@ -205,20 +197,11 @@ export class FilePanel {
    * Refresh files in current directory
    */
   async refresh() {
-    if (!this.currentSessionId) {
-      console.warn("FilePanel.refresh() called but no currentSessionId set");
-      return;
-    }
+    if (!this.currentSessionId) return;
 
     const activeTab = this.getActiveTab();
     const dirType = activeTab?.dataset.directory || "sources";
     const directory = `data/files/${this.currentSessionId}/${dirType}`;
-
-    console.log(`Refreshing files panel (${dirType} tab)`, {
-      sessionId: this.currentSessionId,
-      directory,
-      containerId: this.filesContainer?.id,
-    });
 
     try {
       return await loadFiles(directory, this.filesContainer);
@@ -258,8 +241,6 @@ export class FilePanel {
       // Remove DOM elements that might hold file handles
       preview.remove();
     });
-
-    console.log("✅ FilePanel: All file handles closed");
   }
 
   /**
@@ -275,10 +256,8 @@ export class FilePanel {
    * Add a file to the list (called when file is uploaded)
    * @param {Object} fileData - File data object
    */
-  addFile(fileData) {
-    // For now, just refresh the file list
-    // This will trigger a backend call to get the updated file list
-    console.log("📄 File added, refreshing file panel:", fileData);
+  addFile(_fileData) {
+    // Refresh the file list to show the new file
     this.refresh().catch((error) => {
       console.error("FilePanel refresh failed after addFile", error);
     });
@@ -289,8 +268,7 @@ export class FilePanel {
    * @param {string} fileId - File ID
    * @param {string} status - New status
    */
-  async updateFile(fileId, status) {
-    console.log(`📄 File ${fileId} status updated to: ${status}`);
+  async updateFile(_fileId, status) {
     // If upload is complete, refresh the list
     if (status === "loaded") {
       try {
@@ -305,8 +283,7 @@ export class FilePanel {
    * Remove a file from the list
    * @param {string} fileId - File ID to remove
    */
-  async removeFile(fileId) {
-    console.log("📄 File removed, refreshing file panel:", fileId);
+  async removeFile(_fileId) {
     try {
       await this.refresh();
     } catch (error) {
