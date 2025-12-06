@@ -5,7 +5,7 @@ Creates and configures the Agent/Runner with tools and MCP servers.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, TypeGuard, get_args
 
 from agents import Agent, ModelSettings
 from openai.types.shared import Reasoning
@@ -15,6 +15,18 @@ from utils.logger import logger
 
 # Type alias for valid reasoning effort levels
 ReasoningEffort = Literal["minimal", "low", "medium", "high"]
+
+
+def is_valid_reasoning_effort(value: str) -> TypeGuard[ReasoningEffort]:
+    """Type guard to validate reasoning effort level.
+
+    Args:
+        value: String value to check
+
+    Returns:
+        True if value is a valid ReasoningEffort literal
+    """
+    return value in get_args(ReasoningEffort)
 
 
 def create_agent(
@@ -40,14 +52,13 @@ def create_agent(
     # Use session-specific reasoning_effort if provided, otherwise use default
     effort_level = reasoning_effort if reasoning_effort is not None else "medium"
 
-    # Validate effort_level is a valid literal type
-    valid_efforts: tuple[ReasoningEffort, ...] = ("minimal", "low", "medium", "high")
-    if effort_level not in valid_efforts:
+    # Validate effort_level using TypeGuard
+    if not is_valid_reasoning_effort(effort_level):
         logger.warning(f"Invalid reasoning_effort '{effort_level}', defaulting to 'medium'")
         effort_level = "medium"
 
-    # Type assertion after validation - we know it's a valid literal now
-    validated_effort: ReasoningEffort = effort_level  # type: ignore[assignment]
+    # Type is now narrowed to ReasoningEffort by the TypeGuard
+    validated_effort: ReasoningEffort = effort_level if is_valid_reasoning_effort(effort_level) else "medium"
 
     # Check if this is a reasoning model that supports reasoning_effort
     is_reasoning_model = any(deployment.startswith(model) for model in REASONING_MODELS)

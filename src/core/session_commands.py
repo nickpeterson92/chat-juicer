@@ -18,7 +18,10 @@ from core.constants import (
     ERROR_SESSION_MANAGER_NOT_INITIALIZED,
     ERROR_SESSION_NOT_FOUND,
     INITIAL_SESSION_CHUNK_SIZE,
+    MODEL_METADATA,
+    MODELS_WITH_REASONING,
     REASONING_EFFORT_OPTIONS,
+    SUPPORTED_MODELS,
 )
 from core.session_builder import SessionBuilder
 from integrations.sdk_token_tracker import connect_session, disconnect_session
@@ -564,71 +567,25 @@ async def update_session_config(
 async def get_config_metadata(app_state: AppStateProtocol) -> dict[str, Any]:
     """Return available configuration options for frontend.
 
+    Uses centralized model configuration from core.constants to ensure
+    consistency across the application.
+
     Args:
         app_state: Application state (not used but kept for consistency)
 
     Returns:
         Dictionary with available models and reasoning levels
     """
-
-    # Model metadata with display names and descriptions
-    MODEL_INFO = {
-        "gpt-5-pro": {
-            "displayName": "GPT-5 Pro",
-            "description": "Most capable for complex tasks",
-            "isPrimary": True,
-        },
-        "gpt-5": {
-            "displayName": "GPT-5",
-            "description": "Deep reasoning for hard problems",
-            "isPrimary": True,
-        },
-        "gpt-5-mini": {
-            "displayName": "GPT-5 Mini",
-            "description": "Smart and fast for everyday use",
-            "isPrimary": True,
-        },
-        "gpt-5-codex": {
-            "displayName": "GPT-5 Codex",
-            "description": "Optimized for code generation",
-            "isPrimary": False,
-        },
-        "gpt-4.1": {
-            "displayName": "GPT-4.1",
-            "description": "Previous generation, still capable",
-            "isPrimary": False,
-        },
-        "gpt-4.1-mini": {
-            "displayName": "GPT-4.1 Mini",
-            "description": "Faster responses for simple tasks",
-            "isPrimary": False,
-        },
-    }
-
-    # Supported models (NO nano variants)
-    SUPPORTED_MODELS = [
-        "gpt-5-pro",
-        "gpt-5",
-        "gpt-5-mini",
-        "gpt-5-codex",
-        "gpt-4.1",
-        "gpt-4.1-mini",
-    ]
-
-    # Models that support reasoning effort configuration
-    # GPT-5 family has reasoning, GPT-4.1 family does not
-    REASONING_MODELS = ["gpt-5", "gpt-5-pro", "gpt-5-codex", "gpt-5-mini"]
-
     return {
         "success": True,
         "models": [
             {
                 "value": model,
-                "label": MODEL_INFO[model]["displayName"],
-                "description": MODEL_INFO[model]["description"],
-                "isPrimary": MODEL_INFO[model]["isPrimary"],
-                "isDefault": model == "gpt-5",
-                "supportsReasoning": model in REASONING_MODELS,
+                "label": MODEL_METADATA[model]["displayName"],
+                "description": MODEL_METADATA[model]["description"],
+                "isPrimary": MODEL_METADATA[model]["isPrimary"],
+                "isDefault": model == DEFAULT_MODEL,
+                "supportsReasoning": model in MODELS_WITH_REASONING,
             }
             for model in SUPPORTED_MODELS
         ],
@@ -640,7 +597,7 @@ async def get_config_metadata(app_state: AppStateProtocol) -> dict[str, Any]:
             }
             for level in ["minimal", "low", "medium", "high"]
         ],
-        "reasoning_models": sorted(REASONING_MODELS),
+        "reasoning_models": sorted(MODELS_WITH_REASONING),
     }
 
 
