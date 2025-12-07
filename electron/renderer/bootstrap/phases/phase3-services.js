@@ -22,18 +22,11 @@ import { SessionService } from "../../services/session-service.js";
  * @throws {Error} If service initialization fails
  */
 export async function initializeServices({ ipcAdapter, storageAdapter, appState }) {
-  console.log("📦 Phase 3: Initializing services...");
-
   try {
     const messageService = new MessageService({ ipcAdapter, storageAdapter });
     const fileService = new FileService({ ipcAdapter, storageAdapter, appState });
     const functionCallService = new FunctionCallService({ storageAdapter, appState });
     const sessionService = new SessionService({ ipcAdapter, storageAdapter, appState });
-
-    console.log("  ✓ MessageService created");
-    console.log("  ✓ FileService created (with AppState)");
-    console.log("  ✓ FunctionCallService created (with AppState)");
-    console.log("  ✓ SessionService created (with AppState)");
 
     return {
       messageService,
@@ -42,7 +35,7 @@ export async function initializeServices({ ipcAdapter, storageAdapter, appState 
       sessionService,
     };
   } catch (error) {
-    console.error("❌ Phase 3 failed:", error);
+    console.error("Phase 3 failed:", error);
     throw new Error(`Service initialization failed: ${error.message}`);
   }
 }

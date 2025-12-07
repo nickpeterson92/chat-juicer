@@ -17,12 +17,9 @@ import { StorageAdapter } from "../../adapters/StorageAdapter.js";
  * @throws {Error} If any adapter fails to initialize
  */
 export async function initializeAdapters() {
-  console.log("📦 Phase 1: Initializing adapters...");
-
   // One-time cleanup: Remove legacy theme preference
   if (localStorage.getItem("theme")) {
     localStorage.removeItem("theme");
-    console.log("  ✓ Cleaned up legacy theme preference");
   }
 
   try {
@@ -39,11 +36,6 @@ export async function initializeAdapters() {
       throw new Error("One or more adapters failed to initialize");
     }
 
-    console.log("  ✓ DOMAdapter initialized");
-    console.log("  ✓ IPCAdapter initialized");
-    console.log("  ✓ StorageAdapter initialized");
-    console.log("  ✓ EventBus ready");
-
     return {
       domAdapter,
       ipcAdapter,
@@ -51,7 +43,7 @@ export async function initializeAdapters() {
       eventBus: globalEventBus,
     };
   } catch (error) {
-    console.error("❌ Phase 1 failed:", error);
+    console.error("Phase 1 failed:", error);
     throw new Error(`Adapter initialization failed: ${error.message}`);
   }
 }

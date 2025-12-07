@@ -136,10 +136,7 @@ export function initLottieWithColor(container, animationData, colorHex) {
 
     // Override colors
     const targetRGB = hexToLottieRGB(colorHex);
-    console.log("[Lottie Color] Target RGB:", targetRGB, "from hex:", colorHex);
-
     overrideColors(animationDataCopy, targetRGB);
-    console.log("[Lottie Color] Colors overridden in animation data");
 
     // Load animation with lottie-web
     const animation = lottie.loadAnimation({
@@ -150,7 +147,6 @@ export function initLottieWithColor(container, animationData, colorHex) {
       animationData: animationDataCopy,
     });
 
-    console.log("[Lottie Color] Animation loaded successfully");
     return animation;
   } catch (error) {
     console.error("Failed to load Lottie animation with color override:", error);

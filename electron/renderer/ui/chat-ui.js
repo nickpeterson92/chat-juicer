@@ -162,7 +162,6 @@ export function createStreamingAssistantMessage(chatContainer) {
   const brandColor = CRITICAL_COLORS.BRAND_PRIMARY;
   loadingSpan.style.cssText = `display: inline-block !important; width: 48px; height: 48px; vertical-align: middle; margin-right: 8px; opacity: 1; line-height: 48px; text-align: center; font-size: 32px; color: ${brandColor}; font-weight: bold;`;
   loadingSpan.textContent = "●"; // Start with visible fallback in brand blue
-  console.log("[Chat UI] Loading indicator created:", loadingSpan);
 
   const textSpan = document.createElement("span");
   textSpan.className = "streaming-text";
@@ -181,14 +180,10 @@ export function createStreamingAssistantMessage(chatContainer) {
       // Use CRITICAL_COLORS for guaranteed brand color availability (no CSS variable timing dependency)
       const safeBrandColor = CRITICAL_COLORS.BRAND_PRIMARY;
 
-      console.log("[Chat UI] Initializing Lottie with brand blue from constants:", safeBrandColor);
-
       const animation = initLottieWithColor(loadingSpan, smokeAnimationData, safeBrandColor);
       if (!animation) {
-        console.error("[Chat UI] Failed to initialize Lottie animation");
+        console.error("Failed to initialize Lottie animation");
         loadingSpan.textContent = "●"; // Restore fallback if Lottie fails
-      } else {
-        console.log("[Chat UI] Lottie animation loaded successfully with color:", safeBrandColor);
       }
     } catch (error) {
       console.error("[Chat UI] Error loading Lottie:", error);
@@ -224,12 +219,10 @@ export function completeStreamingMessage(chatContainer) {
     // Fade out loading smoke animation over 800ms before removing (lifecycle-managed)
     const loadingLamp = streamingMsg.querySelector(".loading-lamp");
     if (loadingLamp) {
-      console.log("[Chat UI] Fading out loading indicator");
       loadingLamp.style.transition = "opacity 800ms ease-out";
       loadingLamp.style.opacity = "0";
       chatUIComponent.setTimeout(() => {
         loadingLamp.remove();
-        console.log("[Chat UI] Loading indicator removed");
       }, 800);
     }
 

@@ -17,23 +17,18 @@ import { initializeElements } from "../../managers/dom-manager.js";
  * @throws {Error} If required DOM elements are missing
  */
 export async function initializeStateAndDOM({ domAdapter: _domAdapter, ipcAdapter }) {
-  console.log("📦 Phase 2: Initializing state and DOM...");
-
   try {
     // Create state
     const appState = new AppState();
-    console.log("  ✓ AppState created");
 
     // Inject appState into IPCAdapter for command queuing
     if (ipcAdapter) {
       ipcAdapter.setAppState(appState);
-      console.log("  ✓ AppState injected into IPCAdapter");
     }
 
     // Initialize DOM element references
     initializeElements();
     const { elements } = await import("../../managers/dom-manager.js");
-    console.log("  ✓ DOM elements initialized");
 
     // Verify critical DOM elements exist
     const requiredElements = [
@@ -51,14 +46,12 @@ export async function initializeStateAndDOM({ domAdapter: _domAdapter, ipcAdapte
       throw new Error(`Missing required DOM elements: ${missing.join(", ")}`);
     }
 
-    console.log("  ✓ All required DOM elements present");
-
     return {
       appState,
       elements,
     };
   } catch (error) {
-    console.error("❌ Phase 2 failed:", error);
+    console.error("Phase 2 failed:", error);
     throw new Error(`State & DOM initialization failed: ${error.message}`);
   }
 }

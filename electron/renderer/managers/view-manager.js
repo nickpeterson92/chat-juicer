@@ -32,7 +32,6 @@ const welcomePageListeners = [];
  * @param {Object} appState - Application state
  */
 export async function showWelcomeView(elements, appState) {
-  console.log("showWelcomeView called");
   if (!elements.welcomePageContainer) {
     console.error("welcomePageContainer not found!");
     return;
@@ -300,11 +299,8 @@ function attachWelcomePageListeners(elements, appState) {
 
     const currentSession = sessions.sessions.find((s) => s.session_id === sessionId);
     if (!currentSession || currentSession.message_count > 0) {
-      console.log("⚠️ Session has messages, not updating config on change");
       return;
     }
-
-    console.log("🔄 Updating session config (0 messages)");
 
     // Get new config
     const { getMcpConfig, getModelConfig } = await import("../ui/welcome-page.js");
@@ -321,12 +317,6 @@ function attachWelcomePageListeners(elements, appState) {
       });
 
       if (response?.session_id) {
-        console.log("✅ Session config updated:", {
-          model: modelConfig.model,
-          mcp_config: mcpConfig,
-          reasoning: modelConfig.reasoning_effort,
-        });
-
         // Reload sessions list to show updated metadata
         const sessionService = window.app?.services?.sessionService;
         if (sessionService) {
@@ -379,23 +369,19 @@ function attachWelcomePageListeners(elements, appState) {
     const welcomeInputElement = document.getElementById("welcome-input");
 
     if (!welcomeInputElement || isProcessing) {
-      console.log("sendWelcomeMessage blocked:", { hasInput: !!welcomeInputElement, isProcessing });
       return;
     }
 
     const message = welcomeInputElement.value.trim();
     if (!message) {
-      console.log("sendWelcomeMessage: empty message");
       return;
     }
 
     if (appState.connection.status !== "CONNECTED") {
-      console.log("sendWelcomeMessage: not connected");
       return;
     }
 
     isProcessing = true; // Set guard
-    console.log("sendWelcomeMessage: processing message:", message.substring(0, 50));
 
     try {
       // Get MCP config from checkboxes

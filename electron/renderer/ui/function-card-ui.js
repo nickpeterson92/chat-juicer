@@ -92,8 +92,6 @@ export function createFunctionCallCard(
   functionName,
   status = "preparing"
 ) {
-  window.electronAPI.log("info", "Creating inline function card", { callId, functionName, status });
-
   // Handle case where callId might not be provided initially
   if (!callId) {
     callId = `temp-${Date.now()}`;
@@ -138,7 +136,6 @@ export function createFunctionCallCard(
 
     // Add click handler for expand/collapse
     cardDiv.addEventListener("click", () => {
-      window.electronAPI.log("debug", "Function card clicked", { callId });
       toggleFunctionCard(cardDiv, activeCalls, appState.functions.activeTimers, callId);
     });
 
@@ -218,7 +215,6 @@ function toggleFunctionCard(cardElement, activeCalls, activeTimers, callId) {
           clearTimeout(card.cleanupTimerId);
           activeTimers.delete(card.cleanupTimerId);
           card.cleanupTimerId = null;
-          window.electronAPI.log("debug", "Cancelled cleanup timer on expand", { callId });
         }
       }
     }
@@ -260,7 +256,6 @@ function flushStatusUpdates(activeCalls) {
     const card = activeCalls.get(callId);
     // Skip if card doesn't exist or has no DOM element
     if (!card || !card.element) {
-      console.warn("[FunctionCard] flushStatusUpdates: No card element for", callId);
       continue;
     }
 
@@ -271,7 +266,6 @@ function flushStatusUpdates(activeCalls) {
     }
 
     // Update card styling based on status
-    console.log("[FunctionCard] Updating status:", { callId, status, hasElement: !!card.element });
     if (status === "thinking" || status === "executing" || status === "executing...") {
       card.element.className =
         card.element.dataset.expanded === "true"
@@ -280,7 +274,6 @@ function flushStatusUpdates(activeCalls) {
     } else if (status === "completed" || status === "success") {
       card.element.className =
         card.element.dataset.expanded === "true" ? "function-call-card success expanded" : "function-call-card success";
-      console.log("[FunctionCard] Set success class for", callId);
     } else if (status === "error") {
       card.element.className =
         card.element.dataset.expanded === "true" ? "function-call-card error expanded" : "function-call-card error";
@@ -427,16 +420,12 @@ export function scheduleFunctionCardCleanup(activeCalls, activeTimers, callId) {
   const card = activeCalls.get(callId);
 
   // Don't clean up if card is expanded - user is still reviewing it
-  if (card?.expanded) {
-    window.electronAPI.log("debug", "Skipping cleanup for expanded card", { callId });
-    return;
-  }
+  if (card?.expanded) return;
 
   // Cancel any existing timer for this card before scheduling new one
   if (card?.cleanupTimerId) {
     clearTimeout(card.cleanupTimerId);
     activeTimers.delete(card.cleanupTimerId);
-    window.electronAPI.log("debug", "Cancelled previous cleanup timer", { callId });
   }
 
   const timerId = setTimeout(() => {

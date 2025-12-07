@@ -29,8 +29,6 @@ import { getCSSVariable } from "./utils/css-variables.js";
  * @returns {Promise<Object>} Application instance
  */
 export async function bootstrapSimple() {
-  console.log("🚀 Bootstrapping Chat Juicer (Phase-Based Architecture)...");
-
   const bootstrapStart = performance.now();
   const phaseResults = {};
 
@@ -38,29 +36,24 @@ export async function bootstrapSimple() {
     // ==========================================
     // Phase 1: Adapters (Foundation)
     // ==========================================
-    console.log("\n📦 Phase 1: Initializing adapters...");
     const { initializeAdapters } = await import("./bootstrap/phases/phase1-adapters.js");
     phaseResults.adapters = await initializeAdapters();
     validatePhaseResult("adapters", phaseResults.adapters, {
       required: ["domAdapter", "ipcAdapter", "storageAdapter", "eventBus"],
     });
-    console.log("✅ Phase 1 complete");
 
     // ==========================================
     // Phase 2: State & DOM (Core Infrastructure)
     // ==========================================
-    console.log("\n📦 Phase 2: Initializing state and DOM...");
     const { initializeStateAndDOM } = await import("./bootstrap/phases/phase2-state-dom.js");
     phaseResults.stateDOM = await initializeStateAndDOM(phaseResults.adapters);
     validatePhaseResult("stateDOM", phaseResults.stateDOM, {
       required: ["appState", "elements"],
     });
-    console.log("✅ Phase 2 complete");
 
     // ==========================================
     // Phase 3: Services (Business Logic)
     // ==========================================
-    console.log("\n📦 Phase 3: Initializing services...");
     const { initializeServices } = await import("./bootstrap/phases/phase3-services.js");
     phaseResults.services = await initializeServices({
       ...phaseResults.adapters,
@@ -69,12 +62,10 @@ export async function bootstrapSimple() {
     validatePhaseResult("services", phaseResults.services, {
       required: ["messageService", "fileService", "functionCallService", "sessionService"],
     });
-    console.log("✅ Phase 3 complete");
 
     // ==========================================
     // Phase 4: Components (UI Layer)
     // ==========================================
-    console.log("\n📦 Phase 4: Initializing components...");
     const { initializeComponents } = await import("./bootstrap/phases/phase4-components.js");
     phaseResults.components = await initializeComponents({
       ...phaseResults.stateDOM,
@@ -86,12 +77,10 @@ export async function bootstrapSimple() {
       optional: ["inputArea"], // May fail if DOM elements missing
     });
     window.components = phaseResults.components;
-    console.log("✅ Phase 4 complete");
 
     // ==========================================
     // Phase 5: Event Handlers (Interaction Layer)
     // ==========================================
-    console.log("\n📦 Phase 5: Initializing event handlers...");
     const { initializeEventHandlers } = await import("./bootstrap/phases/phase5-event-handlers.js");
     phaseResults.eventHandlers = await initializeEventHandlers({
       ...phaseResults.adapters,
@@ -100,12 +89,10 @@ export async function bootstrapSimple() {
       components: phaseResults.components,
       sendMessage: phaseResults.components.sendMessage,
     });
-    console.log("✅ Phase 5 complete");
 
     // ==========================================
     // Phase 6: Plugins & Debug (Extension Layer)
     // ==========================================
-    console.log("\n📦 Phase 6: Initializing plugins...");
     const { initializePlugins } = await import("./bootstrap/phases/phase6-plugins.js");
     phaseResults.plugins = await initializePlugins({
       ...phaseResults.adapters,
@@ -113,12 +100,10 @@ export async function bootstrapSimple() {
       services: phaseResults.services,
       components: phaseResults.components,
     });
-    console.log("✅ Phase 6 complete");
 
     // ==========================================
     // Phase 7: Data Loading (Initialization Data)
     // ==========================================
-    console.log("\n📦 Phase 7: Loading initial data...");
     const { loadInitialData } = await import("./bootstrap/phases/phase7-data-loading.js");
     phaseResults.dataLoading = await loadInitialData({
       ...phaseResults.stateDOM,
@@ -127,7 +112,6 @@ export async function bootstrapSimple() {
       components: phaseResults.components,
       updateSessionsList: phaseResults.eventHandlers.updateSessionsList,
     });
-    console.log("✅ Phase 7 complete");
 
     // ==========================================
     // Finalization
@@ -152,7 +136,6 @@ export async function bootstrapSimple() {
 
     // Setup cleanup on window unload
     window.addEventListener("beforeunload", () => {
-      console.log("[Bootstrap] Window unloading, running cleanup...");
       runAppCleanup();
     });
 
@@ -165,20 +148,17 @@ export async function bootstrapSimple() {
     }
 
     const bootstrapDuration = performance.now() - bootstrapStart;
-    console.log(`\n⏱️  Bootstrap time: ${bootstrapDuration.toFixed(2)}ms`);
-
     app.eventBus.emit("app:bootstrap:complete", { duration: bootstrapDuration });
-    console.log("🎉 Chat Juicer bootstrapped successfully!\n");
 
     return app;
   } catch (error) {
-    console.error("❌ Bootstrap failed:", error);
+    console.error("[Bootstrap] Failed:", error);
 
     // Attempt error recovery
     const recovery = await handlePhaseError(error, phaseResults);
 
     if (recovery.strategy === ErrorRecoveryStrategy.CONTINUE_DEGRADED) {
-      console.warn("⚠️ Continuing in degraded mode:", recovery.message);
+      console.warn("[Bootstrap] Continuing in degraded mode:", recovery.message);
       return phaseResults.plugins?.app || createMinimalApp(phaseResults);
     }
 
@@ -279,14 +259,14 @@ export async function init() {
       try {
         window.app = await bootstrapSimple();
       } catch (error) {
-        console.error("❌ Failed to bootstrap:", error);
+        console.error("[Bootstrap] Failed to bootstrap:", error);
       }
     });
   } else {
     try {
       window.app = await bootstrapSimple();
     } catch (error) {
-      console.error("❌ Failed to bootstrap:", error);
+      console.error("[Bootstrap] Failed to bootstrap:", error);
     }
   }
 }

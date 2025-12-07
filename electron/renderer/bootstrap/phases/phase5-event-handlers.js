@@ -34,8 +34,6 @@ export async function initializeEventHandlers({
   eventBus,
   sendMessage: _sendMessage,
 }) {
-  console.log("Phase 5: Initializing event handlers...");
-
   // Mount event handlers component with lifecycle management
   ComponentLifecycle.mount(eventHandlersComponent, "EventHandlers", globalLifecycleManager);
 
@@ -103,8 +101,6 @@ export async function initializeEventHandlers({
         }
       });
     }
-
-    console.log("  ✓ UI interaction listeners attached");
 
     // ======================
     // 1.5. Reactive DOM Bindings (AppState → DOM)
@@ -183,8 +179,6 @@ export async function initializeEventHandlers({
     // Apply initial state immediately
     updateLoadingLampVisibility(appState.getState("ui.loadingLampVisible"));
     stateUnsubscribers.push(appState.subscribe("ui.loadingLampVisible", updateLoadingLampVisibility));
-
-    console.log("  ✓ Reactive DOM bindings registered");
 
     // ======================
     // 2. Drag & Drop File Upload
@@ -277,19 +271,14 @@ export async function initializeEventHandlers({
       const files = Array.from(e.dataTransfer.files);
       if (files.length === 0) return;
 
-      console.log("Files dropped:", files.length, "files");
-
       const isOnWelcomePage = document.body.classList.contains("view-welcome");
 
       // If no session, create one first
       if (!sessionService.getCurrentSessionId()) {
-        console.log("No session - creating one for file upload");
         try {
           const result = await sessionService.createSession({});
 
           if (result.success) {
-            console.log("Session created:", result.sessionId);
-
             if (components.filePanel) {
               components.filePanel.setSession(result.sessionId);
             }
@@ -318,7 +307,6 @@ export async function initializeEventHandlers({
           const result = await services.fileService.uploadFile(file, sessionService.getCurrentSessionId());
 
           if (result.success) {
-            console.log(`File uploaded: ${file.name}`);
             uploadedCount++;
 
             // Refresh the appropriate file container
@@ -385,15 +373,11 @@ export async function initializeEventHandlers({
       addListener(fileDropZone, "drop", handleFileDrop);
     }
 
-    console.log("  ✓ Drag-and-drop handlers attached");
-
     // ======================
     // 3. Titlebar
     // ======================
 
     initializeTitlebar();
-
-    console.log("  ✓ Titlebar initialized");
 
     // ======================
     // 4. Session Management
@@ -412,8 +396,6 @@ export async function initializeEventHandlers({
     if (newSessionBtn) {
       addListener(newSessionBtn, "click", async () => {
         try {
-          console.log("Creating new session...");
-
           const previousSessionId = sessionService.getCurrentSessionId();
 
           if (components.filePanel) {
@@ -440,15 +422,11 @@ export async function initializeEventHandlers({
 
           // Collapse sidebar when showing welcome view
           appState.setState("ui.sidebarCollapsed", true);
-
-          console.log("New session started");
         } catch (error) {
-          console.error("Failed to create new session:", error);
+          console.error("[session] Failed to create new session:", error);
         }
       });
     }
-
-    console.log("  ✓ Session management handlers attached");
 
     // ======================
     // 5. EventBus Message Handlers
@@ -459,7 +437,6 @@ export async function initializeEventHandlers({
     // Without this, handlers for "message:function_detected" etc. will never fire.
     const app = { eventBus };
     await MessageHandlerPlugin.install(app);
-    console.log("  ✓ MessageHandlerPlugin installed (message routing enabled)");
 
     registerMessageHandlers({
       appState,
@@ -474,16 +451,12 @@ export async function initializeEventHandlers({
       },
     });
 
-    console.log("  ✓ EventBus message handlers registered");
-
     // ======================
     // 6. IPC Listeners (V2 Binary Protocol)
     // ======================
 
     // V2: Receive messages as objects directly (no parsing needed)
     ipcAdapter.onBotMessage((message) => {
-      console.log("Received message:", message.type);
-
       eventBus.emit("message:received", message, {
         source: "backend",
         timestamp: Date.now(),
@@ -497,8 +470,6 @@ export async function initializeEventHandlers({
     ipcAdapter.onPythonExit(() => {
       console.warn("Bot disconnected");
     });
-
-    console.log("  ✓ IPC listeners attached");
 
     // ======================
     // 7. Session Event Listeners
@@ -535,14 +506,10 @@ export async function initializeEventHandlers({
 
     // Session created event
     window.addEventListener("session-created", async (event) => {
-      console.log("[SessionEvents] Session created event received:", event.detail);
-
       const session = event.detail.session || event.detail;
       const sessionId = session.session_id || event.detail.session_id;
 
       if (sessionId) {
-        console.log("[SessionEvents] Session created:", sessionId);
-
         if (components.filePanel) {
           components.filePanel.setSession(sessionId);
         }
@@ -572,14 +539,10 @@ export async function initializeEventHandlers({
     });
 
     // Session updated event
-    window.addEventListener("session-updated", (event) => {
-      console.log("[SessionEvents] Session updated event received:", event.detail);
-
+    window.addEventListener("session-updated", () => {
       // Update UI immediately with SessionService data
       updateSessionsList(sessionService.getSessions());
     });
-
-    console.log("  ✓ Session event listeners attached");
 
     // ======================
     // 8. Session List Handlers
@@ -597,17 +560,10 @@ export async function initializeEventHandlers({
       });
     }
 
-    console.log("  ✓ Session list handlers attached");
-
     // Cleanup function
     const cleanup = () => {
-      if (hasCleanedUp) {
-        console.log("Cleanup already executed, skipping duplicate call");
-        return;
-      }
+      if (hasCleanedUp) return;
       hasCleanedUp = true;
-
-      console.log("Cleaning up event handlers...");
       // Clear any pending drop zone timer
       if (hideDropZoneTimer) {
         clearTimeout(hideDropZoneTimer);

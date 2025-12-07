@@ -70,13 +70,8 @@ export function setupSessionListHandlers({
     // Otherwise, switch to this session (only if different)
     if (sessionId !== sessionService.getCurrentSessionId()) {
       await handleSwitch(sessionId, sessionService, updateSessionsList, elements, appState);
-    } else {
-      // Already in this session - do nothing (better UX, no popup)
-      console.log("Already in session:", sessionId);
     }
   });
-
-  console.log("✅ Session list event handlers attached (delegation)");
 }
 
 /**
@@ -90,35 +85,25 @@ async function handleSummarize(sessionId, sessionService, appState, ipcAdapter) 
   }
 
   try {
-    console.log("Summarizing session:", sessionId);
-
-    // Track Python status - summarization started
     if (appState) {
       appState.setState("python.status", "busy_summarizing");
-      console.log("🔄 Python status: busy_summarizing");
     }
 
     const result = await sessionService.summarizeSession(sessionId);
 
-    // Track Python status - summarization ended
     if (appState) {
       appState.setState("python.status", "idle");
-      console.log("✅ Python status: idle");
     }
 
-    // Process queued commands
     if (ipcAdapter && ipcAdapter.commandQueue.length > 0) {
-      console.log("📦 Processing queued commands after summarization...");
       await ipcAdapter.processQueue();
     }
 
-    if (result.success) {
-      console.log("✅ Session summarized successfully");
-    } else {
+    if (!result.success) {
       throw new Error(result.error);
     }
   } catch (error) {
-    console.error("Error summarizing session:", error);
+    console.error("[session] Summarize failed:", error.message);
 
     // Ensure status is reset even on error
     if (appState) {
@@ -167,18 +152,16 @@ async function handleRename(sessionItem, sessionId, sessionService, _updateSessi
     if (!newTitle || newTitle === currentTitle) return;
 
     try {
-      console.log("Renaming session:", sessionId, "to:", newTitle);
       const result = await sessionService.renameSession(sessionId, newTitle);
 
       if (result.success) {
-        console.log("✅ Session renamed successfully");
         titleDiv.textContent = newTitle;
       } else {
-        console.error("Failed to rename session:", result.error);
+        console.error("[session] Rename failed:", result.error);
         alert(`Failed to rename session: ${result.error}`);
       }
     } catch (error) {
-      console.error("Error renaming session:", error);
+      console.error("[session] Rename error:", error.message);
       alert(`Error renaming session: ${error.message}`);
     }
   };
@@ -208,58 +191,34 @@ async function handleDelete(sessionId, sessionService, updateSessionsList, eleme
   if (!confirmDelete) return;
 
   try {
-    console.log("Deleting session:", sessionId);
-
-    // Check which view we're on BEFORE deleting (to decide sidebar auto-close behavior)
     const wasOnWelcomePage = document.body.classList.contains("view-welcome");
-
-    // IMPORTANT: Check if we're deleting the current session BEFORE calling deleteSession
-    // (deleteSession will set currentSessionId to null, making the check impossible after)
     const isDeletingCurrentSession = sessionId === sessionService.getCurrentSessionId();
-    console.log("🗑️ Delete check:", {
-      deletedSessionId: sessionId,
-      currentSessionIdBeforeDelete: sessionService.getCurrentSessionId(),
-      isDeletingCurrentSession,
-    });
 
     const result = await sessionService.deleteSession(sessionId);
 
     if (result.success) {
-      console.log("✅ Session deleted successfully");
-
-      // Reload sessions list
       const sessions = await sessionService.loadSessions();
       if (sessions.success) {
         updateSessionsList(sessions.sessions || []);
       }
 
-      // If we deleted the current session, clear and show welcome page
       if (isDeletingCurrentSession) {
-        console.log("🏠 Deleted active session, navigating to welcome page");
-
-        // Clear FilePanel component FIRST (Phase 7 - release file handles!)
+        // Clear FilePanel FIRST to release file handles
         if (window.components?.filePanel) {
-          // CRITICAL: Close all file handles before deletion to prevent "Too many open files"
           window.components.filePanel.closeAllHandles();
           window.components.filePanel.setSession(null);
           window.components.filePanel.clear();
-          console.log("✅ FilePanel handles closed and cleared before deletion");
         }
 
-        // Clear chat UI (Phase 7: use component)
         if (window.components?.chatContainer) {
           window.components.chatContainer.clear();
-        } else {
-          console.error("⚠️ ChatContainer component not available - UI not cleared");
         }
 
-        // Show welcome view (pass services for session creation)
         const { showWelcomeView } = await import("../managers/view-manager.js");
         await showWelcomeView(elements, appState);
       }
 
-      // Close sidebar after delete (better UX) - but only if we were on chat view
-      // Keep sidebar open if we were on welcome page so user can manage multiple sessions
+      // Close sidebar after delete (but keep open on welcome page for multi-session management)
       if (!wasOnWelcomePage) {
         const sidebar = document.getElementById("sidebar");
         if (sidebar && !sidebar.classList.contains("collapsed")) {
@@ -267,11 +226,11 @@ async function handleDelete(sessionId, sessionService, updateSessionsList, eleme
         }
       }
     } else {
-      console.error("Failed to delete session:", result.error);
+      console.error("[session] Delete failed:", result.error);
       alert(`Failed to delete session: ${result.error}`);
     }
   } catch (error) {
-    console.error("Error deleting session:", error);
+    console.error("[session] Delete error:", error.message);
     alert(`Error deleting session: ${error.message}`);
   }
 }
@@ -280,11 +239,7 @@ async function handleDelete(sessionId, sessionService, updateSessionsList, eleme
  * Handle session switch
  */
 async function handleSwitch(sessionId, sessionService, updateSessionsList, elements, appState) {
-  console.log("Switching to session:", sessionId);
-
-  // Double-check: don't switch if already in this session
   if (sessionId === sessionService.getCurrentSessionId()) {
-    console.log("Already in this session, skipping switch");
     return;
   }
 
@@ -292,26 +247,22 @@ async function handleSwitch(sessionId, sessionService, updateSessionsList, eleme
     const result = await sessionService.switchSession(sessionId);
 
     if (result.success) {
-      console.log("✅ Switched to session:", sessionId);
-
-      // Close sidebar after successful switch (UX: only close on success)
+      // Close sidebar after successful switch
       const sidebar = document.getElementById("sidebar");
       if (sidebar && !sidebar.classList.contains("collapsed")) {
         sidebar.classList.add("collapsed");
       }
 
-      // Update chat model selector to reflect session's config
+      // Update chat model selector
       if (result.session) {
         import("../utils/chat-model-updater.js").then(({ updateChatModelSelector }) => {
           updateChatModelSelector(result.session);
         });
       }
 
-      // Clear current chat UI (Phase 7: use component)
+      // Clear current chat UI
       if (window.components?.chatContainer) {
         window.components.chatContainer.clear();
-      } else {
-        console.error("⚠️ ChatContainer component not available - UI not cleared");
       }
 
       // Reset app state
@@ -324,87 +275,23 @@ async function handleSwitch(sessionId, sessionService, updateSessionsList, eleme
         }
       }
 
-      // Render messages from backend response (Phase 7: use component)
+      // Render messages from backend
       const messages = result.fullHistory || [];
-      if (messages.length > 0) {
-        console.log(`📨 Rendering ${messages.length} messages for session ${sessionId}`);
-
-        if (window.components?.chatContainer) {
-          // Use ChatContainer component
-          for (const msg of messages) {
-            console.log("Processing message:", {
-              role: msg.role,
-              contentType: typeof msg.content,
-              isArray: Array.isArray(msg.content),
-            });
-
-            if (msg.role && msg.content) {
-              let content = msg.content;
-              const originalContent = content;
-
-              // Handle different content formats
-              if (Array.isArray(content)) {
-                console.log("Content is array, length:", content.length);
-                // Direct array (multipart message)
-                // Handle both 'text' and 'output_text' types
-                content = content
-                  .filter((part) => part && (part.type === "text" || part.type === "output_text"))
-                  .map((part) => part.text)
-                  .join("\n");
-                console.log("After array processing:", content);
-              } else if (typeof content === "object" && content.text) {
-                // Single text object
-                content = content.text;
-                console.log("Extracted from object.text:", content);
-              } else if (typeof content === "string" && (content.startsWith("[") || content.startsWith("{"))) {
-                // JSON string that needs parsing
-                try {
-                  const parsed = JSON.parse(content);
-                  console.log("Parsed JSON:", { isArray: Array.isArray(parsed), hasText: !!parsed.text });
-
-                  if (Array.isArray(parsed)) {
-                    content = parsed
-                      .filter((part) => part && (part.type === "text" || part.type === "output_text"))
-                      .map((part) => part.text)
-                      .join("\n");
-                    console.log("After JSON array processing:", content);
-                  } else if (parsed.text) {
-                    content = parsed.text;
-                    console.log("Extracted from parsed.text:", content);
-                  }
-                } catch (_e) {
-                  // Not valid JSON, use as-is
-                  console.log("Content is not valid JSON, using as-is");
-                }
-              }
-              // else: content is already a plain string, use as-is
-
-              // Only add if we have actual text content
-              if (content && typeof content === "string" && content.trim()) {
-                // Use appropriate method based on role
-                if (msg.role === "user") {
-                  window.components.chatContainer.addUserMessage(content);
-                } else if (msg.role === "assistant") {
-                  // Don't force scroll per-message - single scroll at end handles it (lines 416-427)
-                  window.components.chatContainer.addAssistantMessage(content);
-                }
-              } else {
-                console.warn("❌ Skipping message - invalid content:", {
-                  role: msg.role,
-                  finalContent: content,
-                  originalContent: originalContent,
-                });
+      if (messages.length > 0 && window.components?.chatContainer) {
+        for (const msg of messages) {
+          if (msg.role && msg.content) {
+            const content = extractTextContent(msg.content);
+            if (content && content.trim()) {
+              if (msg.role === "user") {
+                window.components.chatContainer.addUserMessage(content);
+              } else if (msg.role === "assistant") {
+                window.components.chatContainer.addAssistantMessage(content);
               }
             }
           }
-        } else {
-          console.error("⚠️ ChatContainer component not available - messages not rendered");
         }
-      } else {
-        console.log(`📭 No messages to render for session ${sessionId}`);
       }
 
-      // Update the list to show new active session
       updateSessionsList();
 
       // Switch to chat view if on welcome page
@@ -413,23 +300,17 @@ async function handleSwitch(sessionId, sessionService, updateSessionsList, eleme
         await showChatView(elements, appState);
       }
 
-      // Update FilePanel component with new session (Phase 7)
+      // Update FilePanel
       if (window.components?.filePanel) {
         window.components.filePanel.setSession(sessionId);
-        console.log("✅ FilePanel updated with new session");
-      } else {
-        console.error("⚠️ FilePanel component not available");
       }
 
-      // Scroll to bottom AFTER view transitions complete (UX: show most recent)
+      // Scroll to bottom after loading
       if (messages.length > 0 && window.components?.chatContainer) {
         const { scheduleScroll } = await import("../utils/scroll-utils.js");
-        // Use double RAF to ensure layout is fully settled after showChatView
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            // Force scroll to bottom after session load (always show most recent messages)
             scheduleScroll(window.components.chatContainer.getElement(), { force: true });
-            console.log("[SessionList] Forced scroll to bottom after loading session");
           });
         });
       }
@@ -437,7 +318,45 @@ async function handleSwitch(sessionId, sessionService, updateSessionsList, eleme
       throw new Error(result.error);
     }
   } catch (error) {
-    console.error("Failed to switch session:", error);
+    console.error("[session] Switch failed:", error.message);
     alert(`Failed to switch session: ${error.message}`);
   }
+}
+
+/**
+ * Extract text content from various message formats
+ */
+function extractTextContent(content) {
+  if (typeof content === "string") {
+    // Try parsing as JSON if it looks like JSON
+    if (content.startsWith("[") || content.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed)) {
+          return parsed
+            .filter((part) => part && (part.type === "text" || part.type === "output_text"))
+            .map((part) => part.text)
+            .join("\n");
+        } else if (parsed.text) {
+          return parsed.text;
+        }
+      } catch (_e) {
+        // Not valid JSON, use as-is
+      }
+    }
+    return content;
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .filter((part) => part && (part.type === "text" || part.type === "output_text"))
+      .map((part) => part.text)
+      .join("\n");
+  }
+
+  if (typeof content === "object" && content.text) {
+    return content.text;
+  }
+
+  return null;
 }

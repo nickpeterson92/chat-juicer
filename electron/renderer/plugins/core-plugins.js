@@ -19,10 +19,7 @@ export const MessageHandlerPlugin = createPlugin({
 
   async install(app) {
     // Prevent duplicate installation (plugin may be installed in Phase 5 and Phase 6)
-    if (messageHandlerPluginInstalled) {
-      console.log("[MessageHandlerPlugin] Already installed, skipping");
-      return;
-    }
+    if (messageHandlerPluginInstalled) return;
 
     const { eventBus } = app;
 
@@ -30,11 +27,6 @@ export const MessageHandlerPlugin = createPlugin({
     messageHandlerUnsubscribe = eventBus.on("message:received", async ({ data }) => {
       const message = data;
       const messageType = message.type;
-
-      // DEBUG: Log function-related messages for troubleshooting
-      if (messageType?.includes("function")) {
-        console.log("[MessageHandlerPlugin] Routing function message:", messageType, message);
-      }
 
       // Emit specific message type event
       eventBus.emit(`message:${messageType}`, message, {
@@ -52,7 +44,6 @@ export const MessageHandlerPlugin = createPlugin({
     });
 
     messageHandlerPluginInstalled = true;
-    console.log("[MessageHandlerPlugin] Installed");
   },
 
   async uninstall(_app) {
@@ -64,7 +55,6 @@ export const MessageHandlerPlugin = createPlugin({
 
     // Reset installation guard
     messageHandlerPluginInstalled = false;
-    console.log("[MessageHandlerPlugin] Uninstalled");
   },
 });
 
@@ -103,8 +93,6 @@ export const StateSyncPlugin = createPlugin({
         });
       }
     });
-
-    console.log("[StateSyncPlugin] Installed");
   },
 });
 
@@ -159,8 +147,6 @@ export const PerformanceTrackingPlugin = createPlugin({
 
     // Store metrics reference on app
     app.performanceMetrics = metrics;
-
-    console.log("[PerformanceTrackingPlugin] Installed");
   },
 });
 
@@ -208,8 +194,6 @@ export const ErrorTrackingPlugin = createPlugin({
 
     // Store errors on app for debugging
     app.recentErrors = errors;
-
-    console.log("[ErrorTrackingPlugin] Installed");
   },
 });
 
@@ -223,10 +207,7 @@ export const DebugToolsPlugin = createPlugin({
   description: "Development debugging tools",
 
   async install(app) {
-    if (!import.meta.env.DEV) {
-      console.log("[DebugToolsPlugin] Skipped (not in dev mode)");
-      return;
-    }
+    if (!import.meta.env.DEV) return;
 
     const { eventBus, state } = app;
 
@@ -284,15 +265,12 @@ export const DebugToolsPlugin = createPlugin({
       }),
     };
 
-    // Log all events in dev mode
+    // Log debug-namespaced events in dev mode
     eventBus.on("*", ({ event, data }) => {
       if (event.startsWith("debug:")) {
-        console.log(`[EventBus] ${event}`, data);
+        console.debug(`[EventBus] ${event}`, data);
       }
     });
-
-    console.log("[DebugToolsPlugin] Installed");
-    console.log("💡 Debug API available at: window.__CHAT_JUICER_DEBUG__");
   },
 });
 
@@ -358,14 +336,11 @@ export const KeyboardShortcutsPlugin = createPlugin({
     // Store shortcuts on app
     app.shortcuts = shortcuts;
     app.registerShortcut = registerShortcut;
-
-    console.log("[KeyboardShortcutsPlugin] Installed");
   },
 
   async uninstall(app) {
     // Remove keyboard listener
     document.removeEventListener("keydown", app.handleKeydown);
-    console.log("[KeyboardShortcutsPlugin] Uninstalled");
   },
 });
 
@@ -392,8 +367,6 @@ export const AnalyticsBridgePlugin = createPlugin({
 
     // Store analytics on app
     app.analytics = globalAnalytics;
-
-    console.log("[AnalyticsBridgePlugin] Installed - wired to globalAnalytics");
   },
 });
 
@@ -408,7 +381,6 @@ export const MetricsBridgePlugin = createPlugin({
 
   async install(_app) {
     // Performance metrics disabled; plugin is a no-op for compatibility.
-    console.log("[MetricsBridgePlugin] Skipped (performance metrics disabled)");
   },
 });
 
@@ -435,8 +407,6 @@ export const AutoSavePlugin = createPlugin({
       localStorage.setItem("toolsPanelCollapsed", collapsed);
       eventBus.emit("ui:panel:saved", { collapsed });
     });
-
-    console.log("[AutoSavePlugin] Installed");
   },
 });
 
