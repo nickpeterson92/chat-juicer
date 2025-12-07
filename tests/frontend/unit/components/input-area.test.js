@@ -65,7 +65,7 @@ describe("InputArea", () => {
   });
 
   describe("AppState integration", () => {
-    it("should subscribe to queue.items for placeholder updates", () => {
+    it("should subscribe to queue.items for badge updates", () => {
       const inputArea = new InputArea(textarea, sendButton, onSendCallback, {
         appState,
       });
@@ -78,13 +78,14 @@ describe("InputArea", () => {
       expect(inputArea.isEnabled).toBe(true);
       expect(textarea.hasAttribute("disabled")).toBe(false);
 
-      // Placeholder updates when queue has items
+      // Badge appears when queue has items
       appState.setState("queue.items", [{ id: "1", text: "test", status: "queued" }]);
-      expect(textarea.placeholder).toContain("1 queued");
+      expect(inputArea.queueBadge).not.toBeNull();
+      expect(inputArea.queueBadge.textContent).toBe("1");
 
-      // Placeholder resets when queue is empty
+      // Badge removed when queue is empty
       appState.setState("queue.items", []);
-      expect(textarea.placeholder).toBe("Type a message...");
+      expect(inputArea.queueBadge).toBeNull();
     });
 
     it("should work without appState", () => {

@@ -86,29 +86,13 @@ export class InputArea {
     // Messages sent while agent is busy are queued and processed when idle
     // No longer disabling input during streaming
 
-    // Subscribe to queue state for placeholder and badge updates
+    // Subscribe to queue state for badge updates on send button
     const unsubscribeQueue = this.appState.subscribe("queue.items", (items) => {
       const queueCount = items?.length || 0;
-      this.updatePlaceholderWithQueueCount(queueCount);
       this.updateQueueBadge(queueCount);
     });
 
     globalLifecycleManager.addUnsubscriber(this, unsubscribeQueue);
-  }
-
-  /**
-   * Update placeholder text to show queue count
-   * @param {number} queueCount - Number of queued messages
-   * @private
-   */
-  updatePlaceholderWithQueueCount(queueCount) {
-    if (!this.textarea) return;
-
-    if (queueCount > 0) {
-      this.textarea.placeholder = `Type another message... (${queueCount} queued)`;
-    } else {
-      this.textarea.placeholder = "Type a message...";
-    }
   }
 
   /**
