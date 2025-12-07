@@ -8,6 +8,26 @@ import { globalLifecycleManager } from "@/core/lifecycle-manager.js";
 import { AppState } from "@/core/state.js";
 import { ChatContainer } from "@/ui/components/chat-container.js";
 
+// Mock lottie-web to avoid canvas errors in tests
+vi.mock("lottie-web", () => ({
+  default: {
+    loadAnimation: vi.fn(() => ({
+      destroy: vi.fn(),
+      play: vi.fn(),
+      stop: vi.fn(),
+    })),
+  },
+}));
+
+// Mock lottie-color utility
+vi.mock("@/utils/lottie-color.js", () => ({
+  initLottieWithColor: vi.fn(() => ({
+    destroy: vi.fn(),
+    play: vi.fn(),
+    stop: vi.fn(),
+  })),
+}));
+
 // Mock chat-ui and function-card-ui modules
 vi.mock("@/ui/chat-ui.js", () => ({
   addMessage: vi.fn(),

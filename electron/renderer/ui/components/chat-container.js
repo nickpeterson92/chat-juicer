@@ -3,10 +3,13 @@
  * Wraps existing DOM element and delegates to chat-ui.js and function-card-ui.js utilities
  */
 
+import smokeAnimationData from "../../../../ui/Smoke.json";
+import { CRITICAL_COLORS } from "../../config/colors.js";
 import { ComponentLifecycle } from "../../core/component-lifecycle.js";
 import { globalEventBus } from "../../core/event-bus.js";
 import { globalLifecycleManager } from "../../core/lifecycle-manager.js";
 import { getMessageQueueService } from "../../services/message-queue-service.js";
+import { initLottieWithColor } from "../../utils/lottie-color.js";
 import { renderMarkdown } from "../../utils/markdown-renderer.js";
 import {
   addMessage,
@@ -65,15 +68,23 @@ export class ChatContainer {
         // Update the streaming message with new content
         this.updateStreamingMessage(buffer);
       }
+
+      // When first tokens arrive, hide mini thinking indicators (thinking phase over)
+      if (buffer) {
+        this._toggleQueuedIndicators();
+      }
     });
     globalLifecycleManager.addUnsubscriber(this, unsubscribeAssistantBuffer);
 
-    // Subscribe to streaming state - manage streaming UI state
+    // Subscribe to streaming state - manage streaming UI state and queued message indicators
     const unsubscribeIsStreaming = this.appState.subscribe("message.isStreaming", (isStreaming) => {
       if (!isStreaming && this.currentStreamingMessage) {
         // Streaming completed, finalize the message
         this.completeStreaming();
       }
+
+      // Toggle mini thinking indicators on queued messages
+      this._toggleQueuedIndicators();
     });
     globalLifecycleManager.addUnsubscriber(this, unsubscribeIsStreaming);
 
@@ -100,32 +111,42 @@ export class ChatContainer {
   }
 
   /**
-   * Render queued messages in the chat container
+   * Render queued messages in a separate container outside the scroll flow
+   * This prevents "bouncing" during streaming as content grows
    * @param {Array<Object>} items - Queue items to render
    * @private
    */
   renderQueuedMessages(items) {
-    // Remove existing queued message elements
-    const existingQueued = this.element.querySelectorAll(".queued-message");
-    existingQueued.forEach((el) => {
-      el.remove();
-    });
+    // Use dedicated container outside scroll flow (prevents bouncing during streaming)
+    const queuedContainer = document.getElementById("queued-messages-container");
+    if (!queuedContainer) {
+      return;
+    }
+
+    // Clear existing queued messages
+    queuedContainer.innerHTML = "";
 
     // Only render items with 'queued' status (not processing)
     const queuedItems = items.filter((item) => item.status === "queued");
 
     if (queuedItems.length === 0) {
+      // Hide container when empty
+      queuedContainer.classList.add("hidden");
       return;
     }
 
-    // Render each queued message
+    // Show container and render queued messages
+    queuedContainer.classList.remove("hidden");
     for (const item of queuedItems) {
       const queuedElement = this._createQueuedMessageElement(item);
-      this.element.appendChild(queuedElement);
+      queuedContainer.appendChild(queuedElement);
     }
 
-    // Scroll to show queued messages
-    this.scrollToBottom();
+    // Scroll chat to bottom to show context (only when not streaming)
+    const isStreaming = this.appState?.getState("message.isStreaming");
+    if (!isStreaming) {
+      this.scrollToBottom();
+    }
   }
 
   /**
@@ -148,11 +169,41 @@ export class ChatContainer {
     const header = document.createElement("div");
     header.className = "flex items-center justify-between mb-2";
 
+    // Badge container with mini processing indicator
+    const badgeContainer = document.createElement("div");
+    badgeContainer.className = "flex items-center gap-1.5";
+
     // Queued badge
     const badge = document.createElement("span");
     badge.className =
       "queued-badge text-xs font-medium px-2 py-0.5 rounded bg-[var(--color-surface-active)] text-[var(--color-text-secondary)]";
     badge.textContent = "Queued";
+
+    // Mini processing indicator (shows when streaming)
+    const miniIndicator = document.createElement("span");
+    miniIndicator.className = "queued-mini-indicator";
+    miniIndicator.style.cssText = "display: none; width: 20px; height: 20px; vertical-align: middle;";
+
+    // Check if thinking indicator should be visible:
+    // 1. Main smoke indicator exists in DOM
+    // 2. No tokens have started streaming yet (buffer empty = still "thinking")
+    const hasTokensStarted = !!this.appState?.getState("message.assistantBuffer");
+    const thinkingIndicatorVisible = !hasTokensStarted && !!document.querySelector("#chat-container .loading-lamp");
+    if (thinkingIndicatorVisible) {
+      miniIndicator.style.display = "inline-block";
+      requestAnimationFrame(() => {
+        try {
+          const brandColor = CRITICAL_COLORS.BRAND_PRIMARY;
+          initLottieWithColor(miniIndicator, smokeAnimationData, brandColor);
+        } catch (error) {
+          miniIndicator.textContent = "●";
+          miniIndicator.style.color = CRITICAL_COLORS.BRAND_PRIMARY;
+        }
+      });
+    }
+
+    badgeContainer.appendChild(badge);
+    badgeContainer.appendChild(miniIndicator);
 
     // Action buttons container
     const actions = document.createElement("div");
@@ -181,7 +232,7 @@ export class ChatContainer {
 
     actions.appendChild(editBtn);
     actions.appendChild(cancelBtn);
-    header.appendChild(badge);
+    header.appendChild(badgeContainer);
     header.appendChild(actions);
 
     // Message content
@@ -620,6 +671,43 @@ export class ChatContainer {
     const wrapper = document.createElement("div");
     createCompletedToolCard(wrapper, toolData);
     return wrapper.firstChild;
+  }
+
+  /**
+   * Toggle mini thinking indicators on queued messages
+   * Shows indicators only when in "thinking" phase (smoke visible, no tokens yet)
+   * @private
+   */
+  _toggleQueuedIndicators() {
+    const queuedContainer = document.getElementById("queued-messages-container");
+    if (!queuedContainer) return;
+
+    // Check if thinking indicator should be visible:
+    // 1. Main smoke indicator exists in DOM
+    // 2. No tokens have started streaming yet (buffer empty = still "thinking")
+    const hasTokensStarted = !!this.appState?.getState("message.assistantBuffer");
+    const thinkingIndicatorVisible = !hasTokensStarted && !!document.querySelector("#chat-container .loading-lamp");
+
+    const indicators = queuedContainer.querySelectorAll(".queued-mini-indicator");
+    for (const indicator of indicators) {
+      if (thinkingIndicatorVisible) {
+        indicator.style.display = "inline-block";
+        // Initialize Lottie if empty (first time showing)
+        if (!indicator.hasChildNodes() && !indicator.textContent) {
+          requestAnimationFrame(() => {
+            try {
+              const brandColor = CRITICAL_COLORS.BRAND_PRIMARY;
+              initLottieWithColor(indicator, smokeAnimationData, brandColor);
+            } catch (error) {
+              indicator.textContent = "●";
+              indicator.style.color = CRITICAL_COLORS.BRAND_PRIMARY;
+            }
+          });
+        }
+      } else {
+        indicator.style.display = "none";
+      }
+    }
   }
 
   /**
