@@ -6,11 +6,75 @@ Includes Pydantic validation for environment variables.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
 from pydantic import Field, HttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# ============================================================================
+# Model Configuration - Single Source of Truth
+# ============================================================================
+
+
+@dataclass(frozen=True, slots=True)
+class ModelConfig:
+    """Single source of truth for model configuration.
+
+    All model-related constants are derived from MODEL_CONFIGS tuple.
+    To add a new model, add ONE entry to MODEL_CONFIGS below.
+
+    Attributes:
+        id: API model name (e.g., "gpt-5.1")
+        display_name: Human-readable name for UI (e.g., "GPT-5.1")
+        description: Short description for model selector
+        token_limit: Maximum input context window size
+        supports_reasoning: Whether model supports reasoning_effort parameter
+        is_primary: Whether to show prominently in UI model selector
+        is_ui_model: Whether model appears in frontend UI selector
+    """
+
+    id: str
+    display_name: str
+    description: str
+    token_limit: int
+    supports_reasoning: bool
+    is_primary: bool
+    is_ui_model: bool = True  # Default True for backward compatibility
+
+
+#: Master model configuration - ADD NEW MODELS HERE ONLY!
+#: Order determines display order in UI model selector.
+#: Models with is_ui_model=False are backend-only (for token limits, etc.)
+MODEL_CONFIGS: tuple[ModelConfig, ...] = (
+    # GPT-5.1 series (latest)
+    ModelConfig("gpt-5.1", "GPT-5.1", "Latest reasoning model", 272000, True, True),
+    ModelConfig("gpt-5.1-codex-max", "GPT-5.1 Codex Max", "Maximum capability code generation", 272000, True, True),
+    # GPT-5 series
+    ModelConfig("gpt-5-pro", "GPT-5 Pro", "Most capable for complex tasks", 272000, True, False),
+    ModelConfig("gpt-5", "GPT-5", "Deep reasoning for hard problems", 272000, True, False),
+    ModelConfig("gpt-5-mini", "GPT-5 Mini", "Smart and fast for everyday use", 272000, True, False),
+    ModelConfig("gpt-5-codex", "GPT-5 Codex", "Optimized for code generation", 272000, True, False),
+    ModelConfig("gpt-5-nano", "GPT-5 Nano", "Lightweight reasoning model", 272000, True, False, is_ui_model=False),
+    # GPT-4.1 series (non-reasoning)
+    ModelConfig("gpt-4.1", "GPT-4.1", "Previous generation, still capable", 128000, False, False),
+    ModelConfig("gpt-4.1-mini", "GPT-4.1 Mini", "Faster responses for simple tasks", 128000, False, False),
+    # Legacy models (backend-only for token limits)
+    ModelConfig("gpt-4o", "GPT-4o", "GPT-4 Optimized", 128000, False, False, is_ui_model=False),
+    ModelConfig("gpt-4o-mini", "GPT-4o Mini", "GPT-4 Optimized Mini", 128000, False, False, is_ui_model=False),
+    ModelConfig("gpt-4", "GPT-4", "GPT-4 Base", 128000, False, False, is_ui_model=False),
+    ModelConfig("gpt-4-turbo", "GPT-4 Turbo", "GPT-4 Turbo", 128000, False, False, is_ui_model=False),
+    ModelConfig("gpt-3.5-turbo", "GPT-3.5 Turbo", "GPT-3.5 Turbo", 15360, False, False, is_ui_model=False),
+    ModelConfig("gpt-35-turbo", "GPT-3.5 Turbo", "GPT-3.5 Turbo (Azure)", 15360, False, False, is_ui_model=False),
+    # O1 series (reasoning, backend-only)
+    ModelConfig("o1", "O1", "O1 Reasoning", 128000, True, False, is_ui_model=False),
+    ModelConfig("o1-mini", "O1 Mini", "O1 Mini Reasoning", 128000, True, False, is_ui_model=False),
+    ModelConfig("o1-preview", "O1 Preview", "O1 Preview Reasoning", 128000, True, False, is_ui_model=False),
+    # O3 series (reasoning, backend-only)
+    ModelConfig("o3", "O3", "O3 Reasoning", 128000, True, False, is_ui_model=False),
+    ModelConfig("o3-mini", "O3 Mini", "O3 Mini Reasoning", 128000, True, False, is_ui_model=False),
+)
 
 # ============================================================================
 # File Operations Configuration
@@ -380,24 +444,12 @@ SUMMARY_MAX_COMPLETION_TOKENS = 3000
 #: Default model name for fallback scenarios and initial agent setup.
 #: Used when agent model is not specified or during bootstrap.
 #: Sessions will override this with their own per-session model selection.
-DEFAULT_MODEL = "gpt-5"
+DEFAULT_MODEL = "gpt-5.1"
 
-#: Models that support reasoning_effort parameter.
+#: Models that support reasoning_effort parameter (derived from MODEL_CONFIGS).
 #: Only these models can use the reasoning.effort configuration.
 #: Setting reasoning_effort on non-reasoning models may cause errors or be ignored.
-REASONING_MODELS = {
-    # GPT-5 series (reasoning models)
-    "gpt-5",
-    "gpt-5-mini",
-    "gpt-5-nano",
-    # O1 series (reasoning models)
-    "o1",
-    "o1-mini",
-    "o1-preview",
-    # O3 series (reasoning models)
-    "o3",
-    "o3-mini",
-}
+REASONING_MODELS: set[str] = {m.id for m in MODEL_CONFIGS if m.supports_reasoning}
 
 #: Maximum number of conversation turns (user+assistant exchanges) per run.
 #: Prevents infinite loops and controls maximum conversation length per execution.
@@ -469,56 +521,22 @@ REASONING_EFFORT_OPTIONS: dict[str, str] = {
 # Model Configuration (Frontend Display)
 # ============================================================================
 
-#: Model metadata with display names, descriptions, and feature flags.
+#: Model metadata with display names, descriptions, and feature flags (derived from MODEL_CONFIGS).
 #: Used by frontend for model selection UI and configuration.
 MODEL_METADATA: dict[str, dict[str, str | bool]] = {
-    "gpt-5-pro": {
-        "displayName": "GPT-5 Pro",
-        "description": "Most capable for complex tasks",
-        "isPrimary": True,
-    },
-    "gpt-5": {
-        "displayName": "GPT-5",
-        "description": "Deep reasoning for hard problems",
-        "isPrimary": True,
-    },
-    "gpt-5-mini": {
-        "displayName": "GPT-5 Mini",
-        "description": "Smart and fast for everyday use",
-        "isPrimary": True,
-    },
-    "gpt-5-codex": {
-        "displayName": "GPT-5 Codex",
-        "description": "Optimized for code generation",
-        "isPrimary": False,
-    },
-    "gpt-4.1": {
-        "displayName": "GPT-4.1",
-        "description": "Previous generation, still capable",
-        "isPrimary": False,
-    },
-    "gpt-4.1-mini": {
-        "displayName": "GPT-4.1 Mini",
-        "description": "Faster responses for simple tasks",
-        "isPrimary": False,
-    },
+    m.id: {"displayName": m.display_name, "description": m.description, "isPrimary": m.is_primary}
+    for m in MODEL_CONFIGS
+    if m.is_ui_model
 }
 
-#: Ordered list of supported models for frontend display.
+#: Ordered list of supported models for frontend display (derived from MODEL_CONFIGS).
 #: Controls the order of models in the model selection UI.
-SUPPORTED_MODELS: list[str] = [
-    "gpt-5-pro",
-    "gpt-5",
-    "gpt-5-mini",
-    "gpt-5-codex",
-    "gpt-4.1",
-    "gpt-4.1-mini",
-]
+SUPPORTED_MODELS: list[str] = [m.id for m in MODEL_CONFIGS if m.is_ui_model]
 
-#: Models that support reasoning effort configuration.
+#: Models that support reasoning effort configuration (derived from MODEL_CONFIGS).
 #: GPT-5 family has reasoning, GPT-4.1 family does not.
 #: Used to conditionally show reasoning effort selector in UI.
-MODELS_WITH_REASONING: list[str] = ["gpt-5", "gpt-5-pro", "gpt-5-codex", "gpt-5-mini"]
+MODELS_WITH_REASONING: list[str] = [m.id for m in MODEL_CONFIGS if m.supports_reasoning and m.is_ui_model]
 
 # ============================================================================
 # Model Token Limits (Input Context Windows)
@@ -527,30 +545,15 @@ MODELS_WITH_REASONING: list[str] = ["gpt-5", "gpt-5-pro", "gpt-5-codex", "gpt-5-
 #: **Note**: IPC uses binary V2 protocol (MessagePack + length-prefixed framing).
 #: See :class:`utils.ipc.IPCManager` for IPC communication methods.
 
-#: Model-specific input token limits for conversation tracking.
+#: Model-specific input token limits for conversation tracking (derived from MODEL_CONFIGS).
 #: These are INPUT limits (not output) since we track conversation context,
 #: not generation tokens. Used by TokenAwareSQLiteSession for auto-summarization.
-#:
-#: Format: {"model-name": input_token_limit}
 #:
 #: Notes:
 #: - Values are approximate and may change with model updates
 #: - Conservative limits preferred to avoid context overflow
 #: - Azure model names (gpt-35-turbo) included for compatibility
-MODEL_TOKEN_LIMITS: dict[str, int] = {
-    # GPT-5 models (272k input context)
-    "gpt-5": 272000,
-    "gpt-5-mini": 272000,
-    "gpt-5-nano": 272000,
-    # GPT-4 models (128k input context)
-    "gpt-4o": 128000,
-    "gpt-4o-mini": 128000,
-    "gpt-4": 128000,
-    "gpt-4-turbo": 128000,
-    # GPT-3.5 models (16k input, conservative 15.3k limit)
-    "gpt-3.5-turbo": 15360,
-    "gpt-35-turbo": 15360,  # Azure naming convention
-}
+MODEL_TOKEN_LIMITS: dict[str, int] = {m.id: m.token_limit for m in MODEL_CONFIGS}
 
 # ============================================================================
 # Environment Configuration with Pydantic Validation

@@ -1,26 +1,41 @@
 /**
  * Model Metadata Configuration
- * Shared constants for model display names, descriptions, and reasoning levels
+ *
+ * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY!
+ *
+ * This file is generated from src/core/constants.py MODEL_CONFIGS.
+ * To modify model configuration, edit MODEL_CONFIGS in constants.py
+ * and run: make generate-model-metadata
  */
 
 /**
  * Model metadata with display names and descriptions
  */
 export const MODEL_METADATA = {
+  "gpt-5.1": {
+    displayName: "GPT-5.1",
+    description: "Latest reasoning model",
+    isPrimary: true,
+  },
+  "gpt-5.1-codex-max": {
+    displayName: "GPT-5.1 Codex Max",
+    description: "Maximum capability code generation",
+    isPrimary: true,
+  },
   "gpt-5-pro": {
     displayName: "GPT-5 Pro",
     description: "Most capable for complex tasks",
-    isPrimary: true,
+    isPrimary: false,
   },
   "gpt-5": {
     displayName: "GPT-5",
     description: "Deep reasoning for hard problems",
-    isPrimary: true,
+    isPrimary: false,
   },
   "gpt-5-mini": {
     displayName: "GPT-5 Mini",
     description: "Smart and fast for everyday use",
-    isPrimary: true,
+    isPrimary: false,
   },
   "gpt-5-codex": {
     displayName: "GPT-5 Codex",

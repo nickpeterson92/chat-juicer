@@ -256,7 +256,7 @@ class TestGetConfigMetadata:
         # Verify default markings
         default_model = next((m for m in models if m["isDefault"]), None)
         assert default_model is not None
-        assert default_model["value"] == "gpt-5"
+        assert default_model["value"] == "gpt-5.1"
 
         default_reasoning = next((r for r in reasoning_levels if r["isDefault"]), None)
         assert default_reasoning is not None

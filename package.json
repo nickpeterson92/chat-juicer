@@ -7,6 +7,8 @@
     "prestart": "node scripts/validate.js",
     "start": "npm run build && node scripts/launch.js",
     "dev": "node scripts/launch.js --dev",
+    "generate:models": ".juicer/bin/python scripts/generate-model-metadata.py",
+    "prebuild": "npm run generate:models",
     "build": "vite build",
     "inspect": "node scripts/launch.js --inspect",
     "setup": "npm install && node scripts/setup.js",
