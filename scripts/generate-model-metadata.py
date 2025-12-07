@@ -114,9 +114,7 @@ def generate_model_metadata_js() -> str:
     # Add reasoning descriptions
     desc_items = list(reasoning_descriptions.items())
     for i, (level, desc) in enumerate(desc_items):
-        is_last = i == len(desc_items) - 1
-        comma = "," if not is_last else ""
-        lines.append(f'  {level}: "{desc}"{comma}')
+        lines.append(f'  {level}: "{desc}",')
 
     lines.append("};")
     lines.append("")
