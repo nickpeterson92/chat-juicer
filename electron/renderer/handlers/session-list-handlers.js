@@ -85,6 +85,12 @@ async function handleSummarize(sessionId, sessionService, appState, ipcAdapter) 
   }
 
   try {
+    // Collapse sidebar so user can see the summarization in chat
+    const sidebar = document.getElementById("sidebar");
+    if (sidebar && !sidebar.classList.contains("collapsed")) {
+      sidebar.classList.add("collapsed");
+    }
+
     // Send the command FIRST, then set status
     // (Setting status before would cause the command to queue itself)
     const resultPromise = sessionService.summarizeSession(sessionId);

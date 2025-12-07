@@ -244,21 +244,21 @@
     @apply transition-colors duration-150;
   }
 
-  /* Summarize button - Blue hover */
+  /* Summarize button - Lime green (matches pill accent-1) */
   .session-action-btn.summarize-btn:hover svg {
-    color: var(--color-status-info);
+    color: var(--color-brand-accent-1);
     @apply stroke-current;
   }
 
-  /* Rename button - Green hover */
+  /* Rename button - Light purple (matches pill accent-2) */
   .session-action-btn.rename-btn:hover svg {
-    color: var(--color-status-success);
+    color: var(--color-brand-accent-2);
     @apply stroke-current;
   }
 
-  /* Delete button - Red hover */
+  /* Delete button - Coral red (matches pill accent-3) */
   .session-action-btn.delete-btn:hover svg {
-    color: var(--color-status-error);
+    color: var(--color-brand-accent-3);
     @apply stroke-current;
   }
 
