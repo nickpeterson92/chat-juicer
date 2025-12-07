@@ -405,10 +405,15 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
             )
 
     finally:
-        # Always send assistant_end to close the stream
-        logger.debug("Finally block - sending assistant_end")
-        IPCManager.send_assistant_end()
-        logger.debug("assistant_end message sent")
+        # Send assistant_end unless interrupt was requested
+        # When interrupted, main.py handles sending assistant_end (either after task completes
+        # or after timeout), so we skip it here to avoid duplicate messages
+        if not app_state.interrupt_requested:
+            logger.debug("Finally block - sending assistant_end")
+            IPCManager.send_assistant_end()
+            logger.debug("assistant_end message sent")
+        else:
+            logger.debug("Finally block - skipping assistant_end (interrupt handled by main.py)")
 
         # Save partial response to Layer 2 if cancelled with content
         # Use app_state.interrupt_requested since SDK may suppress CancelledError

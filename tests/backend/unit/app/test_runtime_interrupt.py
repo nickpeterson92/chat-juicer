@@ -43,6 +43,7 @@ class TestStreamInterrupt:
         """Test cancellation during token streaming causes immediate stop."""
         mock_app_state = Mock()
         mock_app_state.full_history_store = None
+        mock_app_state.interrupt_requested = True  # Set by main.py before cancel
 
         mock_session = Mock()
         mock_session.agent = Mock()
@@ -66,9 +67,9 @@ class TestStreamInterrupt:
         with pytest.raises(asyncio.CancelledError):
             await process_messages(mock_app_state, mock_session, ["Test input"])
 
-        # Note: stream_interrupted is sent by main.py, not process_messages
-        # process_messages only re-raises CancelledError and sends assistant_end
-        mock_ipc.send_assistant_end.assert_called_once()
+        # Note: When interrupt_requested is True, process_messages skips assistant_end
+        # main.py handles sending it to avoid duplicates
+        mock_ipc.send_assistant_end.assert_not_called()
 
     @pytest.mark.asyncio
     @patch("app.runtime.Runner")
@@ -232,6 +233,7 @@ class TestStreamInterrupt:
         """Test that cancel_requested flag causes loop to break at safe points."""
         mock_app_state = Mock()
         mock_app_state.full_history_store = None
+        mock_app_state.interrupt_requested = True  # Set by main.py before cancel
 
         mock_session = Mock()
         mock_session.agent = Mock()
@@ -256,8 +258,9 @@ class TestStreamInterrupt:
         with pytest.raises(asyncio.CancelledError):
             await process_messages(mock_app_state, mock_session, ["Test"])
 
-        # Note: stream_interrupted is sent by main.py, not process_messages
-        mock_ipc.send_assistant_end.assert_called_once()
+        # When interrupt_requested is True, process_messages skips assistant_end
+        # main.py handles sending it to avoid duplicates
+        mock_ipc.send_assistant_end.assert_not_called()
 
     @pytest.mark.asyncio
     @patch("app.runtime.Runner")

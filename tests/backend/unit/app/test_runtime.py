@@ -90,6 +90,7 @@ class TestProcessMessages:
         """Test processing user messages successfully."""
         mock_app_state = Mock()
         mock_app_state.full_history_store = None
+        mock_app_state.interrupt_requested = False  # Normal completion, not interrupted
         mock_session = Mock()
         mock_session.agent = Mock()
         mock_session.session_id = "chat_test"
@@ -124,6 +125,7 @@ class TestProcessMessages:
         mock_app_state.session_manager = Mock()
         mock_app_state.session_manager.get_session.return_value = Mock(is_named=True)
         mock_app_state.full_history_store = None
+        mock_app_state.interrupt_requested = False  # Error during streaming, not interrupted
 
         mock_session = Mock()
         mock_session.agent = Mock()

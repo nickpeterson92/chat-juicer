@@ -236,21 +236,18 @@ async def main() -> None:
                                 # Send stream_interrupted IMMEDIATELY for instant user feedback
                                 write_message({"type": "stream_interrupted"})
                                 logger.info("stream_interrupted sent to frontend")
-                                task_completed = False
                                 try:
                                     # Short timeout - task should respond quickly to cancel
                                     await asyncio.wait_for(app_state.active_stream_task, timeout=0.5)
-                                    task_completed = True
+                                    logger.debug("Stream task completed after cancel")
                                 except asyncio.TimeoutError:
                                     logger.warning("Stream task didn't complete within timeout after cancel")
                                 except asyncio.CancelledError:
-                                    task_completed = True
                                     logger.debug("Stream task cancelled successfully")
-                                # If task timed out, send assistant_end to reset frontend state
-                                # (task's finally block hasn't run yet)
-                                if not task_completed:
-                                    write_message({"type": "assistant_end"})
-                                    logger.info("assistant_end sent (task timed out)")
+                                # Always send assistant_end after interrupt - runtime.py skips it
+                                # when interrupt_requested is True to avoid duplicates
+                                write_message({"type": "assistant_end"})
+                                logger.info("assistant_end sent (interrupt handler)")
                                 break
                             else:
                                 # Non-interrupt message during streaming - queue for after stream completes
