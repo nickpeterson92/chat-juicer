@@ -34,15 +34,17 @@ export class IPCAdapter {
   }
 
   /**
-   * Send message to Python backend
-   * @param {string} content - Message content to send
+   * Send message(s) to Python backend
+   * @param {string|string[]} content - Single message or array of messages
    * @returns {Promise<void>}
    */
   async sendMessage(content) {
     if (!this.api?.sendUserInput) {
       throw new Error("IPC API not available: sendUserInput");
     }
-    return this.api.sendUserInput(content);
+    // Normalize to array format for unified backend handling
+    const messages = Array.isArray(content) ? content : [content];
+    return this.api.sendUserInput(messages);
   }
 
   /**

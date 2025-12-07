@@ -65,22 +65,27 @@ describe("InputArea", () => {
   });
 
   describe("AppState integration", () => {
-    it("should subscribe to message.isStreaming", () => {
+    it("should subscribe to queue.items for badge updates", () => {
       const inputArea = new InputArea(textarea, sendButton, onSendCallback, {
         appState,
       });
 
+      // Input should always be enabled (queue feature - messages queue when agent is busy)
       expect(inputArea.isEnabled).toBe(true);
 
-      // Start streaming - should disable
+      // During streaming, input stays enabled (messages get queued)
       appState.setState("message.isStreaming", true);
-      expect(inputArea.isEnabled).toBe(false);
-      expect(textarea.hasAttribute("disabled")).toBe(true);
-
-      // Stop streaming - should enable
-      appState.setState("message.isStreaming", false);
       expect(inputArea.isEnabled).toBe(true);
       expect(textarea.hasAttribute("disabled")).toBe(false);
+
+      // Badge appears when queue has items
+      appState.setState("queue.items", [{ id: "1", text: "test", status: "queued" }]);
+      expect(inputArea.queueBadge).not.toBeNull();
+      expect(inputArea.queueBadge.textContent).toBe("1");
+
+      // Badge removed when queue is empty
+      appState.setState("queue.items", []);
+      expect(inputArea.queueBadge).toBeNull();
     });
 
     it("should work without appState", () => {

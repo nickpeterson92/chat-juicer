@@ -32,22 +32,31 @@ export class MessageService {
   }
 
   /**
-   * Send message to backend
+   * Send message(s) to backend
    *
-   * @param {string} content - Message content
+   * @param {string|string[]} content - Single message string or array of message strings
    * @param {string|null} sessionId - Optional session ID
    * @returns {Promise<Object>} Result with success/error
    */
   async sendMessage(content, _sessionId = null) {
-    if (!content || typeof content !== "string" || !content.trim()) {
+    // Normalize to array format
+    const messages = Array.isArray(content) ? content : [content];
+
+    // Validate all messages
+    const validMessages = messages
+      .filter((msg) => msg && typeof msg === "string")
+      .map((msg) => msg.trim())
+      .filter((msg) => msg.length > 0);
+
+    if (validMessages.length === 0) {
       return { success: false, error: "Message content cannot be empty" };
     }
 
     try {
-      // Use IPCAdapter's sendMessage method (which calls sendUserInput)
-      // Note: sendUserInput just takes content string, backend will use current session
-      await this.ipc.sendMessage(content.trim());
-      return { success: true };
+      // Use IPCAdapter's sendMessage method (which normalizes to array)
+      // Backend processes all messages and returns a single response
+      await this.ipc.sendMessage(validMessages);
+      return { success: true, messageCount: validMessages.length };
     } catch (error) {
       return { success: false, error: error.message };
     }

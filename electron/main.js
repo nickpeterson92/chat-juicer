@@ -325,20 +325,22 @@ app.whenReady().then(() => {
   });
 
   // IPC handler for user input (Binary V2)
-  ipcMain.on("user-input", (event, message) => {
-    logger.logIPC("receive", "user-input", message, { fromRenderer: true });
-    logger.logUserInteraction("chat-input", { messageLength: message.length });
+  // Accepts array of message strings from preload.js (unified array format)
+  ipcMain.on("user-input", (event, messageArray) => {
+    logger.logIPC("receive", "user-input", messageArray, { fromRenderer: true });
+    logger.logUserInteraction("chat-input", { messageCount: messageArray.length });
 
     if (pythonProcess && !pythonProcess.killed) {
       try {
+        // Convert array of strings to array of message objects for Python backend
+        const messages = messageArray.map((content) => ({ content }));
         const binaryMessage = IPCProtocolV2.encode({
           type: "message",
-          role: "user",
-          content: message,
+          messages: messages, // Array format: [{content: "text1"}, {content: "text2"}]
         });
         pythonProcess.stdin.write(binaryMessage);
-        logger.debug("Sent user message as V2 binary", {
-          contentLength: message.length,
+        logger.debug("Sent user messages as V2 binary", {
+          messageCount: messages.length,
           binarySize: binaryMessage.length,
         });
       } catch (error) {

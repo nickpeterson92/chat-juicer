@@ -244,21 +244,21 @@
     @apply transition-colors duration-150;
   }
 
-  /* Summarize button - Blue hover */
+  /* Summarize button - Lime green (matches pill accent-1) */
   .session-action-btn.summarize-btn:hover svg {
-    color: var(--color-status-info);
+    color: var(--color-brand-accent-1);
     @apply stroke-current;
   }
 
-  /* Rename button - Green hover */
+  /* Rename button - Light purple (matches pill accent-2) */
   .session-action-btn.rename-btn:hover svg {
-    color: var(--color-status-success);
+    color: var(--color-brand-accent-2);
     @apply stroke-current;
   }
 
-  /* Delete button - Red hover */
+  /* Delete button - Coral red (matches pill accent-3) */
   .session-action-btn.delete-btn:hover svg {
-    color: var(--color-status-error);
+    color: var(--color-brand-accent-3);
     @apply stroke-current;
   }
 
@@ -525,6 +525,94 @@
     clip: rect(0, 0, 0, 0);
   }
 
+  /* ==========================================
+   * MESSAGE QUEUE FEATURE
+   * Styles for queued messages while agent is processing
+   * ========================================== */
+
+  /* Queue count badge on send button area */
+  .queue-count-badge {
+    @apply absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 text-[10px] font-bold rounded-full flex items-center justify-center;
+    background-color: var(--color-brand-primary);
+    color: var(--color-text-user);
+    animation: queueBadgePop 0.2s ease-out;
+  }
+
+  @keyframes queueBadgePop {
+    0% {
+      transform: scale(0);
+      opacity: 0;
+    }
+    50% {
+      transform: scale(1.2);
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  /* Queued message card styling */
+  .queued-message {
+    animation: queuedMessageSlideIn 0.2s ease-out;
+  }
+
+  @keyframes queuedMessageSlideIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Queued message removal animation (slide up) */
+  .queued-message.removing {
+    animation: queuedMessageSlideOut 0.15s ease-in forwards;
+  }
+
+  @keyframes queuedMessageSlideOut {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+  }
+
+  /* Queued message cancel animation (elegant slide/fade left to right) */
+  .queued-message.queue-cancel-animate {
+    animation: queueCancelSlide 0.3s ease-out forwards;
+    pointer-events: none;
+  }
+
+  @keyframes queueCancelSlide {
+    0% {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(100px);
+    }
+  }
+
+  /* Queued message card hover state */
+  .queued-message-card:hover {
+    opacity: 0.85 !important;
+  }
+
+  /* Edit mode styling for queued message */
+  .queued-message-card.editing {
+    opacity: 1 !important;
+    border-style: solid !important;
+    border-color: var(--color-brand-primary) !important;
+  }
+
   .welcome-content {
     @apply max-w-[720px] w-full px-8 pt-8 pb-12 flex flex-col items-center gap-8 translate-y-[4vh];
   }
@@ -634,7 +722,7 @@
 
   .model-card {
     @apply flex flex-col items-start gap-0.5 p-2.5 rounded-md bg-transparent text-left cursor-pointer transition-all;
-    border: 1px solid var(--color-border-secondary);
+    border: 1px solid transparent;
   }
 
   .model-card:hover {
@@ -675,11 +763,7 @@
   }
 
   .model-card-check {
-    @apply text-transparent w-4 h-4;
-  }
-
-  .model-card.selected .model-card-check {
-    color: var(--color-brand-primary);
+    @apply hidden;
   }
 
   .model-card-description {
@@ -689,7 +773,6 @@
 
   .reasoning-panel {
     @apply mt-1.5 pt-1.5;
-    border-top: 1px solid var(--color-border-secondary);
   }
 
   .reasoning-panel-content {
@@ -707,7 +790,7 @@
 
   .reasoning-option {
     @apply flex flex-col items-start gap-0 p-1.5 rounded-md bg-transparent text-left cursor-pointer transition-all;
-    border: 1px solid var(--color-border-secondary);
+    border: 1px solid transparent;
   }
 
   .reasoning-option:hover {
@@ -730,11 +813,7 @@
   }
 
   .reasoning-option-check {
-    @apply text-transparent w-3.5 h-3.5;
-  }
-
-  .reasoning-option.selected .reasoning-option-check {
-    color: var(--color-brand-primary);
+    @apply hidden;
   }
 
   .reasoning-option-description {
@@ -758,7 +837,6 @@
 
   .more-models-section {
     @apply flex flex-col gap-1 mt-1.5 pt-1.5;
-    border-top: 1px solid var(--color-border-secondary);
   }
 
   /* Model family sub-dropdown group */
@@ -782,12 +860,11 @@
 
   .model-family-models {
     @apply flex flex-col gap-1 pl-3 mt-1 ml-2;
-    border-left: 2px solid var(--color-border-secondary);
+    border-left: 1px solid var(--color-border-secondary);
   }
 
   .reasoning-selector-section {
     @apply mt-3 pt-3;
-    border-top: 1px solid var(--color-border-secondary);
   }
 
   .reasoning-label {
@@ -816,28 +893,65 @@
   }
 
   .mcp-toggle-btn {
-    @apply flex items-center justify-center w-9 h-9 p-0 rounded-[0.65rem] cursor-pointer transition-all flex-shrink-0;
+    @apply flex items-center justify-center w-9 h-9 p-0 rounded-[0.65rem] cursor-pointer flex-shrink-0;
     background-color: var(--color-surface-hover);
     border: 1px solid var(--color-border-secondary);
     color: var(--color-text-secondary);
+    transition: color 0.2s, background-color 0.2s, border-color 0.2s, box-shadow 0.2s;
   }
 
-  /* Off + hover: white icon, gray border */
-  .mcp-toggle-btn:hover {
-    background-color: var(--color-surface-active);
-    color: var(--color-text-primary);
+  /* Off + hover: darken */
+  .mcp-toggle-btn:not(.active):hover {
+    background-color: var(--color-surface-1);
+    color: var(--color-text-secondary);
   }
 
   .mcp-toggle-btn:active {
     transform: scale(0.95);
   }
 
-  /* On: white icon + blue border */
+  /* On: white icon + blue border + colored background */
   .mcp-toggle-btn.active {
+    background-color: var(--color-surface-active);
     border-color: var(--color-border-hover);
     color: var(--color-text-primary);
   }
 
+  /* On + hover: glow */
+  .mcp-toggle-btn.active:hover {
+    box-shadow: 0 0 12px 2px var(--color-brand-glow);
+  }
+
+  /* Toggle ON animation: ripple expands outward from icon */
+  .mcp-toggle-btn.animate-on {
+    animation: mcp-ripple-out 0.3s ease-out;
+  }
+
+  /* Toggle OFF animation: ripple contracts inward to icon */
+  .mcp-toggle-btn.animate-off {
+    animation: mcp-ripple-in 0.3s ease-out;
+  }
+
+  @keyframes mcp-ripple-out {
+    0% {
+      box-shadow: inset 0 0 0 18px var(--color-brand-glow);
+    }
+    100% {
+      box-shadow: inset 0 0 0 0 var(--color-brand-glow);
+    }
+  }
+
+  @keyframes mcp-ripple-in {
+    0% {
+      box-shadow: inset 0 0 0 0 var(--color-brand-glow);
+    }
+    50% {
+      box-shadow: inset 0 0 0 18px var(--color-brand-glow);
+    }
+    100% {
+      box-shadow: inset 0 0 0 0 transparent;
+    }
+  }
 
   .mcp-toggle-btn svg {
     @apply w-4 h-4;

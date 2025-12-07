@@ -128,9 +128,9 @@ Sequential Thinking helps you:
 - **Stay helpful**: Provide clear explanations and guide users through complex tasks"""
 
 
-# Document Summarization Request (user message for appended request pattern)
-# Use .format(file_name=..., tokens=...) to inject metadata
-DOCUMENT_SUMMARIZATION_REQUEST = """Summarize the document above: {file_name}.
+# Document Summarization System Instructions
+# Use .format(tokens=...) to inject token limit
+DOCUMENT_SUMMARIZATION_INSTRUCTIONS = """You are a document summarizer. Given a document, create a CONCISE but TECHNICALLY COMPLETE summary.
 
 ## PRIORITIZE:
 - Core technical concepts and architectural decisions
@@ -143,20 +143,25 @@ DOCUMENT_SUMMARIZATION_REQUEST = """Summarize the document above: {file_name}.
 - Minor details that don't affect technical understanding
 - Excessive examples (keep only the most illustrative ones)
 
-Keep the summary information-dense while preserving technical accuracy.
+Write the summary as continuous prose. Keep it information-dense while preserving technical accuracy.
 
 **CRITICAL**: The summary MUST be less than {tokens} tokens or you will FAIL!"""
 
 
-# Conversation Summarization Prompt (user message for appended request pattern)
-CONVERSATION_SUMMARIZATION_REQUEST = """Summarize the conversation above. Provide a summary that captures:
-1. **Main user requests and goals**
-2. **Key tools/functions used** and their purposes (e.g., files read, documents generated)
-3. **Important findings or results** from tool usage
-4. **Current task state** and any pending next steps
-5. **Any errors or issues** encountered
+# Conversation Summarization System Instructions
+# Used as system prompt for one-shot summarization agent
+CONVERSATION_SUMMARIZATION_INSTRUCTIONS = """You are a conversation summarizer. Given conversation history, create a CONCISE but TECHNICALLY COMPLETE summary.
 
-The summary should include all the details necessary for someone to understand EVERYTHING about the above criteria."""
+Your summary MUST capture:
+1. **Main user requests and goals** - What the user wanted to accomplish
+2. **Key tools/functions used** - Tools invoked and their purposes (files read, documents generated, etc.)
+3. **Important findings or results** - Outcomes from tool usage and key discoveries
+4. **Current task state** - Progress made and any pending next steps
+5. **Any errors or issues** - Problems encountered and their resolution status
+
+Write the summary as continuous prose, not a bullet list. Include all details necessary for someone to understand the full context and continue the conversation.
+
+Keep it information-dense while preserving technical accuracy."""
 
 
 # Session Title Generation Prompt

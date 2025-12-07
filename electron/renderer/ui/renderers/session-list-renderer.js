@@ -57,9 +57,11 @@ export function renderSessionItem(session, isActive, domAdapter) {
   domAdapter.setAttribute(summarizeBtn, "data-action", "summarize");
   domAdapter.setAttribute(summarizeBtn, "data-session-id", session.id);
   domAdapter.setAttribute(summarizeBtn, "title", "Summarize");
-  // SVG icon for summarize
-  const summarizeSVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-    <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/>
+  // SVG icon for summarize (wand - matches function card icon)
+  const summarizeSVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/>
+    <path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/>
+    <path d="m3 21 9-9"/><path d="M12.2 6.2 11 5"/>
   </svg>`;
   summarizeBtn.innerHTML = summarizeSVG;
 

@@ -33,48 +33,33 @@ async def summarize_content(content: str, file_name: str = "document", model: st
     """
     Summarize large document content using Agent/Runner pattern.
 
+    Creates a one-shot summarization agent with full instructions specifying
+    the summary criteria. Document content is passed directly as input.
+
     Args:
         content: The document content to summarize
-        file_name: Name of the file being summarized (for context)
+        file_name: Name of the file being summarized (for logging)
         model: Model to use for token counting
 
     Returns:
         Summarized content or original if summarization fails
     """
     try:
-        from typing import cast
-
-        from agents import TResponseInputItem
-
-        from core.prompts import DOCUMENT_SUMMARIZATION_REQUEST
+        from core.prompts import DOCUMENT_SUMMARIZATION_INSTRUCTIONS
 
         deployment = DEFAULT_MODEL
 
-        # Create a one-off document summarization agent with generic instructions
+        # Create document summarization agent with full instructions
         summary_agent = Agent(
             name="DocumentSummarizer",
             model=deployment,
-            instructions="You are a helpful assistant that creates CONCISE but TECHNICALLY COMPLETE document summaries.",
+            instructions=DOCUMENT_SUMMARIZATION_INSTRUCTIONS.format(tokens=DOCUMENT_SUMMARIZATION_THRESHOLD),
         )
 
-        # Pass document content as first user message
-        content_message = {"role": "user", "content": content}
-
-        # Append summarization request as second message
-        summary_request = {
-            "role": "user",
-            "content": DOCUMENT_SUMMARIZATION_REQUEST.format(
-                file_name=file_name, tokens=DOCUMENT_SUMMARIZATION_THRESHOLD
-            ),
-        }
-
-        # Cast to TResponseInputItem for type safety (runtime-compatible dict)
-        messages = [cast(TResponseInputItem, content_message), cast(TResponseInputItem, summary_request)]
-
-        # Use Agent/Runner pattern with appended message
+        # Pass document content directly as input
         result = await Runner.run(
             summary_agent,
-            input=messages,
+            input=content,
             session=None,  # No session for document summarization (one-shot operation)
         )
 

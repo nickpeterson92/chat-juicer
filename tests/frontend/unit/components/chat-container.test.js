@@ -61,8 +61,8 @@ describe("ChatContainer", () => {
       expect(chatContainer.appState).toBe(appState);
       const snapshot = globalLifecycleManager.getDebugSnapshot();
       const entry = snapshot.components.find((c) => c.name === "ChatContainer");
-      // Should have registered 3 subscriptions: currentAssistant, assistantBuffer, isStreaming
-      expect(entry?.listeners).toBe(3);
+      // Should have registered 5 subscriptions: currentAssistant, assistantBuffer, isStreaming, queue.items, queue:processing event
+      expect(entry?.listeners).toBe(5);
     });
 
     it("should throw error without element", () => {
@@ -322,7 +322,7 @@ describe("ChatContainer", () => {
   });
 
   describe("AppState integration", () => {
-    it("should register appState subscriptions for streaming state", () => {
+    it("should register appState subscriptions for streaming and queue state", () => {
       const chatContainer = new ChatContainer(containerElement, {
         appState,
       });
@@ -330,7 +330,8 @@ describe("ChatContainer", () => {
       expect(chatContainer.appState).toBe(appState);
       const snapshot = globalLifecycleManager.getDebugSnapshot();
       const entry = snapshot.components.find((c) => c.name === "ChatContainer");
-      expect(entry?.listeners).toBe(3);
+      // 5 subscriptions: currentAssistant, assistantBuffer, isStreaming, queue.items, queue:processing event
+      expect(entry?.listeners).toBe(5);
     });
   });
 });

@@ -272,7 +272,31 @@ export function showWelcomePage(container, userName = "User") {
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      btn.classList.toggle("active");
+
+      const isActive = btn.classList.contains("active");
+
+      // Remove any existing animation classes
+      btn.classList.remove("animate-on", "animate-off");
+
+      // Toggle state and add appropriate animation
+      if (isActive) {
+        // Turning OFF: animate inward
+        btn.classList.remove("active");
+        btn.classList.add("animate-off");
+      } else {
+        // Turning ON: animate outward
+        btn.classList.add("active");
+        btn.classList.add("animate-on");
+      }
+
+      // Clean up animation class after it completes
+      btn.addEventListener(
+        "animationend",
+        () => {
+          btn.classList.remove("animate-on", "animate-off");
+        },
+        { once: true }
+      );
     });
   });
 

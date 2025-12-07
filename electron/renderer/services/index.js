@@ -17,9 +17,15 @@
  * - FileService({ ipcAdapter, storageAdapter, appState })
  * - MessageService({ ipcAdapter, storageAdapter }) - unchanged
  * - FunctionCallService({ ipcAdapter, storageAdapter }) - unchanged
+ * - MessageQueueService({ appState, messageService }) - message queue management
  */
 
 export { FileService } from "./file-service.js";
 export { CallStatus, FunctionCallService } from "./function-call-service.js";
+export {
+  getMessageQueueService,
+  initializeMessageQueueService,
+  MessageQueueService,
+} from "./message-queue-service.js";
 export { MessageService } from "./message-service.js";
 export { SessionService } from "./session-service.js";

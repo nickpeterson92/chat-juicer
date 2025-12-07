@@ -21,52 +21,37 @@ chat-juicer/
 │   ├── config/
 │   │   └── main-constants.js     # Main process configuration constants
 │   └── renderer/     # Component-based renderer process (ES6 modules)
-│       ├── index.js              # Main entry point orchestrating all modules
-│       ├── bootstrap.js          # Renderer initialization and setup
-│       ├── adapters/             # Platform abstraction layer
-│       │   ├── DOMAdapter.js, IPCAdapter.js, StorageAdapter.js, index.js
-│       ├── config/               # Configuration management
-│       │   ├── constants.js      # Centralized configuration (timeouts, limits, delimiters)
-│       │   └── model-metadata.js # Model configuration and metadata
-│       ├── core/                 # Core framework
-│       │   ├── event-bus.js      # Event-driven messaging system
-│       │   └── state.js          # BoundedMap memory management and AppState pub/sub
-│       ├── ui/
-│       │   ├── components/       # Reusable UI components
-│       │   │   ├── chat-container.js     # Message container component
-│       │   │   ├── connection-status.js  # Connection status indicator
-│       │   │   ├── file-panel.js         # File management with handle cleanup
-│       │   │   ├── input-area.js         # Chat input and controls
-│       │   │   ├── model-selector.js     # Model/reasoning selection (shared)
-│       │   │   └── index.js              # Component exports
-│       │   ├── renderers/        # Rendering utilities
-│       │   │   ├── file-list-renderer.js    # File list rendering
-│       │   │   ├── function-card-renderer.js # Function call cards
-│       │   │   ├── message-renderer.js      # Message formatting
-│       │   │   ├── session-list-renderer.js # Session list rendering
-│       │   │   └── index.js                 # Renderer exports
-│       │   ├── chat-ui.js        # Main chat interface
-│       │   ├── function-card-ui.js # Function call visualization
-│       │   ├── welcome-page.js   # Welcome page component
-│       │   └── titlebar.js       # Cross-platform custom titlebar
-│       ├── handlers/             # Event handlers
-│       │   ├── message-handlers-v2.js, session-list-handlers.js
-│       │   ├── chat-events.js, file-events.js, session-events.js, index.js
-│       ├── services/             # Business logic services
-│       │   ├── session-service.js, message-service.js, file-service.js
-│       │   ├── function-call-service.js, index.js
-│       ├── managers/             # UI state managers
-│       │   ├── view-manager.js, file-manager.js, dom-manager.js
-│       ├── plugins/              # Plugin architecture
-│       │   ├── plugin-interface.js, core-plugins.js, index.js
-│       ├── viewmodels/           # View models for data presentation
-│       │   ├── message-viewmodel.js, session-viewmodel.js
-│       └── utils/                # Renderer utilities
-│           ├── markdown-renderer.js, scroll-utils.js, json-cache.js
-│           ├── toast.js, file-utils.js, chat-model-updater.js, lottie-color.js
-│           ├── analytics/        # Analytics and tracking
-│           ├── debug/            # Debugging utilities
-│           └── performance/      # Performance monitoring and profiling
+│       ├── index.js              # Entry point (imports CSS + bootstrapSimple)
+│       ├── bootstrap.js          # 7-phase bootstrap orchestrator
+│       ├── bootstrap/            # Error recovery, validators, phases 1-7
+│       │   └── phases/phase1-7   # Adapters → State/DOM → Services → Components → Handlers → Plugins → Data
+│       ├── adapters/             # DOM, IPC, Storage adapters + barrel
+│       ├── config/               # constants, colors, model-metadata
+│       ├── core/                 # AppState + EventBus + lifecycle helpers
+│       │   ├── component-lifecycle.js
+│       │   ├── event-bus.js
+│       │   ├── lifecycle-manager.js
+│       │   └── state.js
+│       ├── managers/             # DOM + view + file rendering helpers
+│       │   ├── dom-manager.js
+│       │   ├── file-manager.js
+│       │   └── view-manager.js
+│       ├── services/             # Business logic (AppState-backed)
+│       │   ├── message-service.js, file-service.js
+│       │   ├── function-call-service.js, session-service.js
+│       ├── handlers/             # Event wiring
+│       │   ├── message-handlers-v2.js  # EventBus-driven streaming + tool cards
+│       │   ├── session-list-handlers.js
+│       │   ├── chat-events.js, file-events.js, session-events.js
+│       ├── plugins/              # Plugin registry + core plugins
+│       │   ├── core-plugins.js, plugin-interface.js, index.js
+│       ├── ui/                   # UI layer
+│       │   ├── components/       # ChatContainer, ConnectionStatus, FilePanel, InputArea, ModelSelector
+│       │   ├── renderers/        # session-list-renderer.js + index.js
+│       │   ├── chat-ui.js, function-card-ui.js, welcome-page.js, titlebar.js
+│       │   └── utils/welcome-animations.js
+│       ├── viewmodels/           # message-viewmodel.js, session-viewmodel.js
+│       └── utils/                # css-variables, markdown-renderer, scroll-utils, toast, chat-model-updater, etc.
 ├── ui/               # Frontend static assets
 │   ├── index.html    # Main chat UI (loads renderer/index.js as ES6 module)
 │   ├── input.css     # Tailwind CSS source
@@ -148,30 +133,40 @@ chat-juicer/
 
 ## Key Architectural Concepts
 
+### Renderer Runtime Highlights
+- 7-phase bootstrap (`bootstrap.js`) wiring adapters → AppState/DOM → services → components → event handlers → plugins → initial data, with phase validation and degraded-mode recovery.
+- Global `EventBus` (`core/event-bus.js`) drives message routing; `message-handlers-v2.js` maps backend events (`message:*`) to chat updates, function cards, and analytics.
+- `AppState` (`core/state.js`) is the single source of truth for connection, sessions, messages, functions, UI, Python status, and files; components subscribe for reactive DOM updates.
+- Services (`session-service.js`, `file-service.js`, `function-call-service.js`, `message-service.js`) are pure business logic and require `appState` in constructors (state-backed, no DOM).
+- UI components: ChatContainer (streaming + tool card aware), InputArea (model selector hook), FilePanel (tabbed sources/output with handle cleanup), ModelSelector (shared welcome/chat with optional backend sync), ConnectionStatus.
+- View management: `view-manager.js` controls welcome → chat transitions, seeds ModelSelector, and syncs MCP/model config before the first message; `file-manager.js` is migrating to AppState-driven rendering via `loadFilesIntoState`.
+
 ### Orchestrator Pattern (Main Application)
 The Python backend uses a clean orchestrator pattern for maintainability:
 
-**src/app/state.py** (41 lines):
+**src/app/state.py**:
 - `AppState` dataclass - single source of truth for application state
 - Explicit state passing (no hidden global variables)
 - Type-safe state management with full mypy compliance
 
-**src/app/bootstrap.py** (170 lines):
+**src/app/bootstrap.py**:
 - `initialize_application() -> AppState` - complete application setup
 - Environment loading, settings validation, client creation
-- MCP server initialization and agent creation
-- Session manager setup and integrity validation
+- MCP server initialization (sequential, fetch, optional Tavily) and agent creation
+- Session manager setup, metadata/database sync, and integrity validation
 - Returns fully populated AppState ready for main loop
 
-**src/app/runtime.py** (369 lines):
-- 8 core runtime functions for message processing
+**src/app/runtime.py**:
+- Core runtime functions for message processing
 - `ensure_session_exists` - lazy session creation with workspace isolation
-- `process_user_input` - message streaming and token management
+- `process_user_input` - message streaming, token management, post-run summarization check, and metadata update in finally
 - `handle_session_command_wrapper` - session command dispatch
 - `handle_file_upload` - file uploads with session isolation
+- `update_session_metadata` - message counts, tool token accumulation, auto-title trigger
+- `send_session_created_event` - deferred until after first message completes
 - All functions receive AppState as explicit parameter
 
-**src/main.py** (174 lines - 69% reduction from 557):
+**src/main.py**:
 - Pure orchestrator - no business logic, only coordination
 - Three phases: Bootstrap → Main Loop → Cleanup
 - Command dispatch router (session commands, file uploads, chat messages)
@@ -186,13 +181,11 @@ The Python backend uses a clean orchestrator pattern for maintainability:
 ### Agent/Runner Pattern with MCP
 The application uses OpenAI's Agent/Runner pattern which provides:
 
-- **Native MCP Server Integration**: Direct support for Model Context Protocol servers
-- **Sequential Thinking**: Advanced reasoning capabilities for complex problem-solving
-- **Web Content Retrieval**: HTTP/HTTPS fetching via Fetch MCP server
+- **Native MCP Server Integration**: Sequential Thinking + Fetch by default, Tavily search when configured
 - **Automatic Tool Orchestration**: Framework handles function calling automatically
 - **Full Async Architecture**: Consistent async/await for Agent/Runner, MCP servers, and all functions
-- **Streaming Events**: Structured event handling for real-time responses
-- **Token-Aware Sessions**: SQLite-based session management with automatic summarization
+- **Streaming Events**: Structured event handling for real-time responses (including argument deltas and reasoning)
+- **Token-Aware Sessions**: SQLite-based session management with automatic summarization and post-run token checks
 - **Type Safety**: Full mypy strict compliance with Pydantic runtime validation
 
 ### MCP Server Integration
@@ -207,8 +200,11 @@ The application integrates two MCP servers for enhanced capabilities:
 **Fetch Server** (Python):
 - HTTP/HTTPS web content retrieval
 - Automatic content format handling
-- Supports GET/POST requests with headers and parameters
 - Integrated into `.juicer` venv for seamless operation
+
+**Tavily Search** (Node.js, optional):
+- Enabled when `TAVILY_API_KEY` is present
+- Provides search/crawl MCP endpoints via npx
 
 ### Frontend Architecture (Component-Based ES6)
 The renderer process uses a component-based modular architecture for maintainability and reusability:
@@ -335,28 +331,27 @@ Chat Juicer supports configurable reasoning effort for reasoning models (GPT-5, 
 **Token Impact**: Reasoning tokens appear separately in usage metrics as `output_tokens_details.reasoning_tokens`
 
 ### Function Architecture
-All functions are implemented as async operations organized by module:
+All tools are async and organized under `src/tools/`:
 
 **File Operations** (`tools/file_operations.py`):
 - **list_directory**: List directory contents with metadata (size, modified time, file count)
-- **read_file**: Read files with automatic format conversion via markitdown
+- **read_file**: Read files with automatic format conversion via markitdown; supports head/tail previews
+- **search_files**: Glob search with max-results guardrails
 
 **Document Generation** (`tools/document_generation.py`):
-- **generate_document**: Generate docs from templates with placeholder replacement
+- **generate_document**: Save generated content to `output/` with optional backups and session sandboxing
 
 **Text Editing** (`tools/text_editing.py`):
-- **text_edit**: Find and replace exact text in documents
-- **regex_edit**: Pattern-based editing using regular expressions
-- **insert_text**: Add new content before or after existing text
+- **edit_file**: Batch text edits with git-style diffs and whitespace-flexible matching (auto-prefixes `output/` unless scoped)
 
-All tools registered in `tools/registry.py` for automatic discovery by Agent/Runner framework.
+Registration & isolation:
+- `tools/registry.py` exposes `AGENT_TOOLS` + `FUNCTION_REGISTRY`
+- `tools/wrappers.py` builds session-aware wrappers via `create_session_aware_tools(session_id)` to enforce workspace isolation (data/files/{session_id})
 
-### Document Generation System
-- Process multiple source formats using markitdown (PDF, Word, Excel, HTML, CSV, JSON, images)
-- Template-first workflow with placeholder replacement
-- Sequential Thinking for complex document structuring
-- Token-aware content optimization (removes redundant whitespace, headers)
-- Professional documentation generation with Mermaid diagram support
+### Document Handling
+- `read_file` converts many formats via markitdown and auto-summarizes documents exceeding the configured token threshold.
+- `generate_document` writes to session-scoped `output/` with optional backups; no implicit templating is applied.
+- Session-aware wrappers ensure all file operations stay inside `data/files/{session_id}`.
 
 ## Frontend Logging Guidelines
 
@@ -735,26 +730,10 @@ The Sequential Thinking server is configured in `integrations/mcp_servers.py` an
 ### Testing Infrastructure
 The project maintains comprehensive test coverage with modern tooling:
 
-**Test Suite**: 1,192 tests with 87% coverage
-- **Python Tests**: 614 unit tests using pytest with fixtures and mocking
-  - Core business logic (Agent/Runner, session management, token tracking)
-  - Tool implementations (file operations, document generation, text editing)
-  - Integration tests for MCP server communication
-  - Pydantic model validation and type safety
-- **JavaScript Tests**: 578 tests covering frontend architecture
-  - Component tests (chat, file panel, input area, model selector)
-  - Service layer tests (session, message, file operations)
-  - Event handler tests (message, session, file events)
-  - Manager tests (view, theme, DOM, file management)
-  - Renderer tests (markdown, function cards, message formatting)
-  - Utility tests (scroll behavior, JSON cache, toast notifications)
-  - IPC communication and state management
-
-**Test Execution**:
-- Pytest for Python backend with coverage reporting
-- Modern JavaScript test runner for frontend components
-- Pre-commit hooks ensure all tests pass before commits
-- Continuous validation via `make check` and `make precommit`
+**Tests**:
+- Python tests live under `tests/` (app/core/models/utils) using pytest and fixtures.
+- Frontend tests cover renderer services/components/utilities (see `tests/` JS files).
+- Use `make test` / `make quality` / `make precommit` for common flows.
 
 ### Performance Considerations
 - Full async/await architecture for optimal concurrency

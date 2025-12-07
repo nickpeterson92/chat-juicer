@@ -56,19 +56,18 @@ make health             # Check system configuration
 
 - 🖥️ **Desktop Application**: Production-grade Electron app with health monitoring and auto-recovery
 - 🤖 **Agent/Runner Pattern**: Native OpenAI Agents SDK with automatic tool orchestration
-- 🧠 **Sequential Thinking**: MCP server for advanced multi-step reasoning and problem decomposition
-- 🌐 **Web Content Retrieval**: Fetch MCP server for HTTP/HTTPS web content fetching
-- 💾 **Two-Layer Session Persistence**: Layered architecture separating LLM context from UI display
-- 🔄 **Multi-Session Support**: Create, switch, and manage multiple conversation sessions with reliable deletion
-- 📊 **Smart Session Management**: TokenAwareSQLiteSession with auto-summarization at 20% threshold
-- ⚡ **Streaming Responses**: Real-time AI response streaming with structured event handling
-- 🛠️ **Function Calling**: Async native tools and MCP server integration
+- 🧠 **MCP Servers**: Sequential Thinking and Fetch servers by default, plus optional Tavily search when configured
+- 💾 **Two-Layer Session Persistence**: Token-aware Layer 1 (LLM context) and full-history Layer 2 for UI
+- 🔄 **Multi-Session Support**: Lazy session creation, switch, delete, and auto-title after the first user message
+- 📊 **Smart Session Management**: TokenAwareSQLiteSession auto-summarizes at 20% of model limits while keeping the last 2 user turns
+- ⚡ **Streaming Responses**: Real-time AI response streaming with structured event handling and function argument deltas
+- 🛠️ **Function Calling**: Async native tools and MCP integration with session-aware wrappers
 - 📝 **Structured Logging**: Enterprise-grade JSON logging with rotation and session correlation
-- 🔐 **Azure OpenAI Integration**: Secure connection to Azure OpenAI services
-- 📊 **Token Management**: SDK-level universal token tracking with exact counting via tiktoken
+- 🔐 **Azure/OpenAI Integration**: Azure by default with optional base OpenAI provider
+- 📊 **Token Management**: SDK-level universal token tracking that counts tool calls and reasoning tokens automatically
 - ⚡ **Full Async Architecture**: Consistent async/await throughout backend
-- 📄 **Document Generation**: Template-based document creation with multi-format support (PDF, Word, Excel, HTML)
-- 🔧 **Editing Tools**: Text, regex, and insert operations for document modification
+- 📄 **Document Generation**: Save generated content to session-scoped output/ with optional backups
+- 🔧 **Editing Tools**: Batch text edits with git-style diffs and whitespace-flexible matching
 - 🎯 **Type Safety**: Full mypy strict compliance with Pydantic runtime validation
 - 🧩 **Component Architecture**: Reusable frontend components with proper state management
 - 🏗️ **Production Features**: Memory management, error recovery, performance optimization, file handle cleanup
@@ -88,8 +87,9 @@ Chat Juicer uses OpenAI's **Agent/Runner pattern** with a **two-layer persistenc
 
 ### Key Architectural Components:
 - **Backend**: Python with async functions, Pydantic models, type safety (mypy strict=true)
-- **Frontend**: Electron with component-based architecture, memory-bounded state management, and health monitoring
-- **UI Components**: Reusable components (ModelSelector, FilePanel, ChatContainer) with proper lifecycle management
+- **Frontend**: Electron renderer built around a 7-phase bootstrap (`bootstrap.js`) that wires adapters → AppState/DOM → services → UI components → event handlers → plugins → initial data
+- **State & Events (Frontend)**: `AppState` pub/sub in `core/state.js` (connection/session/message/ui/file/function namespaces) + global `EventBus` with error boundaries for message routing
+- **UI Components**: ChatContainer (streaming-safe), InputArea (model selector integration), FilePanel (tabbed sources/output with handle cleanup), ModelSelector (shared welcome/chat), ConnectionStatus
 - **Persistence**: Two-layer SQLite architecture (LLM context + UI display)
 - **Session**: TokenAwareSQLiteSession with 20% threshold auto-summarization
 - **Session Manager**: Multi-session lifecycle management with metadata persistence and file handle cleanup
@@ -321,49 +321,88 @@ make help               # Show all available commands
 
 ```
 chat-juicer/
-├── electron/          # Electron main process and utilities
-│   ├── main.js       # Electron main process, IPC handlers, health monitoring
-│   ├── preload.js    # Preload script for secure context-isolated IPC
-│   ├── logger.js     # Centralized structured logging with IPC forwarding
+├── electron/          # Electron main process and renderer
+│   ├── main.js       # Main process, IPC handlers, health monitoring
+│   ├── preload.js    # Secure context-isolated bridge
+│   ├── logger.js     # Structured logging with IPC forwarding
 │   ├── config/
-│   │   └── main-constants.js     # Main process configuration constants
-│   └── renderer/     # Modular renderer process (ES6 modules)
-│       ├── index.js              # Main entry point orchestrating all modules
-│       ├── config/constants.js   # Centralized configuration
-│       ├── core/state.js         # BoundedMap memory management and AppState pub/sub
+│   │   └── main-constants.js
+│   └── renderer/     # Renderer (ES modules)
+│       ├── index.js              # Entry point (imports CSS + bootstrapSimple)
+│       ├── bootstrap.js          # 7-phase bootstrap orchestrator
+│       ├── bootstrap/            # Phase orchestration + validation
+│       │   ├── error-recovery.js
+│       │   ├── validators.js
+│       │   └── phases/
+│       │       ├── phase1-adapters.js      # DOM/IPС/Storage adapters + global EventBus
+│       │       ├── phase2-state-dom.js     # AppState + DOM element registry
+│       │       ├── phase3-services.js      # Message/File/FunctionCall/Session services (AppState-backed)
+│       │       ├── phase4-components.js    # ChatContainer, InputArea, FilePanel wiring
+│       │       ├── phase5-event-handlers.js# DOM listeners, AppState bindings, IPC wiring
+│       │       ├── phase6-plugins.js       # Plugin registry + core plugins
+│       │       └── phase7-data-loading.js  # Renderer-ready signal, model metadata, sessions
+│       ├── adapters/             # Platform abstraction
+│       │   ├── DOMAdapter.js
+│       │   ├── IPCAdapter.js
+│       │   ├── StorageAdapter.js
+│       │   └── index.js
+│       ├── config/
+│       │   ├── constants.js
+│       │   ├── colors.js
+│       │   └── model-metadata.js
+│       ├── core/
+│       │   ├── component-lifecycle.js
+│       │   ├── event-bus.js      # Global EventBus (pub/sub with error boundaries)
+│       │   ├── lifecycle-manager.js
+│       │   └── state.js          # AppState + BoundedMap (connection/session/message/file/ui)
+│       ├── managers/
+│       │   ├── dom-manager.js    # Element registry
+│       │   ├── file-manager.js   # File list rendering + AppState migration helpers
+│       │   └── view-manager.js   # Welcome/chat view transitions + model config sync
+│       ├── services/
+│       │   ├── file-service.js
+│       │   ├── function-call-service.js
+│       │   ├── message-service.js
+│       │   └── session-service.js
+│       ├── handlers/
+│       │   ├── message-handlers-v2.js      # EventBus-driven streaming + tool cards
+│       │   ├── session-list-handlers.js    # Session list delegation
+│       │   ├── chat-events.js
+│       │   ├── file-events.js
+│       │   └── session-events.js
+│       ├── plugins/
+│       │   ├── core-plugins.js
+│       │   ├── index.js
+│       │   └── plugin-interface.js
 │       ├── ui/
-│       │   ├── components/       # Reusable UI components
-│       │   │   ├── chat-container.js     # Message container component
-│       │   │   ├── connection-status.js  # Connection status indicator
-│       │   │   ├── file-panel.js         # File management with handle cleanup
-│       │   │   ├── input-area.js         # Chat input and controls
-│       │   │   ├── model-selector.js     # Model/reasoning selection (shared)
-│       │   │   └── index.js              # Component exports
-│       │   ├── renderers/        # Rendering utilities
-│       │   │   ├── file-list-renderer.js    # File list rendering
-│       │   │   ├── function-card-renderer.js # Function call cards
-│       │   │   ├── message-renderer.js      # Message formatting
-│       │   │   ├── session-list-renderer.js # Session list rendering
-│       │   │   └── index.js                 # Renderer exports
-│       │   ├── chat-ui.js        # Main chat interface
-│       │   ├── function-card-ui.js # Function call visualization
-│       │   ├── welcome-page.js   # Welcome page component
-│       │   └── titlebar.js       # Cross-platform custom titlebar
-│       ├── handlers/             # Event handlers
-│       │   ├── message-handlers-v2.js    # EventBus-integrated message handlers
-│       │   └── session-list-handlers.js  # Session list interactions
-│       ├── services/session-service.js  # Session CRUD operations
-│       ├── managers/              # UI state and interaction managers
-│       │   ├── theme-manager.js  # Dark mode and theme management
-│       │   ├── view-manager.js   # View state (welcome vs chat)
-│       │   ├── dom-manager.js    # DOM element management
-│       │   └── file-manager.js   # File operations and drag-and-drop
-│       └── utils/                # Renderer utilities
-│           ├── markdown-renderer.js # Markdown rendering with syntax highlighting
-│           ├── scroll-utils.js   # Scroll behavior utilities
-│           ├── json-cache.js     # JSON parsing cache
-│           ├── toast.js          # Toast notification system
-│           └── file-utils.js     # File handling utilities
+│       │   ├── components/
+│       │   │   ├── chat-container.js
+│       │   │   ├── connection-status.js
+│       │   │   ├── file-panel.js
+│       │   │   ├── input-area.js
+│       │   │   └── model-selector.js
+│       │   ├── renderers/
+│       │   │   ├── index.js
+│       │   │   └── session-list-renderer.js
+│       │   ├── chat-ui.js
+│       │   ├── function-card-ui.js
+│       │   ├── titlebar.js
+│       │   ├── welcome-page.js
+│       │   └── utils/welcome-animations.js
+│       ├── viewmodels/
+│       │   ├── message-viewmodel.js
+│       │   └── session-viewmodel.js
+│       └── utils/
+│           ├── analytics/
+│           ├── chat-model-updater.js
+│           ├── css-variables.js
+│           ├── file-utils.js
+│           ├── json-cache.js
+│           ├── lottie-color.js
+│           ├── markdown-renderer.js
+│           ├── scroll-utils.js
+│           ├── state-migration.js
+│           └── toast.js
 ├── ui/               # Frontend static assets
 │   ├── index.html    # Main chat UI (loads renderer/index.js as ES6 module)
 │   ├── input.css     # Tailwind CSS source
@@ -442,6 +481,14 @@ chat-juicer/
     ├── conf.py       # Sphinx configuration
     └── index.rst     # Documentation index
 ```
+
+### Renderer Runtime Highlights
+- 7-phase bootstrap orchestrator (`bootstrap.js`) with validation and degraded-mode recovery (adapters → AppState/DOM → services → components → event handlers → plugins → initial data).
+- `AppState` (`core/state.js`) is the single state source (connection/session/message/ui/file/function); components subscribe for reactive DOM updates.
+- Global `EventBus` (`core/event-bus.js`) powers decoupled message routing; `message-handlers-v2.js` maps backend events to chat streaming, function cards, and analytics.
+- Services (`session-service.js`, `file-service.js`, `function-call-service.js`, `message-service.js`) are pure business logic and require `appState` (no DOM access).
+- Primary UI components: ChatContainer (streaming-aware), InputArea (model selector integration), FilePanel (sources/output tabs + handle cleanup), ModelSelector (shared welcome/chat), ConnectionStatus.
+- View management: `view-manager.js` controls welcome ↔ chat transitions and seeds ModelSelector; `file-manager.js` is migrating to AppState-driven rendering via `loadFilesIntoState` + `renderFileList`.
 
 ## Key Components
 
@@ -583,29 +630,27 @@ The application supports both native functions and MCP server tools:
 
 ### Native Functions (Async)
 - **list_directory**: Directory listing with metadata (size, modified time, file count)
-- **read_file**: File reading with automatic format conversion via markitdown (PDF, Word, Excel, PowerPoint, HTML, CSV, JSON, images)
-- **generate_document**: Template-based document generation with placeholder replacement
-- **text_edit**: Find and replace exact text in documents (or delete by setting replace_with='')
-- **regex_edit**: Pattern-based editing using regular expressions
-- **insert_text**: Add new content before or after existing text
+- **read_file**: File reading with automatic format conversion via markitdown (PDF, Word, Excel, PowerPoint, HTML, CSV, JSON, images) and optional head/tail previews
+- **search_files**: Glob search with configurable max results
+- **edit_file**: Batch text edits with git-style diff output and whitespace-flexible matching (auto-prefixes `output/` unless scoped)
+- **generate_document**: Save generated content to `output/` with optional backups and session sandboxing
 
 ### MCP Server Integration
 - **Sequential Thinking** (Node.js): Advanced multi-step reasoning with revision capabilities and hypothesis testing
-- **Fetch Server** (Python): HTTP/HTTPS web content retrieval with automatic format handling and parameter support
-- Extensible to add more MCP servers (filesystem, GitHub, databases, etc.)
+- **Fetch Server** (Python): HTTP/HTTPS web content retrieval with automatic format handling
+- **Tavily Search** (Node.js): Optional web search MCP server when `TAVILY_API_KEY` is configured
+- Extensible via `integrations/mcp_registry.py`
 
 ### Features
-- Automatic tool orchestration by Agent/Runner framework
-- SDK-level universal token tracking for all tools (native, MCP, future agents)
+- Session-aware tool wrappers (`tools/wrappers.py`) enforce workspace isolation (data/files/{session_id})
+- SDK-level universal token tracking for all tools (native + MCP)
 - Exact token counting using tiktoken with LRU caching
-- Content optimization to reduce token usage (removes redundant whitespace, headers)
 - Accumulated tool token tracking separate from conversation tokens
 
 Add new functions by:
-1. Defining the function in `src/functions.py`
-2. Adding it to the `TOOLS` array
-3. Registering in `FUNCTION_REGISTRY`
-4. Function automatically available to Agent (including MCP tools)
+1. Implementing in the appropriate `src/tools/*.py` module
+2. Registering in `tools/registry.py` (`AGENT_TOOLS` + `FUNCTION_REGISTRY`)
+3. If session-scoped, exposing a wrapped version via `create_session_aware_tools()` so session_id is injected automatically
 
 ## Logging
 
@@ -737,27 +782,30 @@ The application features advanced session management with **two-layer persistenc
 
 **Layer 1 (LLM Context - SQLiteSession)**
 - Complete SDK state including tool calls, reasoning items, and internal structures
-- Optimized for Agent/Runner framework consumption
-- Stored in `data/chat_history.db` (agent_messages table)
-- May be summarized when token limit approaches
-- Essential for maintaining proper model context with all execution details
+- Stored in `data/chat_history.db` (agent_sessions / agent_messages tables)
+- Token-aware auto-summarization triggers at 20% of the model limit (per MODEL_TOKEN_LIMITS)
+- Keeps the last 2 user exchanges unsummarized and repopulates context after summarization
+- Metadata is always updated in a `finally` block to prevent desync
 
 **Layer 2 (UI Display - FullHistoryStore)**
 - User-facing conversation history (user/assistant/system messages only)
 - Filtered to exclude SDK internal items (tool_call_item, reasoning_item, etc.)
-- Stored in session-specific tables (full_history_chat_[SESSION_ID])
-- Never summarized - complete conversation history preserved
-- Optimized for UI rendering and session switching
+- Stored in a single shared `full_history` table keyed by session_id
+- Best-effort writes (Layer 1 is source of truth); never summarized
+- Optimized for UI rendering and paginated session switching
 
 #### Session Features
 
-- **Multi-Session Support**: Create, switch, and manage multiple conversation sessions
+- **Lazy Init**: Sessions are created on first message or upload; welcome view uses `clear` to reset
+- **Multi-Session Support**: Create, switch, update, and delete conversation sessions
 - **Persistent Storage**: Both layers survive application restarts
-- **Token-Aware Summarization**: Automatically summarizes Layer 1 at 20% of model limit
-- **Model-Aware Limits**: GPT-5 (272k), GPT-4o (128k), GPT-4 (128k), GPT-3.5-turbo (15.3k)
+- **Token-Aware Summarization**: Automatically summarizes Layer 1 at 20% of model limit; also checked post-run to account for tool tokens
+- **Model-Aware Limits**: GPT-5 family (272k), GPT-4.1/4o (128k), GPT-3.5 (15.3k)
 - **Context Preservation**: Keeps last 2 user-assistant exchanges unsummarized
-- **Seamless Switching**: Fast session switching with reduced payload size
-- **Tool Token Tracking**: Accumulates tokens from all tool calls (native, MCP, agents)
+- **Seamless Switching**: SessionBuilder restores context and paginates Layer 2
+- **Tool Token Tracking**: SDK-level tracker counts tool/reasoning/handoff tokens separately
+- **Metadata Hygiene**: Startup sync fixes stale message counts; cleanup removes empty sessions >24h while protecting sessions with DB messages or files
+- **Auto Titles**: Generates a title after the first user message (non-blocking)
 
 #### Session Commands
 
@@ -767,6 +815,9 @@ The application includes IPC-based session management:
 - **List**: View all available sessions with metadata
 - **Delete**: Remove sessions and clean up both persistence layers (with automatic file handle cleanup to prevent "too many open files" errors)
 - **Summarize**: Manually trigger conversation summarization
+- **Load More**: Paginate Layer 2 history
+- **Clear**: Clear current session to return to lazy-init welcome state
+- **Update Config**: Change per-session model, MCP servers, or reasoning effort and recreate the agent
 
 #### Session Deletion Reliability
 
@@ -810,16 +861,19 @@ agent_messages (
 )
 ```
 
-**Layer 2 Tables (Application Managed)**
+**Layer 2 Table (Application Managed)**
 ```sql
--- One table per session: full_history_chat_[SESSION_ID]
-CREATE TABLE full_history_chat_[SESSION_ID] (
+-- Shared table across all sessions
+CREATE TABLE full_history (
     id INTEGER PRIMARY KEY,
-    role TEXT NOT NULL,        -- user, assistant, system, tool
+    session_id TEXT NOT NULL,
+    role TEXT NOT NULL,        -- user, assistant, system, tool_call
     content TEXT NOT NULL,     -- Clean message content
     metadata TEXT,             -- Optional JSON metadata
-    created_at TIMESTAMP
-)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_full_history_session_id ON full_history(session_id);
+CREATE INDEX IF NOT EXISTS idx_full_history_session_created ON full_history(session_id, created_at);
 ```
 
 **Metadata File**
@@ -833,7 +887,11 @@ CREATE TABLE full_history_chat_[SESSION_ID] (
       "title": "Conversation 2025-10-12 07:32 AM",
       "created_at": "2025-10-12T07:32:51.738400",
       "last_used": "2025-10-12T07:41:08.806529",
-      "message_count": 24
+      "message_count": 24,
+      "accumulated_tool_tokens": 0,
+      "mcp_config": ["sequential", "fetch", "tavily"],
+      "model": "gpt-5.1",
+      "reasoning_effort": "medium"
     }
   }
 }
@@ -841,21 +899,16 @@ CREATE TABLE full_history_chat_[SESSION_ID] (
 
 ### Rate Limiting & Error Handling
 The application includes robust error handling:
-- Automatic rate limit detection with user-friendly messages
-- Graceful handling of RS_ and FC_ streaming errors (now resolved with client-side sessions)
-- Connection error recovery with auto-restart
-- Process health monitoring every 5 minutes (optimized from 30 seconds)
-- Connection state machine (CONNECTED/DISCONNECTED/RECONNECTING/ERROR)
-- Centralized configuration in `constants.py` with Pydantic validation
+- Streaming error handling for rate limits, connection issues, and API status errors
+- Binary protocol V2 negotiation fallback with helpful error messaging
+- Structured logging of exceptions with session context
 
 ### Token Counting & Optimization
 Using tiktoken for exact token counting:
 - Precise token counts for all content (not estimates)
-- Automatic content optimization for documents >1000 tokens
-- Removes unnecessary headers, footers, and redundant whitespace
-- Reports exact tokens saved through optimization
-- Model-aware encoding (supports GPT-4, GPT-3.5, and newer models)
-- Utilities centralized in `utils.py` for reusability
+- Automatic document summarization when `read_file` content exceeds the configured threshold
+- Model-aware encoding (supports GPT-5 family, GPT-4.1/4o, GPT-3.5)
+- Utilities centralized in `utils/token_utils.py`
 
 ### Code Organization
 Recent improvements for better maintainability:

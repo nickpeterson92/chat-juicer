@@ -1,34 +1,35 @@
 # Chat Juicer Requirements
 # Python 3.13+ required for all dependencies
+# Last updated: 2025-12-07
 
 # Core AI Libraries (REQUIRED)
-openai-agents>=0.3.3  # Provides agents module for Responses API support
-openai>=1.0.0  # Azure OpenAI client library
+openai-agents>=0.6.2  # Provides agents module for Responses API support
+openai>=2.9.0  # Azure OpenAI client library
 
 # Configuration (REQUIRED)
-python-dotenv>=1.0.0  # Load environment variables from .env file
+python-dotenv>=1.2.1  # Load environment variables from .env file
 
 # Document Conversion (REQUIRED for file reading features)
-markitdown[all]>=0.1.0  # Microsoft's markdown converter with all format support (PDF, Word, Excel, etc.)
+markitdown[all]>=0.1.4  # Microsoft's markdown converter with all format support (PDF, Word, Excel, etc.)
 
 # Token Counting (REQUIRED)
-tiktoken>=0.5.0  # OpenAI's official token counting library for accurate token counts
+tiktoken>=0.12.0  # OpenAI's official token counting library for accurate token counts
 
 # Networking (REQUIRED)
-httpx>=0.25.0  # Modern HTTP client for handling network errors and retries
+httpx>=0.27.2,<0.28  # Modern HTTP client (pinned for mcp-server-fetch compatibility)
 
 # Structured Logging (REQUIRED)
-python-json-logger>=2.0.0  # JSON formatted logging for structured logs
+python-json-logger>=4.0.0  # JSON formatted logging for structured logs
 
 # Async File I/O (REQUIRED for async functions)
-aiofiles>=23.0.0  # Async file operations for non-blocking I/O
+aiofiles>=25.1.0  # Async file operations for non-blocking I/O
 
 # Data Validation (REQUIRED for runtime type safety)
-pydantic>=2.5.0  # Runtime data validation with type hints
-pydantic-settings>=2.0.0  # Settings management with environment variables
+pydantic>=2.12.5  # Runtime data validation with type hints
+pydantic-settings>=2.12.0  # Settings management with environment variables
 
 # MCP Servers (REQUIRED for web fetching capabilities)
-mcp-server-fetch>=2025.4.0  # MCP server for HTTP/web content retrieval
+mcp-server-fetch>=2025.4.7  # MCP server for HTTP/web content retrieval
 
 # Binary Serialization (REQUIRED for IPC Protocol V2)
-msgpack>=1.0.0  # MessagePack serialization for binary IPC protocol
+msgpack>=1.1.2  # MessagePack serialization for binary IPC protocol

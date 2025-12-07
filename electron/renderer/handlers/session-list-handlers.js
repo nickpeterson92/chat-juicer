@@ -85,11 +85,22 @@ async function handleSummarize(sessionId, sessionService, appState, ipcAdapter) 
   }
 
   try {
+    // Collapse sidebar so user can see the summarization in chat
+    const sidebar = document.getElementById("sidebar");
+    if (sidebar && !sidebar.classList.contains("collapsed")) {
+      sidebar.classList.add("collapsed");
+    }
+
+    // Send the command FIRST, then set status
+    // (Setting status before would cause the command to queue itself)
+    const resultPromise = sessionService.summarizeSession(sessionId);
+
+    // Now set status to busy (command is already in flight)
     if (appState) {
       appState.setState("python.status", "busy_summarizing");
     }
 
-    const result = await sessionService.summarizeSession(sessionId);
+    const result = await resultPromise;
 
     if (appState) {
       appState.setState("python.status", "idle");

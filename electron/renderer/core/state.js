@@ -112,6 +112,17 @@ export class BoundedMap extends Map {
  * @property {Array<Object>} sourcesList - Source files for current session
  * @property {Array<Object>} outputList - Output files for current session
  * @property {boolean} isLoadingFiles - File list loading state
+ *
+ * @typedef {Object} QueueItem
+ * @property {string} id - Unique identifier (crypto.randomUUID())
+ * @property {string} text - Message text content
+ * @property {Array} files - Array of file objects to send with message
+ * @property {number} timestamp - Date.now() when queued
+ * @property {'queued' | 'processing' | 'cancelled'} status - Current status
+ *
+ * @typedef {Object} QueueState
+ * @property {Array<QueueItem>} items - Array of queued messages
+ * @property {string|null} processingMessageId - ID of message currently being processed
  */
 export class AppState {
   constructor() {
@@ -180,6 +191,12 @@ export class AppState {
       sourcesList: [], // Source files for current session
       outputList: [], // Output files for current session
       isLoadingFiles: false, // File list loading state
+    };
+
+    // Message queue state (for queuing messages while agent is processing)
+    this.queue = {
+      items: [], // QueueItem[] - array of queued messages
+      processingMessageId: null, // string | null - ID of message currently being processed
     };
 
     // State change listeners

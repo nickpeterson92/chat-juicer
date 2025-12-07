@@ -15,7 +15,7 @@ from app.runtime import (
     handle_file_upload,
     handle_session_command_wrapper,
     handle_streaming_error,
-    process_user_input,
+    process_messages,
     save_tool_call_to_history,
 )
 
@@ -50,18 +50,20 @@ class TestHandleStreamingErrorExtended:
         mock_ipc.send_assistant_end.assert_called_once()
 
 
-class TestProcessUserInputExtended:
-    """Extended tests for process_user_input function."""
+class TestProcessMessagesExtended:
+    """Extended tests for process_messages function."""
 
     @pytest.mark.asyncio
+    @patch("agents.Runner")
     @patch("app.runtime.IPCManager")
     @patch("app.runtime.handle_streaming_error")
-    async def test_process_user_input_persistence_error(
+    async def test_process_messages_persistence_error(
         self,
         mock_handle_error: Mock,
         mock_ipc: Mock,
+        mock_runner: Mock,
     ) -> None:
-        """Test processing user input with persistence error."""
+        """Test processing messages with persistence error."""
         from core.session import PersistenceError
 
         mock_app_state = Mock()
@@ -74,16 +76,16 @@ class TestProcessUserInputExtended:
         mock_session.accumulated_tool_tokens = 0
         mock_session.get_items = AsyncMock(return_value=[])
 
-        # Raise persistence error during run
-        mock_session.run_with_auto_summary = AsyncMock(side_effect=PersistenceError("Layer 2 write failed"))
+        # Raise persistence error during run_streamed
+        mock_runner.run_streamed.side_effect = PersistenceError("Layer 2 write failed")
 
-        await process_user_input(mock_app_state, mock_session, "Test input")
+        await process_messages(mock_app_state, mock_session, ["Test input"])
 
         # Should send error message to UI (exactly one call for persistence error)
         assert mock_ipc.send.call_count == 1  # Only the error message
         error_call = mock_ipc.send.call_args[0][0]
         assert error_call["type"] == "error"
-        assert "persist" in error_call["message"].lower()
+        assert "save" in error_call["message"].lower() or "history" in error_call["message"].lower()
 
         # Should send assistant_end
         mock_ipc.send_assistant_end.assert_called_once()
@@ -92,10 +94,12 @@ class TestProcessUserInputExtended:
         mock_handle_error.assert_not_called()
 
     @pytest.mark.asyncio
+    @patch("agents.Runner")
     @patch("app.runtime.IPCManager")
-    async def test_process_user_input_with_response_text(self, mock_ipc: Mock) -> None:
-        """Test processing user input with response text logging."""
+    async def test_process_messages_with_response_text(self, mock_ipc: Mock, mock_runner: Mock) -> None:
+        """Test processing messages with response text logging."""
         mock_app_state = Mock()
+        mock_app_state.full_history_store = None
         mock_session = Mock()
         mock_session.agent = Mock()
         mock_session.session_id = "chat_test"
@@ -130,22 +134,24 @@ class TestProcessUserInputExtended:
 
         mock_result = Mock()
         mock_result.stream_events = mock_stream
-        mock_session.run_with_auto_summary = AsyncMock(return_value=mock_result)
+        mock_runner.run_streamed.return_value = mock_result
 
         with patch("app.runtime.handle_electron_ipc") as mock_handle_ipc:
             mock_handle_ipc.return_value = None
 
-            await process_user_input(mock_app_state, mock_session, "Test input")
+            await process_messages(mock_app_state, mock_session, ["Test input"])
 
         # Should process the message and log response
         mock_ipc.send_assistant_start.assert_called_once()
         mock_ipc.send_assistant_end.assert_called_once()
 
     @pytest.mark.asyncio
+    @patch("agents.Runner")
     @patch("app.runtime.IPCManager")
-    async def test_process_user_input_triggers_summarization(self, mock_ipc: Mock) -> None:
+    async def test_process_messages_triggers_summarization(self, mock_ipc: Mock, mock_runner: Mock) -> None:
         """Test that post-run summarization is triggered when needed."""
         mock_app_state = Mock()
+        mock_app_state.full_history_store = None
         mock_session = Mock()
         mock_session.agent = Mock()
         mock_session.session_id = "chat_test"
@@ -168,9 +174,9 @@ class TestProcessUserInputExtended:
 
         mock_result = Mock()
         mock_result.stream_events = mock_stream
-        mock_session.run_with_auto_summary = AsyncMock(return_value=mock_result)
+        mock_runner.run_streamed.return_value = mock_result
 
-        await process_user_input(mock_app_state, mock_session, "Test input")
+        await process_messages(mock_app_state, mock_session, ["Test input"])
 
         # Should trigger summarization
         mock_session.should_summarize.assert_called_once()

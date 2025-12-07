@@ -52,11 +52,17 @@ const FUNCTION_ICONS = {
   search_files:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
   read_file:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8m8 4H8m8-8H8"/></svg>',
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M16 12h2"/><path d="M16 8h2"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/><path d="M6 12h2"/><path d="M6 8h2"/></svg>',
   generate_document:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/></svg>',
   edit_file:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>',
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18.226 5.226-2.52-2.52A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-.351"/><path d="M21.378 12.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/><path d="M8 18h1"/></svg>',
+  text_edit:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18.226 5.226-2.52-2.52A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-.351"/><path d="M21.378 12.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/><path d="M8 18h1"/></svg>',
+  regex_edit:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18.226 5.226-2.52-2.52A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-.351"/><path d="M21.378 12.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/><path d="M8 18h1"/></svg>',
+  insert_text:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18.226 5.226-2.52-2.52A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-.351"/><path d="M21.378 12.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/><path d="M8 18h1"/></svg>',
   sequentialthinking:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg>',
   fetch:
@@ -70,6 +76,9 @@ const FUNCTION_ICONS = {
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3V6z"/><path d="M9 3v15M15 6v15"/></svg>',
   tavily_crawl:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 12-1.5 3"/><path d="M19.63 18.81 22 20"/><path d="M6.47 8.23a1.68 1.68 0 0 1 2.44 1.93l-.64 2.08a6.76 6.76 0 0 0 10.16 7.67l.42-.27a1 1 0 1 0-2.73-4.21l-.42.27a1.76 1.76 0 0 1-2.63-1.99l.64-2.08A6.66 6.66 0 0 0 3.94 3.9l-.7.4a1 1 0 1 0 2.55 4.34z"/></svg>',
+  // Conversation summarization
+  summarize_conversation:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="m3 21 9-9"/><path d="M12.2 6.2 11 5"/></svg>',
   default:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>',
 };
@@ -194,6 +203,8 @@ function formatToolName(functionName) {
   // Special case mappings
   const nameMap = {
     sequentialthinking: "Thought",
+    summarize_conversation: "Summarize",
+    summarizeconversation: "Summarize",
     read_file: "Read",
     list_directory: "List",
     search_files: "File Search",
@@ -404,7 +415,9 @@ function flushStatusUpdates(activeCalls) {
     const contentDiv = card.element.querySelector(".disclosure-content");
 
     // Update args preview in header when arguments arrive
-    if (data.arguments) {
+    // Skip args display entirely for summarize_conversation (cleaner card like Thought)
+    const isSummarization = card.rawName === "summarize_conversation";
+    if (data.arguments && !isSummarization) {
       const argsPreview = card.element.querySelector(".disclosure-args-preview");
       if (argsPreview) {
         const primaryArg = extractPrimaryArg(data.arguments, card.rawName || card.name);
@@ -476,37 +489,60 @@ function flushStatusUpdates(activeCalls) {
     }
 
     // Add result to expanded content
+    // Summarization uses thought-like styling (no label, clean text)
     if (data.result && contentDiv && !contentDiv.querySelector(".disclosure-result")) {
-      const resultSection = document.createElement("div");
-      resultSection.className = "disclosure-result";
+      const isSummarizationResult = card.rawName === "summarize_conversation";
 
-      const resultLabel = document.createElement("div");
-      resultLabel.className = "disclosure-section-label";
-      resultLabel.textContent = "Result";
-      resultSection.appendChild(resultLabel);
+      if (isSummarizationResult) {
+        // Summarization: Clean thought-like display (no label, just text)
+        const summarySection = document.createElement("div");
+        summarySection.className = "disclosure-result disclosure-reasoning";
 
-      const resultContent = document.createElement("pre");
-      // Try to pretty-print as JSON, fall back to plain text
-      const { html, isJson } = prettyPrintJson(data.result);
-      // Truncate very long results (check original length)
-      const isTruncated = data.result.length > 4000;
-      const displayContent = isTruncated ? data.result.substring(0, 4000) : data.result;
+        const summaryContent = document.createElement("div");
+        summaryContent.className = "disclosure-reasoning-content";
+        // Strip the metadata suffix [Tokens before: X, ...] from display
+        const cleanResult = data.result.replace(/\n?\n?\[Tokens before:.*\]$/, "");
+        summaryContent.textContent = cleanResult;
+        summarySection.appendChild(summaryContent);
 
-      if (isJson && !isTruncated) {
-        resultContent.className = "disclosure-section-content hljs";
-        resultContent.innerHTML = html;
-      } else if (isJson && isTruncated) {
-        // Re-prettify truncated content
-        const truncatedResult = prettyPrintJson(displayContent);
-        resultContent.className = "disclosure-section-content hljs";
-        resultContent.innerHTML = `${truncatedResult.html}\n<span class="hljs-comment">... (truncated)</span>`;
+        contentDiv.appendChild(summarySection);
+
+        // Show chevron for summarization (we skipped args, so need to show it here)
+        const chevron = card.element.querySelector(".disclosure-chevron");
+        if (chevron) chevron.classList.add("visible");
       } else {
-        resultContent.className = "disclosure-section-content";
-        resultContent.textContent = isTruncated ? `${displayContent}\n... (truncated)` : displayContent;
-      }
-      resultSection.appendChild(resultContent);
+        // Regular tool: Show with "Result" label and JSON/text formatting
+        const resultSection = document.createElement("div");
+        resultSection.className = "disclosure-result";
 
-      contentDiv.appendChild(resultSection);
+        const resultLabel = document.createElement("div");
+        resultLabel.className = "disclosure-section-label";
+        resultLabel.textContent = "Result";
+        resultSection.appendChild(resultLabel);
+
+        const resultContent = document.createElement("pre");
+        // Try to pretty-print as JSON, fall back to plain text
+        const { html, isJson } = prettyPrintJson(data.result);
+        // Truncate very long results (check original length)
+        const isTruncated = data.result.length > 4000;
+        const displayContent = isTruncated ? data.result.substring(0, 4000) : data.result;
+
+        if (isJson && !isTruncated) {
+          resultContent.className = "disclosure-section-content hljs";
+          resultContent.innerHTML = html;
+        } else if (isJson && isTruncated) {
+          // Re-prettify truncated content
+          const truncatedResult = prettyPrintJson(displayContent);
+          resultContent.className = "disclosure-section-content hljs";
+          resultContent.innerHTML = `${truncatedResult.html}\n<span class="hljs-comment">... (truncated)</span>`;
+        } else {
+          resultContent.className = "disclosure-section-content";
+          resultContent.textContent = isTruncated ? `${displayContent}\n... (truncated)` : displayContent;
+        }
+        resultSection.appendChild(resultContent);
+
+        contentDiv.appendChild(resultSection);
+      }
     }
 
     // Add error to expanded content
@@ -677,6 +713,9 @@ export function clearFunctionCards(chatContainer) {
 export function createCompletedToolCard(chatContainer, toolData) {
   const { call_id, name, arguments: args, result, success = true } = toolData;
 
+  // Summarization cards have special styling (like Thought cards)
+  const isSummarization = name === "summarize_conversation";
+
   // Create disclosure card (collapsed by default)
   const cardDiv = document.createElement("div");
   cardDiv.className = "function-disclosure";
@@ -698,12 +737,14 @@ export function createCompletedToolCard(chatContainer, toolData) {
   toolNameSpan.textContent = formatToolName(name);
 
   const argsSpan = document.createElement("span");
-  const primaryArg = extractPrimaryArg(args, name);
+  // Skip args display for summarization (cleaner card like Thought)
+  const primaryArg = isSummarization ? "" : extractPrimaryArg(args, name);
   argsSpan.className = `disclosure-args-preview${primaryArg ? " visible" : ""}`;
   argsSpan.textContent = primaryArg;
 
   const chevronSpan = document.createElement("span");
   // Show chevron if there's content to expand (args or result)
+  // For summarization, always show chevron if there's a result
   chevronSpan.className = `disclosure-chevron${primaryArg || result ? " visible" : ""}`;
   chevronSpan.innerHTML = CHEVRON_DOWN;
 
@@ -717,8 +758,8 @@ export function createCompletedToolCard(chatContainer, toolData) {
   const contentDiv = document.createElement("div");
   contentDiv.className = "disclosure-content";
 
-  // Add arguments section
-  if (args) {
+  // Add arguments section (skip for summarization - cleaner card like Thought)
+  if (args && !isSummarization) {
     const { html, isJson } = prettyPrintJson(args);
 
     const argsSection = document.createElement("div");
@@ -743,33 +784,49 @@ export function createCompletedToolCard(chatContainer, toolData) {
 
   // Add result section
   if (result) {
-    const resultSection = document.createElement("div");
-    resultSection.className = success ? "disclosure-result" : "disclosure-error";
+    if (isSummarization) {
+      // Summarization: Clean thought-like display (no label, just text)
+      const summarySection = document.createElement("div");
+      summarySection.className = "disclosure-result disclosure-reasoning";
 
-    const resultLabel = document.createElement("div");
-    resultLabel.className = "disclosure-section-label";
-    resultLabel.textContent = success ? "Result" : "Error";
-    resultSection.appendChild(resultLabel);
+      const summaryContent = document.createElement("div");
+      summaryContent.className = "disclosure-reasoning-content";
+      // Strip the metadata suffix [Tokens before: X, ...] from display
+      const cleanResult = result.replace(/\n?\n?\[Tokens before:.*\]$/, "");
+      summaryContent.textContent = cleanResult;
+      summarySection.appendChild(summaryContent);
 
-    const resultContent = document.createElement("pre");
-    const { html, isJson } = prettyPrintJson(result);
-    const isTruncated = result.length > 4000;
-    const displayContent = isTruncated ? result.substring(0, 4000) : result;
-
-    if (isJson && !isTruncated) {
-      resultContent.className = `${success ? "disclosure-section-content" : "disclosure-section-content error-text"} hljs`;
-      resultContent.innerHTML = html;
-    } else if (isJson && isTruncated) {
-      const truncatedResult = prettyPrintJson(displayContent);
-      resultContent.className = `${success ? "disclosure-section-content" : "disclosure-section-content error-text"} hljs`;
-      resultContent.innerHTML = `${truncatedResult.html}\n<span class="hljs-comment">... (truncated)</span>`;
+      contentDiv.appendChild(summarySection);
     } else {
-      resultContent.className = success ? "disclosure-section-content" : "disclosure-section-content error-text";
-      resultContent.textContent = isTruncated ? `${displayContent}\n... (truncated)` : displayContent;
-    }
-    resultSection.appendChild(resultContent);
+      // Regular tool: Show with "Result" label and JSON/text formatting
+      const resultSection = document.createElement("div");
+      resultSection.className = success ? "disclosure-result" : "disclosure-error";
 
-    contentDiv.appendChild(resultSection);
+      const resultLabel = document.createElement("div");
+      resultLabel.className = "disclosure-section-label";
+      resultLabel.textContent = success ? "Result" : "Error";
+      resultSection.appendChild(resultLabel);
+
+      const resultContent = document.createElement("pre");
+      const { html, isJson } = prettyPrintJson(result);
+      const isTruncated = result.length > 4000;
+      const displayContent = isTruncated ? result.substring(0, 4000) : result;
+
+      if (isJson && !isTruncated) {
+        resultContent.className = `${success ? "disclosure-section-content" : "disclosure-section-content error-text"} hljs`;
+        resultContent.innerHTML = html;
+      } else if (isJson && isTruncated) {
+        const truncatedResult = prettyPrintJson(displayContent);
+        resultContent.className = `${success ? "disclosure-section-content" : "disclosure-section-content error-text"} hljs`;
+        resultContent.innerHTML = `${truncatedResult.html}\n<span class="hljs-comment">... (truncated)</span>`;
+      } else {
+        resultContent.className = success ? "disclosure-section-content" : "disclosure-section-content error-text";
+        resultContent.textContent = isTruncated ? `${displayContent}\n... (truncated)` : displayContent;
+      }
+      resultSection.appendChild(resultContent);
+
+      contentDiv.appendChild(resultSection);
+    }
   }
 
   cardDiv.appendChild(contentDiv);

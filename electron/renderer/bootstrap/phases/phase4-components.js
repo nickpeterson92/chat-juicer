@@ -7,6 +7,7 @@
  * Criticality: HIGH (UI won't work without components)
  */
 
+import { initializeMessageQueueService } from "../../services/message-queue-service.js";
 import { ChatContainer } from "../../ui/components/chat-container.js";
 import { FilePanel } from "../../ui/components/file-panel.js";
 import { InputArea } from "../../ui/components/input-area.js";
@@ -25,8 +26,16 @@ export async function initializeComponents({ elements, appState, services, ipcAd
     // Component references (will be populated)
     const components = {};
 
+    // Initialize MessageQueueService for message queuing
+    const messageQueueService = initializeMessageQueueService({
+      appState,
+      messageService: services.messageService,
+    });
+    services.messageQueueService = messageQueueService;
+
     // CRITICAL: Define sendMessage FIRST (closure over services)
     // This must be defined before InputArea initialization
+    // Now uses queue service to handle queueing when agent is busy
     async function sendMessage(message, clearInput) {
       if (!message || !message.trim()) {
         return;
@@ -38,6 +47,28 @@ export async function initializeComponents({ elements, appState, services, ipcAd
           await showChatView(elements, appState);
         }
 
+        // Check if backend is busy - if so, queue the message
+        const pythonStatus = appState.getState("python.status");
+        const isBusy = pythonStatus !== "idle";
+
+        if (isBusy) {
+          // Queue the message - it will be sent when backend is idle
+          messageQueueService.add(message.trim());
+
+          // Clear input immediately (message is queued)
+          if (clearInput) {
+            clearInput.value = "";
+          }
+
+          // Focus chat input
+          const chatInput = document.getElementById("user-input");
+          if (chatInput) {
+            chatInput.focus();
+          }
+          return;
+        }
+
+        // Backend is idle - send directly (normal flow)
         // Display user message in chat
         if (components.chatContainer) {
           components.chatContainer.addUserMessage(message.trim());

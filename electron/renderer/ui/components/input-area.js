@@ -37,6 +37,9 @@ export class InputArea {
     // AppState integration (optional)
     this.appState = options.appState || null;
 
+    // Queue badge element (created lazily)
+    this.queueBadge = null;
+
     if (!this._lifecycle) {
       ComponentLifecycle.mount(this, "InputArea", globalLifecycleManager);
     }
@@ -79,16 +82,45 @@ export class InputArea {
   setupStateSubscriptions() {
     if (!this.appState) return;
 
-    // Subscribe to message streaming state to auto enable/disable input
-    const unsubscribeStreaming = this.appState.subscribe("message.isStreaming", (isStreaming) => {
-      if (isStreaming) {
-        this.disable();
-      } else {
-        this.enable();
-      }
+    // NOTE: Message queuing feature (2025-12-07) - input is ALWAYS enabled
+    // Messages sent while agent is busy are queued and processed when idle
+    // No longer disabling input during streaming
+
+    // Subscribe to queue state for badge updates on send button
+    const unsubscribeQueue = this.appState.subscribe("queue.items", (items) => {
+      const queueCount = items?.length || 0;
+      this.updateQueueBadge(queueCount);
     });
 
-    globalLifecycleManager.addUnsubscriber(this, unsubscribeStreaming);
+    globalLifecycleManager.addUnsubscriber(this, unsubscribeQueue);
+  }
+
+  /**
+   * Update queue count badge on send button
+   * @param {number} queueCount - Number of queued messages
+   * @private
+   */
+  updateQueueBadge(queueCount) {
+    if (!this.sendButton) return;
+
+    if (queueCount > 0) {
+      // Create badge if it doesn't exist
+      if (!this.queueBadge) {
+        this.queueBadge = document.createElement("span");
+        this.queueBadge.className = "queue-count-badge";
+        // Ensure send button has relative positioning for badge
+        this.sendButton.style.position = "relative";
+        this.sendButton.appendChild(this.queueBadge);
+      }
+      // Update badge text
+      this.queueBadge.textContent = queueCount > 99 ? "99+" : String(queueCount);
+    } else {
+      // Remove badge when queue is empty
+      if (this.queueBadge) {
+        this.queueBadge.remove();
+        this.queueBadge = null;
+      }
+    }
   }
 
   /**
@@ -285,6 +317,12 @@ export class InputArea {
     // Clean up model selector
     if (this.modelSelector && typeof this.modelSelector.destroy === "function") {
       this.modelSelector.destroy();
+    }
+
+    // Clean up queue badge
+    if (this.queueBadge) {
+      this.queueBadge.remove();
+      this.queueBadge = null;
     }
 
     if (this._lifecycle) {

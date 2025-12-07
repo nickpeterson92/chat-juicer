@@ -3,6 +3,7 @@
  * Handles session-related events and coordinates between UI and services
  */
 
+import { getMessageQueueService } from "../services/message-queue-service.js";
 import {
   findSessionElement,
   renderSessionItem,
@@ -71,6 +72,12 @@ export function setupSessionEventHandlers({
   // Handle session switch
   const handleSessionSwitch = async (sessionId) => {
     try {
+      // Clear message queue on session switch (queued messages belong to previous session)
+      const messageQueueService = getMessageQueueService();
+      if (messageQueueService) {
+        messageQueueService.clear();
+      }
+
       // Load session data
       const sessionData = await sessionService.switchSession(sessionId);
 
