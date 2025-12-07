@@ -21,6 +21,7 @@ from core.constants import (
     MSG_TYPE_FUNCTION_ARGUMENTS_DONE,
     MSG_TYPE_FUNCTION_COMPLETED,
     MSG_TYPE_FUNCTION_DETECTED,
+    MSG_TYPE_FUNCTION_EXECUTING,
     MSG_TYPE_HANDOFF_COMPLETED,
     MSG_TYPE_HANDOFF_STARTED,
     MSG_TYPE_REASONING_DELTA,
@@ -76,8 +77,12 @@ class CallTracker:
 
     def add_call(self, call_id: str, tool_name: str) -> None:
         """Add a new tool call to track."""
-        if call_id:
+        if call_id and not self.has_call(call_id):
             self.active_calls.append({"call_id": call_id, "tool_name": tool_name})
+
+    def has_call(self, call_id: str) -> bool:
+        """Check if a call_id is already being tracked."""
+        return any(call["call_id"] == call_id for call in self.active_calls)
 
     def pop_call(self) -> dict[str, str] | None:
         """Get and remove the oldest tracked call."""
@@ -101,7 +106,12 @@ def handle_message_output(item: RunItem) -> str | None:
 
 
 def handle_tool_call(item: RunItem, tracker: CallTracker) -> str | None:
-    """Handle tool call items (function invocations) with validation."""
+    """Handle tool call items (function invocations) with validation.
+
+    This fires when TOOL_CALL_ITEM event occurs - args are complete and tool
+    is about to execute. We emit function_executing (not function_detected)
+    because early detection via output_item.added already emitted function_detected.
+    """
     tool_name = "unknown"
     call_id = ""
     arguments = "{}"
@@ -121,16 +131,18 @@ def handle_tool_call(item: RunItem, tracker: CallTracker) -> str | None:
             # Get call_id with fallback to id
             call_id = getattr(raw, "call_id", getattr(raw, "id", ""))
 
-        # Track active calls for matching with outputs
+        # Track active calls for matching with outputs (no-op if already tracked via early detection)
         tracker.add_call(call_id, tool_name)
 
-    # Use Pydantic model for validation
+    # Emit function_executing - tool is about to run
+    # (function_detected was already emitted via output_item.added early detection)
     tool_msg = ToolCallNotification(
-        type=MSG_TYPE_FUNCTION_DETECTED,
+        type=MSG_TYPE_FUNCTION_EXECUTING,
         name=tool_name,
         arguments=arguments,
         call_id=call_id if call_id else None,
     )
+    logger.info(f"Function executing: {tool_name} (call_id: {call_id or 'none'})")
     return cast(str, _json_builder(tool_msg.model_dump(exclude_none=True)))
 
 
@@ -335,14 +347,18 @@ def handle_content_part_done_event(data: Any) -> str | None:
 
 # Handler registry mapping event types to handler functions
 RAW_EVENT_TYPE_HANDLERS: dict[str, Callable[[Any], str | None]] = {
-    "response.output_text.delta": handle_text_delta_event,  # SDK emits output_text, not text
-    "response.function_call_arguments.delta": handle_function_arguments_delta_event,
-    "response.function_call_arguments.done": handle_function_arguments_done_event,
-    "response.reasoning.text.delta": handle_reasoning_text_delta_event,
-    "response.reasoning_summary.text.delta": handle_reasoning_summary_delta_event,
-    "response.refusal.delta": handle_refusal_delta_event,
+    # Text and content events
+    "response.output_text.delta": handle_text_delta_event,
     "response.content_part.added": handle_content_part_added_event,
     "response.content_part.done": handle_content_part_done_event,
+    # Function call events
+    "response.function_call_arguments.delta": handle_function_arguments_delta_event,
+    "response.function_call_arguments.done": handle_function_arguments_done_event,
+    # Reasoning events
+    "response.reasoning.text.delta": handle_reasoning_text_delta_event,
+    "response.reasoning_summary.text.delta": handle_reasoning_summary_delta_event,
+    # Refusal events
+    "response.refusal.delta": handle_refusal_delta_event,
 }
 
 # Event logging throttle - log every Nth occurrence to reduce noise
@@ -352,6 +368,13 @@ _LOG_EVERY_N_EVENTS = 100  # Log handled events every 50 occurrences
 # High-frequency events that should be throttled (one per token)
 _THROTTLED_EVENTS = {
     "response.output_text.delta",  # Token-by-token text streaming (very noisy)
+}
+
+# Lifecycle events to ignore (no useful data, just noise)
+_IGNORED_EVENTS = {
+    "response.created",  # Response object created - no actionable data
+    "response.in_progress",  # Response generating - redundant with assistant_start
+    "response.completed",  # Response finished - usage data redundant with SDK tracking
 }
 
 # All other events logged immediately (rare, important for debugging):
@@ -374,6 +397,45 @@ def build_event_handlers(tracker: CallTracker) -> dict[str, EventHandler]:
         Uses strategy pattern with handler registry for clean extensibility.
         Each event type is dispatched to a specific handler function.
         """
+
+        def _handle_output_item_added(data: Any) -> str | None:
+            """Handle output_item.added events with early function detection."""
+            output_item = getattr(data, "item", None)
+            if output_item and getattr(output_item, "type", None) == "function_call":
+                tool_name = getattr(output_item, "name", "unknown")
+                call_id = getattr(output_item, "call_id", "") or getattr(output_item, "id", "")
+
+                tracker.add_call(call_id, tool_name)
+
+                tool_msg = ToolCallNotification(
+                    type=MSG_TYPE_FUNCTION_DETECTED,
+                    name=tool_name,
+                    arguments="{}",  # Empty - args will stream via delta events
+                    call_id=call_id if call_id else None,
+                )
+                logger.info(f"Early function detected: {tool_name} (call_id: {call_id or 'none'})")
+                return cast(str, _json_builder(tool_msg.model_dump(exclude_none=True)))
+            return None
+
+        def _handle_output_item_done(data: Any) -> str | None:
+            """Handle output_item.done events - safety net for complete function args."""
+            output_item = getattr(data, "item", None)
+            if output_item and getattr(output_item, "type", None) == "function_call":
+                tool_name = getattr(output_item, "name", "unknown")
+                call_id = getattr(output_item, "call_id", "") or getattr(output_item, "id", "")
+                arguments = getattr(output_item, "arguments", "{}")
+
+                # Send complete arguments as safety net (in case streaming deltas were missed)
+                tool_msg = ToolCallNotification(
+                    type=MSG_TYPE_FUNCTION_EXECUTING,
+                    name=tool_name,
+                    arguments=arguments,
+                    call_id=call_id if call_id else None,
+                )
+                logger.info(f"Function args complete (safety net): {tool_name} (call_id: {call_id or 'none'})")
+                return cast(str, _json_builder(tool_msg.model_dump(exclude_none=True)))
+            return None
+
         try:
             # Guard clauses for invalid events
             if getattr(event, "type", None) != RAW_RESPONSE_EVENT or not (data := getattr(event, "data", None)):
@@ -384,33 +446,34 @@ def build_event_handlers(tracker: CallTracker) -> dict[str, EventHandler]:
                 logger.warning("Event missing type attribute", extra={"event": event})
                 return None
 
-            # Look up and call the appropriate handler from registry
-            handler = RAW_EVENT_TYPE_HANDLERS.get(event_type)
-            if handler:
-                result = handler(data)
-                if result:
-                    # Selective throttling: only throttle high-frequency events
-                    if event_type in _THROTTLED_EVENTS:
-                        _event_counts[event_type] = _event_counts.get(event_type, 0) + 1
-                        if _event_counts[event_type] % _LOG_EVERY_N_EVENTS == 0:
-                            logger.info(f"Handled {_event_counts[event_type]} {event_type} events")
-                    else:
-                        # Log all non-throttled events immediately (rare, important)
-                        logger.info(f"Handled event: {event_type}")
-                return result
-
-            # Always log unknown event types (important for debugging)
-            logger.info(f"Unknown event type: {event_type}")
-
-            # Fallback: Unknown event types with delta become generic assistant_delta
-            if delta := getattr(data, "delta", None):
-                logger.debug(f"Unknown event type with delta: {event_type}")
-                return AssistantMessage(type=MSG_TYPE_ASSISTANT_DELTA, content=delta).to_json()  # type: ignore[no-any-return]
-
+            result: str | None = None
+            if event_type == "response.output_item.added":
+                result = _handle_output_item_added(data)
+            elif event_type == "response.output_item.done":
+                result = _handle_output_item_done(data)
+            else:
+                handler = RAW_EVENT_TYPE_HANDLERS.get(event_type)
+                if handler:
+                    result = handler(data)
+                    if result:
+                        # Selective throttling: only throttle high-frequency events
+                        if event_type in _THROTTLED_EVENTS:
+                            _event_counts[event_type] = _event_counts.get(event_type, 0) + 1
+                            if _event_counts[event_type] % _LOG_EVERY_N_EVENTS == 0:
+                                logger.info(f"Handled {_event_counts[event_type]} {event_type} events")
+                        else:
+                            # Log all non-throttled events immediately (rare, important)
+                            logger.info(f"Handled event: {event_type}")
+                elif event_type not in _IGNORED_EVENTS:
+                    # Log unknown event types (important for debugging), skip ignored lifecycle events
+                    logger.info(f"Unknown event type: {event_type}")
+                    if delta := getattr(data, "delta", None):
+                        logger.debug(f"Unknown event type with delta: {event_type}")
+                        result = AssistantMessage(type=MSG_TYPE_ASSISTANT_DELTA, content=delta).to_json()
         except Exception as e:
             logger.error(f"Error handling raw response event: {e}", exc_info=True)
 
-        return None  # Graceful degradation (single exit point)
+        return result  # Graceful degradation (single exit point)
 
     def handle_run_item_event(event: StreamEvent) -> str | None:
         # Guard by event type, then cast for attribute access

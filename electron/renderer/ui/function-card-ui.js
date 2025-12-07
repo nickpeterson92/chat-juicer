@@ -1,14 +1,49 @@
 /**
  * Function call card UI components for inline tool execution visualization
- * Optimized with JSON caching and collapsible design
+ * Uses Claude Code-style disclosure pattern: "ToolName args..." expandable
  */
 
+import hljs from "highlight.js";
 import { FUNCTION_CARD_CLEANUP_DELAY } from "../config/constants.js";
 import { safeParse } from "../utils/json-cache.js";
+
+/**
+ * Pretty-print and syntax highlight JSON content
+ * @param {string|Object} content - JSON string or object to format
+ * @returns {{html: string, isJson: boolean}} Highlighted HTML and whether it was valid JSON
+ */
+function prettyPrintJson(content) {
+  let parsed;
+  let jsonString;
+
+  if (typeof content === "string") {
+    parsed = safeParse(content, null);
+    if (parsed === null) {
+      // Not valid JSON, return as-is
+      return { html: content, isJson: false };
+    }
+    jsonString = JSON.stringify(parsed, null, 2);
+  } else if (typeof content === "object" && content !== null) {
+    parsed = content;
+    jsonString = JSON.stringify(parsed, null, 2);
+  } else {
+    return { html: String(content), isJson: false };
+  }
+
+  // Apply syntax highlighting
+  const highlighted = hljs.highlight(jsonString, { language: "json" });
+  return { html: highlighted.value, isJson: true };
+}
 
 // Throttled status update queue for batched DOM updates
 const pendingUpdates = new Map();
 let updateScheduled = false;
+
+// Chevron SVG for expand/collapse indicator
+const CHEVRON_DOWN =
+  '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>';
+const CHEVRON_UP =
+  '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 15l6-6 6 6"/></svg>';
 
 // SVG icon mapping for functions
 const FUNCTION_ICONS = {
@@ -19,29 +54,24 @@ const FUNCTION_ICONS = {
   read_file:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8m8 4H8m8-8H8"/></svg>',
   generate_document:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>',
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/></svg>',
   edit_file:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>',
   sequentialthinking:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"/></svg>',
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg>',
   fetch:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 10c.7-.7 1.69 0 2.5 0a2.5 2.5 0 1 0 0-5 .5.5 0 0 1-.5-.5 2.5 2.5 0 1 0-5 0c0 .81.7 1.8 0 2.5l-7 7c-.7.7-1.69 0-2.5 0a2.5 2.5 0 0 0 0 5c.28 0 .5.22.5.5a2.5 2.5 0 1 0 5 0c0-.81-.7-1.8 0-2.5Z"/></svg>',
+  // Tavily MCP tools (search, extract, map, crawl)
+  tavily_search:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>',
+  tavily_extract:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3L11 9.999"/><path d="M15.973 4.027A13 13 0 0 0 5.902 2.373c-1.398.342-1.092 2.158.277 2.601a19.9 19.9 0 0 1 5.822 3.024"/><path d="M16.001 11.999a19.9 19.9 0 0 1 3.024 5.824c.444 1.369 2.26 1.676 2.603.278A13 13 0 0 0 20 8.069"/><path d="M18.352 3.352a1.205 1.205 0 0 0-1.704 0l-5.296 5.296a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l5.296-5.296a1.205 1.205 0 0 0 0-1.704z"/></svg>',
+  tavily_map:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3V6z"/><path d="M9 3v15M15 6v15"/></svg>',
+  tavily_crawl:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 12-1.5 3"/><path d="M19.63 18.81 22 20"/><path d="M6.47 8.23a1.68 1.68 0 0 1 2.44 1.93l-.64 2.08a6.76 6.76 0 0 0 10.16 7.67l.42-.27a1 1 0 1 0-2.73-4.21l-.42.27a1.76 1.76 0 0 1-2.63-1.99l.64-2.08A6.66 6.66 0 0 0 3.94 3.9l-.7.4a1 1 0 1 0 2.55 4.34z"/></svg>',
   default:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>',
-};
-
-// Status icon mapping for WCAG 1.4.1 compliance (color-independent indicators)
-const STATUS_ICONS = {
-  executing:
-    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>',
-  thinking:
-    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"/></svg>',
-  completed:
-    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>',
-  error:
-    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
-  preparing:
-    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/></svg>',
 };
 
 /**
@@ -62,20 +92,147 @@ function getFunctionIcon(functionName) {
 }
 
 /**
- * Get status icon for WCAG 1.4.1 compliance (color-independent indicators)
- * @param {string} status - Status name
- * @returns {string} SVG icon HTML
+ * Extract a value from potentially incomplete JSON using regex
+ * Useful during streaming when JSON is still being built
+ * @param {string} jsonStr - Partial or complete JSON string
+ * @param {string} key - Key to extract
+ * @returns {string|null} Extracted value or null
  */
-function getStatusIcon(status) {
-  // Map common status variants to standard statuses
-  if (status === "success" || status === "completed") {
-    return STATUS_ICONS.completed;
+function extractFromPartialJson(jsonStr, key) {
+  // Match "key": "value" or "key": "value...  (streaming may cut off)
+  // Use non-greedy match and handle escaped quotes
+  const regex = new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)`, "i");
+  const match = jsonStr.match(regex);
+  if (match?.[1]) {
+    // Unescape common escape sequences
+    return match[1].replace(/\\n/g, " ").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
   }
-  return STATUS_ICONS[status] || STATUS_ICONS.preparing;
+  return null;
 }
 
 /**
- * Create or get an inline function call card (collapsed by default)
+ * Extract primary argument for display in collapsed state
+ * Returns the most relevant argument value for inline display
+ * Works with both complete JSON and partial streaming JSON
+ * @param {Object|string} args - Function arguments
+ * @param {string} _functionName - Function name for context
+ * @returns {string} Primary argument for display
+ */
+function extractPrimaryArg(args, _functionName) {
+  if (!args) return "";
+
+  // Priority order for common argument keys
+  const priorityKeys = ["path", "file_path", "filename", "url", "query", "pattern", "thought", "name", "command"];
+
+  // If args is a string (streaming JSON), try regex extraction first
+  if (typeof args === "string") {
+    // Try regex extraction for partial JSON (works during streaming)
+    for (const key of priorityKeys) {
+      const value = extractFromPartialJson(args, key);
+      if (value && value.length > 0) {
+        // Truncate long values
+        return value.length > 60 ? `${value.substring(0, 57)}...` : value;
+      }
+    }
+
+    // Fall back to full JSON parse if regex didn't find anything
+    const parsed = safeParse(args, {});
+    if (typeof parsed !== "object" || parsed === null) return "";
+
+    for (const key of priorityKeys) {
+      if (parsed[key]) {
+        let value = String(parsed[key]);
+        if (value.length > 60) {
+          value = `${value.substring(0, 57)}...`;
+        }
+        return value;
+      }
+    }
+
+    // Fallback: use first string value found
+    for (const value of Object.values(parsed)) {
+      if (typeof value === "string" && value.length > 0) {
+        return value.length > 60 ? `${value.substring(0, 57)}...` : value;
+      }
+    }
+
+    return "";
+  }
+
+  // Handle object args directly
+  if (typeof args !== "object" || args === null) return String(args);
+
+  for (const key of priorityKeys) {
+    if (args[key]) {
+      let value = String(args[key]);
+      if (value.length > 60) {
+        value = `${value.substring(0, 57)}...`;
+      }
+      return value;
+    }
+  }
+
+  // Fallback: use first string value found
+  for (const value of Object.values(args)) {
+    if (typeof value === "string" && value.length > 0) {
+      return value.length > 60 ? `${value.substring(0, 57)}...` : value;
+    }
+  }
+
+  return "";
+}
+
+/**
+ * Format tool name for display (human-readable)
+ * @param {string} functionName - Raw function name
+ * @returns {string} Formatted display name
+ */
+function formatToolName(functionName) {
+  // Handle MCP server prefixed names like "sequentialthinking"
+  const name = functionName.replace(/^mcp_/, "");
+
+  // Special case mappings
+  const nameMap = {
+    sequentialthinking: "Thought",
+    read_file: "Read",
+    list_directory: "List",
+    search_files: "File Search",
+    generate_document: "Generate",
+    edit_file: "Edit",
+    text_edit: "Edit",
+    regex_edit: "Regex",
+    insert_text: "Insert",
+    fetch: "Fetch",
+    // Tavily MCP tools
+    tavily_search: "Web Search",
+    tavilysearch: "Web Search",
+    tavily_extract: "Extract",
+    tavilyextract: "Extract",
+    tavily_map: "Map",
+    tavilymap: "Map",
+    tavily_crawl: "Crawl",
+    tavilycrawl: "Crawl",
+  };
+
+  const normalized = name.toLowerCase().replace(/[_-]/g, "");
+  for (const [key, display] of Object.entries(nameMap)) {
+    if (normalized.includes(key.replace(/[_-]/g, ""))) {
+      return display;
+    }
+  }
+
+  // Default: capitalize first letter, replace underscores with spaces
+  return name
+    .split(/[_-]/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+/**
+ * Create or get an inline function call card (Claude Code disclosure style)
+ * Collapsed: "ToolName primary_arg ▼"
+ * Expanded: Shows full arguments, result, reasoning
+ *
  * @param {HTMLElement} chatContainer - The chat container element (not tools container)
  * @param {Map} activeCalls - Map of active function calls
  * @param {Object} appState - Application state with message.currentAssistant
@@ -102,41 +259,48 @@ export function createFunctionCallCard(
   // Check if card exists AND has an element - FunctionCallService may have created
   // a call object without a DOM element, so we need to create the element
   if (!card || !card.element) {
-    // Create new inline card (collapsed by default)
+    // Create new disclosure card (collapsed by default)
     const cardDiv = document.createElement("div");
-    cardDiv.className = "function-call-card executing";
+    cardDiv.className = "function-disclosure";
     cardDiv.id = `function-${callId}`;
     cardDiv.dataset.expanded = "false";
+    cardDiv.dataset.status = status;
 
+    // Header row: [icon] ToolName args... ▼
     const headerDiv = document.createElement("div");
-    headerDiv.className = "function-header";
+    headerDiv.className = "disclosure-header";
 
-    const iconDiv = document.createElement("div");
-    iconDiv.className = "function-icon";
-    iconDiv.innerHTML = getFunctionIcon(functionName);
+    const iconSpan = document.createElement("span");
+    iconSpan.className = "disclosure-icon";
+    iconSpan.innerHTML = getFunctionIcon(functionName);
 
-    const nameDiv = document.createElement("div");
-    nameDiv.className = "function-name";
-    nameDiv.textContent = functionName;
+    const toolNameSpan = document.createElement("span");
+    toolNameSpan.className = "disclosure-tool-name";
+    toolNameSpan.textContent = formatToolName(functionName);
 
-    const paramsDiv = document.createElement("div");
-    paramsDiv.className = "function-params";
-    paramsDiv.textContent = "()"; // Will be updated with actual params
+    const argsSpan = document.createElement("span");
+    argsSpan.className = "disclosure-args-preview";
+    argsSpan.textContent = ""; // Will be updated when args arrive
 
-    const statusDiv = document.createElement("div");
-    statusDiv.className = "function-status";
-    // Include status icon for WCAG 1.4.1 compliance (color-independent indicators)
-    statusDiv.innerHTML = `<span class="status-icon">${getStatusIcon(status)}</span><span class="status-text">${status}</span>`;
+    const chevronSpan = document.createElement("span");
+    chevronSpan.className = "disclosure-chevron";
+    chevronSpan.innerHTML = CHEVRON_DOWN;
 
-    headerDiv.appendChild(iconDiv);
-    headerDiv.appendChild(nameDiv);
-    headerDiv.appendChild(paramsDiv);
-    headerDiv.appendChild(statusDiv);
+    headerDiv.appendChild(iconSpan);
+    headerDiv.appendChild(toolNameSpan);
+    headerDiv.appendChild(argsSpan);
+    headerDiv.appendChild(chevronSpan);
     cardDiv.appendChild(headerDiv);
 
-    // Add click handler for expand/collapse
-    cardDiv.addEventListener("click", () => {
-      toggleFunctionCard(cardDiv, activeCalls, appState.functions.activeTimers, callId);
+    // Expandable content container (hidden by default)
+    const contentDiv = document.createElement("div");
+    contentDiv.className = "disclosure-content";
+    cardDiv.appendChild(contentDiv);
+
+    // Add click handler for expand/collapse (only on header)
+    headerDiv.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleFunctionCard(cardDiv);
     });
 
     // Insert function card BEFORE the current streaming assistant message
@@ -165,8 +329,8 @@ export function createFunctionCallCard(
       ...existingCard, // Preserve FunctionCallService properties (id, args, status, etc.)
       element: cardDiv,
       name: functionName,
+      rawName: functionName, // Keep original for expanded view
       timestamp: existingCard?.timestamp || Date.now(),
-      expanded: false,
       cleanupTimerId: null, // Track timer for cancellation
     };
     activeCalls.set(callId, card);
@@ -177,47 +341,21 @@ export function createFunctionCallCard(
 
 /**
  * Toggle function card between collapsed and expanded states
+ * Pure DOM manipulation - no Map tracking needed since cards are persisted to SQLite
  * @param {HTMLElement} cardElement - The card element to toggle
  */
-function toggleFunctionCard(cardElement, activeCalls, activeTimers, callId) {
+function toggleFunctionCard(cardElement) {
   const isExpanded = cardElement.dataset.expanded === "true";
+  const chevron = cardElement.querySelector(".disclosure-chevron");
 
   if (isExpanded) {
-    // Collapsing - remove expanded state and trigger cleanup
     cardElement.classList.remove("expanded");
     cardElement.dataset.expanded = "false";
-
-    // Update card object state
-    if (callId && activeCalls) {
-      const card = activeCalls.get(callId);
-      if (card) {
-        card.expanded = false;
-      }
-
-      // Trigger cleanup now that card is collapsed
-      if (activeTimers) {
-        scheduleFunctionCardCleanup(activeCalls, activeTimers, callId);
-      }
-    }
+    if (chevron) chevron.innerHTML = CHEVRON_DOWN;
   } else {
-    // Expanding - add expanded state and cancel any pending cleanup
     cardElement.classList.add("expanded");
     cardElement.dataset.expanded = "true";
-
-    // Update card object state and cancel cleanup timer
-    if (callId && activeCalls) {
-      const card = activeCalls.get(callId);
-      if (card) {
-        card.expanded = true;
-
-        // Cancel any pending cleanup timer since user wants to keep it visible
-        if (card.cleanupTimerId && activeTimers) {
-          clearTimeout(card.cleanupTimerId);
-          activeTimers.delete(card.cleanupTimerId);
-          card.cleanupTimerId = null;
-        }
-      }
-    }
+    if (chevron) chevron.innerHTML = CHEVRON_UP;
   }
 }
 
@@ -259,95 +397,134 @@ function flushStatusUpdates(activeCalls) {
       continue;
     }
 
-    const statusDiv = card.element.querySelector(".function-status");
-    if (statusDiv) {
-      // Update both icon and text for WCAG 1.4.1 compliance
-      statusDiv.innerHTML = `<span class="status-icon">${getStatusIcon(status)}</span><span class="status-text">${status}</span>`;
-    }
+    // Update data-status attribute for CSS styling
+    card.element.dataset.status = status;
 
-    // Update card styling based on status
-    if (status === "thinking" || status === "executing" || status === "executing...") {
-      card.element.className =
-        card.element.dataset.expanded === "true"
-          ? "function-call-card executing expanded"
-          : "function-call-card executing";
-    } else if (status === "completed" || status === "success") {
-      card.element.className =
-        card.element.dataset.expanded === "true" ? "function-call-card success expanded" : "function-call-card success";
-    } else if (status === "error") {
-      card.element.className =
-        card.element.dataset.expanded === "true" ? "function-call-card error expanded" : "function-call-card error";
-    }
+    // Update expanded content with detailed info
+    const contentDiv = card.element.querySelector(".disclosure-content");
 
-    // Add arguments if provided (optimized with JSON cache)
-    if (data.arguments && !card.element.querySelector(".function-arguments")) {
-      const parsedArgs = safeParse(data.arguments, data.arguments);
-      const argsText = typeof parsedArgs === "string" ? parsedArgs : JSON.stringify(parsedArgs, null, 2);
+    // Update args preview in header when arguments arrive
+    if (data.arguments) {
+      const argsPreview = card.element.querySelector(".disclosure-args-preview");
+      if (argsPreview) {
+        const primaryArg = extractPrimaryArg(data.arguments, card.rawName || card.name);
+        argsPreview.textContent = primaryArg;
 
-      // Update params display for collapsed state - show full params inline
-      const paramsDiv = card.element.querySelector(".function-params");
-      if (paramsDiv) {
-        // Show compact inline JSON representation
-        const compactJson = typeof parsedArgs === "object" ? JSON.stringify(parsedArgs) : parsedArgs;
-        paramsDiv.textContent = compactJson;
-      }
-
-      // Create full arguments section for expanded state
-      const argsDiv = document.createElement("div");
-      argsDiv.className = "function-arguments";
-      argsDiv.textContent = argsText;
-      card.element.appendChild(argsDiv);
-    }
-
-    // Add result if provided
-    if (data.result && !card.element.querySelector(".function-result")) {
-      const resultDiv = document.createElement("div");
-      resultDiv.className = "function-result";
-      resultDiv.textContent = data.result;
-      card.element.appendChild(resultDiv);
-    }
-
-    // Add error if provided
-    if (data.error && !card.element.querySelector(".function-result")) {
-      const resultDiv = document.createElement("div");
-      resultDiv.className = "function-result";
-      resultDiv.textContent = `Error: ${data.error}`;
-      card.element.appendChild(resultDiv);
-    }
-
-    // Add or update reasoning if provided (live updates during thinking)
-    if (data.reasoning !== undefined) {
-      let reasoningDiv = card.element.querySelector(".function-reasoning");
-
-      if (!reasoningDiv) {
-        // Create reasoning section if it doesn't exist
-        reasoningDiv = document.createElement("div");
-        reasoningDiv.className = "function-reasoning";
-
-        // Add a label for clarity
-        const reasoningLabel = document.createElement("div");
-        reasoningLabel.className = "function-reasoning-label";
-        reasoningLabel.textContent = "Thinking:";
-        reasoningDiv.appendChild(reasoningLabel);
-
-        const reasoningContent = document.createElement("div");
-        reasoningContent.className = "function-reasoning-content";
-        reasoningDiv.appendChild(reasoningContent);
-
-        // Insert reasoning before arguments (if they exist) or at the end
-        const argsDiv = card.element.querySelector(".function-arguments");
-        if (argsDiv) {
-          card.element.insertBefore(reasoningDiv, argsDiv);
-        } else {
-          card.element.appendChild(reasoningDiv);
+        // Fade in args and chevron when we have content
+        if (primaryArg) {
+          argsPreview.classList.add("visible");
+          const chevron = card.element.querySelector(".disclosure-chevron");
+          if (chevron) chevron.classList.add("visible");
         }
       }
 
-      // Update reasoning content
-      const reasoningContent = reasoningDiv.querySelector(".function-reasoning-content");
+      // Add full arguments to expanded content
+      if (contentDiv && !contentDiv.querySelector(".disclosure-arguments")) {
+        const { html, isJson } = prettyPrintJson(data.arguments);
+
+        const argsSection = document.createElement("div");
+        argsSection.className = "disclosure-arguments";
+
+        const argsLabel = document.createElement("div");
+        argsLabel.className = "disclosure-section-label";
+        argsLabel.textContent = "Arguments";
+        argsSection.appendChild(argsLabel);
+
+        const argsContent = document.createElement("pre");
+        argsContent.className = `disclosure-section-content${isJson ? " hljs" : ""}`;
+        if (isJson) {
+          argsContent.innerHTML = html;
+        } else {
+          argsContent.textContent = html;
+        }
+        argsSection.appendChild(argsContent);
+
+        contentDiv.appendChild(argsSection);
+      }
+    }
+
+    // Add or update reasoning in expanded content
+    if (data.reasoning !== undefined && contentDiv) {
+      let reasoningSection = contentDiv.querySelector(".disclosure-reasoning");
+
+      if (!reasoningSection) {
+        reasoningSection = document.createElement("div");
+        reasoningSection.className = "disclosure-reasoning";
+
+        const reasoningLabel = document.createElement("div");
+        reasoningLabel.className = "disclosure-section-label";
+        reasoningLabel.textContent = "Thinking";
+        reasoningSection.appendChild(reasoningLabel);
+
+        const reasoningContent = document.createElement("div");
+        reasoningContent.className = "disclosure-reasoning-content";
+        reasoningSection.appendChild(reasoningContent);
+
+        // Insert reasoning before arguments
+        const argsSection = contentDiv.querySelector(".disclosure-arguments");
+        if (argsSection) {
+          contentDiv.insertBefore(reasoningSection, argsSection);
+        } else {
+          contentDiv.appendChild(reasoningSection);
+        }
+      }
+
+      const reasoningContent = reasoningSection.querySelector(".disclosure-reasoning-content");
       if (reasoningContent) {
         reasoningContent.textContent = data.reasoning;
       }
+    }
+
+    // Add result to expanded content
+    if (data.result && contentDiv && !contentDiv.querySelector(".disclosure-result")) {
+      const resultSection = document.createElement("div");
+      resultSection.className = "disclosure-result";
+
+      const resultLabel = document.createElement("div");
+      resultLabel.className = "disclosure-section-label";
+      resultLabel.textContent = "Result";
+      resultSection.appendChild(resultLabel);
+
+      const resultContent = document.createElement("pre");
+      // Try to pretty-print as JSON, fall back to plain text
+      const { html, isJson } = prettyPrintJson(data.result);
+      // Truncate very long results (check original length)
+      const isTruncated = data.result.length > 4000;
+      const displayContent = isTruncated ? data.result.substring(0, 4000) : data.result;
+
+      if (isJson && !isTruncated) {
+        resultContent.className = "disclosure-section-content hljs";
+        resultContent.innerHTML = html;
+      } else if (isJson && isTruncated) {
+        // Re-prettify truncated content
+        const truncatedResult = prettyPrintJson(displayContent);
+        resultContent.className = "disclosure-section-content hljs";
+        resultContent.innerHTML = `${truncatedResult.html}\n<span class="hljs-comment">... (truncated)</span>`;
+      } else {
+        resultContent.className = "disclosure-section-content";
+        resultContent.textContent = isTruncated ? `${displayContent}\n... (truncated)` : displayContent;
+      }
+      resultSection.appendChild(resultContent);
+
+      contentDiv.appendChild(resultSection);
+    }
+
+    // Add error to expanded content
+    if (data.error && contentDiv && !contentDiv.querySelector(".disclosure-error")) {
+      const errorSection = document.createElement("div");
+      errorSection.className = "disclosure-error";
+
+      const errorLabel = document.createElement("div");
+      errorLabel.className = "disclosure-section-label";
+      errorLabel.textContent = "Error";
+      errorSection.appendChild(errorLabel);
+
+      const errorContent = document.createElement("div");
+      errorContent.className = "disclosure-section-content error-text";
+      errorContent.textContent = data.error;
+      errorSection.appendChild(errorContent);
+
+      contentDiv.appendChild(errorSection);
     }
   }
 
@@ -376,79 +553,99 @@ export function updateFunctionArguments(activeCalls, argumentsBuffer, callId, de
     argumentsBuffer.set(callId, argumentsBuffer.get(callId) + delta);
   }
 
-  let argsDiv = card.element.querySelector(".function-arguments");
-  if (!argsDiv) {
-    argsDiv = document.createElement("div");
-    argsDiv.className = "function-arguments streaming";
-    card.element.appendChild(argsDiv);
+  const bufferedArgs = argumentsBuffer.get(callId);
+
+  // Update header args preview with streaming content
+  const argsPreview = card.element.querySelector(".disclosure-args-preview");
+  if (argsPreview) {
+    const primaryArg = extractPrimaryArg(bufferedArgs, card.rawName || card.name);
+    argsPreview.textContent = primaryArg || "";
+
+    // Fade in args and chevron when we have extractable content
+    if (primaryArg && !argsPreview.classList.contains("visible")) {
+      argsPreview.classList.add("visible");
+      const chevron = card.element.querySelector(".disclosure-chevron");
+      if (chevron) chevron.classList.add("visible");
+    }
   }
 
-  if (isDone) {
-    argsDiv.classList.remove("streaming");
+  // Update expanded content if exists
+  const contentDiv = card.element.querySelector(".disclosure-content");
+  if (contentDiv) {
+    let argsSection = contentDiv.querySelector(".disclosure-arguments");
 
-    // Use cached JSON parsing
-    const parsedArgs = safeParse(argumentsBuffer.get(callId), argumentsBuffer.get(callId));
-    argsDiv.textContent = typeof parsedArgs === "string" ? parsedArgs : JSON.stringify(parsedArgs, null, 2);
+    if (!argsSection) {
+      argsSection = document.createElement("div");
+      argsSection.className = "disclosure-arguments";
 
-    // Update params display for collapsed state - show full params inline
-    const paramsDiv = card.element.querySelector(".function-params");
-    if (paramsDiv) {
-      const compactJson = typeof parsedArgs === "object" ? JSON.stringify(parsedArgs) : parsedArgs;
-      paramsDiv.textContent = compactJson;
+      const argsLabel = document.createElement("div");
+      argsLabel.className = "disclosure-section-label";
+      argsLabel.textContent = "Arguments";
+      argsSection.appendChild(argsLabel);
+
+      const argsContent = document.createElement("pre");
+      argsContent.className = "disclosure-section-content streaming";
+      argsSection.appendChild(argsContent);
+
+      contentDiv.appendChild(argsSection);
     }
 
-    argumentsBuffer.delete(callId);
-  } else {
-    // Show partial arguments while streaming
-    argsDiv.textContent = `${argumentsBuffer.get(callId)}...`;
-
-    // Update params to show streaming indicator
-    const paramsDiv = card.element.querySelector(".function-params");
-    if (paramsDiv) {
-      paramsDiv.textContent = argumentsBuffer.get(callId);
+    const argsContent = argsSection.querySelector(".disclosure-section-content");
+    if (argsContent) {
+      if (isDone) {
+        argsContent.classList.remove("streaming");
+        const parsedArgs = safeParse(bufferedArgs, bufferedArgs);
+        argsContent.textContent = typeof parsedArgs === "string" ? parsedArgs : JSON.stringify(parsedArgs, null, 2);
+        argumentsBuffer.delete(callId);
+      } else {
+        argsContent.textContent = `${bufferedArgs}...`;
+      }
     }
   }
 }
 
 /**
- * Schedule cleanup of a function card after delay
+ * Schedule cleanup of a function card's Map entry after delay.
+ * DOM element is preserved (cards persist visually) since tool calls are
+ * now stored in Layer 2 (SQLite) and will be restored on session load.
+ *
+ * This only cleans up the activeCalls Map entry to free memory while
+ * keeping the visual card in the chat for reference.
+ *
  * @param {Map} activeCalls - Map of active function calls
  * @param {Set} activeTimers - Set of active timer IDs
- * @param {string} callId - Call identifier to clean up
+ * @param {string} callId - Call identifier
+ * @param {number} delay - Cleanup delay in ms (default: FUNCTION_CARD_CLEANUP_DELAY)
  */
-export function scheduleFunctionCardCleanup(activeCalls, activeTimers, callId) {
+export function scheduleFunctionCardCleanup(activeCalls, activeTimers, callId, delay = FUNCTION_CARD_CLEANUP_DELAY) {
+  if (!callId || !activeCalls) return;
+
   const card = activeCalls.get(callId);
+  if (!card) return;
 
-  // Don't clean up if card is expanded - user is still reviewing it
-  if (card?.expanded) return;
-
-  // Cancel any existing timer for this card before scheduling new one
-  if (card?.cleanupTimerId) {
-    clearTimeout(card.cleanupTimerId);
-    activeTimers.delete(card.cleanupTimerId);
+  // Prevent duplicate timers
+  if (card.cleanupTimerId) {
+    return;
   }
 
-  const timerId = setTimeout(() => {
-    const card = activeCalls.get(callId);
-
-    if (card?.element) {
-      // Remove from DOM with fade-out animation
-      card.element.style.transition = "opacity 0.3s ease-out";
-      card.element.style.opacity = "0";
-
-      setTimeout(() => {
-        card.element.remove(); // Actually remove from DOM
-      }, 300);
+  const timerId = window.setTimeout(() => {
+    // Mark the DOM element as persisted (no longer tracked in activeCalls)
+    const targetCard = activeCalls.get(callId);
+    if (targetCard?.element) {
+      targetCard.element.dataset.persisted = "true";
     }
 
+    // Remove from active calls map (frees memory)
+    // DOM element stays visible - tool call is persisted in Layer 2
     activeCalls.delete(callId);
-    activeTimers.delete(timerId);
-  }, FUNCTION_CARD_CLEANUP_DELAY);
 
-  // Store timer ID on card for later cancellation
-  if (card) {
-    card.cleanupTimerId = timerId;
-  }
+    // Clear timer tracking
+    activeTimers.delete(timerId);
+  }, delay);
+
+  // Track timer for this card so we don't schedule twice
+  card.cleanupTimerId = timerId;
+  activeCalls.set(callId, card);
   activeTimers.add(timerId);
 }
 
@@ -457,9 +654,145 @@ export function scheduleFunctionCardCleanup(activeCalls, activeTimers, callId) {
  * @param {HTMLElement} chatContainer - The chat container element
  */
 export function clearFunctionCards(chatContainer) {
-  // Remove all function cards from chat container
-  const cards = chatContainer.querySelectorAll(".function-call-card");
+  // Remove all disclosure cards from chat container
+  const cards = chatContainer.querySelectorAll(".function-disclosure");
   for (const card of cards) {
     card.remove();
   }
+}
+
+/**
+ * Create a completed tool card from persisted session data
+ * Used for restoring tool cards on session load (not for active/streaming calls)
+ *
+ * @param {HTMLElement} chatContainer - The chat container element
+ * @param {Object} toolData - Persisted tool call data
+ * @param {string} toolData.call_id - Unique call identifier
+ * @param {string} toolData.name - Tool/function name
+ * @param {string|Object} toolData.arguments - Tool arguments
+ * @param {string} toolData.result - Tool result
+ * @param {boolean} toolData.success - Whether the call succeeded
+ * @returns {HTMLElement} The created card element
+ */
+export function createCompletedToolCard(chatContainer, toolData) {
+  const { call_id, name, arguments: args, result, success = true } = toolData;
+
+  // Create disclosure card (collapsed by default)
+  const cardDiv = document.createElement("div");
+  cardDiv.className = "function-disclosure";
+  cardDiv.id = `function-${call_id}`;
+  cardDiv.dataset.expanded = "false";
+  cardDiv.dataset.status = success ? "completed" : "error";
+  cardDiv.dataset.persisted = "true"; // Mark as loaded from persistence
+
+  // Header row: [icon] ToolName args... ▼
+  const headerDiv = document.createElement("div");
+  headerDiv.className = "disclosure-header";
+
+  const iconSpan = document.createElement("span");
+  iconSpan.className = "disclosure-icon";
+  iconSpan.innerHTML = getFunctionIcon(name);
+
+  const toolNameSpan = document.createElement("span");
+  toolNameSpan.className = "disclosure-tool-name";
+  toolNameSpan.textContent = formatToolName(name);
+
+  const argsSpan = document.createElement("span");
+  const primaryArg = extractPrimaryArg(args, name);
+  argsSpan.className = `disclosure-args-preview${primaryArg ? " visible" : ""}`;
+  argsSpan.textContent = primaryArg;
+
+  const chevronSpan = document.createElement("span");
+  // Show chevron if there's content to expand (args or result)
+  chevronSpan.className = `disclosure-chevron${primaryArg || result ? " visible" : ""}`;
+  chevronSpan.innerHTML = CHEVRON_DOWN;
+
+  headerDiv.appendChild(iconSpan);
+  headerDiv.appendChild(toolNameSpan);
+  headerDiv.appendChild(argsSpan);
+  headerDiv.appendChild(chevronSpan);
+  cardDiv.appendChild(headerDiv);
+
+  // Expandable content container (hidden by default)
+  const contentDiv = document.createElement("div");
+  contentDiv.className = "disclosure-content";
+
+  // Add arguments section
+  if (args) {
+    const { html, isJson } = prettyPrintJson(args);
+
+    const argsSection = document.createElement("div");
+    argsSection.className = "disclosure-arguments";
+
+    const argsLabel = document.createElement("div");
+    argsLabel.className = "disclosure-section-label";
+    argsLabel.textContent = "Arguments";
+    argsSection.appendChild(argsLabel);
+
+    const argsContent = document.createElement("pre");
+    argsContent.className = `disclosure-section-content${isJson ? " hljs" : ""}`;
+    if (isJson) {
+      argsContent.innerHTML = html;
+    } else {
+      argsContent.textContent = html;
+    }
+    argsSection.appendChild(argsContent);
+
+    contentDiv.appendChild(argsSection);
+  }
+
+  // Add result section
+  if (result) {
+    const resultSection = document.createElement("div");
+    resultSection.className = success ? "disclosure-result" : "disclosure-error";
+
+    const resultLabel = document.createElement("div");
+    resultLabel.className = "disclosure-section-label";
+    resultLabel.textContent = success ? "Result" : "Error";
+    resultSection.appendChild(resultLabel);
+
+    const resultContent = document.createElement("pre");
+    const { html, isJson } = prettyPrintJson(result);
+    const isTruncated = result.length > 4000;
+    const displayContent = isTruncated ? result.substring(0, 4000) : result;
+
+    if (isJson && !isTruncated) {
+      resultContent.className = `${success ? "disclosure-section-content" : "disclosure-section-content error-text"} hljs`;
+      resultContent.innerHTML = html;
+    } else if (isJson && isTruncated) {
+      const truncatedResult = prettyPrintJson(displayContent);
+      resultContent.className = `${success ? "disclosure-section-content" : "disclosure-section-content error-text"} hljs`;
+      resultContent.innerHTML = `${truncatedResult.html}\n<span class="hljs-comment">... (truncated)</span>`;
+    } else {
+      resultContent.className = success ? "disclosure-section-content" : "disclosure-section-content error-text";
+      resultContent.textContent = isTruncated ? `${displayContent}\n... (truncated)` : displayContent;
+    }
+    resultSection.appendChild(resultContent);
+
+    contentDiv.appendChild(resultSection);
+  }
+
+  cardDiv.appendChild(contentDiv);
+
+  // Add click handler for expand/collapse (only on header)
+  headerDiv.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isExpanded = cardDiv.dataset.expanded === "true";
+    const chevron = cardDiv.querySelector(".disclosure-chevron");
+
+    if (isExpanded) {
+      cardDiv.classList.remove("expanded");
+      cardDiv.dataset.expanded = "false";
+      if (chevron) chevron.innerHTML = CHEVRON_DOWN;
+    } else {
+      cardDiv.classList.add("expanded");
+      cardDiv.dataset.expanded = "true";
+      if (chevron) chevron.innerHTML = CHEVRON_UP;
+    }
+  });
+
+  // Append to chat container
+  chatContainer.appendChild(cardDiv);
+
+  return cardDiv;
 }

@@ -61,7 +61,7 @@ class TestCreateAgent:
     def test_reasoning_effort_validation(self, mock_agent_class: Mock, mock_env: dict[str, str]) -> None:
         """Test that reasoning effort is validated."""
         # Valid efforts should work
-        for effort in ["minimal", "low", "medium", "high"]:
+        for effort in ["none", "low", "medium", "high"]:
             agent = create_agent(
                 deployment="o1-preview",
                 instructions="Test",

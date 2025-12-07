@@ -105,8 +105,8 @@ class SessionMetadata(BaseModel):
     message_count: int = Field(default=0, ge=0, description="Non-negative message count")
     accumulated_tool_tokens: int = Field(default=0, ge=0, description="Accumulated tool tokens for this session")
     mcp_config: list[str] = Field(
-        default_factory=lambda: ["sequential", "fetch"],
-        description="List of enabled MCP server names (sequential, fetch)",
+        default_factory=lambda: ["sequential", "fetch", "tavily"],
+        description="List of enabled MCP server names (sequential, fetch, tavily)",
     )
     model: str = Field(
         default="gpt-5",
@@ -139,7 +139,7 @@ class SessionMetadata(BaseModel):
     @classmethod
     def validate_reasoning_effort(cls, v: str) -> str:
         """Validate reasoning_effort parameter."""
-        valid_values = ["minimal", "low", "medium", "high"]
+        valid_values = ["none", "minimal", "low", "medium", "high"]
         if v not in valid_values:
             raise ValueError(f"reasoning_effort must be one of {valid_values}")
         return v

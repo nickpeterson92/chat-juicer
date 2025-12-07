@@ -8,7 +8,7 @@
  * - Event-driven: Emits onChange callback for parent components
  */
 
-import { MODEL_METADATA, REASONING_DESCRIPTIONS } from "../../config/model-metadata.js";
+import { MODEL_FAMILY_LABELS, MODEL_METADATA, REASONING_DESCRIPTIONS } from "../../config/model-metadata.js";
 import { ComponentLifecycle } from "../../core/component-lifecycle.js";
 import { globalLifecycleManager } from "../../core/lifecycle-manager.js";
 
@@ -60,6 +60,7 @@ export class ModelSelector {
     if (!this.listenersAttached) {
       await this.setupDropdownToggle();
       this.setupMoreModelsToggle();
+      this.setupFamilyToggles();
       this.setupModelCardHandlers();
       this.setupReasoningHandlers();
       this.listenersAttached = true;
@@ -89,7 +90,7 @@ export class ModelSelector {
         <div id="model-selector-dropdown" class="model-selector-dropdown" style="display: none;">
           <div class="model-selector-content">
             <div id="main-models" class="model-cards">
-              <!-- Populated by populateModelCards() -->
+              <!-- Populated by populateModelCards() - Primary models -->
             </div>
             <button id="more-models-toggle" class="more-models-toggle">
               <span>More models</span>
@@ -98,7 +99,7 @@ export class ModelSelector {
               </svg>
             </button>
             <div id="more-models-section" class="more-models-section" style="display: none;">
-              <!-- Populated by populateModelCards() -->
+              <!-- Model family sub-dropdowns populated by populateModelCards() -->
             </div>
           </div>
         </div>
@@ -113,6 +114,7 @@ export class ModelSelector {
 
   /**
    * Populate model cards in main and "more models" sections
+   * Groups secondary models by family into sub-dropdowns
    * @private
    */
   populateModelCards() {
@@ -120,7 +122,7 @@ export class ModelSelector {
     const moreModelsSection = this.container.querySelector("#more-models-section");
 
     if (!mainModelsContainer || !moreModelsSection) {
-      console.error("⚠️ Model containers not found");
+      console.error("[ModelSelector] Model containers not found");
       return;
     }
 
@@ -135,11 +137,51 @@ export class ModelSelector {
       mainModelsContainer.appendChild(cardWrapper);
     });
 
-    // Populate secondary models
+    // Group secondary models by family
+    const modelsByFamily = new Map();
+    secondaryModels.forEach((model) => {
+      const family = MODEL_METADATA[model.value]?.modelFamily || "other";
+      if (!modelsByFamily.has(family)) {
+        modelsByFamily.set(family, []);
+      }
+      modelsByFamily.get(family).push(model);
+    });
+
+    // Populate secondary models with family sub-dropdowns
     moreModelsSection.innerHTML = "";
-    secondaryModels.forEach(({ value, isDefault, supportsReasoning }) => {
-      const cardWrapper = this.createModelCard(value, isDefault, supportsReasoning);
-      moreModelsSection.appendChild(cardWrapper);
+
+    modelsByFamily.forEach((models, family) => {
+      const familyLabel = MODEL_FAMILY_LABELS[family] || family;
+
+      // Create family sub-dropdown container
+      const familyContainer = document.createElement("div");
+      familyContainer.className = "model-family-group";
+      familyContainer.dataset.family = family;
+
+      // Create family toggle button
+      const familyToggle = document.createElement("button");
+      familyToggle.className = "model-family-toggle";
+      familyToggle.innerHTML = `
+        <span>${familyLabel}</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      `;
+
+      // Create family models container (initially hidden)
+      const familyModels = document.createElement("div");
+      familyModels.className = "model-family-models";
+      familyModels.style.display = "none";
+
+      // Add model cards to family container
+      models.forEach(({ value, isDefault, supportsReasoning }) => {
+        const cardWrapper = this.createModelCard(value, isDefault, supportsReasoning);
+        familyModels.appendChild(cardWrapper);
+      });
+
+      familyContainer.appendChild(familyToggle);
+      familyContainer.appendChild(familyModels);
+      moreModelsSection.appendChild(familyContainer);
     });
 
     // Populate reasoning options for all reasoning panels
@@ -338,6 +380,36 @@ export class ModelSelector {
       if (svg) {
         svg.style.transform = isExpanded ? "rotate(0deg)" : "rotate(90deg)";
       }
+    });
+  }
+
+  /**
+   * Setup model family sub-dropdown toggles
+   * @private
+   */
+  setupFamilyToggles() {
+    const familyToggles = this.container.querySelectorAll(".model-family-toggle");
+
+    familyToggles.forEach((toggle) => {
+      if (toggle.dataset.listenerAttached) return;
+      toggle.dataset.listenerAttached = "true";
+
+      toggle.addEventListener("click", (e) => {
+        e.stopPropagation();
+
+        const familyGroup = toggle.closest(".model-family-group");
+        const familyModels = familyGroup?.querySelector(".model-family-models");
+        const svg = toggle.querySelector("svg");
+
+        if (!familyModels) return;
+
+        const isExpanded = familyModels.style.display !== "none";
+        familyModels.style.display = isExpanded ? "none" : "block";
+
+        if (svg) {
+          svg.style.transform = isExpanded ? "rotate(0deg)" : "rotate(90deg)";
+        }
+      });
     });
   }
 

@@ -188,7 +188,8 @@ export function registerMessageHandlers(context) {
       "preparing..."
     );
 
-    if (message.arguments) {
+    // Only update to "ready" if we have real arguments (not empty "{}" from early detection)
+    if (message.arguments && message.arguments !== "{}") {
       updateFunctionCallStatus(appState.functions.activeCalls, message.call_id, "ready", {
         arguments: message.arguments,
       });

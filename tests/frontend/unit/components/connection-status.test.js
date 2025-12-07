@@ -3,7 +3,7 @@
  * Phase 4 State Management Migration
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { globalLifecycleManager } from "@/core/lifecycle-manager.js";
 import { AppState } from "@/core/state.js";
 import { ConnectionStatus } from "@/ui/components/connection-status.js";

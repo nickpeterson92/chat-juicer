@@ -327,7 +327,7 @@ Chat Juicer supports configurable reasoning effort for reasoning models (GPT-5, 
 **Reasoning Levels**:
 | Level | Speed | Cost | Reasoning Tokens | Use Case |
 |-------|-------|------|------------------|----------|
-| minimal | ⚡ Fastest | 💰 Cheapest | Fewest | Simple queries, quick responses |
+| none | ⚡ Fastest | 💰 Cheapest | None | No reasoning, direct responses |
 | low | ⚡ Fast | 💰 Low | Light | Moderate complexity |
 | medium | ⚙️ Balanced | 💰💰 Moderate | Balanced | Default, most tasks |
 | high | 🐢 Slower | 💰💰💰 Expensive | Maximum | Complex reasoning, critical analysis |
@@ -560,8 +560,8 @@ Required:
 - `AZURE_OPENAI_DEPLOYMENT`: Model deployment name (e.g., "gpt-5-mini")
 
 Optional:
-- `REASONING_EFFORT`: Control reasoning effort for reasoning models (`minimal`, `low`, `medium`, `high`)
-  - **minimal**: Fastest responses, fewest reasoning tokens (cheapest)
+- `REASONING_EFFORT`: Control reasoning effort for reasoning models (`none`, `low`, `medium`, `high`)
+  - **none**: No reasoning, fastest responses (cheapest)
   - **low**: Light reasoning
   - **medium**: Balanced (default, recommended for most use cases)
   - **high**: Maximum thoroughness, most reasoning tokens (most expensive)

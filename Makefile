@@ -1,4 +1,4 @@
-.PHONY: help setup setup-dev install install-node install-python install-mcp install-dev run dev clean clean-cache test lint format typecheck precommit precommit-install quality validate fix check docs docs-clean docs-serve logs logs-errors logs-all db-explore db-sessions db-compare db-layer1 db-layer2 db-tools db-types db-shell db-reset db-backup db-restore health status backend-only clean-venv clean-all reset kill restart update-deps
+.PHONY: help setup setup-dev install install-node install-python install-mcp install-dev run dev clean clean-cache test lint format typecheck precommit precommit-install quality validate fix check docs docs-clean docs-serve logs logs-errors logs-all db-explore db-sessions db-compare db-layer1 db-layer2 db-tools db-types db-shell db-reset db-backup db-restore health status backend-only clean-venv clean-all reset kill restart update-deps generate-model-metadata
 
 # Default target
 .DEFAULT_GOAL := help
@@ -159,6 +159,19 @@ test-validate: ## Validate Python syntax (compilation check)
 	@echo "$(BLUE)Validating Python syntax...$(NC)"
 	@python3 -m compileall src/ tests/ || python -m compileall src/ tests/
 	@echo "$(GREEN)✓ Syntax validation passed$(NC)"
+
+##@ Code Generation
+
+generate-model-metadata: ## Generate model-metadata.js from Python MODEL_CONFIGS
+	@echo "$(BLUE)Generating model-metadata.js from MODEL_CONFIGS...$(NC)"
+	@if [ -f ".juicer/bin/python" ]; then \
+		.juicer/bin/python scripts/generate-model-metadata.py; \
+		echo "$(GREEN)✓ model-metadata.js generated$(NC)"; \
+	else \
+		echo "$(YELLOW)⚠ Python venv not found$(NC)"; \
+		echo "$(BLUE)Run: make install-python$(NC)"; \
+		exit 1; \
+	fi
 
 ##@ Development & Quality
 

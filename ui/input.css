@@ -296,151 +296,174 @@
     color: var(--color-text-secondary);
   }
 
-  /* Function call cards */
-  .function-call-card {
-    @apply block border rounded-md px-2.5 py-1.5 my-1 text-xs cursor-pointer transition-all;
-    background: var(--color-surface-overlay);
-    border-color: var(--color-border-secondary);
-    animation: slideIn 0.3s ease-out;
+  /* Function call disclosure cards (Claude Code style) */
+  .function-disclosure {
+    @apply my-1.5 text-sm;
+    animation: fadeIn 0.2s ease-out;
   }
 
-  .function-call-card:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: var(--color-border-hover);
-    transform: translateY(-1px);
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 
-  .function-call-card.expanded {
-    @apply block cursor-default p-3.5 px-4 my-1.5 rounded-lg max-w-full;
-    background: var(--color-surface-1);
-    border: 1px solid var(--color-border-secondary);
+  /* Disclosure header - clickable row */
+  .disclosure-header {
+    @apply inline-flex items-center gap-1.5 cursor-pointer py-0.5 px-0;
+    transition: opacity 0.15s ease;
   }
 
-  /* No hover effect for expanded cards - they're not interactive */
-
-  .function-call-card.executing {
-    @apply text-white border-indigo-400/40;
-    background: var(--color-function-executing);
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  .disclosure-header:hover {
+    opacity: 0.8;
   }
 
-  .function-call-card.success {
-    @apply text-white border-emerald-500/40;
-    background: var(--color-function-success);
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  /* Tool icon - small, subtle */
+  .disclosure-icon {
+    @apply inline-flex items-center justify-center w-4 h-4 flex-shrink-0;
+    color: var(--color-text-secondary);
+    opacity: 0.7;
   }
 
-  .function-call-card.error {
-    @apply text-white border-red-500/40;
-    background: var(--color-function-error);
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
-  }
-
-  .function-header {
-    @apply flex items-center gap-2 mb-0;
-  }
-
-  .function-call-card.expanded .function-header {
-    @apply gap-2 mb-2.5;
-  }
-
-  .function-icon {
-    @apply w-3.5 h-3.5 inline-flex items-center justify-center flex-shrink-0;
-  }
-
-  .function-icon svg {
+  .disclosure-icon svg {
     @apply w-3.5 h-3.5;
   }
 
-  .function-call-card.expanded .function-icon {
-    @apply w-[18px] h-[18px] rounded opacity-100 text-[11px];
-    background: var(--color-surface-overlay);
+  /* Tool name - prominent */
+  .disclosure-tool-name {
+    @apply font-medium;
+    color: var(--color-text-secondary);
   }
 
-  .function-call-card.expanded .function-icon svg {
-    @apply w-3.5 h-3.5;
+  /* Args preview - less prominent, space-separated from tool name */
+  /* Hidden initially, fades in gracefully when args arrive */
+  .disclosure-args-preview {
+    @apply font-normal text-sm max-w-[400px] overflow-hidden text-ellipsis whitespace-nowrap;
+    color: var(--color-text-secondary);
+    opacity: 0;
+    transition: opacity 0.3s ease-out;
   }
 
-  .function-name {
-    @apply font-semibold text-xs whitespace-nowrap flex-shrink-0 font-mono;
+  .disclosure-args-preview.visible {
+    opacity: 0.7;
   }
 
-  .function-call-card.expanded .function-name {
-    @apply text-xs font-semibold tracking-wider flex-1 whitespace-nowrap overflow-hidden text-ellipsis font-sans;
+  /* Chevron indicator - hidden until there's content to expand */
+  .disclosure-chevron {
+    @apply inline-flex items-center justify-center ml-0.5 flex-shrink-0;
+    color: var(--color-text-secondary);
+    opacity: 0;
+    transition: opacity 0.3s ease-out, transform 0.2s ease;
   }
 
-  .function-params {
-    @apply font-normal text-xs whitespace-nowrap overflow-hidden text-ellipsis flex-shrink min-w-0 font-mono;
+  .disclosure-chevron.visible {
+    opacity: 0.5;
   }
 
-  .function-call-card.expanded .function-params {
-    @apply hidden;
-  }
-
-  .function-status {
-    @apply hidden;
-  }
-
-  .function-call-card.expanded .function-status {
-    @apply inline-flex items-center gap-1 text-[10px] font-medium lowercase py-0.5 px-1.5 rounded-md flex-shrink-0;
-    background: var(--color-surface-overlay);
-  }
-
-  /* Status icon styling for WCAG 1.4.1 compliance */
-  .status-icon {
-    @apply inline-flex items-center justify-center flex-shrink-0;
-  }
-
-  .status-icon svg {
+  .disclosure-chevron svg {
     @apply w-3 h-3;
   }
 
-  .function-expand-indicator {
-    @apply hidden;
+  .function-disclosure.expanded .disclosure-chevron {
+    transform: rotate(0deg);
   }
 
-  .function-arguments {
-    @apply hidden;
+  /* Status-based styling - only highlight errors, keep everything else chill */
+  .function-disclosure[data-status="error"] .disclosure-tool-name {
+    color: var(--color-status-error);
   }
 
-  .function-call-card.expanded .function-arguments {
-    @apply block border rounded-md p-1.5 px-2 mt-1.5 font-mono text-xs max-h-[120px] overflow-y-auto break-all leading-relaxed;
-    background: var(--color-surface-3);
+  /* In-progress shimmer animation - wave that lights up letters left to right */
+  @keyframes shimmer-wave {
+    from {
+      background-position: 200% center;
+    }
+    to {
+      background-position: -200% center;
+    }
+  }
+
+  /* Apply shimmer to all in-progress states */
+  .function-disclosure[data-status="preparing"] .disclosure-tool-name,
+  .function-disclosure[data-status="preparing..."] .disclosure-tool-name,
+  .function-disclosure[data-status="ready"] .disclosure-tool-name,
+  .function-disclosure[data-status="streaming"] .disclosure-tool-name,
+  .function-disclosure[data-status="executing..."] .disclosure-tool-name {
+    background: linear-gradient(
+      90deg,
+      var(--color-text-secondary) 0%,
+      var(--color-text-secondary) 40%,
+      var(--color-text-primary) 50%,
+      var(--color-text-secondary) 60%,
+      var(--color-text-secondary) 100%
+    );
+    background-size: 200% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer-wave 2s ease-in-out infinite;
+  }
+
+  /* Expandable content container */
+  .disclosure-content {
+    @apply hidden mt-2 ml-0 pl-3 border-l-2;
     border-color: var(--color-border-secondary);
+  }
+
+  .function-disclosure.expanded .disclosure-content {
+    @apply block;
+  }
+
+  /* Section labels (Arguments, Result, Thinking) */
+  .disclosure-section-label {
+    @apply text-xs font-semibold uppercase tracking-wider mb-1;
+    color: var(--color-text-secondary);
+    opacity: 0.7;
+  }
+
+  /* Section content (pre-formatted) */
+  .disclosure-section-content {
+    @apply font-mono text-xs rounded-md p-3 mb-2 max-h-[250px] overflow-y-auto overflow-x-auto whitespace-pre-wrap break-words;
+    background: var(--color-surface-3);
     color: var(--color-text-on-surface);
   }
 
-  .function-result {
-    @apply hidden;
-  }
-
-  .function-call-card.expanded .function-result {
-    @apply block border rounded-lg p-2.5 px-3 mt-2.5 text-xs max-h-[150px] overflow-y-auto overflow-x-hidden break-words whitespace-pre-wrap leading-relaxed font-medium;
+  /* Syntax highlighted content */
+  .disclosure-section-content.hljs {
     background: var(--color-surface-3);
-    border-color: var(--color-border-secondary);
-    color: var(--color-text-on-surface);
   }
 
-  /* Function reasoning (thinking) display */
-  .function-reasoning {
-    @apply hidden;
+  .disclosure-section-content.streaming {
+    opacity: 0.7;
   }
 
-  .function-call-card.expanded .function-reasoning {
-    @apply block rounded-md p-2 mt-1.5 text-xs max-h-[120px] overflow-y-auto break-words whitespace-pre-wrap leading-relaxed;
-    background: var(--color-surface-overlay);
-    border: 1px dashed var(--color-border-secondary);
-    color: var(--color-text-secondary);
-    font-style: italic;
+  /* Reasoning section (thinking) */
+  .disclosure-reasoning {
+    @apply mb-2;
   }
 
-  .function-reasoning-label {
-    @apply text-[10px] font-semibold uppercase tracking-wider mb-1 opacity-70;
+  .disclosure-reasoning-content {
+    @apply text-sm leading-relaxed;
     color: var(--color-text-secondary);
   }
 
-  .function-reasoning-content {
-    @apply font-normal;
+  /* Result section */
+  .disclosure-result .disclosure-section-content {
+    @apply max-h-[400px];
+  }
+
+  /* Error section */
+  .disclosure-error .disclosure-section-content {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+
+  .disclosure-error .error-text {
+    color: var(--color-status-error);
+  }
+
+  /* Arguments section */
+  .disclosure-arguments .disclosure-section-content {
+    @apply max-h-[250px];
   }
 
   /* File items */
@@ -532,7 +555,6 @@
 
   .welcome-input-section:focus-within {
     border-color: var(--color-border-focus);
-    box-shadow: 0 0 0 3px var(--color-brand-glow);
   }
 
   /* Compact variant for chat page - absolute minimal padding */
@@ -735,8 +757,32 @@
   }
 
   .more-models-section {
-    @apply flex flex-col gap-1.5 mt-1.5 pt-1.5;
+    @apply flex flex-col gap-1 mt-1.5 pt-1.5;
     border-top: 1px solid var(--color-border-secondary);
+  }
+
+  /* Model family sub-dropdown group */
+  .model-family-group {
+    @apply flex flex-col;
+  }
+
+  .model-family-toggle {
+    @apply flex items-center justify-between w-full py-2 px-2.5 border-none rounded-md bg-transparent text-xs font-medium cursor-pointer transition-colors;
+    color: var(--color-text-secondary);
+  }
+
+  .model-family-toggle:hover {
+    background-color: var(--color-surface-hover);
+    color: var(--color-text-primary);
+  }
+
+  .model-family-toggle svg {
+    @apply w-3.5 h-3.5 transition-transform;
+  }
+
+  .model-family-models {
+    @apply flex flex-col gap-1 pl-3 mt-1 ml-2;
+    border-left: 2px solid var(--color-border-secondary);
   }
 
   .reasoning-selector-section {
@@ -774,21 +820,24 @@
     background-color: var(--color-surface-hover);
     border: 1px solid var(--color-border-secondary);
     color: var(--color-text-secondary);
-    box-shadow: inset 0 0 0 0 var(--color-brand-glow);
   }
 
+  /* Off + hover: white icon, gray border */
   .mcp-toggle-btn:hover {
-    border-color: var(--color-border-hover);
     background-color: var(--color-surface-active);
     color: var(--color-text-primary);
   }
 
-  .mcp-toggle-btn.active {
-    border-color: var(--color-brand-primary);
-    background-color: var(--color-surface-active);
-    color: var(--color-brand-primary);
-    box-shadow: inset 0 0 0 1px var(--color-brand-glow);
+  .mcp-toggle-btn:active {
+    transform: scale(0.95);
   }
+
+  /* On: white icon + blue border */
+  .mcp-toggle-btn.active {
+    border-color: var(--color-border-hover);
+    color: var(--color-text-primary);
+  }
+
 
   .mcp-toggle-btn svg {
     @apply w-4 h-4;
@@ -816,7 +865,6 @@
     background-color: var(--color-surface-active);
     color: var(--color-text-user);
     opacity: 0.5;
-    box-shadow: inset 0 0 0 0 rgba(13, 99, 251, 0.4);
   }
 
   /* Compact variant - very small button with equal spacing from edges */
@@ -833,17 +881,14 @@
     background-color: var(--color-brand-primary);
     color: var(--color-text-user);
     opacity: 1;
-    box-shadow: 0 10px 24px -14px rgba(13, 99, 251, 0.8);
   }
 
   .welcome-send-btn.ready:hover {
-    box-shadow: 0 12px 28px -18px rgba(13, 99, 251, 0.9);
     transform: translateY(-1px);
   }
 
   .welcome-send-btn.ready:active {
     transform: translateY(0);
-    box-shadow: 0 8px 20px -14px rgba(13, 99, 251, 0.85);
   }
 
   .welcome-send-btn:disabled {
@@ -902,24 +947,24 @@
     border-color: var(--pill-color-vibrant, var(--pill-border-hover)) !important;
   }
 
-  /* Individual pill hover colors - one for each category */
-  .suggestion-pill[data-category="generate"]:hover {
+  /* Individual pill hover colors - positional for flexibility */
+  .suggestion-pill:nth-child(1):hover {
     border-color: var(--color-brand-accent-1) !important; /* Lime green */
   }
 
-  .suggestion-pill[data-category="analyze"]:hover {
+  .suggestion-pill:nth-child(2):hover {
     border-color: var(--color-brand-accent-2) !important; /* Light purple */
   }
 
-  .suggestion-pill[data-category="edit"]:hover {
+  .suggestion-pill:nth-child(3):hover {
     border-color: var(--color-brand-accent-3) !important; /* Coral red */
   }
 
-  .suggestion-pill[data-category="research"]:hover {
+  .suggestion-pill:nth-child(4):hover {
     border-color: var(--color-brand-accent-4) !important; /* Cyan */
   }
 
-  .suggestion-pill[data-category="code"]:hover {
+  .suggestion-pill:nth-child(5):hover {
     border-color: var(--color-brand-accent-5) !important; /* Dark blue */
   }
 
@@ -1123,12 +1168,43 @@
   }
 
   .message-content p {
-    margin: 0.25em 0;
+    margin: 0.15em 0;
     line-height: 1.4;
   }
 
   .message-content p + p {
     margin-top: 0.5em;
+  }
+
+  /* Tighten gap between paragraph and code block - aggressive removal */
+  .message-content p + pre:not(.mermaid),
+  .message-content p + .code-block-wrapper,
+  .message-content p + br + pre:not(.mermaid),
+  .message-content p + br + .code-block-wrapper {
+    margin-top: 0 !important;
+  }
+
+  /* Remove paragraph bottom margin before code */
+  .message-content p:has(+ pre),
+  .message-content p:has(+ .code-block-wrapper),
+  .message-content p:has(+ br + pre),
+  .message-content p:has(+ br + .code-block-wrapper) {
+    margin-bottom: 0 !important;
+  }
+
+  /* Collapse empty paragraphs (often created by markdown blank lines) */
+  .message-content p:empty {
+    display: none;
+  }
+
+  /* Hide paragraphs that only contain whitespace/br */
+  .message-content p:has(> br:only-child) {
+    display: none;
+  }
+
+  /* Hide standalone br tags between paragraph and code */
+  .message-content p + br {
+    display: none;
   }
 
   .message-content h1 + ul,
@@ -1170,7 +1246,7 @@
     border-radius: 0.5rem;
     padding: 0.625rem;
     overflow-x: auto;
-    margin: 0.4em 0;
+    margin: 0.2em 0;
   }
 
   .message-content pre code {
@@ -1183,9 +1259,11 @@
 
   /* Code block with copy button */
   .message-content .code-block-wrapper {
-    margin: 0.4em 0;
+    margin: 0.2em 0;
     display: block;
   }
+
+  /* Override wrapper margin when following paragraph - handled above with !important */
 
   .message-content .code-block-wrapper pre {
     margin: 0;
@@ -1395,25 +1473,59 @@
     margin-top: 0.25em;
   }
 
-  .message-content li pre {
-    margin-top: 0.2em;
-    margin-bottom: 0.2em;
+  /* ===========================================
+   * PROSE OVERRIDES - Typography plugin has aggressive defaults
+   * These must be more specific than .prose selectors
+   * =========================================== */
+
+  /* Override prose pre margins */
+  .prose pre,
+  .message-content.prose pre,
+  .message-content pre {
+    margin-top: 0.5em !important;
+    margin-bottom: 1.5em !important;
   }
 
-  .message-content li > pre:first-child {
-    margin-top: 0.1em;
+  /* Override prose code-block-wrapper margins */
+  .prose .code-block-wrapper,
+  .message-content.prose .code-block-wrapper,
+  .message-content .code-block-wrapper {
+    margin-top: 0.5em !important;
+    margin-bottom: 1.5em !important;
   }
 
-  .message-content li p + pre {
-    margin-top: 0.15em;
+  /* Code blocks inside list items - tighter spacing than standalone */
+  .prose li pre,
+  .prose li .code-block-wrapper,
+  .message-content.prose li pre,
+  .message-content.prose li .code-block-wrapper,
+  .message-content li pre,
+  .message-content li .code-block-wrapper {
+    margin-top: 0.15em !important;
+    margin-bottom: 0.15em !important;
+  }
+
+  /* Reduce prose li margins when containing code */
+  .prose li:has(pre),
+  .prose li:has(.code-block-wrapper),
+  .message-content li:has(pre),
+  .message-content li:has(.code-block-wrapper) {
+    margin-top: 0.25em !important;
+    margin-bottom: 0.25em !important;
+  }
+
+  /* Remove any extra spacing from br tags in li */
+  .message-content li > br,
+  .prose li > br {
+    display: none;
   }
 
   .message-content p + pre {
-    margin-top: 0.3em;
+    margin-top: 0.15em;
   }
 
   .message-content pre + p {
-    margin-top: 0.3em;
+    margin-top: 0.15em;
   }
 
   .message-content h1 + pre,
@@ -1433,6 +1545,67 @@ body.view-welcome {
 
 body.view-chat {
   background: var(--color-body-chat) !important;
+}
+
+/* ===========================================
+ * PROSE TYPOGRAPHY OVERRIDES - Outside layers for maximum specificity
+ * Tailwind Typography plugin has aggressive defaults that override layered CSS
+ * =========================================== */
+
+/* Fix: Remove padding from code-block-wrapper and margin from inner pre */
+.prose .code-block-wrapper,
+.message-content .code-block-wrapper {
+  padding: 0 !important;
+  margin: 0.5em 0 1.5em 0 !important; /* balanced spacing: half-line above, line-and-half below */
+}
+
+.prose .code-block-wrapper pre,
+.message-content .code-block-wrapper pre {
+  margin: 0 !important;
+}
+
+/* Tighter margins on paragraphs */
+.prose p,
+.message-content p {
+  margin: 0.15em 0 !important;
+}
+
+/* Override prose pre margins (code-block-wrapper handled above) */
+.prose pre:not(.code-block-wrapper pre) {
+  margin-top: 0.5em !important;
+  margin-bottom: 1.5em !important;
+}
+
+/* Code blocks inside list items */
+.prose li pre,
+.prose li .code-block-wrapper {
+  margin-top: 0.15em !important;
+  margin-bottom: 0.15em !important;
+}
+
+/* Reduce li margins when containing code */
+.prose li:has(pre),
+.prose li:has(.code-block-wrapper) {
+  margin-top: 0.2em !important;
+  margin-bottom: 0.2em !important;
+}
+
+/* Hide br tags that create gaps */
+.prose li > br {
+  display: none;
+}
+
+/* Override prose paragraph margins before code */
+.prose p + pre,
+.prose p + .code-block-wrapper {
+  margin-top: 0.15em !important;
+}
+
+/* Mermaid diagrams - match code block spacing */
+.prose .mermaid-wrapper,
+.message-content .mermaid-wrapper {
+  margin-top: 0.5em !important;
+  margin-bottom: 1.5em !important;
 }
 
 /* Base styles */

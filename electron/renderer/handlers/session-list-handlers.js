@@ -275,21 +275,19 @@ async function handleSwitch(sessionId, sessionService, updateSessionsList, eleme
         }
       }
 
-      // Render messages from backend
+      // Render messages from backend (including tool cards from Layer 2)
       const messages = result.fullHistory || [];
-      if (messages.length > 0 && window.components?.chatContainer) {
-        for (const msg of messages) {
-          if (msg.role && msg.content) {
-            const content = extractTextContent(msg.content);
-            if (content && content.trim()) {
-              if (msg.role === "user") {
-                window.components.chatContainer.addUserMessage(content);
-              } else if (msg.role === "assistant") {
-                window.components.chatContainer.addAssistantMessage(content);
-              }
-            }
-          }
-        }
+      if (window.components?.chatContainer) {
+        window.components.chatContainer.setMessages(messages);
+      }
+
+      // Load remaining messages in background if there are more
+      if (result.hasMore && result.loadedCount > 0) {
+        console.log("[session] Loading remaining messages in background...", {
+          loadedCount: result.loadedCount,
+          messageCount: result.messageCount,
+        });
+        loadRemainingMessages(sessionId, result.loadedCount, result.messageCount, sessionService);
       }
 
       updateSessionsList();
@@ -324,39 +322,45 @@ async function handleSwitch(sessionId, sessionService, updateSessionsList, eleme
 }
 
 /**
- * Extract text content from various message formats
+ * Load remaining messages in background and prepend to chat
+ * Called after initial session load when hasMore=true
+ *
+ * @param {string} sessionId - Session ID to load messages for
+ * @param {number} initialOffset - Number of messages already loaded
+ * @param {number} totalCount - Total messages in session
+ * @param {Object} sessionService - Session service instance
  */
-function extractTextContent(content) {
-  if (typeof content === "string") {
-    // Try parsing as JSON if it looks like JSON
-    if (content.startsWith("[") || content.startsWith("{")) {
-      try {
-        const parsed = JSON.parse(content);
-        if (Array.isArray(parsed)) {
-          return parsed
-            .filter((part) => part && (part.type === "text" || part.type === "output_text"))
-            .map((part) => part.text)
-            .join("\n");
-        } else if (parsed.text) {
-          return parsed.text;
+async function loadRemainingMessages(sessionId, initialOffset, totalCount, sessionService) {
+  let offset = initialOffset;
+  const chunkSize = 100; // Match backend MAX_MESSAGES_PER_CHUNK
+
+  console.log(`[session] loadRemainingMessages starting: offset=${offset}, totalCount=${totalCount}`);
+
+  while (offset < totalCount) {
+    try {
+      console.log(`[session] Loading chunk at offset=${offset}, limit=${chunkSize}`);
+      const result = await sessionService.loadMoreMessages(sessionId, offset, chunkSize);
+      console.log(`[session] loadMoreMessages result:`, {
+        success: result.success,
+        messageCount: result.messages?.length,
+      });
+
+      if (result.success && result.messages?.length > 0) {
+        // Prepend older messages to the beginning of chat
+        if (window.components?.chatContainer) {
+          window.components.chatContainer.prependMessages(result.messages);
         }
-      } catch (_e) {
-        // Not valid JSON, use as-is
+        offset += result.messages.length;
+        console.log(`[session] Prepended ${result.messages.length} messages, new offset=${offset}`);
+      } else {
+        // No more messages or error - stop loading
+        console.log(`[session] Stopping: success=${result.success}, error=${result.error}`);
+        break;
       }
+    } catch (error) {
+      console.error("[session] Failed to load more messages:", error);
+      break;
     }
-    return content;
   }
-
-  if (Array.isArray(content)) {
-    return content
-      .filter((part) => part && (part.type === "text" || part.type === "output_text"))
-      .map((part) => part.text)
-      .join("\n");
-  }
-
-  if (typeof content === "object" && content.text) {
-    return content.text;
-  }
-
-  return null;
+  console.log(`[session] loadRemainingMessages complete: final offset=${offset}`);
 }

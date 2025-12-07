@@ -7,6 +7,8 @@ All functions receive AppState as an explicit parameter to avoid hidden global s
 
 from __future__ import annotations
 
+import json
+
 from datetime import datetime
 from typing import Any, cast
 
@@ -18,6 +20,8 @@ from core.constants import (
     CONVERSATION_SUMMARIZATION_THRESHOLD,
     LOG_PREVIEW_LENGTH,
     MAX_CONVERSATION_TURNS,
+    MSG_TYPE_FUNCTION_COMPLETED,
+    MSG_TYPE_FUNCTION_EXECUTING,
     RAW_RESPONSE_EVENT,
     SESSION_NAMING_TRIGGER_MESSAGES,
 )
@@ -52,6 +56,76 @@ async def handle_electron_ipc(event: StreamEvent, tracker: CallTracker) -> str |
         result: str | None = handler(event)
         return result
     return None
+
+
+def save_tool_call_to_history(
+    app_state: AppState,
+    session: TokenAwareSQLiteSession,
+    ipc_msg: str,
+) -> None:
+    """Save tool call event to Layer 2 (full_history) for session restoration.
+
+    Tool calls are saved with role="tool_call" and metadata containing:
+    - call_id: Unique identifier for the tool call
+    - name: Tool/function name
+    - arguments: Tool arguments (from function_executing, which has complete args)
+    - result: Tool output (for function_completed)
+    - status: "detected" or "completed"
+    - success: Boolean for completed calls
+    - timestamp: ISO timestamp
+
+    NOTE: We save function_executing (not function_detected) because early detection
+    emits function_detected with empty args "{}". The function_executing event fires
+    when arguments are complete, providing the data needed for session restoration.
+
+    Args:
+        app_state: Application state with full_history_store
+        session: Current session for session_id
+        ipc_msg: The IPC message JSON string containing tool call data
+    """
+    if not app_state.full_history_store:
+        return
+
+    try:
+        parsed = json.loads(ipc_msg)
+        msg_type = parsed.get("type")
+
+        if msg_type == MSG_TYPE_FUNCTION_EXECUTING:
+            # Tool executing - save with complete arguments
+            # NOTE: We save function_executing (not function_detected) because early detection
+            # has empty args "{}". function_executing fires when args are complete.
+            message = {
+                "role": "tool_call",
+                "content": parsed.get("name", "unknown"),
+                "call_id": parsed.get("call_id"),
+                "name": parsed.get("name"),
+                "arguments": parsed.get("arguments"),
+                "status": "detected",  # Use "detected" for frontend merge logic compatibility
+                "timestamp": datetime.now().isoformat(),
+            }
+            app_state.full_history_store.save_message(session.session_id, message)
+            logger.debug(f"Saved tool call executing to Layer 2: {parsed.get('name')}")
+
+        elif msg_type == MSG_TYPE_FUNCTION_COMPLETED:
+            # Tool call completed - save result data
+            message = {
+                "role": "tool_call",
+                "content": parsed.get("name", "unknown"),
+                "call_id": parsed.get("call_id"),
+                "name": parsed.get("name"),
+                "result": parsed.get("result"),
+                "status": "completed",
+                "success": parsed.get("success", True),
+                "timestamp": datetime.now().isoformat(),
+            }
+            app_state.full_history_store.save_message(session.session_id, message)
+            logger.debug(f"Saved tool call result to Layer 2: {parsed.get('name')}")
+
+    except json.JSONDecodeError:
+        logger.warning("Failed to parse IPC message for tool call persistence")
+    except Exception as e:
+        # Don't fail the request for Layer 2 issues
+        logger.warning(f"Failed to save tool call to Layer 2: {e}")
 
 
 def handle_streaming_error(error: Exception) -> None:
@@ -130,7 +204,7 @@ async def ensure_session_exists(app_state: AppState) -> tuple[TokenAwareSQLiteSe
 
     # Create session-aware tools that inject session_id for workspace isolation
     session_tools = create_session_aware_tools(session_meta.session_id)
-    logger.info(f"Created {len(session_tools)} session-aware tools for session: {session_meta.session_id}")
+    logger.info(f"Created {len(session_tools)} tools for session: {session_meta.session_id}")
 
     # Use MCP servers from app_state, filtered by session's mcp_config
     # Create new agent with isolated tools (instructions are global, tools are session-specific)
@@ -209,6 +283,10 @@ async def process_user_input(app_state: AppState, session: TokenAwareSQLiteSessi
                 ipc_msg = await handle_electron_ipc(event, tracker)
                 if ipc_msg:
                     IPCManager.send_raw(ipc_msg)
+
+                    # Persist tool call events to Layer 2 for session restoration
+                    # This saves both function_detected and function_completed events
+                    save_tool_call_to_history(app_state, session, ipc_msg)
 
                 # Accumulate response text for logging (token-by-token from raw_response_event)
                 if (

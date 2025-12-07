@@ -6,8 +6,6 @@
 
 let scrollPending = false;
 let scrollTarget = null;
-let scrollForced = false;
-let scrollStreaming = false;
 
 // Distance from bottom (in pixels) to consider "near bottom"
 const SCROLL_THRESHOLD = 150;
@@ -111,8 +109,6 @@ export function scheduleScroll(container, options = {}) {
   // Update state to latest call's values (last caller wins)
   // This is consistent with scrollTarget and ensures the most recent intent is honored
   scrollTarget = container;
-  scrollForced = force;
-  scrollStreaming = streaming;
 
   if (!scrollPending) {
     scrollPending = true;
@@ -134,8 +130,6 @@ export function scheduleScroll(container, options = {}) {
         }, 50);
 
         scrollTarget = null;
-        scrollForced = false;
-        scrollStreaming = false;
       }
       scrollPending = false;
     });

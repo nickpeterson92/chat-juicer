@@ -6,24 +6,30 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ModelSelector } from "../../../electron/renderer/ui/components/model-selector.js";
 
-// Mock MODEL_METADATA and REASONING_DESCRIPTIONS
+// Mock MODEL_METADATA, MODEL_FAMILY_LABELS, and REASONING_DESCRIPTIONS
 vi.mock("../../../electron/renderer/config/model-metadata.js", () => ({
   MODEL_METADATA: {
     "gpt-5": {
       displayName: "GPT-5",
       description: "Most capable model",
       isPrimary: true,
+      modelFamily: null,
     },
     "gpt-5-mini": {
       displayName: "GPT-5 Mini",
       description: "Faster and cheaper",
       isPrimary: true,
+      modelFamily: null,
     },
     o1: {
       displayName: "o1",
       description: "Advanced reasoning model",
       isPrimary: false,
+      modelFamily: "o1",
     },
+  },
+  MODEL_FAMILY_LABELS: {
+    o1: "O1 Models",
   },
   REASONING_DESCRIPTIONS: {
     minimal: "Fast, basic reasoning",
@@ -148,7 +154,7 @@ describe("ModelSelector", () => {
       const selector = new ModelSelector(container);
       const models = [{ value: "gpt-5", isDefault: true, supportsReasoning: true }];
       const reasoningLevels = [
-        { value: "minimal", label: "Minimal", isDefault: false },
+        { value: "none", label: "None", isDefault: false },
         { value: "medium", label: "Medium", isDefault: true },
         { value: "high", label: "High", isDefault: false },
       ];

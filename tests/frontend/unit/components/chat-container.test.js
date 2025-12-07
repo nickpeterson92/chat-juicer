@@ -19,6 +19,7 @@ vi.mock("@/ui/chat-ui.js", () => ({
 
 vi.mock("@/ui/function-card-ui.js", () => ({
   clearFunctionCards: vi.fn(),
+  createCompletedToolCard: vi.fn(),
 }));
 
 describe("ChatContainer", () => {
@@ -167,6 +168,104 @@ describe("ChatContainer", () => {
       expect(clearChat).toHaveBeenCalledWith(containerElement);
       expect(clearFunctionCards).toHaveBeenCalledWith(containerElement);
       expect(chatContainer.currentStreamingMessage).toBeNull();
+    });
+  });
+
+  describe("message rendering helpers", () => {
+    it("should extract text content from strings, arrays, objects, and fall back to empty", () => {
+      const chatContainer = new ChatContainer(containerElement);
+      expect(chatContainer._extractTextContent("plain")).toBe("plain");
+      expect(
+        chatContainer._extractTextContent([
+          { type: "text", text: "part1" },
+          { type: "output_text", text: "part2" },
+          { type: "other", text: "ignore" },
+        ])
+      ).toBe("part1\npart2");
+      expect(chatContainer._extractTextContent({ text: "object-text" })).toBe("object-text");
+      expect(chatContainer._extractTextContent({})).toBe("");
+    });
+
+    it("should set messages from history and render completed tool cards", async () => {
+      const { addMessage } = await import("@/ui/chat-ui.js");
+      const { createCompletedToolCard } = await import("@/ui/function-card-ui.js");
+      const chatContainer = new ChatContainer(containerElement);
+
+      chatContainer.setMessages([
+        { role: "user", content: "hello" },
+        { role: "assistant", content: "hi" },
+        { role: "tool_call", call_id: "123", status: "detected", arguments: "{a:1}" },
+        { role: "tool_call", call_id: "123", status: "completed", result: "ok", success: true },
+      ]);
+
+      expect(addMessage).toHaveBeenCalledWith(containerElement, "hello", "user");
+      expect(addMessage).toHaveBeenCalledWith(containerElement, "hi", "assistant");
+      expect(createCompletedToolCard).toHaveBeenCalledWith(
+        containerElement,
+        expect.objectContaining({
+          call_id: "123",
+          arguments: "{a:1}",
+          result: "ok",
+          success: true,
+          status: "completed",
+        })
+      );
+    });
+
+    it("should handle empty or invalid message lists safely", async () => {
+      const { clearChat } = await import("@/ui/chat-ui.js");
+      const chatContainer = new ChatContainer(containerElement);
+
+      chatContainer.setMessages(null);
+      expect(clearChat).toHaveBeenCalledWith(containerElement);
+
+      clearChat.mockClear();
+      chatContainer.setMessages("not-an-array");
+      expect(clearChat).toHaveBeenCalledWith(containerElement);
+    });
+
+    it("should prepend messages while preserving scroll position", async () => {
+      const chatContainer = new ChatContainer(containerElement);
+      containerElement.appendChild(document.createElement("div"));
+
+      let scrollHeightValue = 200;
+      Object.defineProperty(containerElement, "scrollHeight", {
+        get() {
+          return scrollHeightValue;
+        },
+      });
+      Object.defineProperty(containerElement, "scrollTop", { value: 20, writable: true });
+
+      // Simulate height change after insert
+      const originalInsertBefore = containerElement.insertBefore.bind(containerElement);
+      containerElement.insertBefore = (...args) => {
+        scrollHeightValue = 260;
+        return originalInsertBefore(...args);
+      };
+
+      chatContainer.prependMessages([
+        { role: "user", content: "older user" },
+        { role: "assistant", content: "older assistant" },
+        { role: "tool_call", call_id: "abc", status: "completed", result: "done" },
+      ]);
+
+      expect(containerElement.textContent).toContain("older user");
+      expect(containerElement.textContent).toContain("older assistant");
+      expect(containerElement.scrollTop).toBe(80); // 20 + (260-200)
+    });
+  });
+
+  describe("scrolling", () => {
+    it("should scroll to bottom when element exists", () => {
+      const chatContainer = new ChatContainer(containerElement);
+      containerElement.scrollTo = vi.fn();
+
+      chatContainer.scrollToBottom();
+
+      expect(containerElement.scrollTo).toHaveBeenCalledWith({
+        top: containerElement.scrollHeight,
+        behavior: "smooth",
+      });
     });
   });
 

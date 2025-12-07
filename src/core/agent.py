@@ -13,8 +13,11 @@ from openai.types.shared import Reasoning
 from core.constants import REASONING_MODELS
 from utils.logger import logger
 
-# Type alias for valid reasoning effort levels
-ReasoningEffort = Literal["minimal", "low", "medium", "high"]
+# Type alias for valid reasoning effort levels (accepts both none and minimal for compatibility)
+ReasoningEffort = Literal["none", "minimal", "low", "medium", "high"]
+
+# Models that use 'none' instead of 'minimal' (5.1+ series)
+MODELS_USING_NONE = {"gpt-5.1", "gpt-5.2", "o3", "o4"}
 
 
 def is_valid_reasoning_effort(value: str) -> TypeGuard[ReasoningEffort]:
@@ -27,6 +30,34 @@ def is_valid_reasoning_effort(value: str) -> TypeGuard[ReasoningEffort]:
         True if value is a valid ReasoningEffort literal
     """
     return value in get_args(ReasoningEffort)
+
+
+def normalize_reasoning_effort(effort: str, deployment: str) -> str:
+    """Normalize reasoning effort based on model version.
+
+    GPT-5.1+ uses 'none' for no reasoning, GPT-5.0 uses 'minimal'.
+    This maps between them based on the target model.
+
+    Args:
+        effort: The reasoning effort level
+        deployment: Model deployment name
+
+    Returns:
+        Normalized effort level for the target model
+    """
+    # Check if this is a model that uses 'none' (5.1+ series)
+    uses_none = any(deployment.startswith(model) for model in MODELS_USING_NONE)
+
+    if uses_none and effort == "minimal":
+        # 5.1+ models: map 'minimal' -> 'none'
+        logger.info(f"Mapping 'minimal' -> 'none' for model {deployment}")
+        return "none"
+    elif not uses_none and effort == "none":
+        # 5.0 and older: map 'none' -> 'minimal'
+        logger.info(f"Mapping 'none' -> 'minimal' for model {deployment}")
+        return "minimal"
+
+    return effort
 
 
 def create_agent(
@@ -59,13 +90,16 @@ def create_agent(
         logger.warning(f"Invalid reasoning_effort '{effort_level}', defaulting to 'medium'")
         validated_effort = "medium"
 
+    # Normalize effort for model compatibility (none <-> minimal mapping)
+    normalized_effort = normalize_reasoning_effort(validated_effort, deployment)
+
     # Check if this is a reasoning model that supports reasoning_effort
     is_reasoning_model = any(deployment.startswith(model) for model in REASONING_MODELS)
 
     # Configure model settings with reasoning effort only for reasoning models
     if is_reasoning_model:
-        model_settings = ModelSettings(reasoning=Reasoning(effort=validated_effort))
-        logger.info(f"Reasoning model detected - reasoning_effort set to '{validated_effort}'")
+        model_settings = ModelSettings(reasoning=Reasoning(effort=normalized_effort))  # type: ignore[arg-type]
+        logger.info(f"Reasoning model detected - reasoning_effort set to '{normalized_effort}'")
         # Create agent with reasoning configuration
         agent = Agent(
             name="Chat Juicer",
