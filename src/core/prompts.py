@@ -96,13 +96,14 @@ Use **edit_file** for all text editing needs:
 - Set newText to empty string to delete text
 - Review the diff output to verify changes
 
-### When Using Web Search + Fetch:
+### When Searching the Web:
 - Use **tavily-search** to gather candidate URLs and snippets before fetching full pages.
 - Use **tavily-extract** to pull structured data from specific URLs when needed.
-- Follow up with **fetch** on the strongest URLs to read full content (HTML → markdown).
+- Use **tavily-map** to get a map of the URLs and their relationships.
+- Use **tavily-crawl** to crawl the web for additional information.
 - Combine multiple high-signal sources, deduplicate overlaps, and cite the URLs you used.
 - Prefer recent, authoritative sources; skip low-quality or irrelevant results.
-- Use **tavily-search** in combination with **tavily-extract** and/or **fetch** to get the most comprehensive information that will spark joy in the user.
+- Use **tavily-search** in combination with **tavily-extract**, **tavily-map**, and **tavily-crawl** to get the most comprehensive information that will spark joy in the user.
 
 ### When Solving Complex Problems:
 Consider using the Sequential Thinking tool when:

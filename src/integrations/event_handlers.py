@@ -370,6 +370,13 @@ _THROTTLED_EVENTS = {
     "response.output_text.delta",  # Token-by-token text streaming (very noisy)
 }
 
+# Lifecycle events to ignore (no useful data, just noise)
+_IGNORED_EVENTS = {
+    "response.created",  # Response object created - no actionable data
+    "response.in_progress",  # Response generating - redundant with assistant_start
+    "response.completed",  # Response finished - usage data redundant with SDK tracking
+}
+
 # All other events logged immediately (rare, important for debugging):
 # - response.content_part.added/done (content boundaries)
 # - response.refusal.delta (model refusals)
@@ -410,6 +417,25 @@ def build_event_handlers(tracker: CallTracker) -> dict[str, EventHandler]:
                 return cast(str, _json_builder(tool_msg.model_dump(exclude_none=True)))
             return None
 
+        def _handle_output_item_done(data: Any) -> str | None:
+            """Handle output_item.done events - safety net for complete function args."""
+            output_item = getattr(data, "item", None)
+            if output_item and getattr(output_item, "type", None) == "function_call":
+                tool_name = getattr(output_item, "name", "unknown")
+                call_id = getattr(output_item, "call_id", "") or getattr(output_item, "id", "")
+                arguments = getattr(output_item, "arguments", "{}")
+
+                # Send complete arguments as safety net (in case streaming deltas were missed)
+                tool_msg = ToolCallNotification(
+                    type=MSG_TYPE_FUNCTION_EXECUTING,
+                    name=tool_name,
+                    arguments=arguments,
+                    call_id=call_id if call_id else None,
+                )
+                logger.info(f"Function args complete (safety net): {tool_name} (call_id: {call_id or 'none'})")
+                return cast(str, _json_builder(tool_msg.model_dump(exclude_none=True)))
+            return None
+
         try:
             # Guard clauses for invalid events
             if getattr(event, "type", None) != RAW_RESPONSE_EVENT or not (data := getattr(event, "data", None)):
@@ -423,6 +449,8 @@ def build_event_handlers(tracker: CallTracker) -> dict[str, EventHandler]:
             result: str | None = None
             if event_type == "response.output_item.added":
                 result = _handle_output_item_added(data)
+            elif event_type == "response.output_item.done":
+                result = _handle_output_item_done(data)
             else:
                 handler = RAW_EVENT_TYPE_HANDLERS.get(event_type)
                 if handler:
@@ -436,8 +464,8 @@ def build_event_handlers(tracker: CallTracker) -> dict[str, EventHandler]:
                         else:
                             # Log all non-throttled events immediately (rare, important)
                             logger.info(f"Handled event: {event_type}")
-                else:
-                    # Always log unknown event types (important for debugging)
+                elif event_type not in _IGNORED_EVENTS:
+                    # Log unknown event types (important for debugging), skip ignored lifecycle events
                     logger.info(f"Unknown event type: {event_type}")
                     if delta := getattr(data, "delta", None):
                         logger.debug(f"Unknown event type with delta: {event_type}")

@@ -13,7 +13,7 @@ from utils.logger import logger
 
 # MCP server timeout in seconds (default SDK timeout is 5s which is too short)
 # Network requests and reasoning operations can take longer
-MCP_SERVER_TIMEOUT_SECONDS = 30.0
+MCP_SERVER_TIMEOUT_SECONDS = 60.0
 
 
 async def setup_mcp_servers() -> list[Any]:
