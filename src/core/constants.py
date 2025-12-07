@@ -33,6 +33,7 @@ class ModelConfig:
         supports_reasoning: Whether model supports reasoning_effort parameter
         is_primary: Whether to show prominently in UI model selector
         is_ui_model: Whether model appears in frontend UI selector
+        model_family: Optional family grouping for sub-dropdown (e.g., "gpt-5", "gpt-4.1")
     """
 
     id: str
@@ -42,24 +43,40 @@ class ModelConfig:
     supports_reasoning: bool
     is_primary: bool
     is_ui_model: bool = True  # Default True for backward compatibility
+    model_family: str | None = None  # Optional family for sub-dropdown grouping
 
 
 #: Master model configuration - ADD NEW MODELS HERE ONLY!
 #: Order determines display order in UI model selector.
 #: Models with is_ui_model=False are backend-only (for token limits, etc.)
+#: model_family groups secondary models into sub-dropdowns (e.g., "gpt-5", "gpt-4.1")
 MODEL_CONFIGS: tuple[ModelConfig, ...] = (
-    # GPT-5.1 series (latest)
+    # GPT-5.1 series (latest) - Primary models shown at top level
     ModelConfig("gpt-5.1", "GPT-5.1", "Latest reasoning model", 272000, True, True),
     ModelConfig("gpt-5.1-codex-max", "GPT-5.1 Codex Max", "Maximum capability code generation", 272000, True, True),
-    # GPT-5 series
-    ModelConfig("gpt-5-pro", "GPT-5 Pro", "Most capable for complex tasks", 272000, True, False),
-    ModelConfig("gpt-5", "GPT-5", "Deep reasoning for hard problems", 272000, True, False),
-    ModelConfig("gpt-5-mini", "GPT-5 Mini", "Smart and fast for everyday use", 272000, True, False),
-    ModelConfig("gpt-5-codex", "GPT-5 Codex", "Optimized for code generation", 272000, True, False),
+    # GPT-5 series - Secondary models in "GPT-5 Models" sub-dropdown
+    ModelConfig("gpt-5-pro", "GPT-5 Pro", "Most capable for complex tasks", 272000, True, False, is_ui_model=False),
+    ModelConfig("gpt-5", "GPT-5", "Deep reasoning for hard problems", 272000, True, False, model_family="gpt-5"),
+    ModelConfig(
+        "gpt-5-mini", "GPT-5 Mini", "Smart and fast for everyday use", 272000, True, False, model_family="gpt-5"
+    ),
+    ModelConfig(
+        "gpt-5-codex", "GPT-5 Codex", "Optimized for code generation", 272000, True, False, model_family="gpt-5"
+    ),
     ModelConfig("gpt-5-nano", "GPT-5 Nano", "Lightweight reasoning model", 272000, True, False, is_ui_model=False),
-    # GPT-4.1 series (non-reasoning)
-    ModelConfig("gpt-4.1", "GPT-4.1", "Previous generation, still capable", 128000, False, False),
-    ModelConfig("gpt-4.1-mini", "GPT-4.1 Mini", "Faster responses for simple tasks", 128000, False, False),
+    # GPT-4.1 series (non-reasoning) - Secondary models in "GPT-4.1 Models" sub-dropdown
+    ModelConfig(
+        "gpt-4.1", "GPT-4.1", "Previous generation, still capable", 128000, False, False, model_family="gpt-4.1"
+    ),
+    ModelConfig(
+        "gpt-4.1-mini",
+        "GPT-4.1 Mini",
+        "Faster responses for simple tasks",
+        128000,
+        False,
+        False,
+        model_family="gpt-4.1",
+    ),
     # Legacy models (backend-only for token limits)
     ModelConfig("gpt-4o", "GPT-4o", "GPT-4 Optimized", 128000, False, False, is_ui_model=False),
     ModelConfig("gpt-4o-mini", "GPT-4o Mini", "GPT-4 Optimized Mini", 128000, False, False, is_ui_model=False),
@@ -530,8 +547,13 @@ REASONING_EFFORT_OPTIONS: dict[str, str] = {
 
 #: Model metadata with display names, descriptions, and feature flags (derived from MODEL_CONFIGS).
 #: Used by frontend for model selection UI and configuration.
-MODEL_METADATA: dict[str, dict[str, str | bool]] = {
-    m.id: {"displayName": m.display_name, "description": m.description, "isPrimary": m.is_primary}
+MODEL_METADATA: dict[str, dict[str, str | bool | None]] = {
+    m.id: {
+        "displayName": m.display_name,
+        "description": m.description,
+        "isPrimary": m.is_primary,
+        "modelFamily": m.model_family,
+    }
     for m in MODEL_CONFIGS
     if m.is_ui_model
 }

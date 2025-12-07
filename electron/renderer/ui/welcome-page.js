@@ -163,41 +163,42 @@ function createSuggestionPill(category, icon, label) {
 function createSuggestionPills() {
   const pills = [
     {
-      category: "generate",
-      label: "Generate",
-      icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <path d="M14 2v6h6M16 13H8m8 4H8"/>
+      category: "brainstorm",
+      label: "Brainstorm",
+      icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/>
+        <path d="M9 18h6"/><path d="M10 22h4"/>
       </svg>`,
     },
     {
       category: "analyze",
       label: "Analyze",
-      icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="11" cy="11" r="8"/>
-        <path d="M21 21l-4.35-4.35"/>
+      icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 16v5"/><path d="M16 14v7"/><path d="M20 10v11"/>
+        <path d="m22 3-8.646 8.646a.5.5 0 0 1-.708 0L9.354 8.354a.5.5 0 0 0-.707 0L2 15"/>
+        <path d="M4 18v3"/><path d="M8 14v7"/>
       </svg>`,
     },
     {
-      category: "edit",
-      label: "Edit",
-      icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+      category: "plan",
+      label: "Plan",
+      icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 5h12"/><path d="M4 12h10"/><path d="M12 19h8"/>
       </svg>`,
     },
     {
       category: "research",
       label: "Research",
-      icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M3 3v18h18"/>
-        <path d="M18 17V9l-5 5-5-5v8"/>
+      icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M11 22H5.5a1 1 0 0 1 0-5h4.501"/><path d="m21 22-1.879-1.878"/>
+        <path d="M3 19.5v-15A2.5 2.5 0 0 1 5.5 2H18a1 1 0 0 1 1 1v8"/><circle cx="17" cy="18" r="3"/>
       </svg>`,
     },
     {
       category: "code",
       label: "Code",
-      icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/>
+      icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/>
       </svg>`,
     },
   ];
@@ -344,9 +345,9 @@ export function getModelConfig() {
  */
 export function getSuggestionPrompt(category) {
   const prompts = {
-    generate: "Generate a technical specification document",
+    brainstorm: "Help me brainstorm ideas for a new feature",
     analyze: "Analyze this document and extract key insights",
-    edit: "Help me refine this business proposal",
+    plan: "Help me create a project plan with milestones",
     research: "Research best practices for API documentation",
     code: "Review this code and suggest improvements",
   };

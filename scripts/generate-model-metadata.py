@@ -33,13 +33,17 @@ def generate_model_metadata_js() -> str:
 
     # Build MODEL_METADATA object (only UI models)
     model_metadata = {}
+    model_families = set()
     for m in MODEL_CONFIGS:
         if m.is_ui_model:
             model_metadata[m.id] = {
                 "displayName": m.display_name,
                 "description": m.description,
                 "isPrimary": m.is_primary,
+                "modelFamily": m.model_family,
             }
+            if m.model_family:
+                model_families.add(m.model_family)
 
     # Build REASONING_DESCRIPTIONS from REASONING_EFFORT_OPTIONS
     # Map the effort levels to user-friendly descriptions
@@ -50,20 +54,26 @@ def generate_model_metadata_js() -> str:
         "high": "Most thorough, slower responses",
     }
 
+    # Build MODEL_FAMILY_LABELS mapping
+    family_labels = {
+        "gpt-5": "GPT-5 Models",
+        "gpt-4.1": "GPT-4.1 Models",
+    }
+
     # Generate JavaScript content
     lines = [
         "/**",
         " * Model Metadata Configuration",
-        " * ",
+        " *",
         " * AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY!",
-        " * ",
+        " *",
         " * This file is generated from src/core/constants.py MODEL_CONFIGS.",
         " * To modify model configuration, edit MODEL_CONFIGS in constants.py",
         " * and run: make generate-model-metadata",
         " */",
         "",
         "/**",
-        " * Model metadata with display names and descriptions",
+        " * Model metadata with display names, descriptions, and family grouping",
         " */",
         "export const MODEL_METADATA = {",
     ]
@@ -72,11 +82,27 @@ def generate_model_metadata_js() -> str:
     model_items = list(model_metadata.items())
     for i, (model_id, meta) in enumerate(model_items):
         is_last = i == len(model_items) - 1
+        family_value = f'"{meta["modelFamily"]}"' if meta["modelFamily"] else "null"
         lines.append(f'  "{model_id}": {{')
         lines.append(f'    displayName: "{meta["displayName"]}",')
         lines.append(f'    description: "{meta["description"]}",')
         lines.append(f"    isPrimary: {'true' if meta['isPrimary'] else 'false'},")
-        lines.append("  }," if not is_last else "  }")
+        lines.append(f"    modelFamily: {family_value},")
+        lines.append("  },")
+
+    lines.append("};")
+    lines.append("")
+    lines.append("/**")
+    lines.append(" * Model family display names for sub-dropdown headers")
+    lines.append(" */")
+    lines.append("export const MODEL_FAMILY_LABELS = {")
+
+    # Add family labels for families that exist in model metadata
+    family_items = [(k, v) for k, v in family_labels.items() if k in model_families]
+    for i, (family_id, label) in enumerate(family_items):
+        is_last = i == len(family_items) - 1
+        comma = "," if not is_last else ","
+        lines.append(f'  "{family_id}": "{label}"{comma}')
 
     lines.append("};")
     lines.append("")

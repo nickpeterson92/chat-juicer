@@ -758,8 +758,32 @@
   }
 
   .more-models-section {
-    @apply flex flex-col gap-1.5 mt-1.5 pt-1.5;
+    @apply flex flex-col gap-1 mt-1.5 pt-1.5;
     border-top: 1px solid var(--color-border-secondary);
+  }
+
+  /* Model family sub-dropdown group */
+  .model-family-group {
+    @apply flex flex-col;
+  }
+
+  .model-family-toggle {
+    @apply flex items-center justify-between w-full py-2 px-2.5 border-none rounded-md bg-transparent text-xs font-medium cursor-pointer transition-colors;
+    color: var(--color-text-secondary);
+  }
+
+  .model-family-toggle:hover {
+    background-color: var(--color-surface-hover);
+    color: var(--color-text-primary);
+  }
+
+  .model-family-toggle svg {
+    @apply w-3.5 h-3.5 transition-transform;
+  }
+
+  .model-family-models {
+    @apply flex flex-col gap-1 pl-3 mt-1 ml-2;
+    border-left: 2px solid var(--color-border-secondary);
   }
 
   .reasoning-selector-section {
@@ -925,24 +949,24 @@
     border-color: var(--pill-color-vibrant, var(--pill-border-hover)) !important;
   }
 
-  /* Individual pill hover colors - one for each category */
-  .suggestion-pill[data-category="generate"]:hover {
+  /* Individual pill hover colors - positional for flexibility */
+  .suggestion-pill:nth-child(1):hover {
     border-color: var(--color-brand-accent-1) !important; /* Lime green */
   }
 
-  .suggestion-pill[data-category="analyze"]:hover {
+  .suggestion-pill:nth-child(2):hover {
     border-color: var(--color-brand-accent-2) !important; /* Light purple */
   }
 
-  .suggestion-pill[data-category="edit"]:hover {
+  .suggestion-pill:nth-child(3):hover {
     border-color: var(--color-brand-accent-3) !important; /* Coral red */
   }
 
-  .suggestion-pill[data-category="research"]:hover {
+  .suggestion-pill:nth-child(4):hover {
     border-color: var(--color-brand-accent-4) !important; /* Cyan */
   }
 
-  .suggestion-pill[data-category="code"]:hover {
+  .suggestion-pill:nth-child(5):hover {
     border-color: var(--color-brand-accent-5) !important; /* Dark blue */
   }
 
@@ -1146,12 +1170,43 @@
   }
 
   .message-content p {
-    margin: 0.25em 0;
+    margin: 0.15em 0;
     line-height: 1.4;
   }
 
   .message-content p + p {
     margin-top: 0.5em;
+  }
+
+  /* Tighten gap between paragraph and code block - aggressive removal */
+  .message-content p + pre:not(.mermaid),
+  .message-content p + .code-block-wrapper,
+  .message-content p + br + pre:not(.mermaid),
+  .message-content p + br + .code-block-wrapper {
+    margin-top: 0 !important;
+  }
+
+  /* Remove paragraph bottom margin before code */
+  .message-content p:has(+ pre),
+  .message-content p:has(+ .code-block-wrapper),
+  .message-content p:has(+ br + pre),
+  .message-content p:has(+ br + .code-block-wrapper) {
+    margin-bottom: 0 !important;
+  }
+
+  /* Collapse empty paragraphs (often created by markdown blank lines) */
+  .message-content p:empty {
+    display: none;
+  }
+
+  /* Hide paragraphs that only contain whitespace/br */
+  .message-content p:has(> br:only-child) {
+    display: none;
+  }
+
+  /* Hide standalone br tags between paragraph and code */
+  .message-content p + br {
+    display: none;
   }
 
   .message-content h1 + ul,
@@ -1193,7 +1248,7 @@
     border-radius: 0.5rem;
     padding: 0.625rem;
     overflow-x: auto;
-    margin: 0.4em 0;
+    margin: 0.2em 0;
   }
 
   .message-content pre code {
@@ -1206,9 +1261,11 @@
 
   /* Code block with copy button */
   .message-content .code-block-wrapper {
-    margin: 0.4em 0;
+    margin: 0.2em 0;
     display: block;
   }
+
+  /* Override wrapper margin when following paragraph - handled above with !important */
 
   .message-content .code-block-wrapper pre {
     margin: 0;
@@ -1418,25 +1475,59 @@
     margin-top: 0.25em;
   }
 
-  .message-content li pre {
-    margin-top: 0.2em;
-    margin-bottom: 0.2em;
+  /* ===========================================
+   * PROSE OVERRIDES - Typography plugin has aggressive defaults
+   * These must be more specific than .prose selectors
+   * =========================================== */
+
+  /* Override prose pre margins */
+  .prose pre,
+  .message-content.prose pre,
+  .message-content pre {
+    margin-top: 0.5em !important;
+    margin-bottom: 1.5em !important;
   }
 
-  .message-content li > pre:first-child {
-    margin-top: 0.1em;
+  /* Override prose code-block-wrapper margins */
+  .prose .code-block-wrapper,
+  .message-content.prose .code-block-wrapper,
+  .message-content .code-block-wrapper {
+    margin-top: 0.5em !important;
+    margin-bottom: 1.5em !important;
   }
 
-  .message-content li p + pre {
-    margin-top: 0.15em;
+  /* Code blocks inside list items - tighter spacing than standalone */
+  .prose li pre,
+  .prose li .code-block-wrapper,
+  .message-content.prose li pre,
+  .message-content.prose li .code-block-wrapper,
+  .message-content li pre,
+  .message-content li .code-block-wrapper {
+    margin-top: 0.15em !important;
+    margin-bottom: 0.15em !important;
+  }
+
+  /* Reduce prose li margins when containing code */
+  .prose li:has(pre),
+  .prose li:has(.code-block-wrapper),
+  .message-content li:has(pre),
+  .message-content li:has(.code-block-wrapper) {
+    margin-top: 0.25em !important;
+    margin-bottom: 0.25em !important;
+  }
+
+  /* Remove any extra spacing from br tags in li */
+  .message-content li > br,
+  .prose li > br {
+    display: none;
   }
 
   .message-content p + pre {
-    margin-top: 0.3em;
+    margin-top: 0.15em;
   }
 
   .message-content pre + p {
-    margin-top: 0.3em;
+    margin-top: 0.15em;
   }
 
   .message-content h1 + pre,
@@ -1456,6 +1547,67 @@ body.view-welcome {
 
 body.view-chat {
   background: var(--color-body-chat) !important;
+}
+
+/* ===========================================
+ * PROSE TYPOGRAPHY OVERRIDES - Outside layers for maximum specificity
+ * Tailwind Typography plugin has aggressive defaults that override layered CSS
+ * =========================================== */
+
+/* Fix: Remove padding from code-block-wrapper and margin from inner pre */
+.prose .code-block-wrapper,
+.message-content .code-block-wrapper {
+  padding: 0 !important;
+  margin: 0.5em 0 1.5em 0 !important; /* balanced spacing: half-line above, line-and-half below */
+}
+
+.prose .code-block-wrapper pre,
+.message-content .code-block-wrapper pre {
+  margin: 0 !important;
+}
+
+/* Tighter margins on paragraphs */
+.prose p,
+.message-content p {
+  margin: 0.15em 0 !important;
+}
+
+/* Override prose pre margins (code-block-wrapper handled above) */
+.prose pre:not(.code-block-wrapper pre) {
+  margin-top: 0.5em !important;
+  margin-bottom: 1.5em !important;
+}
+
+/* Code blocks inside list items */
+.prose li pre,
+.prose li .code-block-wrapper {
+  margin-top: 0.15em !important;
+  margin-bottom: 0.15em !important;
+}
+
+/* Reduce li margins when containing code */
+.prose li:has(pre),
+.prose li:has(.code-block-wrapper) {
+  margin-top: 0.2em !important;
+  margin-bottom: 0.2em !important;
+}
+
+/* Hide br tags that create gaps */
+.prose li > br {
+  display: none;
+}
+
+/* Override prose paragraph margins before code */
+.prose p + pre,
+.prose p + .code-block-wrapper {
+  margin-top: 0.15em !important;
+}
+
+/* Mermaid diagrams - match code block spacing */
+.prose .mermaid-wrapper,
+.message-content .mermaid-wrapper {
+  margin-top: 0.5em !important;
+  margin-bottom: 1.5em !important;
 }
 
 /* Base styles */
