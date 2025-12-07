@@ -206,6 +206,61 @@ function escapeHtml(text) {
 // Store mermaid code by ID (avoids data attribute sanitization issues)
 const mermaidCodeStore = new Map();
 
+// Track diagrams currently being rendered to prevent double-renders
+const renderingInProgress = new Set();
+
+// Singleton IntersectionObserver for visible-first rendering
+let mermaidObserver = null;
+
+// Batching mechanism for processMermaidDiagrams calls during session load
+const pendingElements = new Set();
+let batchTimeout = null;
+const BATCH_DELAY_MS = 50; // Wait 50ms to collect all elements before processing
+
+/**
+ * Get or create the mermaid visibility observer
+ * Renders diagrams only when they enter the viewport
+ * @returns {IntersectionObserver}
+ */
+function getMermaidObserver() {
+  if (mermaidObserver) return mermaidObserver;
+
+  mermaidObserver = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          const wrapper = entry.target;
+          const id = wrapper.dataset.mermaidId;
+
+          // Skip if already rendering or processed
+          if (renderingInProgress.has(id) || wrapper.dataset.processed) {
+            mermaidObserver.unobserve(wrapper);
+            continue;
+          }
+
+          const code = mermaidCodeStore.get(id);
+          if (id && code) {
+            // Mark as rendering and trigger
+            renderingInProgress.add(id);
+            mermaidObserver.unobserve(wrapper);
+
+            renderDiagramWhenIdle({ id, code, placeholder: wrapper }).then(() => {
+              renderingInProgress.delete(id);
+            });
+          }
+        }
+      }
+    },
+    {
+      // Start rendering when diagram is within 200px of viewport
+      rootMargin: "200px 0px",
+      threshold: 0,
+    }
+  );
+
+  return mermaidObserver;
+}
+
 // Configure marked with custom renderer
 const renderer = new marked.Renderer();
 
@@ -564,51 +619,113 @@ function renderDiagramWhenIdle({ id, code, placeholder }) {
 }
 
 /**
- * Process Mermaid diagrams in a rendered element with progressive loading
+ * Check if an element is currently visible in the viewport
+ * @param {HTMLElement} el - Element to check
+ * @returns {boolean} True if element is in or near viewport
+ */
+function isInViewport(el) {
+  const rect = el.getBoundingClientRect();
+  const windowHeight = window.innerHeight || document.documentElement.clientHeight;
+  // Consider visible if within 200px of viewport (matches observer rootMargin)
+  return rect.top < windowHeight + 200 && rect.bottom > -200;
+}
+
+/**
+ * Process a batch of collected elements for mermaid diagrams
+ * Called after batching delay to handle multiple rapid processMermaidDiagrams calls
+ */
+async function processBatchedMermaidDiagrams() {
+  // Collect all pending elements and clear the set
+  const elements = Array.from(pendingElements);
+  pendingElements.clear();
+  batchTimeout = null;
+
+  if (elements.length === 0) return;
+
+  // Find ALL loading placeholders across all pending elements
+  const allWrappers = [];
+  for (const element of elements) {
+    if (!element || !document.body.contains(element)) continue;
+    const wrappers = element.querySelectorAll(".mermaid-wrapper.mermaid-loading:not([data-processed])");
+    for (const wrapper of wrappers) {
+      allWrappers.push(wrapper);
+    }
+  }
+
+  if (allWrappers.length === 0) return;
+
+  const observer = getMermaidObserver();
+  const visibleDiagrams = [];
+  const deferredWrappers = [];
+
+  // Separate visible from off-screen diagrams (across ALL messages)
+  for (const wrapper of allWrappers) {
+    const id = wrapper.dataset.mermaidId;
+    const code = mermaidCodeStore.get(id);
+
+    if (!id || !code) {
+      console.error(`[MERMAID] Missing data for placeholder: id=${id}, inStore=${mermaidCodeStore.has(id)}`);
+      wrapper.innerHTML = `<div class="mermaid-error">Mermaid Error: Missing diagram data</div>`;
+      wrapper.classList.remove("mermaid-loading");
+      wrapper.dataset.processed = "error";
+      continue;
+    }
+
+    // Skip if already being rendered
+    if (renderingInProgress.has(id)) continue;
+
+    if (isInViewport(wrapper)) {
+      visibleDiagrams.push({ id, code, placeholder: wrapper });
+    } else {
+      deferredWrappers.push(wrapper);
+    }
+  }
+
+  // Phase 1: Render visible diagrams with yields between each
+  for (const diagram of visibleDiagrams) {
+    if (renderingInProgress.has(diagram.id)) continue;
+    renderingInProgress.add(diagram.id);
+
+    await renderDiagramWhenIdle(diagram);
+    renderingInProgress.delete(diagram.id);
+
+    // Explicit yield to let browser paint and handle user input
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  // Phase 2: Set up lazy loading for off-screen diagrams
+  for (const wrapper of deferredWrappers) {
+    observer.observe(wrapper);
+  }
+}
+
+/**
+ * Process Mermaid diagrams in a rendered element with visible-first progressive loading
  *
- * The loading placeholders are rendered inline during markdown parsing (via renderer.code),
- * so users see spinners immediately during streaming. This function renders the actual
- * diagrams progressively using requestIdleCallback to keep UI responsive.
+ * Uses batching to coordinate multiple rapid calls (e.g., during session load).
+ * When multiple messages load at once, their diagrams are batched and processed
+ * together for optimal visible-first rendering.
  *
- * Scroll behavior is handled by the caller via scheduleScroll() which has user-scroll
- * detection to prevent scroll fighting.
- *
- * IMPORTANT: Only call after streaming is complete or for static content.
+ * Rendering strategy:
+ * 1. **Batching**: Collects elements for 50ms before processing
+ * 2. **Visible-first**: Diagrams in viewport render immediately
+ * 3. **Lazy loading**: Off-screen diagrams render when scrolled into view
  *
  * @param {HTMLElement} element - Container element with rendered markdown
  */
 export async function processMermaidDiagrams(element) {
   if (!element) return;
 
-  // Find loading placeholders (created by renderer.code during markdown parsing)
-  const loadingWrappers = element.querySelectorAll(".mermaid-wrapper.mermaid-loading:not([data-processed])");
-  if (loadingWrappers.length === 0) return;
+  // Quick check - any diagrams to process?
+  const hasWrappers = element.querySelector(".mermaid-wrapper.mermaid-loading:not([data-processed])");
+  if (!hasWrappers) return;
 
-  // Build list of diagrams to render from Map storage
-  const diagramsToRender = [];
-  for (const wrapper of loadingWrappers) {
-    const id = wrapper.dataset.mermaidId;
-    const code = mermaidCodeStore.get(id);
+  // Add to pending batch
+  pendingElements.add(element);
 
-    if (id && code) {
-      diagramsToRender.push({
-        id,
-        code,
-        placeholder: wrapper,
-      });
-    } else {
-      // Don't leave it stuck - show error for missing data
-      console.error(`[MERMAID] Missing data for placeholder: id=${id}, inStore=${mermaidCodeStore.has(id)}`);
-      wrapper.innerHTML = `<div class="mermaid-error">Mermaid Error: Missing diagram data</div>`;
-      wrapper.classList.remove("mermaid-loading");
-      wrapper.dataset.processed = "error";
-    }
-  }
-
-  // Render progressively using idle callbacks
-  // Each diagram renders when the browser is idle, keeping UI responsive
-  for (const diagram of diagramsToRender) {
-    await renderDiagramWhenIdle(diagram);
+  // Schedule batch processing (debounced)
+  if (!batchTimeout) {
+    batchTimeout = setTimeout(processBatchedMermaidDiagrams, BATCH_DELAY_MS);
   }
 }
 

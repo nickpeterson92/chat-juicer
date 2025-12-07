@@ -163,7 +163,7 @@ export class ChatContainer {
     // Main card container - left-aligned like regular user messages
     const card = document.createElement("div");
     card.className =
-      "queued-message-card relative p-4 rounded-xl mr-auto max-w-[70%] border-2 border-dashed border-[var(--color-border-secondary)] bg-[var(--color-surface-hover)] opacity-70";
+      "queued-message-card relative p-4 rounded-xl mr-auto max-w-[70%] border-2 border-dashed border-[var(--color-border-secondary)] bg-[var(--color-surface-1)]/80 backdrop-blur-sm";
 
     // Header row with badge and actions
     const header = document.createElement("div");
