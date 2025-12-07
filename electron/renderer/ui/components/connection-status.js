@@ -5,6 +5,7 @@
 
 import { ComponentLifecycle } from "../../core/component-lifecycle.js";
 import { globalLifecycleManager } from "../../core/lifecycle-manager.js";
+import { getMessageQueueService } from "../../services/message-queue-service.js";
 
 export class ConnectionStatus {
   /**
@@ -85,8 +86,10 @@ export class ConnectionStatus {
 
   /**
    * Set connected state
+   * @param {boolean} wasDisconnected - Whether this is a reconnection (not initial connection)
    */
-  setConnected() {
+  setConnected(wasDisconnected = false) {
+    const wasConnected = this.isConnected;
     this.isConnected = true;
     this.lastError = null;
 
@@ -99,6 +102,17 @@ export class ConnectionStatus {
     const statusText = this.dom.querySelector(this.element, ".status-text");
     if (statusText) {
       this.dom.setTextContent(statusText, "Connected");
+    }
+
+    // On reconnect (was disconnected, now connected), resume queue processing (Section 7.F of queue spec)
+    if (wasDisconnected || !wasConnected) {
+      const messageQueueService = getMessageQueueService();
+      if (messageQueueService && messageQueueService.hasItems()) {
+        // Delay to allow system to stabilize after reconnect
+        setTimeout(() => {
+          messageQueueService.process();
+        }, 200);
+      }
     }
   }
 

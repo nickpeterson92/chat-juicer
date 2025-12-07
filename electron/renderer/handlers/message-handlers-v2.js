@@ -4,6 +4,7 @@
  */
 
 import { globalEventBus } from "../core/event-bus.js";
+import { getMessageQueueService } from "../services/message-queue-service.js";
 import {
   cancelPendingRender,
   completeStreamingMessage,
@@ -119,6 +120,22 @@ export function registerMessageHandlers(context) {
       await ipcAdapter.processQueue();
     }
 
+    // Process message queue - send next queued user message if any
+    // MessageQueueService subscribes to python.status, but we also explicitly call here
+    // to ensure queue is processed after assistant response completes
+    const messageQueueService = getMessageQueueService();
+    if (messageQueueService && messageQueueService.hasItems()) {
+      // Small delay to allow UI to settle before sending next message
+      setTimeout(async () => {
+        const processed = await messageQueueService.process();
+        if (processed) {
+          // If a queued message was sent, show it in the chat
+          // The queue service will emit events that ChatContainer listens to
+          globalEventBus.emit("queue:message_sent");
+        }
+      }, 100);
+    }
+
     // Hide AI thinking indicator
     appState.setState("ui.aiThinkingActive", false);
 
@@ -158,6 +175,10 @@ export function registerMessageHandlers(context) {
 
     appState.setState("message.isTyping", false);
 
+    // Reset streaming state on error - backend is now idle
+    appState.setState("python.status", "idle");
+    appState.setState("message.isStreaming", false);
+
     // Add error message (Phase 7: use ChatContainer component)
     if (window.components?.chatContainer) {
       window.components.chatContainer.addErrorMessage(message.message);
@@ -169,6 +190,15 @@ export function registerMessageHandlers(context) {
     globalEventBus.emit("error:backend", {
       message: message.message,
     });
+
+    // Continue processing queue after error (Section 7.B of queue spec)
+    // Queue should continue with next message even if current one failed
+    const messageQueueService = getMessageQueueService();
+    if (messageQueueService && messageQueueService.hasItems()) {
+      setTimeout(async () => {
+        await messageQueueService.process();
+      }, 100);
+    }
   });
 
   // ===== Function Call Handlers =====

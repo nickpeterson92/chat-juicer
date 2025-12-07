@@ -3,9 +3,11 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 // Expose protected methods that allow the renderer process to communicate with the main process
 contextBridge.exposeInMainWorld("electronAPI", {
-  // Send user input to Python bot
-  sendUserInput: (message) => {
-    ipcRenderer.send("user-input", message);
+  // Send user input to Python bot (accepts single string or array of strings)
+  sendUserInput: (messages) => {
+    // Normalize to array format for unified backend handling
+    const messageArray = Array.isArray(messages) ? messages : [messages];
+    ipcRenderer.send("user-input", messageArray);
   },
 
   // Request bot restart

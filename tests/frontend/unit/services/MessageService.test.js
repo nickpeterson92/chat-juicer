@@ -44,7 +44,8 @@ describe("MessageService", () => {
       expect(result.success).toBe(true);
       const calls = mockIPC.getCalls("user-input");
       expect(calls).toHaveLength(1);
-      expect(calls[0].content).toBe("Hello");
+      // Message is normalized to array format for batch support
+      expect(calls[0].content).toEqual(["Hello"]);
       // Note: session_id is NOT sent - backend manages session context
     });
 
@@ -54,7 +55,8 @@ describe("MessageService", () => {
       await messageService.sendMessage("  Hello  ", "session-123");
 
       const calls = mockIPC.getCalls("user-input");
-      expect(calls[0].content).toBe("Hello");
+      // Message is normalized to array with trimmed content
+      expect(calls[0].content).toEqual(["Hello"]);
     });
 
     it("should reject empty message", async () => {
@@ -79,7 +81,8 @@ describe("MessageService", () => {
       expect(result.success).toBe(true);
       const calls = mockIPC.getCalls("user-input");
       expect(calls).toHaveLength(1);
-      expect(calls[0].content).toBe("Hello");
+      // Message is normalized to array format for batch support
+      expect(calls[0].content).toEqual(["Hello"]);
     });
 
     it("should handle IPC errors", async () => {

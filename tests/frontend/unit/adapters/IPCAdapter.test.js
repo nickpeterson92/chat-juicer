@@ -52,7 +52,8 @@ describe("IPCAdapter", () => {
   describe("Message Operations", () => {
     it("should send message", async () => {
       await adapter.sendMessage("Hello World");
-      expect(mockAPI.sendUserInput).toHaveBeenCalledWith("Hello World");
+      // Messages are normalized to array format for batch support
+      expect(mockAPI.sendUserInput).toHaveBeenCalledWith(["Hello World"]);
       expect(mockAPI.sendUserInput).toHaveBeenCalledTimes(1);
     });
 

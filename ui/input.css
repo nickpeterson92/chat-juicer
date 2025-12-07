@@ -525,6 +525,94 @@
     clip: rect(0, 0, 0, 0);
   }
 
+  /* ==========================================
+   * MESSAGE QUEUE FEATURE
+   * Styles for queued messages while agent is processing
+   * ========================================== */
+
+  /* Queue count badge on send button area */
+  .queue-count-badge {
+    @apply absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 text-[10px] font-bold rounded-full flex items-center justify-center;
+    background-color: var(--color-brand-primary);
+    color: var(--color-text-user);
+    animation: queueBadgePop 0.2s ease-out;
+  }
+
+  @keyframes queueBadgePop {
+    0% {
+      transform: scale(0);
+      opacity: 0;
+    }
+    50% {
+      transform: scale(1.2);
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  /* Queued message card styling */
+  .queued-message {
+    animation: queuedMessageSlideIn 0.2s ease-out;
+  }
+
+  @keyframes queuedMessageSlideIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Queued message removal animation (slide up) */
+  .queued-message.removing {
+    animation: queuedMessageSlideOut 0.15s ease-in forwards;
+  }
+
+  @keyframes queuedMessageSlideOut {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+  }
+
+  /* Queued message cancel animation (elegant slide/fade left to right) */
+  .queued-message.queue-cancel-animate {
+    animation: queueCancelSlide 0.3s ease-out forwards;
+    pointer-events: none;
+  }
+
+  @keyframes queueCancelSlide {
+    0% {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(100px);
+    }
+  }
+
+  /* Queued message card hover state */
+  .queued-message-card:hover {
+    opacity: 0.85 !important;
+  }
+
+  /* Edit mode styling for queued message */
+  .queued-message-card.editing {
+    opacity: 1 !important;
+    border-style: solid !important;
+    border-color: var(--color-brand-primary) !important;
+  }
+
   .welcome-content {
     @apply max-w-[720px] w-full px-8 pt-8 pb-12 flex flex-col items-center gap-8 translate-y-[4vh];
   }
@@ -772,6 +860,7 @@
 
   .model-family-models {
     @apply flex flex-col gap-1 pl-3 mt-1 ml-2;
+    border-left: 1px solid var(--color-border-secondary);
   }
 
   .reasoning-selector-section {

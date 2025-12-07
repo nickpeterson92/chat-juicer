@@ -21,7 +21,7 @@ from app.runtime import (
     ensure_session_exists,
     handle_file_upload,
     handle_session_command_wrapper,
-    process_user_input,
+    process_messages,
     send_session_created_event,
 )
 from integrations.sdk_token_tracker import disconnect_session
@@ -133,36 +133,49 @@ async def main() -> None:
                 continue
 
             # ========================================================================
-            # Chat Messages
+            # Chat Messages (always array format - single or batch)
             # ========================================================================
             if message_type == "message":
-                # Extract content from message
-                user_input = message.get("content", "")
+                # Extract messages array (unified format)
+                messages = message.get("messages", [])
 
-                # Validate user input with Pydantic
-                try:
-                    validated_input = UserInput(content=user_input)
-                    user_input = validated_input.content
-                except ValueError:
-                    # Skip invalid input (empty after stripping)
+                # Backward compatibility: support legacy single-message format
+                if not messages and message.get("content"):
+                    messages = [{"content": message.get("content")}]
+
+                if not messages:
+                    logger.warning("Empty message received")
                     continue
 
-                # Log user input
+                # Validate all messages
                 from core.constants import LOG_PREVIEW_LENGTH
 
-                file_msg = (
-                    f"User: {user_input[:LOG_PREVIEW_LENGTH]}{'...' if len(user_input) > LOG_PREVIEW_LENGTH else ''}"
-                )
-                logger.info(f"User: {user_input}", extra={"file_message": file_msg})
+                validated_messages = []
+                for msg in messages:
+                    try:
+                        content = msg.get("content", "") if isinstance(msg, dict) else str(msg)
+                        validated_input = UserInput(content=content)
+                        validated_messages.append(validated_input.content)
+                    except ValueError:
+                        continue
+
+                if not validated_messages:
+                    logger.warning("No valid messages")
+                    continue
+
+                # Log messages
+                for i, msg in enumerate(validated_messages):
+                    prefix = f"User[{i+1}]" if len(validated_messages) > 1 else "User"
+                    file_msg = f"{prefix}: {msg[:LOG_PREVIEW_LENGTH]}{'...' if len(msg) > LOG_PREVIEW_LENGTH else ''}"
+                    logger.info(f"{prefix}: {msg}", extra={"file_message": file_msg})
 
                 # Ensure session exists (lazy initialization on first message)
                 session, is_new_session = await ensure_session_exists(app_state)
 
-                # Process user input through session (handles summarization + metadata update automatically)
-                # CRITICAL: process_user_input now updates metadata via try/finally to prevent desync bugs
-                await process_user_input(app_state, session, user_input)
+                # Process messages (single or batch - handled uniformly)
+                await process_messages(app_state, session, validated_messages)
 
-                # Send session creation event AFTER first message completes
+                # Send session creation event AFTER processing completes
                 if is_new_session:
                     send_session_created_event(app_state, session.session_id)
                 continue

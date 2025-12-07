@@ -65,22 +65,26 @@ describe("InputArea", () => {
   });
 
   describe("AppState integration", () => {
-    it("should subscribe to message.isStreaming", () => {
+    it("should subscribe to queue.items for placeholder updates", () => {
       const inputArea = new InputArea(textarea, sendButton, onSendCallback, {
         appState,
       });
 
+      // Input should always be enabled (queue feature - messages queue when agent is busy)
       expect(inputArea.isEnabled).toBe(true);
 
-      // Start streaming - should disable
+      // During streaming, input stays enabled (messages get queued)
       appState.setState("message.isStreaming", true);
-      expect(inputArea.isEnabled).toBe(false);
-      expect(textarea.hasAttribute("disabled")).toBe(true);
-
-      // Stop streaming - should enable
-      appState.setState("message.isStreaming", false);
       expect(inputArea.isEnabled).toBe(true);
       expect(textarea.hasAttribute("disabled")).toBe(false);
+
+      // Placeholder updates when queue has items
+      appState.setState("queue.items", [{ id: "1", text: "test", status: "queued" }]);
+      expect(textarea.placeholder).toContain("1 queued");
+
+      // Placeholder resets when queue is empty
+      appState.setState("queue.items", []);
+      expect(textarea.placeholder).toBe("Type a message...");
     });
 
     it("should work without appState", () => {
