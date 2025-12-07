@@ -12,6 +12,18 @@
 - **Type Safety**: Full mypy strict compliance + Pydantic runtime validation
 - **Dual-Layer History**: Layer 1 (LLM context with auto-summarization) + Layer 2 (full UI display)
 
+### Backend Quick Rules
+- Scope: backend (`src/`) and backend-facing docs; rely on code, not stale docs.
+- Functions: all async with full type annotations (`from __future__ import annotations`, ordered imports).
+- State: no module-level globals; pass `AppState`; keep business logic out of `main.py`.
+- Logging: use `utils.logger.logger`, no prints; include context as needed.
+- Persistence: Layer 1 (SQLiteSession) + Layer 2 (`FullHistoryStore`); do not write Layer 1 without Layer 2 unless `_skip_full_history` during repopulation.
+- Tools: file ops go through session-aware wrappers (`create_session_aware_tools`) to keep paths under `data/files/{session_id}`.
+- Agent/tool surface: native tools are `list_directory`, `read_file`, `search_files`, `edit_file`, `generate_document`; MCP defaults are Sequential Thinking + Fetch, Tavily optional with `TAVILY_API_KEY`.
+- Protocol: binary V2 only; keep negotiation/error shapes in `main.py`.
+- Summarization: TokenAwareSQLiteSession auto-summarizes at 20% model limit, keeps last 2 user exchanges, updates metadata in `finally`.
+- Docs: when updating README/CLAUDE/etc., sync with current bootstrap/runtime/session manager, tool registry, and MCP registry behavior.
+
 ### Directory Structure
 ```
 src/
@@ -67,6 +79,13 @@ src/
     └── session_integrity.py
 ```
 
+### Renderer Runtime Highlights
+- 7-phase bootstrap orchestrator (`bootstrap.js`) validates each phase and supports degraded mode + error overlay.
+- `AppState` (`core/state.js`) is SSOT for connection/session/message/file/ui/function namespaces; components subscribe via pub/sub.
+- Global `EventBus` (`core/event-bus.js`) backs message routing; `message-handlers-v2.js` translates `message:*` events to streaming UI, tool cards, and analytics.
+- Services are pure business logic and require `appState` (SessionService, FileService, FunctionCallService, MessageService); no DOM access.
+- ChatContainer/InputArea/FilePanel/ModelSelector/ConnectionStatus are the primary renderer components; FilePanel handles handle cleanup before deletion.
+- View management (`view-manager.js`) controls welcome ↔ chat transitions and seeds ModelSelector with cached or fetched config; `file-manager.js` is migrating to AppState-driven file list rendering (`loadFilesIntoState` + `renderFileList`).
 ## Python Code Style & Conventions
 
 ### Type Annotations (Strict)
@@ -283,48 +302,39 @@ SESSION_ID_LENGTH: int = 8
 ### Component-Based ES6 Structure
 ```
 electron/renderer/
-├── index.js                    # Main entry point
-├── bootstrap.js                # Renderer initialization
-├── adapters/                   # Platform abstraction
-│   ├── DOMAdapter.js, IPCAdapter.js, StorageAdapter.js, index.js
-├── config/                     # Configuration management
-│   ├── constants.js, model-metadata.js
-├── core/                       # Core framework
-│   ├── event-bus.js, state.js
+├── index.js                    # Entry point (imports CSS + bootstrapSimple)
+├── bootstrap.js                # 7-phase bootstrap orchestrator
+├── bootstrap/                  # Error recovery + validators + phases 1-7
+│   └── phases/phase[1-7]-*.js  # Adapters → State/DOM → Services → Components → Handlers → Plugins → Data
+├── adapters/                   # DOM, IPC, Storage adapters + barrel
+├── config/                     # constants, colors, model-metadata
+├── core/                       # AppState + EventBus + lifecycle helpers
+│   ├── component-lifecycle.js
+│   ├── event-bus.js
+│   ├── lifecycle-manager.js
+│   └── state.js
+├── managers/                   # View + DOM + file rendering helpers
+│   ├── dom-manager.js
+│   ├── file-manager.js
+│   └── view-manager.js
+├── services/                   # Business logic (AppState-backed)
+│   ├── message-service.js
+│   ├── file-service.js
+│   ├── function-call-service.js
+│   └── session-service.js
+├── handlers/                   # Event wiring
+│   ├── message-handlers-v2.js  # EventBus-driven streaming + tool cards
+│   ├── session-list-handlers.js
+│   ├── chat-events.js, file-events.js, session-events.js
+├── plugins/                    # Plugin registry + core plugins
+│   ├── core-plugins.js, index.js, plugin-interface.js
 ├── ui/                         # UI layer
-│   ├── components/             # Reusable components
-│   │   ├── chat-container.js  # Message container
-│   │   ├── connection-status.js # Connection indicator
-│   │   ├── file-panel.js      # File management with handle cleanup
-│   │   ├── input-area.js      # Chat input and controls
-│   │   ├── model-selector.js  # Model/reasoning selection (shared)
-│   │   └── index.js           # Component exports
-│   ├── renderers/              # Rendering utilities
-│   │   ├── file-list-renderer.js
-│   │   ├── function-card-renderer.js
-│   │   ├── message-renderer.js
-│   │   ├── session-list-renderer.js
-│   │   └── index.js           # Renderer exports
-│   ├── chat-ui.js
-│   ├── function-card-ui.js
-│   ├── welcome-page.js
-│   └── titlebar.js
-├── handlers/                   # Event handlers
-│   ├── message-handlers-v2.js, session-list-handlers.js
-│   ├── chat-events.js, file-events.js, session-events.js, index.js
-├── services/                   # Business logic services
-│   ├── session-service.js, message-service.js, file-service.js
-│   ├── function-call-service.js, index.js
-├── managers/                   # UI state managers
-│   ├── view-manager.js, file-manager.js, dom-manager.js, theme-manager.js
-├── plugins/                    # Plugin architecture
-│   ├── plugin-interface.js, core-plugins.js, index.js
-├── viewmodels/                 # View models
-│   ├── message-viewmodel.js, session-viewmodel.js
-└── utils/                      # Utilities
-    ├── markdown-renderer.js, scroll-utils.js, json-cache.js
-    ├── toast.js, file-utils.js, chat-model-updater.js, lottie-color.js
-    ├── analytics/, debug/, performance/
+│   ├── components/             # ChatContainer, ConnectionStatus, FilePanel, InputArea, ModelSelector
+│   ├── renderers/              # session-list-renderer.js + index.js
+│   ├── chat-ui.js, function-card-ui.js, welcome-page.js, titlebar.js
+│   └── utils/welcome-animations.js
+├── viewmodels/                 # message-viewmodel.js, session-viewmodel.js
+└── utils/                      # css-variables, markdown-renderer, scroll-utils, toast, chat-model-updater, etc.
 ```
 
 ### JavaScript/TypeScript Conventions
@@ -448,6 +458,14 @@ make health     # System health check
 10. **MCP Integration**: Use Agent/Runner pattern for tool orchestration
 11. **Component Lifecycle**: Always implement cleanup methods (closeAllHandles, destroy, etc.)
 12. **Resource Management**: Close file handles before deletion, force GC when needed
+
+## Frontend Critical Rules
+
+1. `AppState` is the renderer source of truth; use `EventBus` only for cross-component events, not as primary state.
+2. Update UI via `AppState` subscriptions instead of direct DOM mutations; keep DOM writes centralized per state change.
+3. Mount components with `ComponentLifecycle` + `globalLifecycleManager`; avoid manual DOM cloning/cleanup hacks.
+4. Renderer logging stays error-focused and emoji-free; prefer `window.electronAPI.log` for persistent logs and `console.error` for errors.
+5. When editing styles, use semantic tokens from `ui/input.css`; avoid adding new hardcoded Tailwind/inline colors.
 
 ## Anti-Patterns to Avoid
 
