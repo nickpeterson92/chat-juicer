@@ -555,7 +555,6 @@
 
   .welcome-input-section:focus-within {
     border-color: var(--color-border-focus);
-    box-shadow: 0 0 0 3px var(--color-brand-glow);
   }
 
   /* Compact variant for chat page - absolute minimal padding */
@@ -821,21 +820,24 @@
     background-color: var(--color-surface-hover);
     border: 1px solid var(--color-border-secondary);
     color: var(--color-text-secondary);
-    box-shadow: inset 0 0 0 0 var(--color-brand-glow);
   }
 
+  /* Off + hover: white icon, gray border */
   .mcp-toggle-btn:hover {
-    border-color: var(--color-border-hover);
     background-color: var(--color-surface-active);
     color: var(--color-text-primary);
   }
 
-  .mcp-toggle-btn.active {
-    border-color: var(--color-brand-primary);
-    background-color: var(--color-surface-active);
-    color: var(--color-brand-primary);
-    box-shadow: inset 0 0 0 1px var(--color-brand-glow);
+  .mcp-toggle-btn:active {
+    transform: scale(0.95);
   }
+
+  /* On: white icon + blue border */
+  .mcp-toggle-btn.active {
+    border-color: var(--color-border-hover);
+    color: var(--color-text-primary);
+  }
+
 
   .mcp-toggle-btn svg {
     @apply w-4 h-4;
@@ -863,7 +865,6 @@
     background-color: var(--color-surface-active);
     color: var(--color-text-user);
     opacity: 0.5;
-    box-shadow: inset 0 0 0 0 rgba(13, 99, 251, 0.4);
   }
 
   /* Compact variant - very small button with equal spacing from edges */
@@ -880,17 +881,14 @@
     background-color: var(--color-brand-primary);
     color: var(--color-text-user);
     opacity: 1;
-    box-shadow: 0 10px 24px -14px rgba(13, 99, 251, 0.8);
   }
 
   .welcome-send-btn.ready:hover {
-    box-shadow: 0 12px 28px -18px rgba(13, 99, 251, 0.9);
     transform: translateY(-1px);
   }
 
   .welcome-send-btn.ready:active {
     transform: translateY(0);
-    box-shadow: 0 8px 20px -14px rgba(13, 99, 251, 0.85);
   }
 
   .welcome-send-btn:disabled {
