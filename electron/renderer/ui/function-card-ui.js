@@ -256,7 +256,6 @@ function flushStatusUpdates(activeCalls) {
     const card = activeCalls.get(callId);
     // Skip if card doesn't exist or has no DOM element
     if (!card || !card.element) {
-      console.warn("[FunctionCard] flushStatusUpdates: No card element for", callId);
       continue;
     }
 
