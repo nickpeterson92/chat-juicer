@@ -130,7 +130,7 @@ async def ensure_session_exists(app_state: AppState) -> tuple[TokenAwareSQLiteSe
 
     # Create session-aware tools that inject session_id for workspace isolation
     session_tools = create_session_aware_tools(session_meta.session_id)
-    logger.info(f"Created {len(session_tools)} session-aware tools for session: {session_meta.session_id}")
+    logger.info(f"Created {len(session_tools)} tools for session: {session_meta.session_id}")
 
     # Use MCP servers from app_state, filtered by session's mcp_config
     # Create new agent with isolated tools (instructions are global, tools are session-specific)

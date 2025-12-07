@@ -585,6 +585,9 @@ class Settings(BaseSettings):
     # HTTP request/response logging (for debugging Azure OpenAI issues)
     http_request_logging: bool = Field(default=False, description="Enable HTTP request/response logging")
 
+    # Tavily MCP server API key (optional - enables web search via Tavily)
+    tavily_api_key: str | None = Field(default=None, description="Tavily API key for web search MCP server")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

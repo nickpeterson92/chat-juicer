@@ -296,151 +296,159 @@
     color: var(--color-text-secondary);
   }
 
-  /* Function call cards */
-  .function-call-card {
-    @apply block border rounded-md px-2.5 py-1.5 my-1 text-xs cursor-pointer transition-all;
-    background: var(--color-surface-overlay);
-    border-color: var(--color-border-secondary);
-    animation: slideIn 0.3s ease-out;
+  /* Function call disclosure cards (Claude Code style) */
+  .function-disclosure {
+    @apply my-1.5 text-sm;
+    animation: fadeIn 0.2s ease-out;
   }
 
-  .function-call-card:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: var(--color-border-hover);
-    transform: translateY(-1px);
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 
-  .function-call-card.expanded {
-    @apply block cursor-default p-3.5 px-4 my-1.5 rounded-lg max-w-full;
-    background: var(--color-surface-1);
-    border: 1px solid var(--color-border-secondary);
+  /* Disclosure header - clickable row */
+  .disclosure-header {
+    @apply inline-flex items-center gap-1.5 cursor-pointer py-0.5 px-0;
+    transition: opacity 0.15s ease;
   }
 
-  /* No hover effect for expanded cards - they're not interactive */
-
-  .function-call-card.executing {
-    @apply text-white border-indigo-400/40;
-    background: var(--color-function-executing);
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  .disclosure-header:hover {
+    opacity: 0.8;
   }
 
-  .function-call-card.success {
-    @apply text-white border-emerald-500/40;
-    background: var(--color-function-success);
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  /* Tool icon - small, subtle */
+  .disclosure-icon {
+    @apply inline-flex items-center justify-center w-4 h-4 flex-shrink-0;
+    color: var(--color-text-secondary);
+    opacity: 0.7;
   }
 
-  .function-call-card.error {
-    @apply text-white border-red-500/40;
-    background: var(--color-function-error);
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
-  }
-
-  .function-header {
-    @apply flex items-center gap-2 mb-0;
-  }
-
-  .function-call-card.expanded .function-header {
-    @apply gap-2 mb-2.5;
-  }
-
-  .function-icon {
-    @apply w-3.5 h-3.5 inline-flex items-center justify-center flex-shrink-0;
-  }
-
-  .function-icon svg {
+  .disclosure-icon svg {
     @apply w-3.5 h-3.5;
   }
 
-  .function-call-card.expanded .function-icon {
-    @apply w-[18px] h-[18px] rounded opacity-100 text-[11px];
-    background: var(--color-surface-overlay);
+  /* Tool name - prominent */
+  .disclosure-tool-name {
+    @apply font-medium;
+    color: var(--color-text-secondary);
   }
 
-  .function-call-card.expanded .function-icon svg {
-    @apply w-3.5 h-3.5;
+  /* Args preview - less prominent, space-separated from tool name */
+  .disclosure-args-preview {
+    @apply font-normal text-sm max-w-[400px] overflow-hidden text-ellipsis whitespace-nowrap;
+    color: var(--color-text-secondary);
+    opacity: 0.7;
   }
 
-  .function-name {
-    @apply font-semibold text-xs whitespace-nowrap flex-shrink-0 font-mono;
+  /* Chevron indicator */
+  .disclosure-chevron {
+    @apply inline-flex items-center justify-center ml-0.5 flex-shrink-0;
+    color: var(--color-text-secondary);
+    opacity: 0.5;
+    transition: transform 0.2s ease;
   }
 
-  .function-call-card.expanded .function-name {
-    @apply text-xs font-semibold tracking-wider flex-1 whitespace-nowrap overflow-hidden text-ellipsis font-sans;
-  }
-
-  .function-params {
-    @apply font-normal text-xs whitespace-nowrap overflow-hidden text-ellipsis flex-shrink min-w-0 font-mono;
-  }
-
-  .function-call-card.expanded .function-params {
-    @apply hidden;
-  }
-
-  .function-status {
-    @apply hidden;
-  }
-
-  .function-call-card.expanded .function-status {
-    @apply inline-flex items-center gap-1 text-[10px] font-medium lowercase py-0.5 px-1.5 rounded-md flex-shrink-0;
-    background: var(--color-surface-overlay);
-  }
-
-  /* Status icon styling for WCAG 1.4.1 compliance */
-  .status-icon {
-    @apply inline-flex items-center justify-center flex-shrink-0;
-  }
-
-  .status-icon svg {
+  .disclosure-chevron svg {
     @apply w-3 h-3;
   }
 
-  .function-expand-indicator {
-    @apply hidden;
+  .function-disclosure.expanded .disclosure-chevron {
+    transform: rotate(0deg);
   }
 
-  .function-arguments {
-    @apply hidden;
+  /* Status-based styling - only highlight errors, keep everything else chill */
+  .function-disclosure[data-status="error"] .disclosure-tool-name {
+    color: var(--color-status-error);
   }
 
-  .function-call-card.expanded .function-arguments {
-    @apply block border rounded-md p-1.5 px-2 mt-1.5 font-mono text-xs max-h-[120px] overflow-y-auto break-all leading-relaxed;
-    background: var(--color-surface-3);
+  /* In-progress shimmer animation - wave that lights up letters left to right */
+  @keyframes shimmer-wave {
+    from {
+      background-position: 200% center;
+    }
+    to {
+      background-position: -200% center;
+    }
+  }
+
+  /* Apply shimmer to all in-progress states */
+  .function-disclosure[data-status="preparing"] .disclosure-tool-name,
+  .function-disclosure[data-status="preparing..."] .disclosure-tool-name,
+  .function-disclosure[data-status="ready"] .disclosure-tool-name,
+  .function-disclosure[data-status="streaming"] .disclosure-tool-name,
+  .function-disclosure[data-status="executing..."] .disclosure-tool-name {
+    background: linear-gradient(
+      90deg,
+      var(--color-text-secondary) 0%,
+      var(--color-text-secondary) 40%,
+      var(--color-text-primary) 50%,
+      var(--color-text-secondary) 60%,
+      var(--color-text-secondary) 100%
+    );
+    background-size: 200% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer-wave 2s ease-in-out infinite;
+  }
+
+  /* Expandable content container */
+  .disclosure-content {
+    @apply hidden mt-2 ml-0 pl-3 border-l-2;
     border-color: var(--color-border-secondary);
+  }
+
+  .function-disclosure.expanded .disclosure-content {
+    @apply block;
+  }
+
+  /* Section labels (Arguments, Result, Thinking) */
+  .disclosure-section-label {
+    @apply text-xs font-semibold uppercase tracking-wider mb-1;
+    color: var(--color-text-secondary);
+    opacity: 0.7;
+  }
+
+  /* Section content (pre-formatted) */
+  .disclosure-section-content {
+    @apply font-mono text-xs rounded-md p-2 mb-2 max-h-[200px] overflow-y-auto overflow-x-auto whitespace-pre-wrap break-words;
+    background: var(--color-surface-3);
     color: var(--color-text-on-surface);
   }
 
-  .function-result {
-    @apply hidden;
+  .disclosure-section-content.streaming {
+    opacity: 0.7;
   }
 
-  .function-call-card.expanded .function-result {
-    @apply block border rounded-lg p-2.5 px-3 mt-2.5 text-xs max-h-[150px] overflow-y-auto overflow-x-hidden break-words whitespace-pre-wrap leading-relaxed font-medium;
-    background: var(--color-surface-3);
-    border-color: var(--color-border-secondary);
-    color: var(--color-text-on-surface);
+  /* Reasoning section (thinking) */
+  .disclosure-reasoning {
+    @apply mb-2;
   }
 
-  /* Function reasoning (thinking) display */
-  .function-reasoning {
-    @apply hidden;
-  }
-
-  .function-call-card.expanded .function-reasoning {
-    @apply block rounded-md p-2 mt-1.5 text-xs max-h-[120px] overflow-y-auto break-words whitespace-pre-wrap leading-relaxed;
-    background: var(--color-surface-overlay);
-    border: 1px dashed var(--color-border-secondary);
-    color: var(--color-text-secondary);
-    font-style: italic;
-  }
-
-  .function-reasoning-label {
-    @apply text-[10px] font-semibold uppercase tracking-wider mb-1 opacity-70;
+  .disclosure-reasoning-content {
+    @apply text-sm leading-relaxed;
     color: var(--color-text-secondary);
   }
 
-  .function-reasoning-content {
-    @apply font-normal;
+  /* Result section */
+  .disclosure-result .disclosure-section-content {
+    @apply max-h-[300px];
+  }
+
+  /* Error section */
+  .disclosure-error .disclosure-section-content {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+
+  .disclosure-error .error-text {
+    color: var(--color-status-error);
+  }
+
+  /* Arguments section */
+  .disclosure-arguments .disclosure-section-content {
+    @apply max-h-[150px];
   }
 
   /* File items */

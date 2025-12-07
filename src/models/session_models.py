@@ -105,8 +105,8 @@ class SessionMetadata(BaseModel):
     message_count: int = Field(default=0, ge=0, description="Non-negative message count")
     accumulated_tool_tokens: int = Field(default=0, ge=0, description="Accumulated tool tokens for this session")
     mcp_config: list[str] = Field(
-        default_factory=lambda: ["sequential", "fetch"],
-        description="List of enabled MCP server names (sequential, fetch)",
+        default_factory=lambda: ["sequential", "fetch", "tavily"],
+        description="List of enabled MCP server names (sequential, fetch, tavily)",
     )
     model: str = Field(
         default="gpt-5",

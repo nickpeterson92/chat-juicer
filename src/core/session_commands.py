@@ -115,7 +115,7 @@ async def switch_to_session(app_state: AppStateProtocol, session_id: str) -> dic
 
     # Create session-aware tools that inject session_id for workspace isolation
     session_tools = create_session_aware_tools(session_id)
-    logger.info(f"Created {len(session_tools)} session-aware tools for session switch: {session_id}")
+    logger.info(f"Created {len(session_tools)} tools for session switch: {session_id}")
 
     # Create session-specific agent with isolated tools (instructions are global, tools are session-specific)
     # Use MCP servers from app_state, filtered by session's mcp_config

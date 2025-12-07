@@ -5,20 +5,23 @@ Provides named access to MCP servers and filtering based on user configuration.
 
 from __future__ import annotations
 
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
-from agents.mcp import MCPServerStdio
+from agents.mcp import MCPServerStdio, MCPServerStdioParams
 
+from core.constants import get_settings
+from integrations.mcp_servers import MCP_SERVER_TIMEOUT_SECONDS
 from utils.logger import logger
 
 
-class MCPServerConfig(TypedDict):
+class MCPServerConfig(TypedDict, total=False):
     """MCP Server configuration structure."""
 
     name: str
     description: str
     command: str
     args: list[str]
+    env_key: str  # Optional: Settings attribute name for API key (e.g., "tavily_api_key")
 
 
 # MCP Server Definitions
@@ -35,17 +38,24 @@ MCP_SERVER_CONFIGS: dict[str, MCPServerConfig] = {
         "command": ".juicer/bin/python3",
         "args": ["-m", "mcp_server_fetch"],
     },
+    "tavily": {
+        "name": "Tavily Search",
+        "description": "Web search, extraction, and crawling via Tavily API",
+        "command": "npx",
+        "args": ["-y", "tavily-mcp@latest"],
+        "env_key": "tavily_api_key",  # Maps to Settings.tavily_api_key
+    },
 }
 
 # Default MCP servers enabled for new sessions
-DEFAULT_MCP_SERVERS = ["sequential", "fetch"]
+DEFAULT_MCP_SERVERS = ["sequential", "fetch", "tavily"]
 
 
 async def initialize_mcp_server(server_key: str) -> MCPServerStdio | None:
     """Initialize a single MCP server by its registry key.
 
     Args:
-        server_key: Key from MCP_SERVER_CONFIGS (e.g., "sequential", "fetch")
+        server_key: Key from MCP_SERVER_CONFIGS (e.g., "sequential", "fetch", "tavily")
 
     Returns:
         Initialized MCPServerStdio instance or None if initialization failed
@@ -55,15 +65,32 @@ async def initialize_mcp_server(server_key: str) -> MCPServerStdio | None:
         return None
 
     config = MCP_SERVER_CONFIGS[server_key]
+
+    # Build params dict with command and args
+    params: dict[str, Any] = {
+        "command": config["command"],
+        "args": config["args"],
+    }
+
+    # Handle environment variables for servers requiring API keys
+    env_key = config.get("env_key")
+    if env_key:
+        settings = get_settings()
+        api_key = getattr(settings, env_key, None)
+        if not api_key:
+            logger.info(f"{config['name']} skipped - {env_key.upper()} not configured")
+            return None
+        # Map env_key to expected env var name (e.g., tavily_api_key -> TAVILY_API_KEY)
+        env_var_name = env_key.upper()
+        params["env"] = {env_var_name: api_key}
+
     try:
         server = MCPServerStdio(
-            params={
-                "command": config["command"],
-                "args": config["args"],
-            }
+            params=cast(MCPServerStdioParams, params),
+            client_session_timeout_seconds=MCP_SERVER_TIMEOUT_SECONDS,
         )
         await server.__aenter__()  # type: ignore[no-untyped-call]
-        logger.info(f"{config['name']} MCP server initialized")
+        logger.info(f"{config['name']} MCP server initialized (timeout: {MCP_SERVER_TIMEOUT_SECONDS}s)")
         return server
     except Exception as e:
         logger.warning(f"{config['name']} server not available: {e}")

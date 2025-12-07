@@ -335,14 +335,18 @@ def handle_content_part_done_event(data: Any) -> str | None:
 
 # Handler registry mapping event types to handler functions
 RAW_EVENT_TYPE_HANDLERS: dict[str, Callable[[Any], str | None]] = {
-    "response.output_text.delta": handle_text_delta_event,  # SDK emits output_text, not text
-    "response.function_call_arguments.delta": handle_function_arguments_delta_event,
-    "response.function_call_arguments.done": handle_function_arguments_done_event,
-    "response.reasoning.text.delta": handle_reasoning_text_delta_event,
-    "response.reasoning_summary.text.delta": handle_reasoning_summary_delta_event,
-    "response.refusal.delta": handle_refusal_delta_event,
+    # Text and content events
+    "response.output_text.delta": handle_text_delta_event,
     "response.content_part.added": handle_content_part_added_event,
     "response.content_part.done": handle_content_part_done_event,
+    # Function call events
+    "response.function_call_arguments.delta": handle_function_arguments_delta_event,
+    "response.function_call_arguments.done": handle_function_arguments_done_event,
+    # Reasoning events
+    "response.reasoning.text.delta": handle_reasoning_text_delta_event,
+    "response.reasoning_summary.text.delta": handle_reasoning_summary_delta_event,
+    # Refusal events
+    "response.refusal.delta": handle_refusal_delta_event,
 }
 
 # Event logging throttle - log every Nth occurrence to reduce noise

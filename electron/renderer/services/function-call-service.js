@@ -196,12 +196,13 @@ export class FunctionCallService {
     call.endTime = Date.now();
     call.duration = call.endTime - call.startTime;
 
-    // Move to completed
+    // Copy to completed for historical tracking
     const completedCalls = this.appState.getState("functions.completedCalls");
     completedCalls.set(callId, { ...call });
 
-    // Remove from active
-    activeCalls.delete(callId);
+    // NOTE: Do NOT delete from activeCalls here - the TTL cleanup timer
+    // needs the card reference to fade out and remove the DOM element.
+    // scheduleFunctionCardCleanup() handles deletion after TTL expires.
     const argumentsBuffer = this.appState.getState("functions.argumentsBuffer");
     argumentsBuffer.delete(callId);
 
@@ -228,12 +229,13 @@ export class FunctionCallService {
     call.endTime = Date.now();
     call.duration = call.endTime - call.startTime;
 
-    // Move to completed
+    // Copy to completed for historical tracking
     const completedCalls = this.appState.getState("functions.completedCalls");
     completedCalls.set(callId, { ...call });
 
-    // Remove from active
-    activeCalls.delete(callId);
+    // NOTE: Do NOT delete from activeCalls here - the TTL cleanup timer
+    // needs the card reference to fade out and remove the DOM element.
+    // scheduleFunctionCardCleanup() handles deletion after TTL expires.
     const argumentsBuffer = this.appState.getState("functions.argumentsBuffer");
     argumentsBuffer.delete(callId);
 
@@ -259,7 +261,11 @@ export class FunctionCallService {
    */
   getActiveCalls() {
     const activeCalls = this.appState.getState("functions.activeCalls");
-    return Array.from(activeCalls.values());
+    // Filter out completed/errored calls - they stay in activeCalls for TTL cleanup
+    // but should not be considered "active" semantically
+    return Array.from(activeCalls.values()).filter(
+      (call) => call.status !== CallStatus.COMPLETED && call.status !== CallStatus.ERROR
+    );
   }
 
   /**
@@ -332,6 +338,11 @@ export class FunctionCallService {
     const completedCalls = this.appState.getState("functions.completedCalls");
     const completed = Array.from(completedCalls.values());
 
+    // Count only truly active calls (not completed/errored waiting for TTL cleanup)
+    const activeCount = Array.from(activeCalls.values()).filter(
+      (c) => c.status !== CallStatus.COMPLETED && c.status !== CallStatus.ERROR
+    ).length;
+
     const totalCompleted = completed.filter((c) => c.status === CallStatus.COMPLETED).length;
     const totalErrors = completed.filter((c) => c.status === CallStatus.ERROR).length;
     const totalCancelled = completed.filter((c) => c.status === CallStatus.CANCELLED).length;
@@ -340,7 +351,7 @@ export class FunctionCallService {
     const avgDuration = durations.length > 0 ? durations.reduce((a, b) => a + b, 0) / durations.length : 0;
 
     return {
-      active: activeCalls.size,
+      active: activeCount,
       completed: totalCompleted,
       errors: totalErrors,
       cancelled: totalCancelled,
