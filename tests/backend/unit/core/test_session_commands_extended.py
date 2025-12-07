@@ -247,10 +247,12 @@ class TestGetConfigMetadata:
         assert all("value" in r for r in reasoning_levels)
         assert all("label" in r for r in reasoning_levels)
 
-        # Verify reasoning models list
+        # Verify reasoning models list (only UI-visible reasoning models)
         reasoning_models = result["reasoning_models"]
         assert "gpt-5" in reasoning_models
-        assert "gpt-5-pro" in reasoning_models
+        assert "gpt-5.1" in reasoning_models
+        # gpt-5-pro is no longer a UI model (is_ui_model=False)
+        assert "gpt-5-pro" not in reasoning_models
         assert "gpt-4.1" not in reasoning_models
 
         # Verify default markings
