@@ -47,12 +47,22 @@ def generate_model_metadata_js() -> str:
 
     # Build REASONING_DESCRIPTIONS from REASONING_EFFORT_OPTIONS
     # Map the effort levels to user-friendly descriptions
-    reasoning_descriptions = {
-        "minimal": "Fastest responses, less thorough",
-        "low": "Quick thinking for simpler tasks",
-        "medium": "Balanced speed and quality",
-        "high": "Most thorough, slower responses",
-    }
+    reasoning_descriptions = {}
+    for level, label in REASONING_EFFORT_OPTIONS.items():
+        # Provide consistent, user-friendly descriptions per level
+        if level == "none":
+            description = "No reasoning; fastest responses"
+        elif level == "low":
+            description = "Light reasoning; quick responses for simple tasks"
+        elif level == "medium":
+            description = "Balanced reasoning; good quality and speed"
+        elif level == "high":
+            description = "Maximum reasoning; slowest but most thorough"
+        else:
+            # Fallback for any future levels: use the label itself
+            description = label
+
+        reasoning_descriptions[level] = description
 
     # Build MODEL_FAMILY_LABELS mapping
     family_labels = {
