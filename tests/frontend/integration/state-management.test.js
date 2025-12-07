@@ -9,18 +9,15 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { EventBus } from "../../../electron/renderer/core/event-bus.js";
 import { AppState } from "../../../electron/renderer/core/state.js";
 
 describe("State Management Integration Tests", () => {
   describe("State Flow: Session Creation", () => {
     let appState;
-    let eventBus;
     let subscriptionCalls;
 
     beforeEach(() => {
       appState = new AppState();
-      eventBus = new EventBus();
       subscriptionCalls = [];
     });
 
