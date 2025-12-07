@@ -29,14 +29,14 @@ const FUNCTION_ICONS = {
   edit_file:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>',
   sequentialthinking:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"/></svg>',
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z"/></svg>',
   fetch:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>',
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.1374 2.73779C13.3942 3.48102 13.0092 4.77646 13.2895 5.7897C13.438 6.32603 13.4622 6.97541 13.0687 7.3689L7.3689 13.0687C6.97541 13.4622 6.32603 13.438 5.7897 13.2895C4.77646 13.0092 3.48101 13.3942 2.73779 14.1374C1.75407 15.1212 1.75407 16.7161 2.73779 17.6998C3.72152 18.6835 5.31646 18.6835 6.30018 17.6998C5.31646 18.6835 5.31645 20.2785 6.30018 21.2622C7.28391 22.2459 8.87884 22.2459 9.86257 21.2622C10.6058 20.519 10.9908 19.2235 10.7105 18.2103C10.562 17.674 10.5378 17.0246 10.9313 16.6311L16.6311 10.9313C17.0246 10.5378 17.674 10.562 18.2103 10.7105C19.2235 10.9908 20.519 10.6058 21.2622 9.86257C22.2459 8.87884 22.2459 7.28391 21.2622 6.30018C20.2785 5.31646 18.6835 5.31646 17.6998 6.30018C18.6835 5.31646 18.6835 3.72152 17.6998 2.73779C16.7161 1.75407 15.1212 1.75407 14.1374 2.73779Z"/></svg>',
   // Tavily MCP tools (search, extract, map, crawl)
   tavily_search:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/><path d="M11 8v6M8 11h6"/></svg>',
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>',
   tavily_extract:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/></svg>',
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0-12l-4 4m4-4l4 4"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>',
   tavily_map:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3V6z"/><path d="M9 3v15M15 6v15"/></svg>',
   tavily_crawl:
@@ -113,7 +113,7 @@ function formatToolName(functionName) {
     sequentialthinking: "Thought",
     read_file: "Read",
     list_directory: "List",
-    search_files: "Search",
+    search_files: "File Search",
     generate_document: "Generate",
     edit_file: "Edit",
     text_edit: "Edit",
@@ -121,8 +121,8 @@ function formatToolName(functionName) {
     insert_text: "Insert",
     fetch: "Fetch",
     // Tavily MCP tools
-    tavily_search: "Search",
-    tavilysearch: "Search",
+    tavily_search: "Web Search",
+    tavilysearch: "Web Search",
     tavily_extract: "Extract",
     tavilyextract: "Extract",
     tavily_map: "Map",
@@ -217,7 +217,7 @@ export function createFunctionCallCard(
     // Add click handler for expand/collapse (only on header)
     headerDiv.addEventListener("click", (e) => {
       e.stopPropagation();
-      toggleFunctionCard(cardDiv, activeCalls, appState.functions.activeTimers, callId);
+      toggleFunctionCard(cardDiv);
     });
 
     // Insert function card BEFORE the current streaming assistant message
@@ -248,7 +248,6 @@ export function createFunctionCallCard(
       name: functionName,
       rawName: functionName, // Keep original for expanded view
       timestamp: existingCard?.timestamp || Date.now(),
-      expanded: false,
       cleanupTimerId: null, // Track timer for cancellation
     };
     activeCalls.set(callId, card);
@@ -259,41 +258,21 @@ export function createFunctionCallCard(
 
 /**
  * Toggle function card between collapsed and expanded states
+ * Pure DOM manipulation - no Map tracking needed since cards are persisted to SQLite
  * @param {HTMLElement} cardElement - The card element to toggle
- * @param {Map} activeCalls - Map of active function calls
- * @param {Set} _activeTimers - Set of active timer IDs (unused, kept for API compatibility)
- * @param {string} callId - Call identifier
  */
-function toggleFunctionCard(cardElement, activeCalls, _activeTimers, callId) {
+function toggleFunctionCard(cardElement) {
   const isExpanded = cardElement.dataset.expanded === "true";
   const chevron = cardElement.querySelector(".disclosure-chevron");
 
   if (isExpanded) {
-    // Collapsing
     cardElement.classList.remove("expanded");
     cardElement.dataset.expanded = "false";
     if (chevron) chevron.innerHTML = CHEVRON_DOWN;
-
-    // Update card object state
-    if (callId && activeCalls) {
-      const card = activeCalls.get(callId);
-      if (card) {
-        card.expanded = false;
-      }
-    }
   } else {
-    // Expanding
     cardElement.classList.add("expanded");
     cardElement.dataset.expanded = "true";
     if (chevron) chevron.innerHTML = CHEVRON_UP;
-
-    // Update card object state
-    if (callId && activeCalls) {
-      const card = activeCalls.get(callId);
-      if (card) {
-        card.expanded = true;
-      }
-    }
   }
 }
 
@@ -347,6 +326,13 @@ function flushStatusUpdates(activeCalls) {
       if (argsPreview) {
         const primaryArg = extractPrimaryArg(data.arguments, card.rawName || card.name);
         argsPreview.textContent = primaryArg;
+
+        // Fade in args and chevron when we have content
+        if (primaryArg) {
+          argsPreview.classList.add("visible");
+          const chevron = card.element.querySelector(".disclosure-chevron");
+          if (chevron) chevron.classList.add("visible");
+        }
       }
 
       // Add full arguments to expanded content
@@ -473,7 +459,14 @@ export function updateFunctionArguments(activeCalls, argumentsBuffer, callId, de
   const argsPreview = card.element.querySelector(".disclosure-args-preview");
   if (argsPreview) {
     const primaryArg = extractPrimaryArg(bufferedArgs, card.rawName || card.name);
-    argsPreview.textContent = primaryArg || "...";
+    argsPreview.textContent = primaryArg || "";
+
+    // Fade in args and chevron when we have extractable content
+    if (primaryArg && !argsPreview.classList.contains("visible")) {
+      argsPreview.classList.add("visible");
+      const chevron = card.element.querySelector(".disclosure-chevron");
+      if (chevron) chevron.classList.add("visible");
+    }
   }
 
   // Update expanded content if exists
@@ -512,8 +505,12 @@ export function updateFunctionArguments(activeCalls, argumentsBuffer, callId, de
 }
 
 /**
- * Schedule cleanup of a function card after delay.
- * Cleans DOM element + activeCalls entry to avoid long-lived references.
+ * Schedule cleanup of a function card's Map entry after delay.
+ * DOM element is preserved (cards persist visually) since tool calls are
+ * now stored in Layer 2 (SQLite) and will be restored on session load.
+ *
+ * This only cleans up the activeCalls Map entry to free memory while
+ * keeping the visual card in the chat for reference.
  *
  * @param {Map} activeCalls - Map of active function calls
  * @param {Set} activeTimers - Set of active timer IDs
@@ -532,25 +529,14 @@ export function scheduleFunctionCardCleanup(activeCalls, activeTimers, callId, d
   }
 
   const timerId = window.setTimeout(() => {
+    // Mark the DOM element as persisted (no longer tracked in activeCalls)
     const targetCard = activeCalls.get(callId);
-
-    // Skip cleanup if card is expanded (user is viewing it)
-    if (targetCard?.element?.hasAttribute("open")) {
-      // Clear the timer reference so it can be rescheduled later
-      targetCard.cleanupTimerId = null;
-      activeCalls.set(callId, targetCard);
-      activeTimers.delete(timerId);
-      // Reschedule cleanup for when user closes it
-      scheduleFunctionCardCleanup(activeCalls, activeTimers, callId, delay);
-      return;
+    if (targetCard?.element) {
+      targetCard.element.dataset.persisted = "true";
     }
 
-    // Remove DOM element if it still exists
-    if (targetCard?.element?.parentNode) {
-      targetCard.element.remove();
-    }
-
-    // Remove from active calls map
+    // Remove from active calls map (frees memory)
+    // DOM element stays visible - tool call is persisted in Layer 2
     activeCalls.delete(callId);
 
     // Clear timer tracking
@@ -573,4 +559,126 @@ export function clearFunctionCards(chatContainer) {
   for (const card of cards) {
     card.remove();
   }
+}
+
+/**
+ * Create a completed tool card from persisted session data
+ * Used for restoring tool cards on session load (not for active/streaming calls)
+ *
+ * @param {HTMLElement} chatContainer - The chat container element
+ * @param {Object} toolData - Persisted tool call data
+ * @param {string} toolData.call_id - Unique call identifier
+ * @param {string} toolData.name - Tool/function name
+ * @param {string|Object} toolData.arguments - Tool arguments
+ * @param {string} toolData.result - Tool result
+ * @param {boolean} toolData.success - Whether the call succeeded
+ * @returns {HTMLElement} The created card element
+ */
+export function createCompletedToolCard(chatContainer, toolData) {
+  const { call_id, name, arguments: args, result, success = true } = toolData;
+
+  // Create disclosure card (collapsed by default)
+  const cardDiv = document.createElement("div");
+  cardDiv.className = "function-disclosure";
+  cardDiv.id = `function-${call_id}`;
+  cardDiv.dataset.expanded = "false";
+  cardDiv.dataset.status = success ? "completed" : "error";
+  cardDiv.dataset.persisted = "true"; // Mark as loaded from persistence
+
+  // Header row: [icon] ToolName args... ▼
+  const headerDiv = document.createElement("div");
+  headerDiv.className = "disclosure-header";
+
+  const iconSpan = document.createElement("span");
+  iconSpan.className = "disclosure-icon";
+  iconSpan.innerHTML = getFunctionIcon(name);
+
+  const toolNameSpan = document.createElement("span");
+  toolNameSpan.className = "disclosure-tool-name";
+  toolNameSpan.textContent = formatToolName(name);
+
+  const argsSpan = document.createElement("span");
+  const primaryArg = extractPrimaryArg(args, name);
+  argsSpan.className = "disclosure-args-preview" + (primaryArg ? " visible" : "");
+  argsSpan.textContent = primaryArg;
+
+  const chevronSpan = document.createElement("span");
+  // Show chevron if there's content to expand (args or result)
+  chevronSpan.className = "disclosure-chevron" + (primaryArg || result ? " visible" : "");
+  chevronSpan.innerHTML = CHEVRON_DOWN;
+
+  headerDiv.appendChild(iconSpan);
+  headerDiv.appendChild(toolNameSpan);
+  headerDiv.appendChild(argsSpan);
+  headerDiv.appendChild(chevronSpan);
+  cardDiv.appendChild(headerDiv);
+
+  // Expandable content container (hidden by default)
+  const contentDiv = document.createElement("div");
+  contentDiv.className = "disclosure-content";
+
+  // Add arguments section
+  if (args) {
+    const parsedArgs = safeParse(args, args);
+    const argsText = typeof parsedArgs === "string" ? parsedArgs : JSON.stringify(parsedArgs, null, 2);
+
+    const argsSection = document.createElement("div");
+    argsSection.className = "disclosure-arguments";
+
+    const argsLabel = document.createElement("div");
+    argsLabel.className = "disclosure-section-label";
+    argsLabel.textContent = "Arguments";
+    argsSection.appendChild(argsLabel);
+
+    const argsContent = document.createElement("pre");
+    argsContent.className = "disclosure-section-content";
+    argsContent.textContent = argsText;
+    argsSection.appendChild(argsContent);
+
+    contentDiv.appendChild(argsSection);
+  }
+
+  // Add result section
+  if (result) {
+    const resultSection = document.createElement("div");
+    resultSection.className = success ? "disclosure-result" : "disclosure-error";
+
+    const resultLabel = document.createElement("div");
+    resultLabel.className = "disclosure-section-label";
+    resultLabel.textContent = success ? "Result" : "Error";
+    resultSection.appendChild(resultLabel);
+
+    const resultContent = document.createElement("pre");
+    resultContent.className = success ? "disclosure-section-content" : "disclosure-section-content error-text";
+    // Truncate very long results
+    const resultText = result.length > 2000 ? `${result.substring(0, 2000)}\n... (truncated)` : result;
+    resultContent.textContent = resultText;
+    resultSection.appendChild(resultContent);
+
+    contentDiv.appendChild(resultSection);
+  }
+
+  cardDiv.appendChild(contentDiv);
+
+  // Add click handler for expand/collapse (only on header)
+  headerDiv.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isExpanded = cardDiv.dataset.expanded === "true";
+    const chevron = cardDiv.querySelector(".disclosure-chevron");
+
+    if (isExpanded) {
+      cardDiv.classList.remove("expanded");
+      cardDiv.dataset.expanded = "false";
+      if (chevron) chevron.innerHTML = CHEVRON_DOWN;
+    } else {
+      cardDiv.classList.add("expanded");
+      cardDiv.dataset.expanded = "true";
+      if (chevron) chevron.innerHTML = CHEVRON_UP;
+    }
+  });
+
+  // Append to chat container
+  chatContainer.appendChild(cardDiv);
+
+  return cardDiv;
 }

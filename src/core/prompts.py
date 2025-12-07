@@ -102,10 +102,7 @@ Use **edit_file** for all text editing needs:
 - Follow up with **fetch** on the strongest URLs to read full content (HTML → markdown).
 - Combine multiple high-signal sources, deduplicate overlaps, and cite the URLs you used.
 - Prefer recent, authoritative sources; skip low-quality or irrelevant results.
-- Produce a concise, professional, and readable synthesis (no raw dumps of snippets or long URL lists).
-- Highlight only the top findings (e.g., 3–5), with brief source-backed takeaways.
-- If evidence is thin or noisy, say so and keep the output tight.
-
+- Use **tavily-search** in combination with **tavily-extract** and/or **fetch** to get the most comprehensive information that will spark joy in the user.
 
 ### When Solving Complex Problems:
 Consider using the Sequential Thinking tool when:

@@ -335,18 +335,28 @@
   }
 
   /* Args preview - less prominent, space-separated from tool name */
+  /* Hidden initially, fades in gracefully when args arrive */
   .disclosure-args-preview {
     @apply font-normal text-sm max-w-[400px] overflow-hidden text-ellipsis whitespace-nowrap;
     color: var(--color-text-secondary);
+    opacity: 0;
+    transition: opacity 0.3s ease-out;
+  }
+
+  .disclosure-args-preview.visible {
     opacity: 0.7;
   }
 
-  /* Chevron indicator */
+  /* Chevron indicator - hidden until there's content to expand */
   .disclosure-chevron {
     @apply inline-flex items-center justify-center ml-0.5 flex-shrink-0;
     color: var(--color-text-secondary);
+    opacity: 0;
+    transition: opacity 0.3s ease-out, transform 0.2s ease;
+  }
+
+  .disclosure-chevron.visible {
     opacity: 0.5;
-    transition: transform 0.2s ease;
   }
 
   .disclosure-chevron svg {

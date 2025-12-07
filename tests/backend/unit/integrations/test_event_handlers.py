@@ -61,6 +61,27 @@ class TestCallTracker:
         result = tracker.pop_call()
         assert result is None
 
+    def test_call_tracker_has_call(self) -> None:
+        """Test has_call method for checking existing calls."""
+        tracker = CallTracker()
+
+        # Empty tracker should return False
+        assert tracker.has_call("call_1") is False
+
+        # Add a call
+        tracker.add_call("call_1", "tool_a")
+        assert tracker.has_call("call_1") is True
+        assert tracker.has_call("call_2") is False
+
+        # Adding duplicate call_id should be prevented
+        tracker.add_call("call_1", "tool_a")
+        assert len(tracker.active_calls) == 1  # Still only 1
+
+        # Add another unique call
+        tracker.add_call("call_2", "tool_b")
+        assert len(tracker.active_calls) == 2
+        assert tracker.has_call("call_2") is True
+
 
 class TestBuildEventHandlers:
     """Tests for build_event_handlers function."""
@@ -155,7 +176,11 @@ class TestHandleToolCall:
     """Tests for handle_tool_call function."""
 
     def test_handle_tool_call_with_valid_data(self) -> None:
-        """Test handling tool call with valid data."""
+        """Test handling tool call with valid data.
+
+        TOOL_CALL_ITEM fires after args are complete, so we emit function_executing
+        (not function_detected, which is emitted earlier via output_item.added).
+        """
         tracker = CallTracker()
         mock_item = Mock()
         mock_raw = Mock()
@@ -169,7 +194,7 @@ class TestHandleToolCall:
 
         assert result is not None
         data = json.loads(result)
-        assert data["type"] == "function_detected"
+        assert data["type"] == "function_executing"  # Changed from function_detected
         assert data["name"] == "test_function"
         assert data["call_id"] == "call_123"
         assert len(tracker.active_calls) == 1
@@ -466,6 +491,54 @@ class TestRawResponseEventHandling:
         payload = json.loads(result)
         assert payload["type"] == "assistant_delta"
         assert payload["content"] == "hi there"
+
+    def test_early_function_detection_via_output_item_added(self) -> None:
+        """Test response.output_item.added emits function_detected early."""
+        from core.constants import RAW_RESPONSE_EVENT
+
+        tracker = CallTracker()
+        handlers = build_event_handlers(tracker)
+        handler = handlers[RAW_RESPONSE_EVENT]
+
+        # Simulate response.output_item.added for a function call
+        event = Mock()
+        event.type = RAW_RESPONSE_EVENT
+        event.data = Mock()
+        event.data.type = "response.output_item.added"
+        event.data.item = Mock()
+        event.data.item.type = "function_call"
+        event.data.item.name = "generate_document"
+        event.data.item.call_id = "call_abc123"
+
+        result = handler(event)
+        assert result is not None
+        payload = json.loads(result)
+        assert payload["type"] == "function_detected"
+        assert payload["name"] == "generate_document"
+        assert payload["call_id"] == "call_abc123"
+        assert payload["arguments"] == "{}"  # Empty - args stream separately
+
+        # Verify call was added to tracker
+        assert tracker.has_call("call_abc123") is True
+
+    def test_output_item_added_non_function_returns_none(self) -> None:
+        """Test response.output_item.added for non-function items returns None."""
+        from core.constants import RAW_RESPONSE_EVENT
+
+        tracker = CallTracker()
+        handlers = build_event_handlers(tracker)
+        handler = handlers[RAW_RESPONSE_EVENT]
+
+        # Simulate response.output_item.added for a text output (not function)
+        event = Mock()
+        event.type = RAW_RESPONSE_EVENT
+        event.data = Mock()
+        event.data.type = "response.output_item.added"
+        event.data.item = Mock()
+        event.data.item.type = "message"  # Not a function_call
+
+        result = handler(event)
+        assert result is None
 
 
 class TestFunctionArgumentsEvents:

@@ -225,6 +225,8 @@ class FullHistoryStore:
                     return []
 
                 # Build query with session_id filter
+                # ORDER BY id DESC returns newest messages first for optimal UX
+                # Frontend loads newest first (visible), then requests older in background
                 query = f"""
                     SELECT role, content, metadata FROM {self.TABLE_NAME}
                     WHERE session_id = ?

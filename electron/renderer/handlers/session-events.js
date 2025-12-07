@@ -109,17 +109,82 @@ export function setupSessionEventHandlers({
         filePanel.loadSessionFiles();
       }
 
-      // Load messages and files
-      if (sessionData) {
-        chatContainer.setMessages(sessionData.messages || []);
+      // Load messages and files from Layer 2 (full_history)
+      // Note: session-service converts snake_case to camelCase
+      if (sessionData?.success) {
+        // Debug: Log pagination info
+        console.log("[session] Switch result:", {
+          hasMore: sessionData.hasMore,
+          loadedCount: sessionData.loadedCount,
+          messageCount: sessionData.messageCount,
+          fullHistoryLength: sessionData.fullHistory?.length,
+        });
+
+        chatContainer.setMessages(sessionData.fullHistory || []);
         // Legacy setFiles call (if filePanel doesn't have component API)
         if (filePanel?.setFiles) {
           filePanel.setFiles(sessionData.files || []);
+        }
+
+        // Load remaining messages in background if there are more
+        if (sessionData.hasMore && sessionData.loadedCount > 0) {
+          console.log("[session] Loading remaining messages in background...");
+          loadRemainingMessages(
+            sessionId,
+            sessionData.loadedCount,
+            sessionData.messageCount,
+            sessionService,
+            chatContainer
+          );
         }
       }
     } catch (error) {
       console.error("Failed to switch session:", error);
     }
+  };
+
+  /**
+   * Load remaining messages in background and prepend to chat
+   * Called after initial session load when has_more=true
+   *
+   * @param {string} sessionId - Session ID to load messages for
+   * @param {number} initialOffset - Number of messages already loaded
+   * @param {number} totalCount - Total messages in session
+   * @param {Object} sessionService - Session service instance
+   * @param {Object} chatContainer - Chat container component
+   */
+  const loadRemainingMessages = async (sessionId, initialOffset, totalCount, sessionService, chatContainer) => {
+    let offset = initialOffset;
+    const chunkSize = 100; // Match backend MAX_MESSAGES_PER_CHUNK
+
+    console.log(`[session] loadRemainingMessages starting: offset=${offset}, totalCount=${totalCount}`);
+
+    while (offset < totalCount) {
+      try {
+        console.log(`[session] Loading chunk at offset=${offset}, limit=${chunkSize}`);
+        const result = await sessionService.loadMoreMessages(sessionId, offset, chunkSize);
+        console.log(`[session] loadMoreMessages result:`, {
+          success: result.success,
+          messageCount: result.messages?.length,
+        });
+
+        if (result.success && result.messages?.length > 0) {
+          // Prepend older messages to the beginning of chat
+          // Messages come back in chronological order (oldest first after reverse)
+          chatContainer.prependMessages(result.messages);
+          offset += result.messages.length;
+          console.log(`[session] Prepended ${result.messages.length} messages, new offset=${offset}`);
+        } else {
+          // No more messages or error - stop loading
+          console.log(`[session] Stopping: success=${result.success}, error=${result.error}`);
+          break;
+        }
+      } catch (error) {
+        console.error("Failed to load more messages:", error);
+        break;
+      }
+    }
+    console.log(`[session] loadRemainingMessages complete: final offset=${offset}`);
   };
 
   // Handle session rename

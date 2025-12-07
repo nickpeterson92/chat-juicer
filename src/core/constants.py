@@ -269,6 +269,10 @@ MSG_TYPE_ASSISTANT_DELTA = "assistant_delta"
 #: Sent when agent decides to call a function before execution.
 MSG_TYPE_FUNCTION_DETECTED = "function_detected"
 
+#: Message type for function/tool execution start notification.
+#: Sent when arguments are complete and tool is about to execute.
+MSG_TYPE_FUNCTION_EXECUTING = "function_executing"
+
 #: Message type for function/tool execution completion notification.
 #: Sent after function completes with success/failure status and result.
 MSG_TYPE_FUNCTION_COMPLETED = "function_completed"

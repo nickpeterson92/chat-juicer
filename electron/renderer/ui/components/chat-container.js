@@ -5,6 +5,7 @@
 
 import { ComponentLifecycle } from "../../core/component-lifecycle.js";
 import { globalLifecycleManager } from "../../core/lifecycle-manager.js";
+import { renderMarkdown } from "../../utils/markdown-renderer.js";
 import {
   addMessage,
   clearChat,
@@ -12,7 +13,7 @@ import {
   createStreamingAssistantMessage,
   updateAssistantMessage,
 } from "../chat-ui.js";
-import { clearFunctionCards } from "../function-card-ui.js";
+import { clearFunctionCards, createCompletedToolCard } from "../function-card-ui.js";
 export class ChatContainer {
   /**
    * @param {HTMLElement} element - Existing chat container element (#chat-container)
@@ -164,6 +165,216 @@ export class ChatContainer {
     clearChat(this.element);
     clearFunctionCards(this.element);
     this.currentStreamingMessage = null;
+  }
+
+  /**
+   * Extract text content from various SDK message formats
+   * Handles: string, array [{type: "text", text: "..."}], object {text: "..."}
+   * @private
+   */
+  _extractTextContent(content) {
+    if (typeof content === "string") {
+      return content;
+    }
+
+    if (Array.isArray(content)) {
+      // SDK format: [{type: "text", text: "..."}, {type: "output_text", text: "..."}]
+      return content
+        .filter((part) => part && (part.type === "text" || part.type === "output_text"))
+        .map((part) => part.text)
+        .join("\n");
+    }
+
+    if (typeof content === "object" && content?.text) {
+      return content.text;
+    }
+
+    return "";
+  }
+
+  /**
+   * Set messages from session history (used on session load/switch)
+   * Clears existing content and renders messages including completed tool cards
+   *
+   * @param {Array<Object>} messages - Array of message objects with role and content
+   */
+  setMessages(messages) {
+    // Clear existing content
+    this.clear();
+
+    if (!messages || !Array.isArray(messages)) {
+      return;
+    }
+
+    // Track tool calls by call_id for pairing detected+completed
+    const toolCallMap = new Map();
+
+    // First pass: collect all tool calls
+    for (const msg of messages) {
+      if (msg.role === "tool_call" && msg.call_id) {
+        const existing = toolCallMap.get(msg.call_id) || {};
+        toolCallMap.set(msg.call_id, {
+          ...existing,
+          ...msg,
+          // Keep both arguments (from detected) and result (from completed)
+          arguments: msg.arguments || existing.arguments,
+          result: msg.result || existing.result,
+          status: msg.status === "completed" ? "completed" : existing.status || "detected",
+          success: msg.success !== undefined ? msg.success : existing.success,
+        });
+      }
+    }
+
+    // Second pass: render messages in order
+    for (const msg of messages) {
+      const { role, content } = msg;
+      const textContent = this._extractTextContent(content);
+
+      if (role === "user" && textContent) {
+        addMessage(this.element, textContent, "user");
+      } else if (role === "assistant" && textContent) {
+        addMessage(this.element, textContent, "assistant");
+      } else if (role === "system" && textContent) {
+        addMessage(this.element, textContent, "system");
+      } else if (role === "tool_call" && msg.status === "completed") {
+        // Render completed tool cards (only for "completed" status, not "detected")
+        const toolData = toolCallMap.get(msg.call_id);
+        if (toolData) {
+          createCompletedToolCard(this.element, toolData);
+        }
+      }
+      // Skip tool_call with status="detected" - we'll render when we see "completed"
+    }
+
+    // Scroll to bottom after loading
+    this.scrollToBottom();
+  }
+
+  /**
+   * Prepend messages to the beginning of chat (for loading older messages)
+   * Used when loading remaining messages after initial session load
+   *
+   * @param {Array<Object>} messages - Array of older messages to prepend (in chronological order)
+   */
+  prependMessages(messages) {
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return;
+    }
+
+    // Store current scroll position to maintain user's view
+    const scrollHeightBefore = this.element.scrollHeight;
+    const scrollTopBefore = this.element.scrollTop;
+
+    // Track tool calls by call_id for pairing detected+completed
+    const toolCallMap = new Map();
+
+    // First pass: collect all tool calls
+    for (const msg of messages) {
+      if (msg.role === "tool_call" && msg.call_id) {
+        const existing = toolCallMap.get(msg.call_id) || {};
+        toolCallMap.set(msg.call_id, {
+          ...existing,
+          ...msg,
+          arguments: msg.arguments || existing.arguments,
+          result: msg.result || existing.result,
+          status: msg.status === "completed" ? "completed" : existing.status || "detected",
+          success: msg.success !== undefined ? msg.success : existing.success,
+        });
+      }
+    }
+
+    // Create a document fragment for efficient DOM insertion
+    const fragment = document.createDocumentFragment();
+
+    // Second pass: render messages into fragment (in order - oldest first)
+    for (const msg of messages) {
+      const { role, content } = msg;
+      const textContent = this._extractTextContent(content);
+
+      let messageElement = null;
+
+      if (role === "user" && textContent) {
+        messageElement = this._createMessageElement(textContent, "user");
+      } else if (role === "assistant" && textContent) {
+        messageElement = this._createMessageElement(textContent, "assistant");
+      } else if (role === "system" && textContent) {
+        messageElement = this._createMessageElement(textContent, "system");
+      } else if (role === "tool_call" && msg.status === "completed") {
+        const toolData = toolCallMap.get(msg.call_id);
+        if (toolData) {
+          messageElement = this._createToolCardElement(toolData);
+        }
+      }
+
+      if (messageElement) {
+        fragment.appendChild(messageElement);
+      }
+    }
+
+    // Insert all prepended messages at the beginning
+    if (this.element.firstChild) {
+      this.element.insertBefore(fragment, this.element.firstChild);
+    } else {
+      this.element.appendChild(fragment);
+    }
+
+    // Restore scroll position so user doesn't get jumped
+    // New content was added above, so adjust scroll to maintain view
+    const scrollHeightAfter = this.element.scrollHeight;
+    const heightAdded = scrollHeightAfter - scrollHeightBefore;
+    this.element.scrollTop = scrollTopBefore + heightAdded;
+  }
+
+  /**
+   * Create a message element without appending to container
+   * Uses same structure and styling as addMessage in chat-ui.js
+   * @private
+   */
+  _createMessageElement(content, role) {
+    const messageDiv = document.createElement("div");
+    // Match exact classes from addMessage in chat-ui.js
+    const baseClasses = "message mb-6 animate-slideIn [contain:layout_style]";
+    const typeClasses = {
+      user: "user text-left",
+      assistant: "assistant",
+      system: "system",
+      error: "error",
+    };
+    messageDiv.className = `${baseClasses} ${typeClasses[role] || ""}`;
+
+    const contentDiv = document.createElement("div");
+
+    // Match exact styling from addMessage
+    if (role === "user") {
+      contentDiv.className =
+        "message-content inline-block py-3 px-4 rounded-2xl max-w-[70%] break-words whitespace-pre-wrap leading-snug min-h-6 bg-user-gradient text-[var(--color-text-user)]";
+      contentDiv.textContent = content;
+    } else if (role === "assistant") {
+      contentDiv.className =
+        "message-content prose prose-invert max-w-none break-words whitespace-pre-wrap leading-snug text-[var(--color-text-assistant)]";
+      contentDiv.innerHTML = renderMarkdown(content, true);
+    } else if (role === "system") {
+      contentDiv.className =
+        "inline-block py-3 px-4 rounded-2xl max-w-[70%] break-words whitespace-pre-wrap leading-snug min-h-6 bg-amber-50 text-amber-900 text-sm italic";
+      contentDiv.textContent = content;
+    } else {
+      contentDiv.className = "message-content";
+      contentDiv.textContent = content;
+    }
+
+    messageDiv.appendChild(contentDiv);
+    return messageDiv;
+  }
+
+  /**
+   * Create a tool card element without appending to container
+   * @private
+   */
+  _createToolCardElement(toolData) {
+    // Create wrapper to capture the created element
+    const wrapper = document.createElement("div");
+    createCompletedToolCard(wrapper, toolData);
+    return wrapper.firstChild;
   }
 
   /**

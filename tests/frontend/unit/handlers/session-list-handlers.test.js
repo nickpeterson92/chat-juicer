@@ -60,6 +60,7 @@ describe("Session List Handlers", () => {
     window.components = {
       chatContainer: {
         clear: vi.fn(),
+        setMessages: vi.fn(),
         addUserMessage: vi.fn(),
         addAssistantMessage: vi.fn(),
         getElement: vi.fn(() => document.createElement("div")),
@@ -233,8 +234,8 @@ describe("Session List Handlers", () => {
     await Promise.resolve();
 
     expect(sessionService.switchSession).toHaveBeenCalledWith("next");
-    expect(window.components.chatContainer.clear).toHaveBeenCalled();
-    expect(window.components.chatContainer.addAssistantMessage).toHaveBeenCalledWith("hi");
+    // setMessages handles message rendering (including tool cards from Layer 2)
+    expect(window.components.chatContainer.setMessages).toHaveBeenCalledWith([{ role: "assistant", content: "hi" }]);
     expect(updateSessionsList).toHaveBeenCalled();
 
     const sidebar = document.getElementById("sidebar");

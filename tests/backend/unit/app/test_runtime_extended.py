@@ -16,6 +16,7 @@ from app.runtime import (
     handle_session_command_wrapper,
     handle_streaming_error,
     process_user_input,
+    save_tool_call_to_history,
 )
 
 
@@ -285,3 +286,133 @@ class TestHandleFileUploadExtended:
 
             # Should NOT send session_created for existing session
             assert mock_ipc.send.call_count == 0
+
+
+class TestSaveToolCallToHistory:
+    """Tests for save_tool_call_to_history function."""
+
+    def test_save_function_executing_with_arguments(self) -> None:
+        """Test saving function_executing event (with complete arguments) to Layer 2.
+
+        This verifies the fix for args being lost on session reload.
+        function_executing is saved instead of function_detected because:
+        - function_detected has empty args "{}" (early detection)
+        - function_executing has complete args (when tool is about to run)
+        """
+        import json
+
+        mock_full_history = Mock()
+        mock_app_state = Mock()
+        mock_app_state.full_history_store = mock_full_history
+
+        mock_session = Mock()
+        mock_session.session_id = "chat_test123"
+
+        # IPC message with function_executing type (complete arguments)
+        ipc_msg = json.dumps(
+            {
+                "type": "function_executing",
+                "name": "generate_document",
+                "call_id": "call_abc123",
+                "arguments": '{"template": "report.md", "output_path": "/docs/report.md"}',
+            }
+        )
+
+        save_tool_call_to_history(mock_app_state, mock_session, ipc_msg)
+
+        # Should save with complete arguments
+        mock_full_history.save_message.assert_called_once()
+        saved_msg = mock_full_history.save_message.call_args[0][1]
+
+        assert saved_msg["role"] == "tool_call"
+        assert saved_msg["name"] == "generate_document"
+        assert saved_msg["call_id"] == "call_abc123"
+        assert saved_msg["arguments"] == '{"template": "report.md", "output_path": "/docs/report.md"}'
+        assert saved_msg["status"] == "detected"  # For frontend merge compatibility
+
+    def test_save_function_completed_with_result(self) -> None:
+        """Test saving function_completed event to Layer 2."""
+        import json
+
+        mock_full_history = Mock()
+        mock_app_state = Mock()
+        mock_app_state.full_history_store = mock_full_history
+
+        mock_session = Mock()
+        mock_session.session_id = "chat_test123"
+
+        # IPC message with function_completed type
+        ipc_msg = json.dumps(
+            {
+                "type": "function_completed",
+                "name": "generate_document",
+                "call_id": "call_abc123",
+                "result": "Document generated successfully at /docs/report.md",
+                "success": True,
+            }
+        )
+
+        save_tool_call_to_history(mock_app_state, mock_session, ipc_msg)
+
+        # Should save with result
+        mock_full_history.save_message.assert_called_once()
+        saved_msg = mock_full_history.save_message.call_args[0][1]
+
+        assert saved_msg["role"] == "tool_call"
+        assert saved_msg["name"] == "generate_document"
+        assert saved_msg["call_id"] == "call_abc123"
+        assert saved_msg["result"] == "Document generated successfully at /docs/report.md"
+        assert saved_msg["status"] == "completed"
+        assert saved_msg["success"] is True
+
+    def test_ignores_function_detected(self) -> None:
+        """Test that function_detected (early detection with empty args) is ignored.
+
+        function_detected has empty args "{}" so we don't save it.
+        We wait for function_executing which has complete args.
+        """
+        import json
+
+        mock_full_history = Mock()
+        mock_app_state = Mock()
+        mock_app_state.full_history_store = mock_full_history
+
+        mock_session = Mock()
+        mock_session.session_id = "chat_test123"
+
+        # IPC message with function_detected type (empty args)
+        ipc_msg = json.dumps(
+            {
+                "type": "function_detected",
+                "name": "generate_document",
+                "call_id": "call_abc123",
+                "arguments": "{}",  # Empty from early detection
+            }
+        )
+
+        save_tool_call_to_history(mock_app_state, mock_session, ipc_msg)
+
+        # Should NOT save function_detected
+        mock_full_history.save_message.assert_not_called()
+
+    def test_no_full_history_store(self) -> None:
+        """Test graceful handling when full_history_store is None."""
+        import json
+
+        mock_app_state = Mock()
+        mock_app_state.full_history_store = None
+
+        mock_session = Mock()
+        mock_session.session_id = "chat_test123"
+
+        ipc_msg = json.dumps(
+            {
+                "type": "function_executing",
+                "name": "test_tool",
+                "call_id": "call_123",
+                "arguments": "{}",
+            }
+        )
+
+        # Should not raise, just return early
+        save_tool_call_to_history(mock_app_state, mock_session, ipc_msg)
