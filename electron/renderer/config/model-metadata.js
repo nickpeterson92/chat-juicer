@@ -68,8 +68,8 @@ export const MODEL_FAMILY_LABELS = {
  * Reasoning effort descriptions
  */
 export const REASONING_DESCRIPTIONS = {
-  minimal: "Fastest responses, less thorough",
-  low: "Quick thinking for simpler tasks",
-  medium: "Balanced speed and quality",
-  high: "Most thorough, slower responses",
+  none: "No reasoning; fastest responses",
+  low: "Light reasoning; quick responses for simple tasks",
+  medium: "Balanced reasoning; good quality and speed",
+  high: "Maximum reasoning; slowest but most thorough",
 };

@@ -634,7 +634,7 @@
 
   .model-card {
     @apply flex flex-col items-start gap-0.5 p-2.5 rounded-md bg-transparent text-left cursor-pointer transition-all;
-    border: 1px solid var(--color-border-secondary);
+    border: 1px solid transparent;
   }
 
   .model-card:hover {
@@ -675,11 +675,7 @@
   }
 
   .model-card-check {
-    @apply text-transparent w-4 h-4;
-  }
-
-  .model-card.selected .model-card-check {
-    color: var(--color-brand-primary);
+    @apply hidden;
   }
 
   .model-card-description {
@@ -689,7 +685,6 @@
 
   .reasoning-panel {
     @apply mt-1.5 pt-1.5;
-    border-top: 1px solid var(--color-border-secondary);
   }
 
   .reasoning-panel-content {
@@ -707,7 +702,7 @@
 
   .reasoning-option {
     @apply flex flex-col items-start gap-0 p-1.5 rounded-md bg-transparent text-left cursor-pointer transition-all;
-    border: 1px solid var(--color-border-secondary);
+    border: 1px solid transparent;
   }
 
   .reasoning-option:hover {
@@ -730,11 +725,7 @@
   }
 
   .reasoning-option-check {
-    @apply text-transparent w-3.5 h-3.5;
-  }
-
-  .reasoning-option.selected .reasoning-option-check {
-    color: var(--color-brand-primary);
+    @apply hidden;
   }
 
   .reasoning-option-description {
@@ -758,7 +749,6 @@
 
   .more-models-section {
     @apply flex flex-col gap-1 mt-1.5 pt-1.5;
-    border-top: 1px solid var(--color-border-secondary);
   }
 
   /* Model family sub-dropdown group */
@@ -782,12 +772,10 @@
 
   .model-family-models {
     @apply flex flex-col gap-1 pl-3 mt-1 ml-2;
-    border-left: 2px solid var(--color-border-secondary);
   }
 
   .reasoning-selector-section {
     @apply mt-3 pt-3;
-    border-top: 1px solid var(--color-border-secondary);
   }
 
   .reasoning-label {
@@ -816,28 +804,65 @@
   }
 
   .mcp-toggle-btn {
-    @apply flex items-center justify-center w-9 h-9 p-0 rounded-[0.65rem] cursor-pointer transition-all flex-shrink-0;
+    @apply flex items-center justify-center w-9 h-9 p-0 rounded-[0.65rem] cursor-pointer flex-shrink-0;
     background-color: var(--color-surface-hover);
     border: 1px solid var(--color-border-secondary);
     color: var(--color-text-secondary);
+    transition: color 0.2s, background-color 0.2s, border-color 0.2s, box-shadow 0.2s;
   }
 
-  /* Off + hover: white icon, gray border */
-  .mcp-toggle-btn:hover {
-    background-color: var(--color-surface-active);
-    color: var(--color-text-primary);
+  /* Off + hover: darken */
+  .mcp-toggle-btn:not(.active):hover {
+    background-color: var(--color-surface-1);
+    color: var(--color-text-secondary);
   }
 
   .mcp-toggle-btn:active {
     transform: scale(0.95);
   }
 
-  /* On: white icon + blue border */
+  /* On: white icon + blue border + colored background */
   .mcp-toggle-btn.active {
+    background-color: var(--color-surface-active);
     border-color: var(--color-border-hover);
     color: var(--color-text-primary);
   }
 
+  /* On + hover: glow */
+  .mcp-toggle-btn.active:hover {
+    box-shadow: 0 0 12px 2px var(--color-brand-glow);
+  }
+
+  /* Toggle ON animation: ripple expands outward from icon */
+  .mcp-toggle-btn.animate-on {
+    animation: mcp-ripple-out 0.3s ease-out;
+  }
+
+  /* Toggle OFF animation: ripple contracts inward to icon */
+  .mcp-toggle-btn.animate-off {
+    animation: mcp-ripple-in 0.3s ease-out;
+  }
+
+  @keyframes mcp-ripple-out {
+    0% {
+      box-shadow: inset 0 0 0 18px var(--color-brand-glow);
+    }
+    100% {
+      box-shadow: inset 0 0 0 0 var(--color-brand-glow);
+    }
+  }
+
+  @keyframes mcp-ripple-in {
+    0% {
+      box-shadow: inset 0 0 0 0 var(--color-brand-glow);
+    }
+    50% {
+      box-shadow: inset 0 0 0 18px var(--color-brand-glow);
+    }
+    100% {
+      box-shadow: inset 0 0 0 0 transparent;
+    }
+  }
 
   .mcp-toggle-btn svg {
     @apply w-4 h-4;
