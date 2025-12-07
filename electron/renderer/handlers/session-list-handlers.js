@@ -85,11 +85,16 @@ async function handleSummarize(sessionId, sessionService, appState, ipcAdapter) 
   }
 
   try {
+    // Send the command FIRST, then set status
+    // (Setting status before would cause the command to queue itself)
+    const resultPromise = sessionService.summarizeSession(sessionId);
+
+    // Now set status to busy (command is already in flight)
     if (appState) {
       appState.setState("python.status", "busy_summarizing");
     }
 
-    const result = await sessionService.summarizeSession(sessionId);
+    const result = await resultPromise;
 
     if (appState) {
       appState.setState("python.status", "idle");

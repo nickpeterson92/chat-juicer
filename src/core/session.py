@@ -43,7 +43,7 @@ from core.constants import (
     MIN_MESSAGES_FOR_SUMMARIZATION,
     MODEL_TOKEN_LIMITS,
 )
-from core.prompts import CONVERSATION_SUMMARIZATION_REQUEST
+from core.prompts import CONVERSATION_SUMMARIZATION_INSTRUCTIONS
 from core.session_manager import SessionManager
 from models.event_models import FunctionEventMessage
 from models.session_models import FullHistoryProtocol, SessionUpdate
@@ -668,7 +668,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
     # ==========================================================================
 
     def _emit_start_event(self, items: list[TResponseInputItem]) -> str:
-        """Emit summarization start event for UI.
+        """Emit summarization start event for UI and persist to Layer 2.
 
         Args:
             items: Conversation items being summarized
@@ -676,21 +676,41 @@ class TokenAwareSQLiteSession(SQLiteSession):
         Returns:
             Call ID for event tracking
         """
+        from datetime import datetime
+
         call_id = f"sum_{uuid.uuid4().hex[:8]}"
+        arguments = json_compact(
+            {
+                "messages_count": len(items),
+                "tokens_before": self._total_tokens,
+                "threshold": self.trigger_tokens,
+            }
+        )
+
+        # Emit to frontend
         write_message(
             {
                 "type": "function_detected",
                 "name": "summarize_conversation",
                 "call_id": call_id,
-                "arguments": json_compact(
-                    {
-                        "messages_count": len(items),
-                        "tokens_before": self._total_tokens,
-                        "threshold": self.trigger_tokens,
-                    }
-                ),
+                "arguments": arguments,
             }
         )
+
+        # Persist to Layer 2 for session restoration
+        if self.full_history_store:
+            message = {
+                "role": "tool_call",
+                "content": "summarize_conversation",
+                "call_id": call_id,
+                "name": "summarize_conversation",
+                "arguments": arguments,
+                "status": "detected",
+                "timestamp": datetime.now().isoformat(),
+            }
+            self.full_history_store.save_message(self.session_id, message)
+            logger.debug(f"Saved summarization start to Layer 2: {call_id}")
+
         return call_id
 
     async def _emit_completion_event(
@@ -700,7 +720,7 @@ class TokenAwareSQLiteSession(SQLiteSession):
         error: str | None = None,
         output: str | None = None,
     ) -> None:
-        """Emit completion event to frontend.
+        """Emit completion event to frontend and persist to Layer 2.
 
         Args:
             call_id: Event tracking ID
@@ -708,6 +728,9 @@ class TokenAwareSQLiteSession(SQLiteSession):
             error: Error message if failed
             output: Summary output if succeeded
         """
+        from datetime import datetime
+
+        # Emit to frontend
         event = FunctionEventMessage(
             type="function_completed",
             call_id=call_id,
@@ -717,11 +740,27 @@ class TokenAwareSQLiteSession(SQLiteSession):
         )
         write_message(event.model_dump(exclude_none=True))
 
+        # Persist to Layer 2 for session restoration
+        if self.full_history_store:
+            message = {
+                "role": "tool_call",
+                "content": "summarize_conversation",
+                "call_id": call_id,
+                "name": "summarize_conversation",
+                "result": output if success else error,
+                "status": "completed",
+                "success": success,
+                "timestamp": datetime.now().isoformat(),
+            }
+            self.full_history_store.save_message(self.session_id, message)
+            logger.debug(f"Saved summarization completion to Layer 2: {call_id}")
+
     async def _generate_summary(self, items: list[TResponseInputItem]) -> str:
         """Generate summary using Agent/Runner pattern.
 
-        Creates one-shot summarization agent with generic instructions
-        and appends summarization request to conversation items.
+        Creates one-shot summarization agent with full instructions that
+        specify the summary criteria. Conversation items are passed directly
+        as input.
 
         Args:
             items: Conversation items to summarize
@@ -731,29 +770,17 @@ class TokenAwareSQLiteSession(SQLiteSession):
         """
         logger.info(f"Summarizing {len(items)} messages ({self._total_tokens} tokens)")
 
-        # Create summarization agent
+        # Create summarization agent with full instructions
         summary_agent = Agent(
             name="Summarizer",
             model=DEFAULT_MODEL,
-            instructions=(
-                "You are a helpful assistant that creates CONCISE but TECHNICALLY COMPLETE conversation summaries."
-            ),
+            instructions=CONVERSATION_SUMMARIZATION_INSTRUCTIONS,
         )
 
-        # Append summarization request
-        summary_request = {
-            "role": "user",
-            "content": CONVERSATION_SUMMARIZATION_REQUEST,
-        }
-        messages_with_request = [
-            *items,
-            cast(TResponseInputItem, summary_request),
-        ]
-
-        # Generate summary
+        # Generate summary - pass conversation items directly
         result = await Runner.run(
             summary_agent,
-            input=messages_with_request,
+            input=items,
             session=None,  # No session for one-shot operation
         )
 
