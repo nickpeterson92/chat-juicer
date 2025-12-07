@@ -203,6 +203,9 @@ function escapeHtml(text) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+// Store mermaid code by ID (avoids data attribute sanitization issues)
+const mermaidCodeStore = new Map();
+
 // Configure marked with custom renderer
 const renderer = new marked.Renderer();
 
@@ -211,10 +214,13 @@ renderer.code = (token) => {
   const code = token.text || "";
   const language = token.lang || "";
 
-  // Handle Mermaid diagrams specially
+  // Handle Mermaid diagrams specially - output loading placeholder immediately
+  // This allows spinner to show during streaming before processMermaidDiagrams runs
   if (language === "mermaid") {
     const id = `mermaid-${Math.random().toString(36).substring(2, 11)}`;
-    return `<pre class="mermaid" id="${id}">${escapeHtml(code)}</pre>`;
+    // Store code in Map to avoid data attribute sanitization issues
+    mermaidCodeStore.set(id, code);
+    return `<div class="mermaid-wrapper mermaid-loading" data-mermaid-id="${id}"><div class="mermaid-placeholder"><div class="mermaid-spinner"></div><span>Rendering diagram...</span></div></div>`;
   }
 
   // Syntax highlighting for other languages
@@ -510,74 +516,99 @@ export function renderMarkdown(markdown, isComplete = false) {
 }
 
 /**
- * Process Mermaid diagrams in a rendered element
+ * Fix SVG height attribute from viewBox if missing
+ * @param {HTMLElement} wrapper - Mermaid wrapper element
+ */
+function fixMermaidSvgHeight(wrapper) {
+  const svg = wrapper.querySelector("svg");
+  if (svg && !svg.getAttribute("height")) {
+    const viewBox = svg.getAttribute("viewBox");
+    if (viewBox) {
+      const height = parseFloat(viewBox.split(" ")[3]);
+      if (height) svg.setAttribute("height", height);
+    }
+  }
+}
+
+/**
+ * Render a single diagram during idle time
+ * @param {Object} diagram - Diagram info { id, code, placeholder }
+ * @returns {Promise<void>}
+ */
+function renderDiagramWhenIdle({ id, code, placeholder }) {
+  return new Promise((resolve) => {
+    const doRender = async () => {
+      try {
+        const { svg } = await mermaid.render(id, code);
+        placeholder.innerHTML = svg;
+        placeholder.classList.remove("mermaid-loading");
+        placeholder.dataset.processed = "true";
+        placeholder.dataset.mermaidCode = code;
+        fixMermaidSvgHeight(placeholder);
+      } catch (err) {
+        console.error(`Mermaid rendering error (${id}):`, err);
+        placeholder.innerHTML = `<div class="mermaid-error">Mermaid Error: ${err.message}</div>`;
+        placeholder.classList.remove("mermaid-loading");
+        placeholder.dataset.processed = "error";
+      }
+      resolve();
+    };
+
+    // Use requestIdleCallback for non-blocking render, fallback to setTimeout
+    if (typeof requestIdleCallback !== "undefined") {
+      requestIdleCallback(doRender, { timeout: 2000 });
+    } else {
+      setTimeout(doRender, 0);
+    }
+  });
+}
+
+/**
+ * Process Mermaid diagrams in a rendered element with progressive loading
+ *
+ * The loading placeholders are rendered inline during markdown parsing (via renderer.code),
+ * so users see spinners immediately during streaming. This function renders the actual
+ * diagrams progressively using requestIdleCallback to keep UI responsive.
+ *
+ * Scroll behavior is handled by the caller via scheduleScroll() which has user-scroll
+ * detection to prevent scroll fighting.
  *
  * IMPORTANT: Only call after streaming is complete or for static content.
- * Calling during streaming causes race conditions with innerHTML replacement.
  *
  * @param {HTMLElement} element - Container element with rendered markdown
  */
 export async function processMermaidDiagrams(element) {
   if (!element) return;
 
-  // Clone HTML to temp container to avoid race conditions with DOM mutations
-  const tempContainer = document.createElement("div");
-  tempContainer.innerHTML = element.innerHTML;
+  // Find loading placeholders (created by renderer.code during markdown parsing)
+  const loadingWrappers = element.querySelectorAll(".mermaid-wrapper.mermaid-loading:not([data-processed])");
+  if (loadingWrappers.length === 0) return;
 
-  const mermaidBlocks = tempContainer.querySelectorAll("pre.mermaid:not([data-processed])");
-  if (mermaidBlocks.length === 0) return;
+  // Build list of diagrams to render from Map storage
+  const diagramsToRender = [];
+  for (const wrapper of loadingWrappers) {
+    const id = wrapper.dataset.mermaidId;
+    const code = mermaidCodeStore.get(id);
 
-  // Collect diagram data for concurrent rendering
-  const diagramsToRender = Array.from(mermaidBlocks).map((block) => ({
-    id: block.id,
-    code: block.textContent,
-    block: block,
-  }));
-
-  // Render all diagrams concurrently
-  const renderPromises = diagramsToRender.map(async ({ id, code, block }) => {
-    try {
-      const { svg } = await mermaid.render(id, code);
-
-      const wrapper = document.createElement("div");
-      wrapper.className = "mermaid-wrapper";
-      wrapper.dataset.processed = "true";
-      wrapper.dataset.mermaidCode = code; // Store original code for theme changes
-      wrapper.innerHTML = svg;
-
-      // Fix missing height attribute from viewBox
-      const insertedSvg = wrapper.querySelector("svg");
-      if (insertedSvg && !insertedSvg.getAttribute("height")) {
-        const viewBox = insertedSvg.getAttribute("viewBox");
-        if (viewBox) {
-          const height = parseFloat(viewBox.split(" ")[3]);
-          if (height) insertedSvg.setAttribute("height", height);
-        }
-      }
-
-      return { block, wrapper };
-    } catch (err) {
-      console.error(`Mermaid rendering error (${id}):`, err);
-      const errorDiv = document.createElement("div");
-      errorDiv.className = "mermaid-error";
-      errorDiv.textContent = `Mermaid Error: ${err.message}`;
-      errorDiv.dataset.processed = "error";
-      return { block, wrapper: errorDiv };
+    if (id && code) {
+      diagramsToRender.push({
+        id,
+        code,
+        placeholder: wrapper,
+      });
+    } else {
+      // Don't leave it stuck - show error for missing data
+      console.error(`[MERMAID] Missing data for placeholder: id=${id}, inStore=${mermaidCodeStore.has(id)}`);
+      wrapper.innerHTML = `<div class="mermaid-error">Mermaid Error: Missing diagram data</div>`;
+      wrapper.classList.remove("mermaid-loading");
+      wrapper.dataset.processed = "error";
     }
-  });
+  }
 
-  const results = await Promise.all(renderPromises);
-
-  // Replace blocks in temp container
-  results.forEach(({ block, wrapper }) => {
-    if (block.parentNode) {
-      block.parentNode.replaceChild(wrapper, block);
-    }
-  });
-
-  // Atomic innerHTML replacement prevents race conditions
-  if (document.body.contains(element)) {
-    element.innerHTML = tempContainer.innerHTML;
+  // Render progressively using idle callbacks
+  // Each diagram renders when the browser is idle, keeping UI responsive
+  for (const diagram of diagramsToRender) {
+    await renderDiagramWhenIdle(diagram);
   }
 }
 

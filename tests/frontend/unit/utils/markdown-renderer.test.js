@@ -160,10 +160,20 @@ describe("markdown-renderer", () => {
   });
 
   it("processes mermaid diagrams and replaces blocks with rendered SVG wrappers", async () => {
-    const { processMermaidDiagrams } = await import("@utils/markdown-renderer.js");
+    // Override mock to call custom renderer for code blocks
+    markedParseMock.mockImplementation((input) => {
+      const match = input.match(/```(\w*)\n([\s\S]*?)```/);
+      if (match && currentRenderer?.code) {
+        return currentRenderer.code({ lang: match[1], text: match[2] });
+      }
+      return `<p>${input}</p>`;
+    });
+
+    const { processMermaidDiagrams, renderMarkdown } = await import("@utils/markdown-renderer.js");
 
     const container = document.createElement("div");
-    container.innerHTML = '<pre class="mermaid" id="m1">graph TD;A-->B;</pre>';
+    // Use renderMarkdown to properly populate the code store
+    container.innerHTML = renderMarkdown("```mermaid\ngraph TD;A-->B;\n```", false);
     document.body.appendChild(container);
 
     await processMermaidDiagrams(container);
@@ -178,18 +188,32 @@ describe("markdown-renderer", () => {
   });
 
   it("surfaces mermaid render errors as error blocks", async () => {
+    // Override mock to call custom renderer for code blocks
+    markedParseMock.mockImplementation((input) => {
+      const match = input.match(/```(\w*)\n([\s\S]*?)```/);
+      if (match && currentRenderer?.code) {
+        return currentRenderer.code({ lang: match[1], text: match[2] });
+      }
+      return `<p>${input}</p>`;
+    });
+
     mermaidRenderMock.mockRejectedValueOnce(new Error("diagram boom"));
-    const { processMermaidDiagrams } = await import("@utils/markdown-renderer.js");
+    const { processMermaidDiagrams, renderMarkdown } = await import("@utils/markdown-renderer.js");
 
     const container = document.createElement("div");
-    container.innerHTML = '<pre class="mermaid" id="m2">graph TD;X-->Y;</pre>';
+    // Use renderMarkdown to properly populate the code store
+    container.innerHTML = renderMarkdown("```mermaid\ngraph TD;X-->Y;\n```", false);
     document.body.appendChild(container);
 
     await processMermaidDiagrams(container);
 
-    const errorDiv = container.querySelector(".mermaid-error");
+    // Error is now inside a wrapper with dataset.processed on the wrapper
+    const wrapper = container.querySelector(".mermaid-wrapper");
+    expect(wrapper).toBeTruthy();
+    expect(wrapper?.dataset.processed).toBe("error");
+
+    const errorDiv = wrapper?.querySelector(".mermaid-error");
     expect(errorDiv).toBeTruthy();
-    expect(errorDiv?.dataset.processed).toBe("error");
     expect(errorDiv?.textContent).toContain("diagram boom");
   });
 

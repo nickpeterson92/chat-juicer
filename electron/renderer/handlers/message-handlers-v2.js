@@ -17,7 +17,7 @@ import {
   updateFunctionArguments,
   updateFunctionCallStatus,
 } from "../ui/function-card-ui.js";
-import { initializeCodeCopyButtons, processMermaidDiagrams } from "../utils/markdown-renderer.js";
+import { initializeCodeCopyButtons, processMermaidDiagrams, renderMarkdown } from "../utils/markdown-renderer.js";
 import { scheduleScroll } from "../utils/scroll-utils.js";
 import { showToast } from "../utils/toast.js";
 
@@ -142,6 +142,15 @@ export function registerMessageHandlers(context) {
 
     // Cancel pending renders
     cancelPendingRender();
+
+    // Final re-render with isComplete=true for footnotes and other complete-content features
+    // During streaming, renderMarkdown uses basic parser; now we use full parser with footnotes
+    if (currentAssistantElement && document.body.contains(currentAssistantElement)) {
+      const finalContent = appState.message.assistantBuffer;
+      if (finalContent) {
+        currentAssistantElement.innerHTML = renderMarkdown(finalContent, true);
+      }
+    }
 
     // Process Mermaid and code blocks
     if (currentAssistantElement && document.body.contains(currentAssistantElement)) {
