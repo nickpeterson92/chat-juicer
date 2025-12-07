@@ -7,11 +7,13 @@ All functions receive AppState as an explicit parameter to avoid hidden global s
 
 from __future__ import annotations
 
+import asyncio
 import json
 
 from datetime import datetime
 from typing import Any, cast
 
+from agents import RunConfig, Runner
 from openai import APIConnectionError, APIStatusError, RateLimitError
 from openai.types.responses import EasyInputMessageParam
 
@@ -133,7 +135,7 @@ def handle_streaming_error(error: Exception) -> None:
     """Handle streaming errors with appropriate user messages.
 
     Logs the error and sends user-friendly error message to UI via IPC.
-    Automatically closes the stream with assistant_end message.
+    Note: The caller's finally block handles sending assistant_end.
 
     Args:
         error: The exception that occurred during streaming
@@ -167,11 +169,8 @@ def handle_streaming_error(error: Exception) -> None:
     handler = error_handlers.get(type(error), handle_generic)
     error_msg = handler(error)
 
-    # Send error message to UI
+    # Send error message to UI (finally block handles assistant_end)
     IPCManager.send(error_msg)
-
-    # Send assistant_end to properly close the stream
-    IPCManager.send_assistant_end()
 
 
 async def ensure_session_exists(app_state: AppState) -> tuple[TokenAwareSQLiteSession, bool]:
@@ -246,10 +245,15 @@ async def ensure_session_exists(app_state: AppState) -> tuple[TokenAwareSQLiteSe
 
 
 async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession, messages: list[str]) -> None:
-    """Process user messages (single or batch) with a single agent response.
+    """Process user messages (single or batch) with cancellation support.
 
     All user messages are sent to the agent in a single request, producing
     one combined response. Works uniformly for single messages or batches.
+
+    Supports stream interruption with deferred tool handling:
+    - Immediate cancellation during token streaming
+    - Deferred cancellation during tool execution (waits for completion)
+    - Conditional persistence based on whether tools completed
 
     CRITICAL: This function ALWAYS updates session metadata via try/finally,
     even if streaming errors occur. This prevents session metadata desync bugs.
@@ -261,6 +265,9 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
 
     Returns:
         None (session manages all state internally)
+
+    Raises:
+        asyncio.CancelledError: Re-raised after handling to maintain proper task state
     """
     if not messages:
         return
@@ -272,6 +279,11 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
 
     logger.info(f"Processing {len(messages)} user message(s)")
 
+    # Track cancellation state for deferred tool handling
+    tool_in_progress = False
+    cancel_requested = False
+    tools_completed = False
+
     # Send start message for Electron
     IPCManager.send_assistant_start()
 
@@ -282,7 +294,6 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
         try:
             # Use batch input directly with run_streamed
             # The SDK accepts list[TResponseInputItem] as input
-            from agents import RunConfig, Runner
 
             # Session input callback for merging batch messages with history
             # Simply appends new messages to the existing session history
@@ -300,8 +311,30 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
                 run_config=run_config,
             )
 
-            # Stream the events
+            # Stream the events with cancellation support
             async for event in result.stream_events():
+                # Track tool execution state for deferred cancellation
+                if event.type == "run_item_stream_event":
+                    if event.item.type == "tool_call_item":
+                        tool_in_progress = True
+                        tool_name = getattr(event.item, "name", "unknown")
+                        logger.debug(f"Tool starting: {tool_name}")
+                    elif event.item.type == "tool_call_output_item":
+                        tool_in_progress = False
+                        tools_completed = True
+                        logger.debug("Tool completed")
+
+                        # Execute deferred cancellation after tool completion
+                        if cancel_requested:
+                            logger.info("Deferred cancellation executing - tool completed")
+                            break
+
+                # Immediate cancellation when safe (no tool in progress)
+                if cancel_requested and not tool_in_progress:
+                    logger.info("Immediate cancellation - no tool in progress")
+                    break
+
+                # Normal event processing
                 ipc_msg = await handle_electron_ipc(event, tracker)
                 if ipc_msg:
                     IPCManager.send_raw(ipc_msg)
@@ -318,6 +351,18 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
                     if delta:
                         response_text += delta
 
+            # After streaming loop ends, check if we were cancelled
+            # SDK may suppress CancelledError and exit gracefully
+            current_task = asyncio.current_task()
+            if current_task and current_task.cancelled():
+                cancel_requested = True
+                logger.info("Stream cancelled by user (detected via task.cancelled())")
+
+        except asyncio.CancelledError:
+            cancel_requested = True
+            logger.info("Stream cancelled by user (CancelledError caught)")
+            raise  # Re-raise for proper task state
+
         except PersistenceError as e:
             logger.error(f"Persistence failure during message processing: {e}")
             error_msg = {
@@ -326,24 +371,21 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
                 "code": "persistence_error",
             }
             IPCManager.send(error_msg)
-            IPCManager.send_assistant_end()
+            # Note: send_assistant_end is handled by the finally block
             return
 
         except Exception as e:
             handle_streaming_error(e)
             return
 
-        # Send end message
-        IPCManager.send_assistant_end()
-
-        # Log response
+        # Log response (only for successful completion)
         if response_text:
             file_msg = (
                 f"AI: {response_text[:LOG_PREVIEW_LENGTH]}{'...' if len(response_text) > LOG_PREVIEW_LENGTH else ''}"
             )
             logger.info(f"AI: {response_text}", extra={"file_message": file_msg})
 
-        # Update token counts
+        # Update token counts (only for successful completion)
         items = await session.get_items()
         items_tokens = session.calculate_items_tokens(items)
         session.total_tokens = items_tokens + session.accumulated_tool_tokens
@@ -353,7 +395,7 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
             f"({int(session.total_tokens / session.trigger_tokens * 100)}%)"
         )
 
-        # Check for post-run summarization
+        # Check for post-run summarization (only for successful completion)
         if await session.should_summarize():
             logger.info(f"Post-run summarization triggered: {session.total_tokens}/{session.trigger_tokens} tokens")
             await session.summarize_with_agent()
@@ -363,9 +405,45 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
             )
 
     finally:
-        # CRITICAL: Always update session metadata, even if errors occurred
-        logger.debug(f"Updating session metadata for {session.session_id}")
-        await update_session_metadata(app_state, session)
+        # Always send assistant_end to close the stream
+        logger.debug("Finally block - sending assistant_end")
+        IPCManager.send_assistant_end()
+        logger.debug("assistant_end message sent")
+
+        # Save partial response to Layer 2 if cancelled with content
+        # Use app_state.interrupt_requested since SDK may suppress CancelledError
+        was_interrupted = cancel_requested or app_state.interrupt_requested
+        if app_state.interrupt_requested:
+            logger.debug("Interrupt detected via app_state flag")
+        if was_interrupted and response_text.strip() and app_state.full_history_store:
+            try:
+                app_state.full_history_store.save_message(
+                    session.session_id,
+                    {
+                        "role": "assistant",
+                        "content": response_text,
+                        "partial": True,
+                        "interrupted_at": datetime.now().isoformat(),
+                    },
+                )
+                logger.info(
+                    f"Saved partial response ({len(response_text)} chars) to Layer 2 for session {session.session_id}"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to save partial response to Layer 2: {e}")
+
+        # Conditional persistence based on cancellation state
+        # - Always persist for normal completion (was_interrupted=False)
+        # - Always persist for errors (PersistenceError, Exception handlers return early)
+        # - For cancellation: only persist if tools completed (side effects happened)
+        if not was_interrupted or tools_completed:
+            if was_interrupted and tools_completed:
+                logger.info("Persisting session - tools completed before cancel")
+            else:
+                logger.debug(f"Updating session metadata for {session.session_id}")
+            await update_session_metadata(app_state, session)
+        else:
+            logger.info("Skipping persistence - cancelled with no tool completion")
 
 
 async def handle_session_command_wrapper(app_state: AppState, command: str, data: dict[str, Any]) -> dict[str, Any]:

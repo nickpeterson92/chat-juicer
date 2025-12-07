@@ -199,7 +199,7 @@ describe("ChatContainer", () => {
       ]);
 
       expect(addMessage).toHaveBeenCalledWith(containerElement, "hello", "user");
-      expect(addMessage).toHaveBeenCalledWith(containerElement, "hi", "assistant");
+      expect(addMessage).toHaveBeenCalledWith(containerElement, "hi", "assistant", { partial: false });
       expect(createCompletedToolCard).toHaveBeenCalledWith(
         containerElement,
         expect.objectContaining({

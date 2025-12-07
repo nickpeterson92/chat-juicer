@@ -466,13 +466,14 @@ export class ChatContainer {
 
     // Second pass: render messages in order
     for (const msg of messages) {
-      const { role, content } = msg;
+      const { role, content, partial } = msg;
       const textContent = this._extractTextContent(content);
 
       if (role === "user" && textContent) {
         addMessage(this.element, textContent, "user");
       } else if (role === "assistant" && textContent) {
-        addMessage(this.element, textContent, "assistant");
+        // Pass partial flag if present
+        addMessage(this.element, textContent, "assistant", { partial: partial === true });
       } else if (role === "system" && textContent) {
         addMessage(this.element, textContent, "system");
       } else if (role === "tool_call" && msg.status === "completed") {
@@ -527,17 +528,17 @@ export class ChatContainer {
 
     // Second pass: render messages into fragment (in order - oldest first)
     for (const msg of messages) {
-      const { role, content } = msg;
+      const { role, content, partial } = msg;
       const textContent = this._extractTextContent(content);
 
       let messageElement = null;
 
       if (role === "user" && textContent) {
-        messageElement = this._createMessageElement(textContent, "user");
+        messageElement = this._createMessageElement(textContent, "user", { partial: false });
       } else if (role === "assistant" && textContent) {
-        messageElement = this._createMessageElement(textContent, "assistant");
+        messageElement = this._createMessageElement(textContent, "assistant", { partial: partial === true });
       } else if (role === "system" && textContent) {
-        messageElement = this._createMessageElement(textContent, "system");
+        messageElement = this._createMessageElement(textContent, "system", { partial: false });
       } else if (role === "tool_call" && msg.status === "completed") {
         const toolData = toolCallMap.get(msg.call_id);
         if (toolData) {
@@ -569,7 +570,7 @@ export class ChatContainer {
    * Uses same structure and styling as addMessage in chat-ui.js
    * @private
    */
-  _createMessageElement(content, role) {
+  _createMessageElement(content, role, options = {}) {
     const messageDiv = document.createElement("div");
     // Match exact classes from addMessage in chat-ui.js
     const baseClasses = "message mb-6 animate-slideIn [contain:layout_style]";
@@ -580,6 +581,11 @@ export class ChatContainer {
       error: "error",
     };
     messageDiv.className = `${baseClasses} ${typeClasses[role] || ""}`;
+
+    // Add partial indicator class if this is an interrupted response
+    if (options.partial && role === "assistant") {
+      messageDiv.classList.add("message-partial");
+    }
 
     const contentDiv = document.createElement("div");
 

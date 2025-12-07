@@ -28,10 +28,11 @@ if (!chatUIComponent._lifecycle) {
  * @param {HTMLElement} chatContainer - The chat container element
  * @param {string} content - Message content
  * @param {string} type - Message type (user|assistant|system|error)
- * @param {Object} options - Additional options (reserved for future use)
+ * @param {Object} options - Additional options
+ * @param {boolean} options.partial - Whether this is a partial/interrupted response
  * @returns {HTMLElement} The message content element
  */
-export function addMessage(chatContainer, content, type = "assistant", _options = {}) {
+export function addMessage(chatContainer, content, type = "assistant", options = {}) {
   const messageDiv = document.createElement("div");
   // Base message styles + type-specific styles
   const baseClasses = "message mb-6 animate-slideIn [contain:layout_style]";
@@ -42,6 +43,12 @@ export function addMessage(chatContainer, content, type = "assistant", _options 
     error: "error",
   };
   messageDiv.className = `${baseClasses} ${typeClasses[type] || ""}`;
+
+  // Add partial indicator class if this is an interrupted response
+  if (options.partial && type === "assistant") {
+    messageDiv.classList.add("message-partial");
+  }
+
   const messageId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
   messageDiv.dataset.messageId = messageId;
 
