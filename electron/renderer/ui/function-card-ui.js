@@ -92,8 +92,28 @@ function getFunctionIcon(functionName) {
 }
 
 /**
+ * Extract a value from potentially incomplete JSON using regex
+ * Useful during streaming when JSON is still being built
+ * @param {string} jsonStr - Partial or complete JSON string
+ * @param {string} key - Key to extract
+ * @returns {string|null} Extracted value or null
+ */
+function extractFromPartialJson(jsonStr, key) {
+  // Match "key": "value" or "key": "value...  (streaming may cut off)
+  // Use non-greedy match and handle escaped quotes
+  const regex = new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)`, "i");
+  const match = jsonStr.match(regex);
+  if (match?.[1]) {
+    // Unescape common escape sequences
+    return match[1].replace(/\\n/g, " ").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+  }
+  return null;
+}
+
+/**
  * Extract primary argument for display in collapsed state
  * Returns the most relevant argument value for inline display
+ * Works with both complete JSON and partial streaming JSON
  * @param {Object|string} args - Function arguments
  * @param {string} _functionName - Function name for context
  * @returns {string} Primary argument for display
@@ -101,27 +121,61 @@ function getFunctionIcon(functionName) {
 function extractPrimaryArg(args, _functionName) {
   if (!args) return "";
 
-  const parsed = typeof args === "string" ? safeParse(args, {}) : args;
-  if (typeof parsed !== "object" || parsed === null) return String(args);
-
   // Priority order for common argument keys
   const priorityKeys = ["path", "file_path", "filename", "url", "query", "pattern", "thought", "name", "command"];
 
+  // If args is a string (streaming JSON), try regex extraction first
+  if (typeof args === "string") {
+    // Try regex extraction for partial JSON (works during streaming)
+    for (const key of priorityKeys) {
+      const value = extractFromPartialJson(args, key);
+      if (value && value.length > 0) {
+        // Truncate long values
+        return value.length > 60 ? `${value.substring(0, 57)}...` : value;
+      }
+    }
+
+    // Fall back to full JSON parse if regex didn't find anything
+    const parsed = safeParse(args, {});
+    if (typeof parsed !== "object" || parsed === null) return "";
+
+    for (const key of priorityKeys) {
+      if (parsed[key]) {
+        let value = String(parsed[key]);
+        if (value.length > 60) {
+          value = `${value.substring(0, 57)}...`;
+        }
+        return value;
+      }
+    }
+
+    // Fallback: use first string value found
+    for (const value of Object.values(parsed)) {
+      if (typeof value === "string" && value.length > 0) {
+        return value.length > 60 ? `${value.substring(0, 57)}...` : value;
+      }
+    }
+
+    return "";
+  }
+
+  // Handle object args directly
+  if (typeof args !== "object" || args === null) return String(args);
+
   for (const key of priorityKeys) {
-    if (parsed[key]) {
-      let value = String(parsed[key]);
-      // Truncate long values
+    if (args[key]) {
+      let value = String(args[key]);
       if (value.length > 60) {
-        value = value.substring(0, 57) + "...";
+        value = `${value.substring(0, 57)}...`;
       }
       return value;
     }
   }
 
   // Fallback: use first string value found
-  for (const value of Object.values(parsed)) {
+  for (const value of Object.values(args)) {
     if (typeof value === "string" && value.length > 0) {
-      return value.length > 60 ? value.substring(0, 57) + "..." : value;
+      return value.length > 60 ? `${value.substring(0, 57)}...` : value;
     }
   }
 
@@ -377,7 +431,7 @@ function flushStatusUpdates(activeCalls) {
         argsSection.appendChild(argsLabel);
 
         const argsContent = document.createElement("pre");
-        argsContent.className = "disclosure-section-content" + (isJson ? " hljs" : "");
+        argsContent.className = `disclosure-section-content${isJson ? " hljs" : ""}`;
         if (isJson) {
           argsContent.innerHTML = html;
         } else {
@@ -445,7 +499,7 @@ function flushStatusUpdates(activeCalls) {
         // Re-prettify truncated content
         const truncatedResult = prettyPrintJson(displayContent);
         resultContent.className = "disclosure-section-content hljs";
-        resultContent.innerHTML = truncatedResult.html + '\n<span class="hljs-comment">... (truncated)</span>';
+        resultContent.innerHTML = `${truncatedResult.html}\n<span class="hljs-comment">... (truncated)</span>`;
       } else {
         resultContent.className = "disclosure-section-content";
         resultContent.textContent = isTruncated ? `${displayContent}\n... (truncated)` : displayContent;
@@ -645,12 +699,12 @@ export function createCompletedToolCard(chatContainer, toolData) {
 
   const argsSpan = document.createElement("span");
   const primaryArg = extractPrimaryArg(args, name);
-  argsSpan.className = "disclosure-args-preview" + (primaryArg ? " visible" : "");
+  argsSpan.className = `disclosure-args-preview${primaryArg ? " visible" : ""}`;
   argsSpan.textContent = primaryArg;
 
   const chevronSpan = document.createElement("span");
   // Show chevron if there's content to expand (args or result)
-  chevronSpan.className = "disclosure-chevron" + (primaryArg || result ? " visible" : "");
+  chevronSpan.className = `disclosure-chevron${primaryArg || result ? " visible" : ""}`;
   chevronSpan.innerHTML = CHEVRON_DOWN;
 
   headerDiv.appendChild(iconSpan);
@@ -676,7 +730,7 @@ export function createCompletedToolCard(chatContainer, toolData) {
     argsSection.appendChild(argsLabel);
 
     const argsContent = document.createElement("pre");
-    argsContent.className = "disclosure-section-content" + (isJson ? " hljs" : "");
+    argsContent.className = `disclosure-section-content${isJson ? " hljs" : ""}`;
     if (isJson) {
       argsContent.innerHTML = html;
     } else {
@@ -703,14 +757,12 @@ export function createCompletedToolCard(chatContainer, toolData) {
     const displayContent = isTruncated ? result.substring(0, 4000) : result;
 
     if (isJson && !isTruncated) {
-      resultContent.className =
-        (success ? "disclosure-section-content" : "disclosure-section-content error-text") + " hljs";
+      resultContent.className = `${success ? "disclosure-section-content" : "disclosure-section-content error-text"} hljs`;
       resultContent.innerHTML = html;
     } else if (isJson && isTruncated) {
       const truncatedResult = prettyPrintJson(displayContent);
-      resultContent.className =
-        (success ? "disclosure-section-content" : "disclosure-section-content error-text") + " hljs";
-      resultContent.innerHTML = truncatedResult.html + '\n<span class="hljs-comment">... (truncated)</span>';
+      resultContent.className = `${success ? "disclosure-section-content" : "disclosure-section-content error-text"} hljs`;
+      resultContent.innerHTML = `${truncatedResult.html}\n<span class="hljs-comment">... (truncated)</span>`;
     } else {
       resultContent.className = success ? "disclosure-section-content" : "disclosure-section-content error-text";
       resultContent.textContent = isTruncated ? `${displayContent}\n... (truncated)` : displayContent;
