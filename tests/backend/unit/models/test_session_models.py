@@ -106,7 +106,7 @@ class TestSessionMetadata:
 
     @pytest.mark.parametrize(
         "effort",
-        ["minimal", "low", "medium", "high"],
+        ["none", "low", "medium", "high"],
     )
     def test_valid_reasoning_efforts(self, effort: str) -> None:
         """Test all valid reasoning effort values."""

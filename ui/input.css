@@ -422,9 +422,14 @@
 
   /* Section content (pre-formatted) */
   .disclosure-section-content {
-    @apply font-mono text-xs rounded-md p-2 mb-2 max-h-[200px] overflow-y-auto overflow-x-auto whitespace-pre-wrap break-words;
+    @apply font-mono text-xs rounded-md p-3 mb-2 max-h-[250px] overflow-y-auto overflow-x-auto whitespace-pre-wrap break-words;
     background: var(--color-surface-3);
     color: var(--color-text-on-surface);
+  }
+
+  /* Syntax highlighted content */
+  .disclosure-section-content.hljs {
+    background: var(--color-surface-3);
   }
 
   .disclosure-section-content.streaming {
@@ -443,7 +448,7 @@
 
   /* Result section */
   .disclosure-result .disclosure-section-content {
-    @apply max-h-[300px];
+    @apply max-h-[400px];
   }
 
   /* Error section */
@@ -458,7 +463,7 @@
 
   /* Arguments section */
   .disclosure-arguments .disclosure-section-content {
-    @apply max-h-[150px];
+    @apply max-h-[250px];
   }
 
   /* File items */

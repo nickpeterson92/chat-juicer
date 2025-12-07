@@ -139,7 +139,7 @@ class SessionMetadata(BaseModel):
     @classmethod
     def validate_reasoning_effort(cls, v: str) -> str:
         """Validate reasoning_effort parameter."""
-        valid_values = ["minimal", "low", "medium", "high"]
+        valid_values = ["none", "minimal", "low", "medium", "high"]
         if v not in valid_values:
             raise ValueError(f"reasoning_effort must be one of {valid_values}")
         return v

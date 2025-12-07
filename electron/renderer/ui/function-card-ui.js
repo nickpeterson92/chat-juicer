@@ -3,8 +3,37 @@
  * Uses Claude Code-style disclosure pattern: "ToolName args..." expandable
  */
 
+import hljs from "highlight.js";
 import { FUNCTION_CARD_CLEANUP_DELAY } from "../config/constants.js";
 import { safeParse } from "../utils/json-cache.js";
+
+/**
+ * Pretty-print and syntax highlight JSON content
+ * @param {string|Object} content - JSON string or object to format
+ * @returns {{html: string, isJson: boolean}} Highlighted HTML and whether it was valid JSON
+ */
+function prettyPrintJson(content) {
+  let parsed;
+  let jsonString;
+
+  if (typeof content === "string") {
+    parsed = safeParse(content, null);
+    if (parsed === null) {
+      // Not valid JSON, return as-is
+      return { html: content, isJson: false };
+    }
+    jsonString = JSON.stringify(parsed, null, 2);
+  } else if (typeof content === "object" && content !== null) {
+    parsed = content;
+    jsonString = JSON.stringify(parsed, null, 2);
+  } else {
+    return { html: String(content), isJson: false };
+  }
+
+  // Apply syntax highlighting
+  const highlighted = hljs.highlight(jsonString, { language: "json" });
+  return { html: highlighted.value, isJson: true };
+}
 
 // Throttled status update queue for batched DOM updates
 const pendingUpdates = new Map();
@@ -25,22 +54,22 @@ const FUNCTION_ICONS = {
   read_file:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8m8 4H8m8-8H8"/></svg>',
   generate_document:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M12 18v-6m-3 3h6"/></svg>',
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/></svg>',
   edit_file:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>',
   sequentialthinking:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z"/></svg>',
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg>',
   fetch:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.1374 2.73779C13.3942 3.48102 13.0092 4.77646 13.2895 5.7897C13.438 6.32603 13.4622 6.97541 13.0687 7.3689L7.3689 13.0687C6.97541 13.4622 6.32603 13.438 5.7897 13.2895C4.77646 13.0092 3.48101 13.3942 2.73779 14.1374C1.75407 15.1212 1.75407 16.7161 2.73779 17.6998C3.72152 18.6835 5.31646 18.6835 6.30018 17.6998C5.31646 18.6835 5.31645 20.2785 6.30018 21.2622C7.28391 22.2459 8.87884 22.2459 9.86257 21.2622C10.6058 20.519 10.9908 19.2235 10.7105 18.2103C10.562 17.674 10.5378 17.0246 10.9313 16.6311L16.6311 10.9313C17.0246 10.5378 17.674 10.562 18.2103 10.7105C19.2235 10.9908 20.519 10.6058 21.2622 9.86257C22.2459 8.87884 22.2459 7.28391 21.2622 6.30018C20.2785 5.31646 18.6835 5.31646 17.6998 6.30018C18.6835 5.31646 18.6835 3.72152 17.6998 2.73779C16.7161 1.75407 15.1212 1.75407 14.1374 2.73779Z"/></svg>',
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 10c.7-.7 1.69 0 2.5 0a2.5 2.5 0 1 0 0-5 .5.5 0 0 1-.5-.5 2.5 2.5 0 1 0-5 0c0 .81.7 1.8 0 2.5l-7 7c-.7.7-1.69 0-2.5 0a2.5 2.5 0 0 0 0 5c.28 0 .5.22.5.5a2.5 2.5 0 1 0 5 0c0-.81-.7-1.8 0-2.5Z"/></svg>',
   // Tavily MCP tools (search, extract, map, crawl)
   tavily_search:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>',
   tavily_extract:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0-12l-4 4m4-4l4 4"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>',
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3L11 9.999"/><path d="M15.973 4.027A13 13 0 0 0 5.902 2.373c-1.398.342-1.092 2.158.277 2.601a19.9 19.9 0 0 1 5.822 3.024"/><path d="M16.001 11.999a19.9 19.9 0 0 1 3.024 5.824c.444 1.369 2.26 1.676 2.603.278A13 13 0 0 0 20 8.069"/><path d="M18.352 3.352a1.205 1.205 0 0 0-1.704 0l-5.296 5.296a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l5.296-5.296a1.205 1.205 0 0 0 0-1.704z"/></svg>',
   tavily_map:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3V6z"/><path d="M9 3v15M15 6v15"/></svg>',
   tavily_crawl:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/><path d="M12 6v6l4 2"/><path d="M2 12h4M18 12h4"/></svg>',
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 12-1.5 3"/><path d="M19.63 18.81 22 20"/><path d="M6.47 8.23a1.68 1.68 0 0 1 2.44 1.93l-.64 2.08a6.76 6.76 0 0 0 10.16 7.67l.42-.27a1 1 0 1 0-2.73-4.21l-.42.27a1.76 1.76 0 0 1-2.63-1.99l.64-2.08A6.66 6.66 0 0 0 3.94 3.9l-.7.4a1 1 0 1 0 2.55 4.34z"/></svg>',
   default:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>',
 };
@@ -337,8 +366,7 @@ function flushStatusUpdates(activeCalls) {
 
       // Add full arguments to expanded content
       if (contentDiv && !contentDiv.querySelector(".disclosure-arguments")) {
-        const parsedArgs = safeParse(data.arguments, data.arguments);
-        const argsText = typeof parsedArgs === "string" ? parsedArgs : JSON.stringify(parsedArgs, null, 2);
+        const { html, isJson } = prettyPrintJson(data.arguments);
 
         const argsSection = document.createElement("div");
         argsSection.className = "disclosure-arguments";
@@ -349,8 +377,12 @@ function flushStatusUpdates(activeCalls) {
         argsSection.appendChild(argsLabel);
 
         const argsContent = document.createElement("pre");
-        argsContent.className = "disclosure-section-content";
-        argsContent.textContent = argsText;
+        argsContent.className = "disclosure-section-content" + (isJson ? " hljs" : "");
+        if (isJson) {
+          argsContent.innerHTML = html;
+        } else {
+          argsContent.textContent = html;
+        }
         argsSection.appendChild(argsContent);
 
         contentDiv.appendChild(argsSection);
@@ -400,10 +432,24 @@ function flushStatusUpdates(activeCalls) {
       resultSection.appendChild(resultLabel);
 
       const resultContent = document.createElement("pre");
-      resultContent.className = "disclosure-section-content";
-      // Truncate very long results
-      const resultText = data.result.length > 2000 ? `${data.result.substring(0, 2000)}\n... (truncated)` : data.result;
-      resultContent.textContent = resultText;
+      // Try to pretty-print as JSON, fall back to plain text
+      const { html, isJson } = prettyPrintJson(data.result);
+      // Truncate very long results (check original length)
+      const isTruncated = data.result.length > 4000;
+      const displayContent = isTruncated ? data.result.substring(0, 4000) : data.result;
+
+      if (isJson && !isTruncated) {
+        resultContent.className = "disclosure-section-content hljs";
+        resultContent.innerHTML = html;
+      } else if (isJson && isTruncated) {
+        // Re-prettify truncated content
+        const truncatedResult = prettyPrintJson(displayContent);
+        resultContent.className = "disclosure-section-content hljs";
+        resultContent.innerHTML = truncatedResult.html + '\n<span class="hljs-comment">... (truncated)</span>';
+      } else {
+        resultContent.className = "disclosure-section-content";
+        resultContent.textContent = isTruncated ? `${displayContent}\n... (truncated)` : displayContent;
+      }
       resultSection.appendChild(resultContent);
 
       contentDiv.appendChild(resultSection);
@@ -619,8 +665,7 @@ export function createCompletedToolCard(chatContainer, toolData) {
 
   // Add arguments section
   if (args) {
-    const parsedArgs = safeParse(args, args);
-    const argsText = typeof parsedArgs === "string" ? parsedArgs : JSON.stringify(parsedArgs, null, 2);
+    const { html, isJson } = prettyPrintJson(args);
 
     const argsSection = document.createElement("div");
     argsSection.className = "disclosure-arguments";
@@ -631,8 +676,12 @@ export function createCompletedToolCard(chatContainer, toolData) {
     argsSection.appendChild(argsLabel);
 
     const argsContent = document.createElement("pre");
-    argsContent.className = "disclosure-section-content";
-    argsContent.textContent = argsText;
+    argsContent.className = "disclosure-section-content" + (isJson ? " hljs" : "");
+    if (isJson) {
+      argsContent.innerHTML = html;
+    } else {
+      argsContent.textContent = html;
+    }
     argsSection.appendChild(argsContent);
 
     contentDiv.appendChild(argsSection);
@@ -649,10 +698,23 @@ export function createCompletedToolCard(chatContainer, toolData) {
     resultSection.appendChild(resultLabel);
 
     const resultContent = document.createElement("pre");
-    resultContent.className = success ? "disclosure-section-content" : "disclosure-section-content error-text";
-    // Truncate very long results
-    const resultText = result.length > 2000 ? `${result.substring(0, 2000)}\n... (truncated)` : result;
-    resultContent.textContent = resultText;
+    const { html, isJson } = prettyPrintJson(result);
+    const isTruncated = result.length > 4000;
+    const displayContent = isTruncated ? result.substring(0, 4000) : result;
+
+    if (isJson && !isTruncated) {
+      resultContent.className =
+        (success ? "disclosure-section-content" : "disclosure-section-content error-text") + " hljs";
+      resultContent.innerHTML = html;
+    } else if (isJson && isTruncated) {
+      const truncatedResult = prettyPrintJson(displayContent);
+      resultContent.className =
+        (success ? "disclosure-section-content" : "disclosure-section-content error-text") + " hljs";
+      resultContent.innerHTML = truncatedResult.html + '\n<span class="hljs-comment">... (truncated)</span>';
+    } else {
+      resultContent.className = success ? "disclosure-section-content" : "disclosure-section-content error-text";
+      resultContent.textContent = isTruncated ? `${displayContent}\n... (truncated)` : displayContent;
+    }
     resultSection.appendChild(resultContent);
 
     contentDiv.appendChild(resultSection);

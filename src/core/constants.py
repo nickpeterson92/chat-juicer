@@ -515,11 +515,14 @@ MAX_MESSAGES_PER_CHUNK = 100
 #: Human-readable labels for reasoning effort levels.
 #: Used by frontend to display user-friendly options in model selection UI.
 REASONING_EFFORT_OPTIONS: dict[str, str] = {
-    "minimal": "Minimal",
+    "none": "None",
     "low": "Low",
     "medium": "Medium",
     "high": "High",
 }
+
+# Note: 'minimal' is also valid but deprecated in favor of 'none'
+# The backend maps between them based on model version
 
 # ============================================================================
 # Model Configuration (Frontend Display)

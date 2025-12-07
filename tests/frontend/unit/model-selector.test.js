@@ -148,7 +148,7 @@ describe("ModelSelector", () => {
       const selector = new ModelSelector(container);
       const models = [{ value: "gpt-5", isDefault: true, supportsReasoning: true }];
       const reasoningLevels = [
-        { value: "minimal", label: "Minimal", isDefault: false },
+        { value: "none", label: "None", isDefault: false },
         { value: "medium", label: "Medium", isDefault: true },
         { value: "high", label: "High", isDefault: false },
       ];

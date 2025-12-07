@@ -595,7 +595,7 @@ async def get_config_metadata(app_state: AppStateProtocol) -> dict[str, Any]:
                 "label": REASONING_EFFORT_OPTIONS[level],
                 "isDefault": level == "medium",
             }
-            for level in ["minimal", "low", "medium", "high"]
+            for level in REASONING_EFFORT_OPTIONS
         ],
         "reasoning_models": sorted(MODELS_WITH_REASONING),
     }
