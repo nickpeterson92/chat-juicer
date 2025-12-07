@@ -19,6 +19,7 @@ import {
 } from "../ui/function-card-ui.js";
 import { initializeCodeCopyButtons, processMermaidDiagrams } from "../utils/markdown-renderer.js";
 import { scheduleScroll } from "../utils/scroll-utils.js";
+import { showToast } from "../utils/toast.js";
 
 /**
  * Register all message handlers with EventBus
@@ -124,7 +125,7 @@ export function registerMessageHandlers(context) {
     // MessageQueueService subscribes to python.status, but we also explicitly call here
     // to ensure queue is processed after assistant response completes
     const messageQueueService = getMessageQueueService();
-    if (messageQueueService && messageQueueService.hasItems()) {
+    if (messageQueueService?.hasItems()) {
       // Small delay to allow UI to settle before sending next message
       setTimeout(async () => {
         const processed = await messageQueueService.process();
@@ -194,11 +195,30 @@ export function registerMessageHandlers(context) {
     // Continue processing queue after error (Section 7.B of queue spec)
     // Queue should continue with next message even if current one failed
     const messageQueueService = getMessageQueueService();
-    if (messageQueueService && messageQueueService.hasItems()) {
+    if (messageQueueService?.hasItems()) {
       setTimeout(async () => {
         await messageQueueService.process();
       }, 100);
     }
+  });
+
+  // ===== Stream Interrupt Handler =====
+
+  createHandler("stream_interrupted", (_message) => {
+    // Reset streaming state
+    appState.setState("message.isStreaming", false);
+    appState.setState("stream.interrupted", false);
+    appState.setState("stream.toolInProgress", false);
+    appState.setState("python.status", "idle");
+
+    // Show toast notification
+    showToast("Response interrupted", "info");
+
+    // Track interrupt
+    globalEventBus.emit("analytics:event", {
+      category: "stream",
+      action: "interrupted",
+    });
   });
 
   // ===== Function Call Handlers =====

@@ -84,12 +84,13 @@ class TestProcessMessages:
     """Tests for process_messages function."""
 
     @pytest.mark.asyncio
-    @patch("agents.Runner")
+    @patch("app.runtime.Runner")
     @patch("app.runtime.IPCManager")
     async def test_process_messages_success(self, mock_ipc: Mock, mock_runner: Mock) -> None:
         """Test processing user messages successfully."""
         mock_app_state = Mock()
         mock_app_state.full_history_store = None
+        mock_app_state.interrupt_requested = False  # Normal completion, not interrupted
         mock_session = Mock()
         mock_session.agent = Mock()
         mock_session.session_id = "chat_test"
@@ -115,7 +116,7 @@ class TestProcessMessages:
         mock_ipc.send_assistant_end.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("agents.Runner")
+    @patch("app.runtime.Runner")
     @patch("app.runtime.IPCManager")
     @patch("app.runtime.handle_streaming_error")
     async def test_process_messages_error(self, mock_handle_error: Mock, mock_ipc: Mock, mock_runner: Mock) -> None:
@@ -124,6 +125,7 @@ class TestProcessMessages:
         mock_app_state.session_manager = Mock()
         mock_app_state.session_manager.get_session.return_value = Mock(is_named=True)
         mock_app_state.full_history_store = None
+        mock_app_state.interrupt_requested = False  # Error during streaming, not interrupted
 
         mock_session = Mock()
         mock_session.agent = Mock()
@@ -177,34 +179,41 @@ class TestHandleStreamingError:
 
     @patch("app.runtime.IPCManager")
     def test_handle_rate_limit_error(self, mock_ipc: Mock) -> None:
-        """Test handling rate limit error."""
+        """Test handling rate limit error.
+
+        Note: send_assistant_end is handled by the caller's finally block,
+        so we only verify the error message is sent.
+        """
         from openai import RateLimitError
 
         error = RateLimitError("Rate limit exceeded", response=Mock(), body=None)
         handle_streaming_error(error)
 
         mock_ipc.send.assert_called()
-        mock_ipc.send_assistant_end.assert_called_once()
 
     @patch("app.runtime.IPCManager")
     def test_handle_connection_error(self, mock_ipc: Mock) -> None:
-        """Test handling connection error."""
+        """Test handling connection error.
+
+        Note: send_assistant_end is handled by the caller's finally block.
+        """
         from openai import APIConnectionError
 
         error = APIConnectionError(request=Mock())
         handle_streaming_error(error)
 
         mock_ipc.send.assert_called()
-        mock_ipc.send_assistant_end.assert_called_once()
 
     @patch("app.runtime.IPCManager")
     def test_handle_generic_error(self, mock_ipc: Mock) -> None:
-        """Test handling generic error."""
+        """Test handling generic error.
+
+        Note: send_assistant_end is handled by the caller's finally block.
+        """
         error = Exception("Generic error")
         handle_streaming_error(error)
 
         mock_ipc.send.assert_called()
-        mock_ipc.send_assistant_end.assert_called_once()
 
 
 class TestHandleFileUpload:

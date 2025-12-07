@@ -199,6 +199,12 @@ export class AppState {
       processingMessageId: null, // string | null - ID of message currently being processed
     };
 
+    // Stream interrupt state (for canceling in-progress responses)
+    this.stream = {
+      interrupted: false, // boolean - interrupt was requested
+      toolInProgress: false, // boolean - tool execution in progress (defer cancel)
+    };
+
     // State change listeners
     this.listeners = new Map();
   }

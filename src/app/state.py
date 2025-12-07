@@ -7,6 +7,8 @@ functions rather than using module-level globals.
 
 from __future__ import annotations
 
+import asyncio
+
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -31,6 +33,9 @@ class AppState:
         deployment: Model deployment name (e.g., "gpt-4o", "gpt-5-mini")
         full_history_store: Layered history persistence (Layer 2)
         mcp_servers: Global pool of initialized MCP servers by name
+        interrupt_requested: Flag set by main.py on interrupt, checked by runtime.py
+        active_stream_task: Currently running stream task for interrupt support
+        pending_read_task: Pending stdin read task to prevent orphaned readers
     """
 
     session_manager: SessionManager | None = None
@@ -39,3 +44,8 @@ class AppState:
     deployment: str = ""
     full_history_store: FullHistoryStore | None = None
     mcp_servers: dict[str, Any] = field(default_factory=dict)
+    interrupt_requested: bool = False  # Set by main.py on interrupt, checked by runtime.py
+
+    # Task management for streaming (replaces module-level globals)
+    active_stream_task: asyncio.Task[None] | None = None
+    pending_read_task: asyncio.Task[dict[str, Any]] | None = None

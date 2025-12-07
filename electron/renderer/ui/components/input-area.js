@@ -46,6 +46,8 @@ export class InputArea {
 
     this.setupEventListeners();
     this.setupStateSubscriptions();
+    this.setupStreamingStateListener();
+    this.setupEscapeKeyListener();
   }
 
   /**
@@ -69,6 +71,11 @@ export class InputArea {
     addDOMListener(this.textarea, "input", () => {
       this.adjustHeight();
       this.updateSendButtonState();
+      // Also update streaming button state (stop vs send based on input content)
+      const isStreaming = this.appState?.getState("message.isStreaming");
+      if (isStreaming) {
+        this.updateButtonForStreamingState(isStreaming);
+      }
     });
 
     // Initial state
@@ -93,6 +100,71 @@ export class InputArea {
     });
 
     globalLifecycleManager.addUnsubscriber(this, unsubscribeQueue);
+  }
+
+  /**
+   * Setup streaming state listener for button transformation
+   * @private
+   */
+  setupStreamingStateListener() {
+    if (!this.appState) return;
+
+    const unsubscribe = this.appState.subscribe("message.isStreaming", (isStreaming) => {
+      this.updateButtonForStreamingState(isStreaming);
+    });
+
+    globalLifecycleManager.addUnsubscriber(this, unsubscribe);
+  }
+
+  /**
+   * Update button appearance based on streaming state and input content
+   * - Streaming + empty input: show Stop button (blue circle with stop icon)
+   * - Streaming + text in input: show Send button (message will be queued)
+   * - Not streaming: show Send button
+   * @private
+   */
+  updateButtonForStreamingState(isStreaming) {
+    if (!this.sendButton) return;
+
+    const hasText = this.getValue().trim().length > 0;
+
+    if (isStreaming && !hasText) {
+      // Show stop button only when streaming with empty input
+      // Keep .ready class for blue styling, add .streaming for stop icon
+      this.sendButton.classList.add("streaming", "ready");
+      this.sendButton.setAttribute("aria-label", "Stop response");
+      this.sendButton.disabled = false; // Enable so user can click to stop
+    } else {
+      // Show send button (either not streaming, or has text to send)
+      this.sendButton.classList.remove("streaming", "stopping");
+      this.sendButton.setAttribute("aria-label", "Send message");
+      // Re-enable button after interrupt completes
+      this.sendButton.disabled = !hasText;
+      // Update ready class based on text content
+      if (hasText) {
+        this.sendButton.classList.add("ready");
+      } else {
+        this.sendButton.classList.remove("ready");
+      }
+    }
+  }
+
+  /**
+   * Setup ESC key listener for interrupt
+   * @private
+   */
+  setupEscapeKeyListener() {
+    const handleEscape = (e) => {
+      if (e.key === "Escape" && this.appState?.getState("message.isStreaming")) {
+        e.preventDefault();
+        this.handleInterrupt();
+      }
+    };
+
+    document.addEventListener("keydown", handleEscape);
+    globalLifecycleManager.addUnsubscriber(this, () => {
+      document.removeEventListener("keydown", handleEscape);
+    });
   }
 
   /**
@@ -141,12 +213,23 @@ export class InputArea {
   }
 
   /**
-   * Handle send action
+   * Handle send action - supports both message sending and interrupt
+   * - If streaming AND input has text: send message (will be queued by backend)
+   * - If streaming AND input is empty: interrupt the stream
+   * - If not streaming: normal send
    */
   handleSend() {
-    if (!this.isEnabled) return;
-
     const message = this.getValue().trim();
+    const isStreaming = this.appState?.getState("message.isStreaming");
+
+    // If streaming with empty input, treat as interrupt (stop button behavior)
+    if (isStreaming && !message) {
+      this.handleInterrupt();
+      return;
+    }
+
+    // If there's a message, send it (will be queued if streaming)
+    if (!this.isEnabled) return;
     if (!message) return;
 
     if (this.onSendCallback) {
@@ -154,6 +237,25 @@ export class InputArea {
     }
 
     this.clear();
+  }
+
+  /**
+   * Handle interrupt request
+   * @private
+   */
+  handleInterrupt() {
+    if (!this.appState?.getState("message.isStreaming")) return;
+
+    // Disable button to prevent spam
+    this.sendButton.disabled = true;
+    this.sendButton.classList.add("stopping");
+
+    // Send interrupt signal to backend
+    // Backend will send stream_interrupted and assistant_end messages
+    window.electronAPI?.interruptStream?.();
+
+    // Update state to track interrupt was requested
+    this.appState.setState("stream.interrupted", true);
   }
 
   /**

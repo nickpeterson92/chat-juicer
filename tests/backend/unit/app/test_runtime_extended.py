@@ -45,16 +45,14 @@ class TestHandleStreamingErrorExtended:
         call_args = mock_ipc.send.call_args[0][0]
         assert call_args["type"] == "error"
         assert "500" in call_args["message"]
-
-        # Should close the stream
-        mock_ipc.send_assistant_end.assert_called_once()
+        # Note: send_assistant_end is now handled by caller's finally block
 
 
 class TestProcessMessagesExtended:
     """Extended tests for process_messages function."""
 
     @pytest.mark.asyncio
-    @patch("agents.Runner")
+    @patch("app.runtime.Runner")
     @patch("app.runtime.IPCManager")
     @patch("app.runtime.handle_streaming_error")
     async def test_process_messages_persistence_error(
@@ -69,6 +67,7 @@ class TestProcessMessagesExtended:
         mock_app_state = Mock()
         mock_app_state.session_manager = Mock()
         mock_app_state.session_manager.get_session.return_value = Mock(is_named=True)
+        mock_app_state.interrupt_requested = False  # Normal error, not interrupted
 
         mock_session = Mock()
         mock_session.agent = Mock()
@@ -94,12 +93,13 @@ class TestProcessMessagesExtended:
         mock_handle_error.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch("agents.Runner")
+    @patch("app.runtime.Runner")
     @patch("app.runtime.IPCManager")
     async def test_process_messages_with_response_text(self, mock_ipc: Mock, mock_runner: Mock) -> None:
         """Test processing messages with response text logging."""
         mock_app_state = Mock()
         mock_app_state.full_history_store = None
+        mock_app_state.interrupt_requested = False  # Normal completion, not interrupted
         mock_session = Mock()
         mock_session.agent = Mock()
         mock_session.session_id = "chat_test"
@@ -146,12 +146,13 @@ class TestProcessMessagesExtended:
         mock_ipc.send_assistant_end.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("agents.Runner")
+    @patch("app.runtime.Runner")
     @patch("app.runtime.IPCManager")
     async def test_process_messages_triggers_summarization(self, mock_ipc: Mock, mock_runner: Mock) -> None:
         """Test that post-run summarization is triggered when needed."""
         mock_app_state = Mock()
         mock_app_state.full_history_store = None
+        mock_app_state.interrupt_requested = False  # Normal completion, not interrupted
         mock_session = Mock()
         mock_session.agent = Mock()
         mock_session.session_id = "chat_test"

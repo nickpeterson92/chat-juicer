@@ -603,6 +603,18 @@ app.whenReady().then(() => {
     }
   });
 
+  // IPC handler for stream interruption
+  ipcMain.handle("interrupt-stream", () => {
+    if (pythonProcess?.stdin && !isShuttingDown) {
+      logger.info("Sending interrupt signal to Python");
+      const msg = { type: "interrupt" };
+      const binaryMessage = IPCProtocolV2.encode(msg);
+      pythonProcess.stdin.write(binaryMessage);
+      return { success: true };
+    }
+    return { success: false, reason: "No active process" };
+  });
+
   // IPC handler for restart request
   ipcMain.on("restart-bot", () => {
     logger.info("Restart requested");

@@ -75,6 +75,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return await ipcRenderer.invoke("get-username");
   },
 
+  // Stream interruption
+  interruptStream: () => ipcRenderer.invoke("interrupt-stream"),
+
   // Window controls (for custom titlebar on Windows/Linux)
   windowMinimize: () => {
     ipcRenderer.send("window-minimize");

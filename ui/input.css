@@ -526,6 +526,66 @@
   }
 
   /* ==========================================
+   * PARTIAL RESPONSE INDICATOR
+   * Visual indicator for interrupted/incomplete responses
+   * ========================================== */
+
+  /* Partial/interrupted response styling */
+  .message-partial {
+    position: relative;
+  }
+
+  .message-partial .message-content::after {
+    content: " [interrupted]";
+    color: var(--color-text-secondary);
+    font-style: italic;
+    font-size: 0.85em;
+    opacity: 0.8;
+  }
+
+  .message-partial::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--color-status-warning);
+    border-radius: 2px;
+  }
+
+  /* ==========================================
+   * STREAM INTERRUPT FEATURE
+   * Styles for stop button during streaming
+   * ========================================== */
+
+  /* Send button streaming state - keep blue, show stop icon */
+  #send-btn.streaming {
+    cursor: pointer;
+  }
+
+  /* Hide the arrow SVG when streaming */
+  #send-btn.streaming svg {
+    display: none;
+  }
+
+  /* Show stop square icon when streaming */
+  #send-btn.streaming::after {
+    content: "";
+    display: block;
+    width: 12px;
+    height: 12px;
+    background-color: currentColor;
+    border-radius: 2px;
+  }
+
+  /* Stopping state - reduced opacity while interrupt processes */
+  #send-btn.stopping {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  /* ==========================================
    * MESSAGE QUEUE FEATURE
    * Styles for queued messages while agent is processing
    * ========================================== */
