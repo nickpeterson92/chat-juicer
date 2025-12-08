@@ -520,10 +520,18 @@ class TestMatplotlibInjection:
 class TestCollectOutputFilesWithBase64:
     """Tests for output file collection with base64 encoding (Phase 2)."""
 
-    def test_collect_output_files_includes_base64_for_images(self, tmp_path: Path) -> None:
-        """Should include base64 content for image files."""
-        pool = SandboxPool()
+    @pytest.fixture
+    def pool(self) -> SandboxPool:
+        """Create sandbox pool with mocked runtime."""
+        with patch("tools.code_interpreter.get_container_runtime", return_value="docker"):
+            yield SandboxPool()
 
+    def test_collect_output_files_includes_base64_for_images(
+        self,
+        pool: SandboxPool,
+        tmp_path: Path,
+    ) -> None:
+        """Should include base64 content for image files."""
         # Create test image
         image_file = tmp_path / "plot.png"
         test_data = b"PNG\x89fake_png_data"
@@ -537,10 +545,12 @@ class TestCollectOutputFilesWithBase64:
         assert "base64" in files[0]
         assert files[0]["base64"] is not None
 
-    def test_collect_output_files_no_base64_for_non_images(self, tmp_path: Path) -> None:
+    def test_collect_output_files_no_base64_for_non_images(
+        self,
+        pool: SandboxPool,
+        tmp_path: Path,
+    ) -> None:
         """Should NOT include base64 for non-image files."""
-        pool = SandboxPool()
-
         # Create test CSV
         csv_file = tmp_path / "data.csv"
         csv_file.write_text("a,b,c\n1,2,3")
@@ -552,10 +562,12 @@ class TestCollectOutputFilesWithBase64:
         assert files[0]["type"] == "text/csv"
         assert "base64" not in files[0]
 
-    def test_collect_output_files_mixed_types(self, tmp_path: Path) -> None:
+    def test_collect_output_files_mixed_types(
+        self,
+        pool: SandboxPool,
+        tmp_path: Path,
+    ) -> None:
         """Should handle mixed image and non-image files."""
-        pool = SandboxPool()
-
         # Create mixed files
         (tmp_path / "plot.png").write_bytes(b"PNG data")
         (tmp_path / "data.csv").write_text("a,b,c")
@@ -578,10 +590,12 @@ class TestCollectOutputFilesWithBase64:
         assert "base64" not in csv_file
         assert "base64" not in json_file
 
-    def test_collect_output_files_skips_oversized_images(self, tmp_path: Path) -> None:
+    def test_collect_output_files_skips_oversized_images(
+        self,
+        pool: SandboxPool,
+        tmp_path: Path,
+    ) -> None:
         """Should skip base64 encoding for oversized images but still include metadata."""
-        pool = SandboxPool()
-
         # Create oversized image (but under MAX_OUTPUT_SIZE)
         large_image = tmp_path / "large.png"
         large_data = b"x" * (MAX_IMAGE_SIZE_FOR_BASE64 + 1)

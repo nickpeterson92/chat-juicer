@@ -26,6 +26,81 @@ const viewManagerComponent = {};
  */
 const welcomePageListeners = [];
 
+// Debounce welcome files rendering to prevent overlapping dynamic imports
+const WELCOME_FILES_RENDER_DEBOUNCE_MS = 50;
+let welcomeFilesRenderTimerId = null;
+let pendingWelcomeFilesPayload = null;
+let welcomeFilesRenderInFlight = false;
+let welcomeFilesRenderQueued = false;
+
+function scheduleWelcomeFilesRender(appState, files) {
+  const welcomeFilesContainer = document.getElementById("welcome-files-container");
+  if (!welcomeFilesContainer) {
+    return;
+  }
+
+  pendingWelcomeFilesPayload = { files, welcomeFilesContainer };
+
+  if (welcomeFilesRenderTimerId) {
+    viewManagerComponent.clearTimer(welcomeFilesRenderTimerId);
+  }
+
+  welcomeFilesRenderTimerId = viewManagerComponent.setTimeout(() => {
+    void renderWelcomeFiles(appState);
+  }, WELCOME_FILES_RENDER_DEBOUNCE_MS);
+}
+
+async function renderWelcomeFiles(appState) {
+  if (welcomeFilesRenderInFlight) {
+    welcomeFilesRenderQueued = true;
+    return;
+  }
+
+  welcomeFilesRenderInFlight = true;
+  welcomeFilesRenderQueued = false;
+
+  try {
+    const payload = pendingWelcomeFilesPayload;
+    pendingWelcomeFilesPayload = null;
+
+    if (!payload || appState.getState("ui.currentView") !== "welcome") {
+      return;
+    }
+
+    const { files, welcomeFilesContainer } = payload;
+
+    if (!files || files.length === 0) {
+      appState.setState("ui.welcomeFilesSectionVisible", false);
+      return;
+    }
+
+    const sessionService = window.app?.services?.sessionService;
+    const currentSessionId = sessionService?.getCurrentSessionId();
+    if (!currentSessionId) {
+      return;
+    }
+
+    const { renderFileList, loadFilesIntoState } = await import("./file-manager.js");
+    const directory = `data/files/${currentSessionId}/sources`;
+    renderFileList(files, welcomeFilesContainer, {
+      directory,
+      isWelcomePage: true,
+      onDelete: async () => {
+        const result = await loadFilesIntoState(appState, directory, "sources");
+        if (!result.files || result.files.length === 0) {
+          appState.setState("ui.welcomeFilesSectionVisible", false);
+        }
+      },
+    });
+  } finally {
+    welcomeFilesRenderInFlight = false;
+    if (welcomeFilesRenderQueued && pendingWelcomeFilesPayload) {
+      welcomeFilesRenderQueued = false;
+      void renderWelcomeFiles(appState);
+    }
+  }
+}
+
 /**
  * Show the welcome view
  * @param {Object} elements - DOM elements from dom-manager
@@ -92,29 +167,7 @@ export async function showWelcomeView(elements, appState) {
         return;
       }
 
-      const welcomeFilesContainer = document.getElementById("welcome-files-container");
-      if (welcomeFilesContainer) {
-        // Dynamic import is async, so handle it properly
-        import("./file-manager.js").then(({ renderFileList, loadFilesIntoState }) => {
-          const sessionService = window.app?.services?.sessionService;
-          const currentSessionId = sessionService?.getCurrentSessionId();
-          if (currentSessionId) {
-            const directory = `data/files/${currentSessionId}/sources`;
-            renderFileList(files, welcomeFilesContainer, {
-              directory,
-              isWelcomePage: true,
-              onDelete: async () => {
-                // Reload files into AppState after deletion (triggers re-render via subscription)
-                const result = await loadFilesIntoState(appState, directory, "sources");
-                // Hide section if no files remain
-                if (!result.files || result.files.length === 0) {
-                  appState.setState("ui.welcomeFilesSectionVisible", false);
-                }
-              },
-            });
-          }
-        });
-      }
+      scheduleWelcomeFilesRender(appState, files);
     }
   });
   globalLifecycleManager.addUnsubscriber(viewManagerComponent, unsubscribeWelcomeFiles);

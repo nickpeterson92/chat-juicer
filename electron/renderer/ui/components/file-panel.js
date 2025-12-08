@@ -291,6 +291,9 @@ export class FilePanel {
    * @returns {string} Full path including session ID and subdirectory
    */
   getFullOutputPath() {
+    if (!this.currentSessionId) {
+      return "";
+    }
     const basePath = `data/files/${this.currentSessionId}/output`;
     return this.currentOutputPath ? `${basePath}/${this.currentOutputPath}` : basePath;
   }

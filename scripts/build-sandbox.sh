@@ -65,8 +65,8 @@ echo ""
 
 cd "$PROJECT_ROOT"
 
-$RUNTIME build \
-    $NO_CACHE \
+"$RUNTIME" build \
+    ${NO_CACHE:+"$NO_CACHE"} \
     -t "$IMAGE_NAME:$IMAGE_TAG" \
     -f "$DOCKERFILE_PATH" \
     "$DOCKERFILE_DIR"

@@ -18,6 +18,7 @@ import base64
 import json
 import logging
 import shutil
+import subprocess
 import time
 
 from dataclasses import dataclass, field
@@ -163,8 +164,6 @@ def check_sandbox_ready() -> tuple[bool, str]:
         return False, "No container runtime (Docker/Podman) found"
 
     # Check if image exists
-    import subprocess
-
     result = subprocess.run(
         [runtime, "image", "inspect", SANDBOX_IMAGE],
         check=False,
@@ -698,9 +697,6 @@ async def execute_python_code(code: str, session_id: str) -> str:
         JSON string with execution results including stdout, files, and metadata
     """
     # Create session-scoped workspace
-    from pathlib import Path
-
-    # Workspace for code outputs
     workspace_base = (Path("data/files") / session_id / "output" / CODE_OUTPUT_SUBDIR).resolve()
     workspace_base.mkdir(parents=True, exist_ok=True)
 
