@@ -523,7 +523,12 @@ export async function initializeEventHandlers({
         created_at: session.created_at || session.last_used,
       }));
 
-      const fragment = renderSessionList(transformedSessions, sessionService.getCurrentSessionId(), domAdapter);
+      const fragment = renderSessionList(
+        transformedSessions,
+        sessionService.getCurrentSessionId(),
+        domAdapter,
+        services.streamManager
+      );
 
       if (fragment) {
         sessionsList.appendChild(fragment);
@@ -579,6 +584,7 @@ export async function initializeEventHandlers({
       setupSessionListHandlers({
         sessionListContainer: sessionsList,
         sessionService,
+        streamManager: services.streamManager,
         updateSessionsList,
         elements,
         appState,

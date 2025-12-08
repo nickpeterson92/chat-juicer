@@ -94,6 +94,17 @@ describe("Session List Handlers", () => {
     };
     ipcAdapter = { commandQueue: [1], processQueue: vi.fn(async () => {}) };
 
+    const streamManager = {
+      startStream: vi.fn(),
+      appendToBuffer: vi.fn(),
+      endStream: vi.fn(),
+      isStreaming: vi.fn(() => false),
+      bufferToolEvent: vi.fn(),
+      getBuffer: vi.fn(() => ""),
+      getBufferedTools: vi.fn(() => []),
+      cleanupSession: vi.fn(),
+    };
+
     container = document.createElement("div");
     container.id = "sessions-list";
     document.body.appendChild(container);
@@ -101,6 +112,7 @@ describe("Session List Handlers", () => {
     setupSessionListHandlers({
       sessionListContainer: container,
       sessionService,
+      streamManager,
       updateSessionsList,
       elements,
       appState,
@@ -233,7 +245,7 @@ describe("Session List Handlers", () => {
     item.dispatchEvent(new Event("click", { bubbles: true }));
     await Promise.resolve();
 
-    expect(sessionService.switchSession).toHaveBeenCalledWith("next");
+    expect(sessionService.switchSession).toHaveBeenCalledWith("next", expect.any(Object));
     // setMessages handles message rendering (including tool cards from Layer 2)
     expect(window.components.chatContainer.setMessages).toHaveBeenCalledWith([{ role: "assistant", content: "hi" }]);
     expect(updateSessionsList).toHaveBeenCalled();

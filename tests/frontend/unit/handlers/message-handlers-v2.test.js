@@ -75,7 +75,19 @@ describe("Message Handlers V2 - Phase 3 State Management", () => {
         setCallResult: vi.fn(),
         setCallError: vi.fn(),
       },
-      sessionService: {},
+      sessionService: {
+        getSession: vi.fn(() => ({ title: "Test Session" })),
+      },
+      streamManager: {
+        startStream: vi.fn(),
+        appendToBuffer: vi.fn(),
+        endStream: vi.fn(),
+        isStreaming: vi.fn(() => false),
+        bufferToolEvent: vi.fn(),
+        getBuffer: vi.fn(() => ""),
+        getBufferedTools: vi.fn(() => []),
+        cleanupSession: vi.fn(),
+      },
     };
 
     // Create context

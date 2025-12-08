@@ -225,6 +225,30 @@
     color: var(--color-text-user);
   }
 
+  /* Streaming indicator for background sessions */
+  .session-item.session-streaming {
+    position: relative;
+    padding-left: 2rem; /* Make room for indicator */
+  }
+
+  .session-item.session-streaming::before {
+    content: '';
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 8px;
+    height: 8px;
+    background: var(--color-brand-primary);
+    border-radius: 50%;
+    animation: streaming-pulse 1.5s ease-in-out infinite;
+  }
+
+  /* Active streaming session uses different color */
+  .session-item.session-streaming.active::before {
+    background: var(--color-text-user);
+  }
+
   .session-title {
     @apply overflow-hidden text-ellipsis whitespace-nowrap;
     max-width: 180px; /* Less aggressive truncation */
@@ -2092,6 +2116,18 @@ body.view-chat {
     }
     50% {
       transform: scale(1.05);
+    }
+  }
+
+  @keyframes streaming-pulse {
+    0%,
+    100% {
+      opacity: 1;
+      transform: translateY(-50%) scale(1);
+    }
+    50% {
+      opacity: 0.5;
+      transform: translateY(-50%) scale(0.8);
     }
   }
 

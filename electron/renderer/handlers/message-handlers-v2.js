@@ -46,6 +46,7 @@ import { showToast } from "../utils/toast.js";
  */
 export function registerMessageHandlers(context) {
   const { appState, elements, services, ipcAdapter, components } = context;
+  const { streamManager } = services;
 
   // Prefer the ChatContainer component when available to keep internal streaming state in sync
   const getChatContainerComponent = () =>
@@ -82,115 +83,142 @@ export function registerMessageHandlers(context) {
 
   // ===== Assistant Message Handlers =====
 
-  createHandler("assistant_start", (_message) => {
-    // Track Python status - streaming started
-    appState.setState("python.status", "busy_streaming");
-    appState.setState("message.isStreaming", true);
-    appState.setState("message.isTyping", false);
+  createHandler("assistant_start", (message) => {
+    const sessionId = message.session_id || appState.getState("session.current");
 
-    // Create streaming message before toggling lamp visibility so the element exists
-    const chatContainerComponent = getChatContainerComponent();
-    const textSpan =
-      chatContainerComponent?.createStreamingMessage?.() || createStreamingAssistantMessage(elements.chatContainer);
-    appState.setState("message.currentAssistant", textSpan);
-    appState.setState("message.assistantBuffer", "");
+    // Start stream tracking for this session
+    streamManager.startStream(sessionId);
 
-    // Reset loading lamp visibility for this streaming message so the first token transition can run
-    appState.setState("ui.loadingLampVisible", true);
+    // Only update UI for active session
+    if (isActiveSessionMessage(message, appState)) {
+      // Track Python status - streaming started
+      appState.setState("python.status", "busy_streaming");
+      appState.setState("message.isStreaming", true);
+      appState.setState("message.isTyping", false);
 
-    // Hide AI thinking indicator
-    appState.setState("ui.aiThinkingActive", false);
+      // Create streaming message before toggling lamp visibility so the element exists
+      const chatContainerComponent = getChatContainerComponent();
+      const textSpan =
+        chatContainerComponent?.createStreamingMessage?.() || createStreamingAssistantMessage(elements.chatContainer);
+      appState.setState("message.currentAssistant", textSpan);
+      appState.setState("message.assistantBuffer", "");
 
-    // Emit performance tracking event
-    globalEventBus.emit("performance:message_render_start");
+      // Reset loading lamp visibility for this streaming message so the first token transition can run
+      appState.setState("ui.loadingLampVisible", true);
+
+      // Hide AI thinking indicator
+      appState.setState("ui.aiThinkingActive", false);
+
+      // Emit performance tracking event
+      globalEventBus.emit("performance:message_render_start");
+    }
   });
 
   createHandler("assistant_delta", (message) => {
-    if (appState.message.currentAssistant) {
-      const isFirstToken = appState.message.assistantBuffer === "";
-      const newBuffer = appState.message.assistantBuffer + message.content;
-      appState.setState("message.assistantBuffer", newBuffer);
+    const sessionId = message.session_id || appState.getState("session.current");
 
-      // Hide lottie indicator on first token arrival for instant feedback
-      if (isFirstToken) {
-        // Update state - subscriptions will handle DOM manipulation
-        appState.setState("ui.loadingLampVisible", false);
+    if (isActiveSessionMessage(message, appState)) {
+      // Active session - render immediately
+      if (appState.message.currentAssistant) {
+        const isFirstToken = appState.message.assistantBuffer === "";
+        const newBuffer = appState.message.assistantBuffer + message.content;
+        appState.setState("message.assistantBuffer", newBuffer);
 
-        // NOTE: UI update handled by subscription in bootstrap/phases/phase5a-subscriptions.js
-        // Subscription listens to ui.loadingLampVisible and applies transition + removal
+        // Hide lottie indicator on first token arrival for instant feedback
+        if (isFirstToken) {
+          // Update state - subscriptions will handle DOM manipulation
+          appState.setState("ui.loadingLampVisible", false);
+
+          // NOTE: UI update handled by subscription in bootstrap/phases/phase5a-subscriptions.js
+          // Subscription listens to ui.loadingLampVisible and applies transition + removal
+        }
+
+        updateAssistantMessage(elements.chatContainer, appState.message.currentAssistant, newBuffer);
       }
-
-      updateAssistantMessage(elements.chatContainer, appState.message.currentAssistant, newBuffer);
+    } else {
+      // Background session - buffer only
+      streamManager.appendToBuffer(sessionId, message.content);
     }
   });
 
-  createHandler("assistant_end", async (_message) => {
-    const currentAssistantElement = appState.message.currentAssistant;
+  createHandler("assistant_end", async (message) => {
+    const sessionId = message.session_id || appState.getState("session.current");
 
-    // Complete streaming
-    completeStreamingMessage(elements.chatContainer);
-    appState.setState("message.currentAssistant", null);
+    // End stream tracking for this session
+    streamManager.endStream(sessionId);
 
-    // Track Python status - streaming ended
-    appState.setState("python.status", "idle");
-    appState.setState("message.isStreaming", false);
+    if (isActiveSessionMessage(message, appState)) {
+      const currentAssistantElement = appState.message.currentAssistant;
 
-    // Process queued commands
-    if (ipcAdapter && ipcAdapter.commandQueue.length > 0) {
-      await ipcAdapter.processQueue();
-    }
+      // Complete streaming
+      completeStreamingMessage(elements.chatContainer);
+      appState.setState("message.currentAssistant", null);
 
-    // Process message queue - send next queued user message if any
-    // MessageQueueService subscribes to python.status, but we also explicitly call here
-    // to ensure queue is processed after assistant response completes
-    const messageQueueService = getMessageQueueService();
-    if (messageQueueService?.hasItems()) {
-      // Small delay to allow UI to settle before sending next message
-      setTimeout(async () => {
-        const processed = await messageQueueService.process();
-        if (processed) {
-          // If a queued message was sent, show it in the chat
-          // The queue service will emit events that ChatContainer listens to
-          globalEventBus.emit("queue:message_sent");
+      // Track Python status - streaming ended
+      appState.setState("python.status", "idle");
+      appState.setState("message.isStreaming", false);
+
+      // Process queued commands
+      if (ipcAdapter && ipcAdapter.commandQueue.length > 0) {
+        await ipcAdapter.processQueue();
+      }
+
+      // Process message queue - send next queued user message if any
+      // MessageQueueService subscribes to python.status, but we also explicitly call here
+      // to ensure queue is processed after assistant response completes
+      const messageQueueService = getMessageQueueService();
+      if (messageQueueService?.hasItems()) {
+        // Small delay to allow UI to settle before sending next message
+        setTimeout(async () => {
+          const processed = await messageQueueService.process();
+          if (processed) {
+            // If a queued message was sent, show it in the chat
+            // The queue service will emit events that ChatContainer listens to
+            globalEventBus.emit("queue:message_sent");
+          }
+        }, 100);
+      }
+
+      // Hide AI thinking indicator
+      appState.setState("ui.aiThinkingActive", false);
+
+      // Cancel pending renders
+      cancelPendingRender();
+
+      // Final re-render with isComplete=true for footnotes and other complete-content features
+      // During streaming, renderMarkdown uses basic parser; now we use full parser with footnotes
+      if (currentAssistantElement && document.body.contains(currentAssistantElement)) {
+        const finalContent = appState.message.assistantBuffer;
+        if (finalContent) {
+          currentAssistantElement.innerHTML = renderMarkdown(finalContent, true);
         }
-      }, 100);
-    }
-
-    // Hide AI thinking indicator
-    appState.setState("ui.aiThinkingActive", false);
-
-    // Cancel pending renders
-    cancelPendingRender();
-
-    // Final re-render with isComplete=true for footnotes and other complete-content features
-    // During streaming, renderMarkdown uses basic parser; now we use full parser with footnotes
-    if (currentAssistantElement && document.body.contains(currentAssistantElement)) {
-      const finalContent = appState.message.assistantBuffer;
-      if (finalContent) {
-        currentAssistantElement.innerHTML = renderMarkdown(finalContent, true);
       }
-    }
 
-    // Process Mermaid and code blocks
-    if (currentAssistantElement && document.body.contains(currentAssistantElement)) {
-      const messageContentDiv = currentAssistantElement.closest(".message-content");
-      if (messageContentDiv) {
-        processMermaidDiagrams(messageContentDiv)
-          .catch((err) =>
-            window.electronAPI?.log("error", "Mermaid processing error", {
-              error: err.message,
-            })
-          )
-          .finally(() => {
-            initializeCodeCopyButtons(messageContentDiv);
-            // Scroll again after Mermaid diagrams render (they add height to the message)
-            scheduleScroll(elements.chatContainer);
-          });
+      // Process Mermaid and code blocks
+      if (currentAssistantElement && document.body.contains(currentAssistantElement)) {
+        const messageContentDiv = currentAssistantElement.closest(".message-content");
+        if (messageContentDiv) {
+          processMermaidDiagrams(messageContentDiv)
+            .catch((err) =>
+              window.electronAPI?.log("error", "Mermaid processing error", {
+                error: err.message,
+              })
+            )
+            .finally(() => {
+              initializeCodeCopyButtons(messageContentDiv);
+              // Scroll again after Mermaid diagrams render (they add height to the message)
+              scheduleScroll(elements.chatContainer);
+            });
+        }
       }
-    }
 
-    // Emit performance tracking event
-    globalEventBus.emit("performance:message_render_complete");
+      // Emit performance tracking event
+      globalEventBus.emit("performance:message_render_complete");
+    } else {
+      // Background session completed - show toast notification
+      const session = services?.sessionService?.getSession(sessionId);
+      showToast(`"${session?.title || "Session"}" completed`, "success");
+    }
   });
 
   // ===== Error Handler =====
@@ -252,24 +280,34 @@ export function registerMessageHandlers(context) {
   // ===== Function Call Handlers =====
 
   createHandler("function_detected", (message) => {
-    // Use service if available
-    if (services?.functionCallService) {
-      services.functionCallService.createCall(message.call_id, message.name, message.arguments || {});
-    }
+    const sessionId = message.session_id || appState.getState("session.current");
 
-    createFunctionCallCard(
-      elements.chatContainer,
-      appState.functions.activeCalls,
-      appState,
-      message.call_id,
-      message.name,
-      "preparing..."
-    );
+    if (isActiveSessionMessage(message, appState)) {
+      // Active session - render tool card
+      // Use service if available
+      if (services?.functionCallService) {
+        services.functionCallService.createCall(message.call_id, message.name, message.arguments || {});
+      }
 
-    // Only update to "ready" if we have real arguments (not empty "{}" from early detection)
-    if (message.arguments && message.arguments !== "{}") {
-      updateFunctionCallStatus(appState.functions.activeCalls, message.call_id, "ready", {
-        arguments: message.arguments,
+      createFunctionCallCard(
+        elements.chatContainer,
+        appState.functions.activeCalls,
+        appState,
+        message.call_id,
+        message.name,
+        "preparing..."
+      );
+
+      // Only update to "ready" if we have real arguments (not empty "{}" from early detection)
+      if (message.arguments && message.arguments !== "{}") {
+        updateFunctionCallStatus(appState.functions.activeCalls, message.call_id, "ready", {
+          arguments: message.arguments,
+        });
+      }
+    } else {
+      // Background session - buffer for later reconstruction
+      streamManager.bufferToolEvent(sessionId, message.call_id, "start", {
+        name: message.name,
       });
     }
 
@@ -282,16 +320,28 @@ export function registerMessageHandlers(context) {
   });
 
   createHandler("function_executing", (message) => {
-    if (services?.functionCallService) {
-      services.functionCallService.updateCallStatus(message.call_id, "streaming");
+    const sessionId = message.session_id || appState.getState("session.current");
+
+    if (isActiveSessionMessage(message, appState)) {
+      // Active session - update UI
+      if (services?.functionCallService) {
+        services.functionCallService.updateCallStatus(message.call_id, "streaming");
+        if (message.arguments) {
+          services.functionCallService.appendArgumentsDelta(message.call_id, JSON.stringify(message.arguments));
+        }
+      }
+
+      updateFunctionCallStatus(appState.functions.activeCalls, message.call_id, "executing...", {
+        arguments: message.arguments,
+      });
+    } else {
+      // Background session - buffer arguments
       if (message.arguments) {
-        services.functionCallService.appendArgumentsDelta(message.call_id, JSON.stringify(message.arguments));
+        streamManager.bufferToolEvent(sessionId, message.call_id, "arguments_delta", {
+          delta: JSON.stringify(message.arguments),
+        });
       }
     }
-
-    updateFunctionCallStatus(appState.functions.activeCalls, message.call_id, "executing...", {
-      arguments: message.arguments,
-    });
   });
 
   createHandler("function_completed", (message) => {
@@ -384,15 +434,26 @@ export function registerMessageHandlers(context) {
   });
 
   createHandler("function_call_arguments_delta", (message) => {
+    const sessionId = message.session_id || appState.getState("session.current");
+
     if (message.item_id || message.call_id) {
       const callId = message.call_id || message.item_id;
-      updateFunctionArguments(
-        appState.functions.activeCalls,
-        appState.functions.argumentsBuffer,
-        callId,
-        message.delta,
-        false
-      );
+
+      if (isActiveSessionMessage(message, appState)) {
+        // Active session - update UI
+        updateFunctionArguments(
+          appState.functions.activeCalls,
+          appState.functions.argumentsBuffer,
+          callId,
+          message.delta,
+          false
+        );
+      } else {
+        // Background session - buffer delta
+        streamManager.bufferToolEvent(sessionId, callId, "arguments_delta", {
+          delta: message.delta,
+        });
+      }
     }
   });
 

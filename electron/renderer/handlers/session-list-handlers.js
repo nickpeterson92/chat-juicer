@@ -10,6 +10,7 @@
  * @param {Object} deps - Dependency container
  * @param {HTMLElement} deps.sessionListContainer - Sessions list container
  * @param {Object} deps.sessionService - Session service instance (SSOT)
+ * @param {Object} deps.streamManager - StreamManager instance for concurrent streams
  * @param {Function} deps.updateSessionsList - Function to refresh sessions list
  * @param {Object} deps.elements - DOM elements
  * @param {Object} deps.appState - Application state
@@ -18,6 +19,7 @@
 export function setupSessionListHandlers({
   sessionListContainer,
   sessionService,
+  streamManager,
   updateSessionsList,
   elements,
   appState,
@@ -69,7 +71,7 @@ export function setupSessionListHandlers({
 
     // Otherwise, switch to this session (only if different)
     if (sessionId !== sessionService.getCurrentSessionId()) {
-      await handleSwitch(sessionId, sessionService, updateSessionsList, elements, appState);
+      await handleSwitch(sessionId, sessionService, streamManager, updateSessionsList, elements, appState);
     }
   });
 }
@@ -249,13 +251,13 @@ async function handleDelete(sessionId, sessionService, updateSessionsList, eleme
 /**
  * Handle session switch
  */
-async function handleSwitch(sessionId, sessionService, updateSessionsList, elements, appState) {
+async function handleSwitch(sessionId, sessionService, streamManager, updateSessionsList, elements, appState) {
   if (sessionId === sessionService.getCurrentSessionId()) {
     return;
   }
 
   try {
-    const result = await sessionService.switchSession(sessionId);
+    const result = await sessionService.switchSession(sessionId, streamManager);
 
     if (result.success) {
       // Close sidebar after successful switch

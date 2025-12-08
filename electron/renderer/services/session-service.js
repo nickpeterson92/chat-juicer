@@ -141,9 +141,10 @@ export class SessionService {
    * Switch to different session
    *
    * @param {string} sessionId - Session ID to switch to
+   * @param {Object} streamManager - StreamManager instance (optional)
    * @returns {Promise<Object>} Result with session data and history
    */
-  async switchSession(sessionId) {
+  async switchSession(sessionId, streamManager = null) {
     if (!sessionId) {
       return { success: false, error: "No session ID provided" };
     }
@@ -153,11 +154,21 @@ export class SessionService {
       return { success: false, error: "Already on this session" };
     }
 
+    // Check if switching away from completed stream - cleanup
+    if (currentSessionId && streamManager && !streamManager.isStreaming(currentSessionId)) {
+      streamManager.cleanupSession(currentSessionId);
+    }
+
     try {
       const response = await this.ipc.sendSessionCommand("switch", { session_id: sessionId });
 
       if (response?.session) {
         this.appState.setState("session.current", sessionId);
+
+        // If target session was streaming, reconstruct state
+        if (streamManager && streamManager.isStreaming(sessionId)) {
+          this.reconstructStreamState(sessionId, streamManager);
+        }
 
         return {
           success: true,
@@ -172,6 +183,41 @@ export class SessionService {
       return { success: false, error: "Invalid response format" };
     } catch (error) {
       return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Reconstruct streaming state when switching to a session that's streaming in background
+   *
+   * @param {string} sessionId - Session ID to reconstruct
+   * @param {Object} streamManager - StreamManager instance
+   */
+  reconstructStreamState(sessionId, streamManager) {
+    // Get buffered content
+    const buffer = streamManager.getBuffer(sessionId);
+
+    // Get buffered tools
+    const tools = streamManager.getBufferedTools(sessionId);
+
+    // TODO: Render buffered assistant content
+    // This would require access to chat UI elements and rendering functions
+    // For now, we just log that reconstruction would happen
+    if (buffer) {
+      window.electronAPI?.log("info", "Stream reconstruction needed", {
+        sessionId,
+        bufferLength: buffer.length,
+        toolCount: tools.length,
+      });
+    }
+
+    // TODO: Render buffered tool cards
+    // This would iterate over tools and create/update tool cards
+    // For now, we just track that tools need reconstruction
+    if (tools.length > 0) {
+      window.electronAPI?.log("info", "Tool cards need reconstruction", {
+        sessionId,
+        toolCount: tools.length,
+      });
     }
   }
 

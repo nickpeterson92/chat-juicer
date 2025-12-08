@@ -17,15 +17,21 @@ import { formatTimestamp } from "../../viewmodels/session-viewmodel.js";
  * @param {string} session.created_at - ISO timestamp
  * @param {boolean} isActive - Whether this session is active
  * @param {Object} domAdapter - DOM adapter
+ * @param {Object} streamManager - StreamManager instance (optional)
  * @returns {HTMLElement} Session list item element
  */
-export function renderSessionItem(session, isActive, domAdapter) {
+export function renderSessionItem(session, isActive, domAdapter, streamManager = null) {
   const itemDiv = domAdapter.createElement("div");
   domAdapter.addClass(itemDiv, "session-item");
   domAdapter.setAttribute(itemDiv, "data-session-id", session.id);
 
   if (isActive) {
     domAdapter.addClass(itemDiv, "active");
+  }
+
+  // Add streaming indicator if session is streaming
+  if (streamManager && streamManager.isStreaming(session.id)) {
+    domAdapter.addClass(itemDiv, "session-streaming");
   }
 
   // Main content area (clickable to switch session)
@@ -108,9 +114,10 @@ export function renderSessionItem(session, isActive, domAdapter) {
  * @param {Array<Object>} sessions - Array of session objects
  * @param {string|null} activeSessionId - ID of currently active session
  * @param {Object} domAdapter - DOM adapter
+ * @param {Object} streamManager - StreamManager instance (optional)
  * @returns {DocumentFragment} Fragment containing all session items
  */
-export function renderSessionList(sessions, activeSessionId, domAdapter) {
+export function renderSessionList(sessions, activeSessionId, domAdapter, streamManager = null) {
   if (!domAdapter || !domAdapter.getDocument) {
     // Handle null adapter case in tests
     return null;
@@ -120,7 +127,7 @@ export function renderSessionList(sessions, activeSessionId, domAdapter) {
 
   for (const session of sessions) {
     const isActive = session.id === activeSessionId;
-    const itemElement = renderSessionItem(session, isActive, domAdapter);
+    const itemElement = renderSessionItem(session, isActive, domAdapter, streamManager);
     fragment.appendChild(itemElement);
   }
 
