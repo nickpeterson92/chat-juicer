@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, shell, dialog } = require("electron");
 const { spawn } = require("node:child_process");
 const path = require("node:path");
 const fs = require("node:fs/promises");
@@ -570,6 +570,53 @@ app.whenReady().then(() => {
       return { success: true };
     } catch (error) {
       logger.error("Failed to open file", { dirPath, filename, error: error.message });
+      return { success: false, error: error.message };
+    }
+  });
+
+  // IPC handler for downloading code interpreter output files
+  ipcMain.handle("download-code-output-file", async (_event, { path: filePath, name }) => {
+    logger.info("Code output file download requested", { path: filePath, name });
+
+    try {
+      // Security check: ensure path is within project directory
+      const projectRoot = path.join(__dirname, "..");
+      const absolutePath = path.isAbsolute(filePath) ? filePath : path.join(projectRoot, filePath);
+      const normalizedPath = path.normalize(absolutePath);
+      const normalizedRoot = path.normalize(projectRoot);
+
+      if (!normalizedPath.startsWith(normalizedRoot)) {
+        logger.error("Security: Attempted to download file outside project", { path: normalizedPath });
+        return { success: false, error: "Invalid file path" };
+      }
+
+      // Check if file exists
+      try {
+        await fs.access(normalizedPath);
+      } catch (_e) {
+        logger.error("File does not exist", { path: normalizedPath });
+        return { success: false, error: "File not found" };
+      }
+
+      // Show save dialog
+      const { canceled, filePath: savePath } = await dialog.showSaveDialog({
+        title: "Save Code Output",
+        defaultPath: name,
+        buttonLabel: "Save",
+      });
+
+      if (canceled || !savePath) {
+        logger.info("File download canceled by user");
+        return { success: false, error: "Download canceled" };
+      }
+
+      // Copy file to chosen location
+      await fs.copyFile(normalizedPath, savePath);
+
+      logger.info("File downloaded successfully", { from: normalizedPath, to: savePath });
+      return { success: true, path: savePath };
+    } catch (error) {
+      logger.error("Failed to download file", { path: filePath, name, error: error.message });
       return { success: false, error: error.message };
     }
   });

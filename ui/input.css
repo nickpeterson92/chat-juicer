@@ -474,6 +474,124 @@
     @apply max-h-[250px];
   }
 
+  /* Code input display (Python code in arguments) */
+  .code-input-section .code-input-display {
+    @apply font-mono text-sm rounded-md p-4 max-h-[400px] overflow-y-auto overflow-x-auto;
+    background: var(--color-surface-3);
+    line-height: 1.5;
+  }
+
+  .code-input-display code.hljs {
+    background: transparent;
+    padding: 0;
+  }
+
+  /* ==========================================
+   * CODE INTERPRETER OUTPUT STYLING
+   * ========================================== */
+
+  /* Main container for code interpreter output */
+  .code-interpreter-output {
+    @apply flex flex-col gap-3;
+  }
+
+  /* Output section wrapper */
+  .code-output-section {
+    @apply mb-2;
+  }
+
+  /* Terminal output styling (stdout/stderr) */
+  .code-output-terminal {
+    @apply font-mono text-xs rounded-md p-3 max-h-[300px] overflow-y-auto overflow-x-auto whitespace-pre-wrap break-words;
+    background: var(--color-surface-3);
+    color: var(--color-text-on-surface);
+  }
+
+  /* Error output specific styling */
+  .code-output-section.code-output-error .code-output-terminal {
+    color: var(--color-status-error);
+    border-left: 3px solid var(--color-status-error);
+  }
+
+  /* Generated files container */
+  .code-output-files {
+    @apply flex flex-col gap-2;
+  }
+
+  /* Image container */
+  .code-output-image-container {
+    @apply rounded-lg overflow-hidden;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border-secondary);
+  }
+
+  .code-output-image {
+    @apply w-full h-auto max-h-[400px] object-contain;
+    display: block;
+  }
+
+  .code-output-image-caption {
+    @apply text-xs py-2 px-3;
+    color: var(--color-text-secondary);
+    background: var(--color-surface-overlay);
+    border-top: 1px solid var(--color-border-secondary);
+  }
+
+  /* File download item */
+  .code-output-file-item {
+    @apply flex items-center gap-2.5 py-2.5 px-3 rounded-lg;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border-secondary);
+  }
+
+  .code-output-file-item:hover {
+    border-color: var(--color-border-hover);
+  }
+
+  .code-output-file-icon {
+    @apply flex-shrink-0 flex items-center justify-center w-8 h-8;
+    color: var(--color-text-secondary);
+  }
+
+  .code-output-file-icon svg {
+    @apply w-5 h-5;
+  }
+
+  .code-output-file-info {
+    @apply flex-1 flex flex-col gap-0.5;
+  }
+
+  .code-output-file-name {
+    @apply text-sm font-medium;
+    color: var(--color-text-primary);
+  }
+
+  .code-output-file-size {
+    @apply text-xs;
+    color: var(--color-text-secondary);
+  }
+
+  .code-output-download-btn {
+    @apply flex-shrink-0 flex items-center justify-center w-8 h-8 p-0 border-none rounded bg-transparent cursor-pointer transition-all;
+    color: var(--color-text-secondary);
+  }
+
+  .code-output-download-btn:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-brand-primary);
+  }
+
+  .code-output-download-btn svg {
+    @apply w-4 h-4;
+  }
+
+  /* Execution metadata footer */
+  .code-output-meta {
+    @apply text-xs mt-2;
+    color: var(--color-text-secondary);
+    opacity: 0.7;
+  }
+
   /* File items */
   .file-item {
     @apply flex items-center gap-2.5 py-2.5 px-3 border rounded-lg transition-all cursor-pointer select-none active:scale-[0.98];
@@ -570,6 +688,7 @@
   /* Send button streaming state - keep blue, show stop icon */
   #send-btn.streaming {
     cursor: pointer;
+    position: relative;
   }
 
   /* Hide the arrow SVG when streaming */
@@ -577,14 +696,24 @@
     display: none;
   }
 
-  /* Show stop square icon when streaming */
+  /* Circle outline around stop square */
+  #send-btn.streaming::before {
+    content: "";
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+  }
+
+  /* Smaller stop square icon centered */
   #send-btn.streaming::after {
     content: "";
-    display: block;
-    width: 12px;
-    height: 12px;
+    position: absolute;
+    width: 8px;
+    height: 8px;
     background-color: currentColor;
-    border-radius: 2px;
+    border-radius: 1px;
   }
 
   /* Stopping state - reduced opacity while interrupt processes */

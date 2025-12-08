@@ -79,6 +79,9 @@ const FUNCTION_ICONS = {
   // Conversation summarization
   summarize_conversation:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="m3 21 9-9"/><path d="M12.2 6.2 11 5"/></svg>',
+  // Code interpreter
+  execute_python_code:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>',
   default:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>',
 };
@@ -223,6 +226,9 @@ function formatToolName(functionName) {
     tavilymap: "Map",
     tavily_crawl: "Crawl",
     tavilycrawl: "Crawl",
+    // Code interpreter
+    execute_python_code: "Code",
+    executepythoncode: "Code",
   };
 
   const normalized = name.toLowerCase().replace(/[_-]/g, "");
@@ -371,6 +377,169 @@ function toggleFunctionCard(cardElement) {
 }
 
 /**
+ * Render code interpreter output with syntax highlighting, images, and file downloads
+ * @param {Object} result - Parsed result from execute_python_code
+ * @returns {HTMLElement} Rendered output element
+ */
+function renderCodeInterpreterOutput(result) {
+  const container = document.createElement("div");
+  container.className = "code-interpreter-output";
+
+  // Show stdout if present
+  if (result.stdout && result.stdout.trim()) {
+    const stdoutSection = document.createElement("div");
+    stdoutSection.className = "code-output-section";
+
+    const stdoutLabel = document.createElement("div");
+    stdoutLabel.className = "disclosure-section-label";
+    stdoutLabel.textContent = "Output";
+    stdoutSection.appendChild(stdoutLabel);
+
+    const stdoutPre = document.createElement("pre");
+    stdoutPre.className = "code-output-terminal";
+    stdoutPre.textContent = result.stdout;
+    stdoutSection.appendChild(stdoutPre);
+
+    container.appendChild(stdoutSection);
+  }
+
+  // Show stderr if present
+  if (result.stderr && result.stderr.trim()) {
+    const stderrSection = document.createElement("div");
+    stderrSection.className = "code-output-section code-output-error";
+
+    const stderrLabel = document.createElement("div");
+    stderrLabel.className = "disclosure-section-label";
+    stderrLabel.textContent = "Errors";
+    stderrSection.appendChild(stderrLabel);
+
+    const stderrPre = document.createElement("pre");
+    stderrPre.className = "code-output-terminal";
+    stderrPre.textContent = result.stderr;
+    stderrSection.appendChild(stderrPre);
+
+    container.appendChild(stderrSection);
+  }
+
+  // Show generated files
+  if (result.files && result.files.length > 0) {
+    const filesSection = document.createElement("div");
+    filesSection.className = "code-output-section";
+
+    const filesLabel = document.createElement("div");
+    filesLabel.className = "disclosure-section-label";
+    filesLabel.textContent = "Generated Files";
+    filesSection.appendChild(filesLabel);
+
+    const filesContainer = document.createElement("div");
+    filesContainer.className = "code-output-files";
+
+    for (const file of result.files) {
+      if (file.type && file.type.startsWith("image/") && file.base64) {
+        // Render inline image
+        const imageContainer = document.createElement("div");
+        imageContainer.className = "code-output-image-container";
+
+        const img = document.createElement("img");
+        img.className = "code-output-image";
+        img.src = `data:${file.type};base64,${file.base64}`;
+        img.alt = file.name || "Generated image";
+        img.title = file.name || "Generated image";
+        imageContainer.appendChild(img);
+
+        const imageCaption = document.createElement("div");
+        imageCaption.className = "code-output-image-caption";
+        imageCaption.textContent = file.name || "Untitled";
+        imageContainer.appendChild(imageCaption);
+
+        filesContainer.appendChild(imageContainer);
+      } else {
+        // Render file download link
+        const fileItem = document.createElement("div");
+        fileItem.className = "code-output-file-item";
+
+        const fileIcon = document.createElement("span");
+        fileIcon.className = "code-output-file-icon";
+        fileIcon.innerHTML =
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M12 18v-6M9 15l3 3 3-3"/></svg>';
+        fileItem.appendChild(fileIcon);
+
+        const fileInfo = document.createElement("div");
+        fileInfo.className = "code-output-file-info";
+
+        const fileName = document.createElement("div");
+        fileName.className = "code-output-file-name";
+        fileName.textContent = file.name || "Untitled";
+        fileInfo.appendChild(fileName);
+
+        const fileSize = document.createElement("div");
+        fileSize.className = "code-output-file-size";
+        fileSize.textContent = formatFileSize(file.size || 0);
+        fileInfo.appendChild(fileSize);
+
+        fileItem.appendChild(fileInfo);
+
+        const downloadBtn = document.createElement("button");
+        downloadBtn.className = "code-output-download-btn";
+        downloadBtn.title = "Download file";
+        downloadBtn.innerHTML =
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>';
+        downloadBtn.onclick = async () => {
+          await downloadFile(file);
+        };
+        fileItem.appendChild(downloadBtn);
+
+        filesContainer.appendChild(fileItem);
+      }
+    }
+
+    filesSection.appendChild(filesContainer);
+    container.appendChild(filesSection);
+  }
+
+  // Show execution metadata
+  if (result.execution_time_ms !== undefined) {
+    const metaSection = document.createElement("div");
+    metaSection.className = "code-output-meta";
+    metaSection.textContent = `Executed in ${result.execution_time_ms}ms`;
+    container.appendChild(metaSection);
+  }
+
+  return container;
+}
+
+/**
+ * Format file size for display
+ * @param {number} bytes - File size in bytes
+ * @returns {string} Formatted size
+ */
+function formatFileSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Download a file from code interpreter output
+ * @param {Object} file - File metadata
+ */
+async function downloadFile(file) {
+  try {
+    // Request file download via IPC
+    const result = await window.electronAPI.invoke("download-code-output-file", {
+      path: file.path,
+      name: file.name,
+    });
+
+    if (!result.success) {
+      console.error("[function-card-ui] Download failed:", result.error);
+    }
+  } catch (error) {
+    console.error("[function-card-ui] Download error:", error);
+  }
+}
+
+/**
  * Update function call card status (throttled for performance)
  * @param {Map} activeCalls - Map of active function calls
  * @param {string} callId - Call identifier
@@ -417,9 +586,11 @@ function flushStatusUpdates(activeCalls) {
     // Update args preview in header when arguments arrive
     // Skip args display entirely for summarize_conversation (cleaner card like Thought)
     const isSummarization = card.rawName === "summarize_conversation";
+    const isCodeInterpreter = card.rawName === "execute_python_code" || card.rawName === "wrapped_execute_python_code";
+
     if (data.arguments && !isSummarization) {
       const argsPreview = card.element.querySelector(".disclosure-args-preview");
-      if (argsPreview) {
+      if (argsPreview && !isCodeInterpreter) {
         const primaryArg = extractPrimaryArg(data.arguments, card.rawName || card.name);
         argsPreview.textContent = primaryArg;
 
@@ -433,26 +604,60 @@ function flushStatusUpdates(activeCalls) {
 
       // Add full arguments to expanded content
       if (contentDiv && !contentDiv.querySelector(".disclosure-arguments")) {
-        const { html, isJson } = prettyPrintJson(data.arguments);
+        // For code interpreter, show code with syntax highlighting
+        if (isCodeInterpreter) {
+          const parsedArgs = safeParse(data.arguments, {});
+          const code = parsedArgs.code || "";
 
-        const argsSection = document.createElement("div");
-        argsSection.className = "disclosure-arguments";
+          if (code) {
+            const codeSection = document.createElement("div");
+            codeSection.className = "disclosure-arguments code-input-section";
 
-        const argsLabel = document.createElement("div");
-        argsLabel.className = "disclosure-section-label";
-        argsLabel.textContent = "Arguments";
-        argsSection.appendChild(argsLabel);
+            const codeLabel = document.createElement("div");
+            codeLabel.className = "disclosure-section-label";
+            codeLabel.textContent = "Python Code";
+            codeSection.appendChild(codeLabel);
 
-        const argsContent = document.createElement("pre");
-        argsContent.className = `disclosure-section-content${isJson ? " hljs" : ""}`;
-        if (isJson) {
-          argsContent.innerHTML = html;
+            const codePre = document.createElement("pre");
+            codePre.className = "code-input-display";
+
+            // Apply Python syntax highlighting
+            const highlighted = hljs.highlight(code, { language: "python" });
+            const codeElement = document.createElement("code");
+            codeElement.className = "hljs language-python";
+            codeElement.innerHTML = highlighted.value;
+            codePre.appendChild(codeElement);
+
+            codeSection.appendChild(codePre);
+            contentDiv.appendChild(codeSection);
+
+            // Show chevron since we have code to display
+            const chevron = card.element.querySelector(".disclosure-chevron");
+            if (chevron) chevron.classList.add("visible");
+          }
         } else {
-          argsContent.textContent = html;
-        }
-        argsSection.appendChild(argsContent);
+          // Regular tool: show JSON arguments
+          const { html, isJson } = prettyPrintJson(data.arguments);
 
-        contentDiv.appendChild(argsSection);
+          const argsSection = document.createElement("div");
+          argsSection.className = "disclosure-arguments";
+
+          const argsLabel = document.createElement("div");
+          argsLabel.className = "disclosure-section-label";
+          argsLabel.textContent = "Arguments";
+          argsSection.appendChild(argsLabel);
+
+          const argsContent = document.createElement("pre");
+          argsContent.className = `disclosure-section-content${isJson ? " hljs" : ""}`;
+          if (isJson) {
+            argsContent.innerHTML = html;
+          } else {
+            argsContent.textContent = html;
+          }
+          argsSection.appendChild(argsContent);
+
+          contentDiv.appendChild(argsSection);
+        }
       }
     }
 
@@ -492,6 +697,8 @@ function flushStatusUpdates(activeCalls) {
     // Summarization uses thought-like styling (no label, clean text)
     if (data.result && contentDiv && !contentDiv.querySelector(".disclosure-result")) {
       const isSummarizationResult = card.rawName === "summarize_conversation";
+      const isCodeInterpreterResult =
+        card.rawName === "execute_python_code" || card.rawName === "wrapped_execute_python_code";
 
       if (isSummarizationResult) {
         // Summarization: Clean thought-like display (no label, just text)
@@ -510,6 +717,29 @@ function flushStatusUpdates(activeCalls) {
         // Show chevron for summarization (we skipped args, so need to show it here)
         const chevron = card.element.querySelector(".disclosure-chevron");
         if (chevron) chevron.classList.add("visible");
+      } else if (isCodeInterpreterResult) {
+        // Code interpreter: Special rendering with syntax highlighting, images, file downloads
+        const parsedResult = safeParse(data.result, null);
+        if (parsedResult && typeof parsedResult === "object") {
+          const codeOutputElement = renderCodeInterpreterOutput(parsedResult);
+          contentDiv.appendChild(codeOutputElement);
+        } else {
+          // Fallback to regular result display if parsing fails
+          const resultSection = document.createElement("div");
+          resultSection.className = "disclosure-result";
+
+          const resultLabel = document.createElement("div");
+          resultLabel.className = "disclosure-section-label";
+          resultLabel.textContent = "Result";
+          resultSection.appendChild(resultLabel);
+
+          const resultContent = document.createElement("pre");
+          resultContent.className = "disclosure-section-content";
+          resultContent.textContent = data.result;
+          resultSection.appendChild(resultContent);
+
+          contentDiv.appendChild(resultSection);
+        }
       } else {
         // Regular tool: Show with "Result" label and JSON/text formatting
         const resultSection = document.createElement("div");
@@ -760,30 +990,64 @@ export function createCompletedToolCard(chatContainer, toolData) {
 
   // Add arguments section (skip for summarization - cleaner card like Thought)
   if (args && !isSummarization) {
-    const { html, isJson } = prettyPrintJson(args);
+    const isCodeInterpreter = name === "execute_python_code" || name === "wrapped_execute_python_code";
 
-    const argsSection = document.createElement("div");
-    argsSection.className = "disclosure-arguments";
+    // For code interpreter, show code with syntax highlighting
+    if (isCodeInterpreter) {
+      const parsedArgs = safeParse(args, {});
+      const code = parsedArgs.code || "";
 
-    const argsLabel = document.createElement("div");
-    argsLabel.className = "disclosure-section-label";
-    argsLabel.textContent = "Arguments";
-    argsSection.appendChild(argsLabel);
+      if (code) {
+        const codeSection = document.createElement("div");
+        codeSection.className = "disclosure-arguments code-input-section";
 
-    const argsContent = document.createElement("pre");
-    argsContent.className = `disclosure-section-content${isJson ? " hljs" : ""}`;
-    if (isJson) {
-      argsContent.innerHTML = html;
+        const codeLabel = document.createElement("div");
+        codeLabel.className = "disclosure-section-label";
+        codeLabel.textContent = "Python Code";
+        codeSection.appendChild(codeLabel);
+
+        const codePre = document.createElement("pre");
+        codePre.className = "code-input-display";
+
+        // Apply Python syntax highlighting
+        const highlighted = hljs.highlight(code, { language: "python" });
+        const codeElement = document.createElement("code");
+        codeElement.className = "hljs language-python";
+        codeElement.innerHTML = highlighted.value;
+        codePre.appendChild(codeElement);
+
+        codeSection.appendChild(codePre);
+        contentDiv.appendChild(codeSection);
+      }
     } else {
-      argsContent.textContent = html;
-    }
-    argsSection.appendChild(argsContent);
+      // Regular tool: show JSON arguments
+      const { html, isJson } = prettyPrintJson(args);
 
-    contentDiv.appendChild(argsSection);
+      const argsSection = document.createElement("div");
+      argsSection.className = "disclosure-arguments";
+
+      const argsLabel = document.createElement("div");
+      argsLabel.className = "disclosure-section-label";
+      argsLabel.textContent = "Arguments";
+      argsSection.appendChild(argsLabel);
+
+      const argsContent = document.createElement("pre");
+      argsContent.className = `disclosure-section-content${isJson ? " hljs" : ""}`;
+      if (isJson) {
+        argsContent.innerHTML = html;
+      } else {
+        argsContent.textContent = html;
+      }
+      argsSection.appendChild(argsContent);
+
+      contentDiv.appendChild(argsSection);
+    }
   }
 
   // Add result section
   if (result) {
+    const isCodeInterpreterResult = name === "execute_python_code" || name === "wrapped_execute_python_code";
+
     if (isSummarization) {
       // Summarization: Clean thought-like display (no label, just text)
       const summarySection = document.createElement("div");
@@ -797,6 +1061,29 @@ export function createCompletedToolCard(chatContainer, toolData) {
       summarySection.appendChild(summaryContent);
 
       contentDiv.appendChild(summarySection);
+    } else if (isCodeInterpreterResult && success) {
+      // Code interpreter: Special rendering with syntax highlighting, images, file downloads
+      const parsedResult = safeParse(result, null);
+      if (parsedResult && typeof parsedResult === "object") {
+        const codeOutputElement = renderCodeInterpreterOutput(parsedResult);
+        contentDiv.appendChild(codeOutputElement);
+      } else {
+        // Fallback to regular result display if parsing fails
+        const resultSection = document.createElement("div");
+        resultSection.className = "disclosure-result";
+
+        const resultLabel = document.createElement("div");
+        resultLabel.className = "disclosure-section-label";
+        resultLabel.textContent = "Result";
+        resultSection.appendChild(resultLabel);
+
+        const resultContent = document.createElement("pre");
+        resultContent.className = "disclosure-section-content";
+        resultContent.textContent = result;
+        resultSection.appendChild(resultContent);
+
+        contentDiv.appendChild(resultSection);
+      }
     } else {
       // Regular tool: Show with "Result" label and JSON/text formatting
       const resultSection = document.createElement("div");
