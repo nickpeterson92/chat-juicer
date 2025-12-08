@@ -177,6 +177,8 @@ describe("markdown-renderer", () => {
     document.body.appendChild(container);
 
     await processMermaidDiagrams(container);
+    // Wait for batch processing (50ms batch delay + processing time)
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     const wrapper = container.querySelector(".mermaid-wrapper");
     expect(wrapper).toBeTruthy();
@@ -206,6 +208,8 @@ describe("markdown-renderer", () => {
     document.body.appendChild(container);
 
     await processMermaidDiagrams(container);
+    // Wait for batch processing (50ms batch delay + processing time)
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     // Error is now inside a wrapper with dataset.processed on the wrapper
     const wrapper = container.querySelector(".mermaid-wrapper");

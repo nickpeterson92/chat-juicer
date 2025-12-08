@@ -134,8 +134,8 @@ export function updateAssistantMessage(chatContainer, currentAssistantElement, c
   // DO NOT process Mermaid during streaming - it causes race conditions
   // Mermaid will be processed after streaming completes in handleAssistantEnd
 
-  // Smart scroll with streaming threshold (handles large content jumps like code blocks)
-  scheduleScroll(chatContainer, { streaming: true });
+  // Smart scroll - content growth detection handles large chunks automatically
+  scheduleScroll(chatContainer);
 }
 
 /**

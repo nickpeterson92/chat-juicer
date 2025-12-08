@@ -7,37 +7,35 @@
 let scrollPending = false;
 let scrollTarget = null;
 
-// Distance from bottom (in pixels) to consider "near bottom"
+// Distance from bottom (in pixels) to consider "near bottom" for auto-scroll
+// ~6-8 lines of text - if within this range, user is "following along"
 const SCROLL_THRESHOLD = 150;
-// Larger threshold for streaming (handles large content jumps like code blocks)
-const STREAMING_THRESHOLD = 500;
 
 // User scroll detection (prevents scroll fighting during streaming)
 const userScrolling = new Map(); // Track which containers have active user scrolling
 const ignoreNextScroll = new Map(); // Track programmatic scrolls to ignore in listener
 const scrollTimeouts = new Map(); // Debounce timeouts for scroll detection
+const lastScrollState = new Map(); // Track last scroll position to detect content growth vs user scroll
 const SCROLL_DEBOUNCE_MS = 150; // Time to wait after scroll stops before allowing auto-scroll
 
 /**
  * Check if user is near the bottom of the container
  * Used to determine if auto-scroll should happen
  * @param {HTMLElement} container - Container element to check
- * @param {boolean} isStreaming - Whether content is actively streaming (uses larger threshold)
  * @returns {boolean} True if user is near bottom
  */
-function isNearBottom(container, isStreaming = false) {
+function isNearBottom(container) {
   if (!container) return false;
 
-  // Use larger threshold during streaming to handle large content jumps (code blocks, tables, etc.)
-  const threshold = isStreaming ? STREAMING_THRESHOLD : SCROLL_THRESHOLD;
   const position = container.scrollTop + container.clientHeight;
   const bottom = container.scrollHeight;
 
-  return position >= bottom - threshold;
+  return position >= bottom - SCROLL_THRESHOLD;
 }
 
 /**
  * Handle user scroll event - marks container as actively scrolling
+ * Distinguishes between actual user scrolling and content-growth-induced scroll events
  * @param {HTMLElement} container - Container being scrolled
  */
 function handleUserScroll(container) {
@@ -46,6 +44,35 @@ function handleUserScroll(container) {
   // Ignore programmatic scrolls (triggered by scheduleScroll)
   if (ignoreNextScroll.get(container)) {
     ignoreNextScroll.set(container, false);
+    return;
+  }
+
+  // Get current and previous scroll state
+  const currentScrollTop = container.scrollTop;
+  const currentScrollHeight = container.scrollHeight;
+  const lastState = lastScrollState.get(container) || { scrollTop: 0, scrollHeight: 0 };
+
+  // Detect content growth vs user scroll:
+  // - Content growth: scrollHeight increased, scrollTop stayed same (or adjusted by browser)
+  // - User scroll: scrollTop changed independently of content growth
+  const scrollHeightDelta = currentScrollHeight - lastState.scrollHeight;
+  const scrollTopDelta = currentScrollTop - lastState.scrollTop;
+
+  // Update stored state
+  lastScrollState.set(container, { scrollTop: currentScrollTop, scrollHeight: currentScrollHeight });
+
+  // If scrollHeight grew and scrollTop didn't change much (within tolerance),
+  // this is likely content growth, not user scroll - don't mark as user scrolling
+  if (scrollHeightDelta > 0 && Math.abs(scrollTopDelta) < 10) {
+    return;
+  }
+
+  // If user scrolled UP (scrollTop decreased), that's definitely intentional
+  // If scrollTop increased by less than content growth, user might have scrolled up relatively
+  const isLikelyUserScroll = scrollTopDelta < 0 || (scrollHeightDelta > 0 && scrollTopDelta < scrollHeightDelta - 50);
+
+  if (!isLikelyUserScroll && scrollHeightDelta > 0) {
+    // Content grew and user is still following along - not a user scroll
     return;
   }
 
@@ -80,6 +107,10 @@ export function setupScrollDetection(container) {
 
   // Initialize tracking
   userScrolling.set(container, false);
+  lastScrollState.set(container, {
+    scrollTop: container.scrollTop,
+    scrollHeight: container.scrollHeight,
+  });
 
   // Listen for user scroll events
   container.addEventListener("scroll", () => handleUserScroll(container), { passive: true });
@@ -94,17 +125,15 @@ export function setupScrollDetection(container) {
  * @param {HTMLElement} container - Container element to scroll
  * @param {Object} options - Scroll options
  * @param {boolean} options.force - Force scroll even if user is not at bottom (default: false)
- * @param {boolean} options.streaming - Whether content is actively streaming (uses larger threshold for large content jumps)
  */
 export function scheduleScroll(container, options = {}) {
-  const { force = false, streaming = false } = options;
+  const { force = false } = options;
 
   // Check if user is actively scrolling (prevents scroll fighting)
   if (!force && userScrolling.get(container)) return;
 
   // Only auto-scroll if user is near bottom (or forced)
-  // Use larger threshold during streaming to handle large content jumps
-  if (!force && !isNearBottom(container, streaming)) return;
+  if (!force && !isNearBottom(container)) return;
 
   // Update state to latest call's values (last caller wins)
   // This is consistent with scrollTarget and ensures the most recent intent is honored
