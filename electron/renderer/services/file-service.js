@@ -328,7 +328,7 @@ export class FileService {
 
     // For larger files, process in chunks with UI breaks
     // Each chunk is converted to base64 separately, then joined
-    const chunkSize = 256 * 1024; // 256KB chunks
+    const chunkSize = 262143; // ~256KB, divisible by 3 (87381 * 3)
     const chunks = [];
     let processed = 0;
 
