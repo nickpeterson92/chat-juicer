@@ -588,6 +588,7 @@ export class ChatContainer {
           result: msg.result || existing.result,
           status: msg.status === "completed" ? "completed" : existing.status || "detected",
           success: msg.success !== undefined ? msg.success : existing.success,
+          interrupted: msg.interrupted !== undefined ? msg.interrupted : existing.interrupted,
         });
       }
     }

@@ -29,11 +29,12 @@ class TestCallTracker:
         tracker = CallTracker()
         assert tracker is not None
         assert hasattr(tracker, "add_call")
-        assert hasattr(tracker, "pop_call")
+        assert hasattr(tracker, "pop_call_by_id")
+        assert hasattr(tracker, "drain_all")
         assert len(tracker.active_calls) == 0
 
-    def test_call_tracker_add_and_pop(self) -> None:
-        """Test adding and popping call IDs."""
+    def test_call_tracker_add_and_pop_by_id(self) -> None:
+        """Test adding and popping call IDs by specific ID (parallel-safe)."""
         tracker = CallTracker()
 
         # Add calls
@@ -42,24 +43,40 @@ class TestCallTracker:
 
         assert len(tracker.active_calls) == 2
 
-        # Pop calls in FIFO order
-        call1 = tracker.pop_call()
+        # Pop by specific ID (works regardless of order - parallel-safe)
+        call2 = tracker.pop_call_by_id("call_2")
+        assert call2 is not None
+        assert call2["call_id"] == "call_2"
+        assert call2["tool_name"] == "tool_b"
+
+        call1 = tracker.pop_call_by_id("call_1")
         assert call1 is not None
         assert call1["call_id"] == "call_1"
         assert call1["tool_name"] == "tool_a"
 
-        call2 = tracker.pop_call()
-        assert call2 is not None
-        assert call2["call_id"] == "call_2"
-
-        # Queue should be empty
+        # Dict should be empty
         assert len(tracker.active_calls) == 0
 
-    def test_call_tracker_pop_empty(self) -> None:
-        """Test popping from empty tracker returns None."""
+    def test_call_tracker_pop_nonexistent(self) -> None:
+        """Test popping nonexistent call_id returns None."""
         tracker = CallTracker()
-        result = tracker.pop_call()
+        result = tracker.pop_call_by_id("nonexistent")
         assert result is None
+
+    def test_call_tracker_drain_all(self) -> None:
+        """Test drain_all returns all calls and clears tracker."""
+        tracker = CallTracker()
+        tracker.add_call("call_1", "tool_a")
+        tracker.add_call("call_2", "tool_b")
+        tracker.add_call("call_3", "tool_c")
+
+        all_calls = tracker.drain_all()
+        assert len(all_calls) == 3
+        assert len(tracker.active_calls) == 0
+
+        # Verify all calls are returned
+        call_ids = {c["call_id"] for c in all_calls}
+        assert call_ids == {"call_1", "call_2", "call_3"}
 
     def test_call_tracker_has_call(self) -> None:
         """Test has_call method for checking existing calls."""
@@ -215,8 +232,8 @@ class TestHandleToolCall:
         assert result is not None
         data = json.loads(result)
         assert data["name"] == "test_func"
-        # call_id from tracker should be fallback_id
-        call = tracker.pop_call()
+        # call_id from tracker should be fallback_id (pop by specific ID)
+        call = tracker.pop_call_by_id("fallback_id")
         assert call is not None
         assert call["call_id"] == "fallback_id"
 
@@ -259,13 +276,14 @@ class TestHandleToolOutput:
     """Tests for handle_tool_output function."""
 
     def test_handle_tool_output_success(self) -> None:
-        """Test handling successful tool output."""
+        """Test handling successful tool output with proper call_id matching."""
         tracker = CallTracker()
         tracker.add_call("call_123", "test_tool")
 
         mock_item = Mock()
         mock_item.output = {"result": "success"}
-        mock_item.raw_item = {}
+        # raw_item must include call_id for parallel-safe matching
+        mock_item.raw_item = {"call_id": "call_123"}
 
         result = handle_tool_output(mock_item, tracker)
 

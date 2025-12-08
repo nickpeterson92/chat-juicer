@@ -949,10 +949,11 @@ export function clearFunctionCards(chatContainer) {
  * @param {string|Object} toolData.arguments - Tool arguments
  * @param {string} toolData.result - Tool result
  * @param {boolean} toolData.success - Whether the call succeeded
+ * @param {boolean} [toolData.interrupted=false] - Whether the call was interrupted by user
  * @returns {HTMLElement} The created card element
  */
 export function createCompletedToolCard(chatContainer, toolData) {
-  const { call_id, name, arguments: args, result, success = true } = toolData;
+  const { call_id, name, arguments: args, result, success = true, interrupted = false } = toolData;
 
   // Summarization cards have special styling (like Thought cards)
   const isSummarization = name === "summarize_conversation";
@@ -962,7 +963,8 @@ export function createCompletedToolCard(chatContainer, toolData) {
   cardDiv.className = "function-disclosure";
   cardDiv.id = `function-${call_id}`;
   cardDiv.dataset.expanded = "false";
-  cardDiv.dataset.status = success ? "completed" : "error";
+  // Interrupted takes priority over error for correct strikethrough styling
+  cardDiv.dataset.status = interrupted ? "interrupted" : success ? "completed" : "error";
   cardDiv.dataset.persisted = "true"; // Mark as loaded from persistence
 
   // Header row: [icon] ToolName args... ▼
@@ -1097,12 +1099,14 @@ export function createCompletedToolCard(chatContainer, toolData) {
       }
     } else {
       // Regular tool: Show with "Result" label and JSON/text formatting
+      // Interrupted tools use "Result" styling (not error) - they didn't fail, just got cancelled
+      const isError = !success && !interrupted;
       const resultSection = document.createElement("div");
-      resultSection.className = success ? "disclosure-result" : "disclosure-error";
+      resultSection.className = isError ? "disclosure-error" : "disclosure-result";
 
       const resultLabel = document.createElement("div");
       resultLabel.className = "disclosure-section-label";
-      resultLabel.textContent = success ? "Result" : "Error";
+      resultLabel.textContent = isError ? "Error" : "Result";
       resultSection.appendChild(resultLabel);
 
       const resultContent = document.createElement("pre");
@@ -1111,14 +1115,14 @@ export function createCompletedToolCard(chatContainer, toolData) {
       const displayContent = isTruncated ? result.substring(0, 4000) : result;
 
       if (isJson && !isTruncated) {
-        resultContent.className = `${success ? "disclosure-section-content" : "disclosure-section-content error-text"} hljs`;
+        resultContent.className = `${isError ? "disclosure-section-content error-text" : "disclosure-section-content"} hljs`;
         resultContent.innerHTML = html;
       } else if (isJson && isTruncated) {
         const truncatedResult = prettyPrintJson(displayContent);
-        resultContent.className = `${success ? "disclosure-section-content" : "disclosure-section-content error-text"} hljs`;
+        resultContent.className = `${isError ? "disclosure-section-content error-text" : "disclosure-section-content"} hljs`;
         resultContent.innerHTML = `${truncatedResult.html}\n<span class="hljs-comment">... (truncated)</span>`;
       } else {
-        resultContent.className = success ? "disclosure-section-content" : "disclosure-section-content error-text";
+        resultContent.className = isError ? "disclosure-section-content error-text" : "disclosure-section-content";
         resultContent.textContent = isTruncated ? `${displayContent}\n... (truncated)` : displayContent;
       }
       resultSection.appendChild(resultContent);

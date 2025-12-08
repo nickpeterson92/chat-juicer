@@ -377,9 +377,15 @@
     transform: rotate(0deg);
   }
 
-  /* Status-based styling - only highlight errors, keep everything else chill */
+  /* Status-based styling - only highlight errors/interrupts, keep everything else chill */
   .function-disclosure[data-status="error"] .disclosure-tool-name {
     color: var(--color-status-error);
+  }
+
+  .function-disclosure[data-status="interrupted"] .disclosure-tool-name {
+    text-decoration: line-through;
+    text-decoration-color: var(--color-text-secondary);
+    opacity: 0.7;
   }
 
   /* In-progress shimmer animation - wave that lights up letters left to right */
@@ -769,6 +775,7 @@
   /* Partial/interrupted response styling */
   .message-partial {
     position: relative;
+    padding-left: 12px; /* Make room for warning bar */
   }
 
   .message-partial .message-content::after {
