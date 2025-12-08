@@ -903,7 +903,7 @@ describe("FilePanel", () => {
         filePanel.setSession("session-123");
         filePanel.currentOutputPath = "code/python";
 
-        // Input tab is active by default
+        // Sources tab is active by default
         sourcesTab.classList.add("active");
         outputTab.classList.remove("active");
 
