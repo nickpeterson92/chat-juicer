@@ -174,7 +174,6 @@ async function reRenderAllMermaidDiagrams() {
 const themeObserver = new MutationObserver((mutations) => {
   mutations.forEach((mutation) => {
     if (mutation.type === "attributes" && mutation.attributeName === "data-theme") {
-      console.log("[Mermaid] Theme changed, re-initializing...");
       mermaid.initialize(getMermaidConfig());
       // Re-render all existing diagrams with new theme
       reRenderAllMermaidDiagrams();
@@ -189,7 +188,6 @@ themeObserver.observe(document.documentElement, {
 
 // Also listen for custom theme-changed event (redundant safety)
 document.addEventListener("theme-changed", () => {
-  console.log("[Mermaid] Custom theme-changed event, re-initializing...");
   mermaid.initialize(getMermaidConfig());
   reRenderAllMermaidDiagrams();
 });
