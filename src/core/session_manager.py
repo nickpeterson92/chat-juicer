@@ -10,7 +10,6 @@ import uuid
 
 from datetime import datetime
 from pathlib import Path
-from typing import cast
 
 from agents import Agent, Runner, TResponseInputItem
 
@@ -496,22 +495,10 @@ class SessionManager:
                 instructions=SESSION_TITLE_GENERATION_PROMPT,
             )
 
-            # Append title generation request as final user message
-            title_request = {
-                "role": "user",
-                "content": (
-                    "Generate a concise 3-5 word title for the conversation above. "
-                    "Use title case, be specific about the main topic, no articles unless necessary, "
-                    "no punctuation at the end. Output ONLY the title with no explanation or quotes."
-                ),
-            }
-            # Cast to TResponseInputItem for type safety (runtime-compatible dict)
-            messages_with_request = [*recent_messages, cast(TResponseInputItem, title_request)]
-
-            # Pass messages with title request to Runner
+            # Pass conversation directly - system prompt contains all instructions
             result = await Runner.run(
                 title_agent,
-                input=messages_with_request,
+                input=recent_messages,
                 session=None,  # No session for title generation (one-shot operation)
             )
 

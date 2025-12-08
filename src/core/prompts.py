@@ -115,7 +115,7 @@ Use **execute_python_code** to run Python in a secure sandbox:
 - **File generation**: Create CSVs, JSON, or other data files
 - **Document conversion**: Transform markdown to Word/PowerPoint using session files
 
-**Available packages**: numpy, pandas, matplotlib, scipy, seaborn, scikit-learn, pillow, sympy, plotly, openpyxl, python-docx, pypdf, python-pptx, tabulate, faker, dateutil, humanize, pyyaml, lxml
+**Available packages**: numpy, pandas, matplotlib, scipy, seaborn, scikit-learn, pillow, sympy, plotly, openpyxl, python-docx, pypdf, python-pptx, tabulate, faker, dateutil, humanize, pyyaml, lxml, pypandoc
 
 **File Access**:
 - `/workspace` (read/write): Working directory for code outputs - files saved here are returned
@@ -196,6 +196,11 @@ Keep it information-dense while preserving technical accuracy."""
 
 
 # Session Title Generation Prompt
-SESSION_TITLE_GENERATION_PROMPT = (
-    """You are a helpful assistant that generates concise, descriptive titles for conversations."""
-)
+SESSION_TITLE_GENERATION_PROMPT = """You are a title generator. Analyze the conversation and output ONLY a concise 3-5 word title.
+
+Rules:
+- Use title case
+- Be specific about the main topic
+- No articles unless necessary
+- No punctuation at the end
+- Output ONLY the title with no explanation, quotes, or preamble"""

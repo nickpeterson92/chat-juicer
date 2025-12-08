@@ -33,6 +33,8 @@ RUN groupadd -g 1000 sandbox && \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Required for some Python packages
     libgomp1 \
+    # Document conversion (markdown, docx, html, etc.)
+    pandoc \
     # Cleanup to reduce image size
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
@@ -70,7 +72,8 @@ RUN pip install --no-cache-dir \
     python-dateutil==2.9.0 \
     humanize==4.11.0 \
     pyyaml==6.0.2 \
-    lxml==5.3.0
+    lxml==5.3.0 \
+    pypandoc==1.14
 
 # Tier 5: Visualization
 RUN pip install --no-cache-dir \

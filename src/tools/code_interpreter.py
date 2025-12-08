@@ -487,6 +487,8 @@ class SandboxPool:
             script_path.write_text(enhanced_code, encoding="utf-8")
 
         # Build command args - base configuration
+        # Note: We don't use --user because macOS + Podman UID mapping is unreliable.
+        # Security is enforced by: --network=none, --read-only, memory/cpu limits, and container isolation.
         cmd_args = [
             self.runtime,
             "run",
@@ -497,8 +499,6 @@ class SandboxPool:
             f"--cpus={CPU_LIMIT}",
             "--tmpfs",
             f"/tmp:size={TMP_SIZE}",
-            "--user",
-            "1000:1000",
             "-v",
             f"{workspace_path}:/workspace:rw",  # Mount workspace
         ]

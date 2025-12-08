@@ -283,6 +283,11 @@ function sendProtocolNegotiation() {
 app.whenReady().then(() => {
   logger.info("Electron app ready, initializing...");
 
+  // Set dock icon on macOS (needed for dev mode)
+  if (process.platform === "darwin" && app.dock) {
+    app.dock.setIcon(path.join(__dirname, "icon.png"));
+  }
+
   // IPC handler for renderer logging
   ipcMain.on("renderer-log", (_event, { level, message, data }) => {
     const rendererLogger = new Logger("renderer");

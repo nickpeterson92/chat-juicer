@@ -205,7 +205,7 @@ The sandbox has access to:
 - numpy, pandas, matplotlib, scipy, seaborn, scikit-learn
 - pillow, sympy, plotly
 - openpyxl, python-docx, pypdf, python-pptx (office documents)
-- tabulate, faker, dateutil, humanize, pyyaml, lxml (utilities)
+- tabulate, faker, dateutil, humanize, pyyaml, lxml, pypandoc (utilities)
 
 Limitations:
 - No internet access
