@@ -571,7 +571,14 @@ async def handle_file_upload(app_state: AppState, upload_data: dict[str, Any]) -
 
     # Process upload with session_id
     # V2 binary protocol sends 'content' field, not 'data'
-    result = save_uploaded_file(filename=upload_data["filename"], data=upload_data["content"], session_id=session_id)
+    # Encoding can be "base64" (efficient) or "array" (legacy list of integers)
+    encoding = upload_data.get("encoding", "array")
+    result = save_uploaded_file(
+        filename=upload_data["filename"],
+        data=upload_data["content"],
+        session_id=session_id,
+        encoding=encoding,
+    )
 
     # If this is a new session, send session info to frontend
     if is_new and session_id and app_state.session_manager:

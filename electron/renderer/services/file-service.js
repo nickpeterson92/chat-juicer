@@ -211,14 +211,19 @@ export class FileService {
       const readProgress = progressCallback ? (p) => progressCallback(Math.round(p * 0.5)) : null;
       const arrayBuffer = await this._readFileWithProgress(file, readProgress);
 
-      // Phase 2: Processing (50-80%) - chunked to allow UI updates
+      // Phase 2: Convert to base64 (50-80%) - much faster than array conversion
       if (progressCallback) progressCallback(50);
-      const uint8Array = new Uint8Array(arrayBuffer);
-      const dataArray = await this._convertToArrayChunked(uint8Array, progressCallback);
+      const base64Data = await this._convertToBase64Chunked(arrayBuffer, progressCallback);
 
       // Phase 3: IPC transfer (80-100%)
+      if (progressCallback) progressCallback(80);
       const filePath = `data/files/${sessionId}/sources/${file.name}`;
-      const result = await this.ipc.uploadFile(filePath, dataArray, file.name, file.type || "application/octet-stream");
+      const result = await this.ipc.uploadFile(
+        filePath,
+        base64Data,
+        file.name,
+        file.type || "application/octet-stream"
+      );
 
       if (progressCallback) progressCallback(100);
 
@@ -270,15 +275,13 @@ export class FileService {
   async _convertToArrayChunked(uint8Array, progressCallback) {
     const length = uint8Array.length;
 
-    // For small files (< 1MB), just convert directly - it's fast enough
-    if (length < 1024 * 1024) {
-      if (progressCallback) progressCallback(80);
-      return Array.from(uint8Array);
-    }
-
-    // For larger files, process in chunks with UI breaks
+    // Always process in chunks to prevent UI blocking
+    // Even small files can cause jank during Array conversion
     const result = new Array(length);
-    const chunkSize = 256 * 1024; // 256KB chunks
+
+    // Use smaller chunks for better UI responsiveness
+    // 64KB chunks provide good balance between speed and responsiveness
+    const chunkSize = 64 * 1024;
     let processed = 0;
 
     while (processed < length) {
@@ -297,11 +300,79 @@ export class FileService {
         progressCallback(Math.round(50 + phaseProgress));
       }
 
-      // Yield to event loop for UI updates
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      // Yield to event loop for UI updates - use requestAnimationFrame for better timing
+      await new Promise((resolve) => requestAnimationFrame(resolve));
     }
 
     return result;
+  }
+
+  /**
+   * Convert ArrayBuffer to base64 string in chunks to prevent UI blocking
+   * Base64 encoding is much more efficient for IPC than array of integers
+   *
+   * @param {ArrayBuffer} arrayBuffer - File data
+   * @param {Function} progressCallback - Progress callback (50-80% range)
+   * @returns {Promise<string>} Base64 encoded string
+   * @private
+   */
+  async _convertToBase64Chunked(arrayBuffer, progressCallback) {
+    const uint8Array = new Uint8Array(arrayBuffer);
+    const length = uint8Array.length;
+
+    // For small files (< 1MB), convert directly - it's fast enough
+    if (length < 1024 * 1024) {
+      if (progressCallback) progressCallback(80);
+      return this._uint8ArrayToBase64(uint8Array);
+    }
+
+    // For larger files, process in chunks with UI breaks
+    // Each chunk is converted to base64 separately, then joined
+    const chunkSize = 262143; // ~256KB, divisible by 3 (87381 * 3)
+    const chunks = [];
+    let processed = 0;
+
+    while (processed < length) {
+      const end = Math.min(processed + chunkSize, length);
+      const chunk = uint8Array.subarray(processed, end);
+
+      // Convert chunk to base64
+      chunks.push(this._uint8ArrayToBase64(chunk));
+
+      processed = end;
+
+      // Report progress (50-80% range for this phase)
+      if (progressCallback) {
+        const phaseProgress = (processed / length) * 30;
+        progressCallback(Math.round(50 + phaseProgress));
+      }
+
+      // Yield to event loop for UI updates
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+
+    // Join all base64 chunks
+    // Note: This works because base64 chunks at 256KB boundaries (divisible by 3)
+    // are complete - no padding issues when chunk size is multiple of 3 bytes
+    return chunks.join("");
+  }
+
+  /**
+   * Convert Uint8Array to base64 string
+   * Uses native btoa for efficiency
+   *
+   * @param {Uint8Array} uint8Array - Byte array
+   * @returns {string} Base64 encoded string
+   * @private
+   */
+  _uint8ArrayToBase64(uint8Array) {
+    // Convert to binary string then base64
+    let binary = "";
+    const len = uint8Array.length;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(uint8Array[i]);
+    }
+    return btoa(binary);
   }
 
   /**
