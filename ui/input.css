@@ -140,6 +140,14 @@
   }
 
   /* ==========================================
+   * SCROLL ANCHORING for chat container
+   * Prevents layout shift when Mermaid diagrams expand
+   * ========================================== */
+  #chat-container {
+    overflow-anchor: auto;
+  }
+
+  /* ==========================================
    * CUSTOM SCROLLBARS (not available in Tailwind)
    * ========================================== */
   .custom-scrollbar::-webkit-scrollbar {
@@ -1628,12 +1636,44 @@
     border-radius: 0.5rem;
     overflow-x: auto;
     min-height: 100px;
+    overflow-anchor: none; /* Prevent expanding diagrams from being scroll anchor */
   }
 
   .message-content .mermaid-wrapper svg {
     display: block;
     max-width: 100%;
     height: auto;
+  }
+
+  /* Mermaid loading placeholder - progressive rendering */
+  .mermaid-wrapper.mermaid-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-surface-overlay);
+    border: 1px dashed var(--color-border-secondary);
+  }
+
+  .mermaid-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+  }
+
+  .mermaid-spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--color-border-secondary);
+    border-top-color: var(--color-brand-primary);
+    border-radius: 50%;
+    animation: mermaid-spin 1s linear infinite;
+  }
+
+  @keyframes mermaid-spin {
+    to { transform: rotate(360deg); }
   }
 
   /* Spacing adjustments for different content combinations */

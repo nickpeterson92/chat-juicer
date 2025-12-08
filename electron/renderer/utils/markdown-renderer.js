@@ -174,7 +174,6 @@ async function reRenderAllMermaidDiagrams() {
 const themeObserver = new MutationObserver((mutations) => {
   mutations.forEach((mutation) => {
     if (mutation.type === "attributes" && mutation.attributeName === "data-theme") {
-      console.log("[Mermaid] Theme changed, re-initializing...");
       mermaid.initialize(getMermaidConfig());
       // Re-render all existing diagrams with new theme
       reRenderAllMermaidDiagrams();
@@ -189,7 +188,6 @@ themeObserver.observe(document.documentElement, {
 
 // Also listen for custom theme-changed event (redundant safety)
 document.addEventListener("theme-changed", () => {
-  console.log("[Mermaid] Custom theme-changed event, re-initializing...");
   mermaid.initialize(getMermaidConfig());
   reRenderAllMermaidDiagrams();
 });
@@ -203,6 +201,68 @@ function escapeHtml(text) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+// Store mermaid code by ID (avoids data attribute sanitization issues)
+const mermaidCodeStore = new Map();
+
+// Track diagrams currently being rendered to prevent double-renders
+const renderingInProgress = new Set();
+
+// Singleton IntersectionObserver for visible-first rendering
+let mermaidObserver = null;
+
+// Batching mechanism for processMermaidDiagrams calls during session load
+const pendingElements = new Set();
+let batchTimeout = null;
+const BATCH_DELAY_MS = 50; // Wait 50ms to collect all elements before processing
+
+// Scroll-based fallback for large conversations where observer may miss elements
+let scrollFallbackTimeout = null;
+let scrollFallbackInitialized = false;
+
+/**
+ * Get or create the mermaid visibility observer
+ * Renders diagrams only when they enter the viewport
+ * @returns {IntersectionObserver}
+ */
+function getMermaidObserver() {
+  if (mermaidObserver) return mermaidObserver;
+
+  mermaidObserver = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          const wrapper = entry.target;
+          const id = wrapper.dataset.mermaidId;
+
+          // Skip if already rendering or processed
+          if (renderingInProgress.has(id) || wrapper.dataset.processed) {
+            mermaidObserver.unobserve(wrapper);
+            continue;
+          }
+
+          const code = mermaidCodeStore.get(id);
+          if (id && code) {
+            // Mark as rendering and trigger
+            renderingInProgress.add(id);
+            mermaidObserver.unobserve(wrapper);
+
+            renderDiagramWhenIdle({ id, code, placeholder: wrapper }).then(() => {
+              renderingInProgress.delete(id);
+            });
+          }
+        }
+      }
+    },
+    {
+      // Start rendering when diagram is within 200px of viewport
+      rootMargin: "200px 0px",
+      threshold: 0,
+    }
+  );
+
+  return mermaidObserver;
+}
+
 // Configure marked with custom renderer
 const renderer = new marked.Renderer();
 
@@ -211,10 +271,13 @@ renderer.code = (token) => {
   const code = token.text || "";
   const language = token.lang || "";
 
-  // Handle Mermaid diagrams specially
+  // Handle Mermaid diagrams specially - output loading placeholder immediately
+  // This allows spinner to show during streaming before processMermaidDiagrams runs
   if (language === "mermaid") {
     const id = `mermaid-${Math.random().toString(36).substring(2, 11)}`;
-    return `<pre class="mermaid" id="${id}">${escapeHtml(code)}</pre>`;
+    // Store code in Map to avoid data attribute sanitization issues
+    mermaidCodeStore.set(id, code);
+    return `<div class="mermaid-wrapper mermaid-loading" data-mermaid-id="${id}"><div class="mermaid-placeholder"><div class="mermaid-spinner"></div><span>Rendering diagram...</span></div></div>`;
   }
 
   // Syntax highlighting for other languages
@@ -510,74 +573,219 @@ export function renderMarkdown(markdown, isComplete = false) {
 }
 
 /**
- * Process Mermaid diagrams in a rendered element
+ * Fix SVG height attribute from viewBox if missing
+ * @param {HTMLElement} wrapper - Mermaid wrapper element
+ */
+function fixMermaidSvgHeight(wrapper) {
+  const svg = wrapper.querySelector("svg");
+  if (svg && !svg.getAttribute("height")) {
+    const viewBox = svg.getAttribute("viewBox");
+    if (viewBox) {
+      const height = parseFloat(viewBox.split(" ")[3]);
+      if (height) svg.setAttribute("height", height);
+    }
+  }
+}
+
+/**
+ * Render a single diagram during idle time
+ * @param {Object} diagram - Diagram info { id, code, placeholder }
+ * @returns {Promise<void>}
+ */
+function renderDiagramWhenIdle({ id, code, placeholder }) {
+  return new Promise((resolve) => {
+    const doRender = async () => {
+      try {
+        const { svg } = await mermaid.render(id, code);
+        placeholder.innerHTML = svg;
+        placeholder.classList.remove("mermaid-loading");
+        placeholder.dataset.processed = "true";
+        placeholder.dataset.mermaidCode = code;
+        fixMermaidSvgHeight(placeholder);
+      } catch (err) {
+        console.error(`Mermaid rendering error (${id}):`, err);
+        placeholder.innerHTML = `<div class="mermaid-error">Mermaid Error: ${err.message}</div>`;
+        placeholder.classList.remove("mermaid-loading");
+        placeholder.dataset.processed = "error";
+      }
+      resolve();
+    };
+
+    // Use requestIdleCallback for non-blocking render, fallback to setTimeout
+    if (typeof requestIdleCallback !== "undefined") {
+      requestIdleCallback(doRender, { timeout: 2000 });
+    } else {
+      setTimeout(doRender, 0);
+    }
+  });
+}
+
+/**
+ * Check if an element is currently visible in the viewport
+ * @param {HTMLElement} el - Element to check
+ * @returns {boolean} True if element is in or near viewport
+ */
+function isInViewport(el) {
+  const rect = el.getBoundingClientRect();
+  const windowHeight = window.innerHeight || document.documentElement.clientHeight;
+  // Consider visible if within 200px of viewport (matches observer rootMargin)
+  return rect.top < windowHeight + 200 && rect.bottom > -200;
+}
+
+/**
+ * Scroll-based fallback to catch diagrams the IntersectionObserver may have missed
+ * For large conversations, the observer can become unreliable
+ */
+function checkVisibleDiagramsFallback() {
+  // Find all unprocessed loading diagrams
+  const loadingWrappers = document.querySelectorAll(".mermaid-wrapper.mermaid-loading:not([data-processed])");
+
+  for (const wrapper of loadingWrappers) {
+    if (!isInViewport(wrapper)) continue;
+
+    const id = wrapper.dataset.mermaidId;
+    if (!id || renderingInProgress.has(id)) continue;
+
+    const code = mermaidCodeStore.get(id);
+    if (!code) continue;
+
+    // Render this visible diagram that was missed
+    renderingInProgress.add(id);
+
+    // Unobserve to prevent duplicate renders
+    if (mermaidObserver) {
+      mermaidObserver.unobserve(wrapper);
+    }
+
+    renderDiagramWhenIdle({ id, code, placeholder: wrapper }).then(() => {
+      renderingInProgress.delete(id);
+    });
+  }
+}
+
+/**
+ * Initialize scroll-based fallback for large conversations
+ * Uses debounced scroll listener to periodically check for missed diagrams
+ */
+function initScrollFallback() {
+  if (scrollFallbackInitialized) return;
+  scrollFallbackInitialized = true;
+
+  const chatContainer = document.getElementById("chat-container");
+  if (!chatContainer) return;
+
+  chatContainer.addEventListener(
+    "scroll",
+    () => {
+      // Debounce: wait 200ms after scroll stops before checking
+      if (scrollFallbackTimeout) {
+        clearTimeout(scrollFallbackTimeout);
+      }
+      scrollFallbackTimeout = setTimeout(checkVisibleDiagramsFallback, 200);
+    },
+    { passive: true }
+  );
+}
+
+/**
+ * Process a batch of collected elements for mermaid diagrams
+ * Called after batching delay to handle multiple rapid processMermaidDiagrams calls
+ */
+async function processBatchedMermaidDiagrams() {
+  // Collect all pending elements and clear the set
+  const elements = Array.from(pendingElements);
+  pendingElements.clear();
+  batchTimeout = null;
+
+  if (elements.length === 0) return;
+
+  // Initialize scroll-based fallback for large conversations
+  initScrollFallback();
+
+  // Find ALL loading placeholders across all pending elements
+  const allWrappers = [];
+  for (const element of elements) {
+    if (!element || !document.body.contains(element)) continue;
+    const wrappers = element.querySelectorAll(".mermaid-wrapper.mermaid-loading:not([data-processed])");
+    for (const wrapper of wrappers) {
+      allWrappers.push(wrapper);
+    }
+  }
+
+  if (allWrappers.length === 0) return;
+
+  const observer = getMermaidObserver();
+  const visibleDiagrams = [];
+  const deferredWrappers = [];
+
+  // Separate visible from off-screen diagrams (across ALL messages)
+  for (const wrapper of allWrappers) {
+    const id = wrapper.dataset.mermaidId;
+    const code = mermaidCodeStore.get(id);
+
+    if (!id || !code) {
+      console.error(`[MERMAID] Missing data for placeholder: id=${id}, inStore=${mermaidCodeStore.has(id)}`);
+      wrapper.innerHTML = `<div class="mermaid-error">Mermaid Error: Missing diagram data</div>`;
+      wrapper.classList.remove("mermaid-loading");
+      wrapper.dataset.processed = "error";
+      continue;
+    }
+
+    // Skip if already being rendered
+    if (renderingInProgress.has(id)) continue;
+
+    if (isInViewport(wrapper)) {
+      visibleDiagrams.push({ id, code, placeholder: wrapper });
+    } else {
+      deferredWrappers.push(wrapper);
+    }
+  }
+
+  // Phase 1: Render visible diagrams with yields between each
+  for (const diagram of visibleDiagrams) {
+    if (renderingInProgress.has(diagram.id)) continue;
+    renderingInProgress.add(diagram.id);
+
+    await renderDiagramWhenIdle(diagram);
+    renderingInProgress.delete(diagram.id);
+
+    // Explicit yield to let browser paint and handle user input
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  // Phase 2: Set up lazy loading for off-screen diagrams
+  for (const wrapper of deferredWrappers) {
+    observer.observe(wrapper);
+  }
+}
+
+/**
+ * Process Mermaid diagrams in a rendered element with visible-first progressive loading
  *
- * IMPORTANT: Only call after streaming is complete or for static content.
- * Calling during streaming causes race conditions with innerHTML replacement.
+ * Uses batching to coordinate multiple rapid calls (e.g., during session load).
+ * When multiple messages load at once, their diagrams are batched and processed
+ * together for optimal visible-first rendering.
+ *
+ * Rendering strategy:
+ * 1. **Batching**: Collects elements for 50ms before processing
+ * 2. **Visible-first**: Diagrams in viewport render immediately
+ * 3. **Lazy loading**: Off-screen diagrams render when scrolled into view
  *
  * @param {HTMLElement} element - Container element with rendered markdown
  */
 export async function processMermaidDiagrams(element) {
   if (!element) return;
 
-  // Clone HTML to temp container to avoid race conditions with DOM mutations
-  const tempContainer = document.createElement("div");
-  tempContainer.innerHTML = element.innerHTML;
+  // Quick check - any diagrams to process?
+  const hasWrappers = element.querySelector(".mermaid-wrapper.mermaid-loading:not([data-processed])");
+  if (!hasWrappers) return;
 
-  const mermaidBlocks = tempContainer.querySelectorAll("pre.mermaid:not([data-processed])");
-  if (mermaidBlocks.length === 0) return;
+  // Add to pending batch
+  pendingElements.add(element);
 
-  // Collect diagram data for concurrent rendering
-  const diagramsToRender = Array.from(mermaidBlocks).map((block) => ({
-    id: block.id,
-    code: block.textContent,
-    block: block,
-  }));
-
-  // Render all diagrams concurrently
-  const renderPromises = diagramsToRender.map(async ({ id, code, block }) => {
-    try {
-      const { svg } = await mermaid.render(id, code);
-
-      const wrapper = document.createElement("div");
-      wrapper.className = "mermaid-wrapper";
-      wrapper.dataset.processed = "true";
-      wrapper.dataset.mermaidCode = code; // Store original code for theme changes
-      wrapper.innerHTML = svg;
-
-      // Fix missing height attribute from viewBox
-      const insertedSvg = wrapper.querySelector("svg");
-      if (insertedSvg && !insertedSvg.getAttribute("height")) {
-        const viewBox = insertedSvg.getAttribute("viewBox");
-        if (viewBox) {
-          const height = parseFloat(viewBox.split(" ")[3]);
-          if (height) insertedSvg.setAttribute("height", height);
-        }
-      }
-
-      return { block, wrapper };
-    } catch (err) {
-      console.error(`Mermaid rendering error (${id}):`, err);
-      const errorDiv = document.createElement("div");
-      errorDiv.className = "mermaid-error";
-      errorDiv.textContent = `Mermaid Error: ${err.message}`;
-      errorDiv.dataset.processed = "error";
-      return { block, wrapper: errorDiv };
-    }
-  });
-
-  const results = await Promise.all(renderPromises);
-
-  // Replace blocks in temp container
-  results.forEach(({ block, wrapper }) => {
-    if (block.parentNode) {
-      block.parentNode.replaceChild(wrapper, block);
-    }
-  });
-
-  // Atomic innerHTML replacement prevents race conditions
-  if (document.body.contains(element)) {
-    element.innerHTML = tempContainer.innerHTML;
+  // Schedule batch processing (debounced)
+  if (!batchTimeout) {
+    batchTimeout = setTimeout(processBatchedMermaidDiagrams, BATCH_DELAY_MS);
   }
 }
 
