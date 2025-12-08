@@ -72,7 +72,16 @@ $RUNTIME build \
     "$DOCKERFILE_DIR"
 
 # Verify build success
-if [ $? -eq 0 ]; then
+# Capture build exit code immediately
+$RUNTIME build \
+    $NO_CACHE \
+    -t "$IMAGE_NAME:$IMAGE_TAG" \
+    -f "$DOCKERFILE_PATH" \
+    "$DOCKERFILE_DIR"
+BUILD_EXIT_CODE=$?
+
+# Verify build success
+if [ $BUILD_EXIT_CODE -eq 0 ]; then
     echo ""
     echo -e "${GREEN}Build successful!${NC}"
     echo ""
