@@ -57,7 +57,7 @@ describe("LifecycleManager", () => {
   });
 
   describe("Timer Management", () => {
-    it("should track setTimeout and clear on unmount", (done) => {
+    it("should track setTimeout and clear on unmount", async () => {
       const component = {};
       manager.register(component, "TimerComponent");
 
@@ -73,18 +73,15 @@ describe("LifecycleManager", () => {
       expect(timerId).toBeDefined();
 
       // Unmount before timer fires
-      setTimeout(() => {
-        manager.unmount(component);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      manager.unmount(component);
 
-        // Wait to ensure timer doesn't fire
-        setTimeout(() => {
-          expect(called).toBe(false);
-          done();
-        }, 20);
-      }, 5);
+      // Wait to ensure timer doesn't fire
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(called).toBe(false);
     });
 
-    it("should allow manual timer clearing", (done) => {
+    it("should allow manual timer clearing", async () => {
       const component = {};
       manager.register(component, "ManualClearComponent");
 
@@ -100,10 +97,8 @@ describe("LifecycleManager", () => {
       // Clear manually
       manager.clearTimer(component, timerId);
 
-      setTimeout(() => {
-        expect(called).toBe(false);
-        done();
-      }, 30);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(called).toBe(false);
     });
   });
 
@@ -248,7 +243,7 @@ describe("LifecycleManager", () => {
       expect(manager.components.size).toBe(initialSize);
     });
 
-    it("should clear all timers on unmountAll", (done) => {
+    it("should clear all timers on unmountAll", async () => {
       const components = [];
       let totalCalls = 0;
 
@@ -270,10 +265,8 @@ describe("LifecycleManager", () => {
       manager.unmountAll();
 
       // Wait and verify no timers fired
-      setTimeout(() => {
-        expect(totalCalls).toBe(0);
-        done();
-      }, 30);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(totalCalls).toBe(0);
     });
   });
 
