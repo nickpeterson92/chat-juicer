@@ -14,14 +14,11 @@ from agents import set_default_openai_client, set_tracing_disabled
 from dotenv import load_dotenv
 
 from app.state import AppState
-from core.agent import create_agent
 from core.constants import CHAT_HISTORY_DB_PATH, DEFAULT_MODEL, DEFAULT_SESSION_METADATA_PATH, get_settings
 from core.full_history import FullHistoryStore
-from core.prompts import SYSTEM_INSTRUCTIONS
 from core.session_manager import SessionManager
 from integrations.mcp_registry import initialize_all_mcp_servers
 from integrations.sdk_token_tracker import patch_sdk_for_auto_tracking
-from tools import AGENT_TOOLS
 from utils.client_factory import create_http_client, create_openai_client
 from utils.logger import logger
 
@@ -120,9 +117,7 @@ async def initialize_application() -> AppState:
     # Set up MCP servers (initialize all available servers into a global pool)
     mcp_servers_dict = await initialize_all_mcp_servers()
 
-    # Create initial agent with all MCP servers for global context
-    all_mcp_servers = list(mcp_servers_dict.values())
-    agent = create_agent(deployment, SYSTEM_INSTRUCTIONS, AGENT_TOOLS, all_mcp_servers)
+    # Phase 3: No global agent - each session creates its own agent in ensure_session_exists()
 
     # Display connection info based on provider (use stderr for status messages)
     if settings.api_provider == "azure":
@@ -159,11 +154,9 @@ async def initialize_application() -> AppState:
     # Session will be created on first user message or when switching to existing session
     logger.info("App initialized - session will be created on first message")
 
-    # Return populated application state
+    # Return populated application state (Phase 3: concurrent sessions)
     return AppState(
         session_manager=session_manager,
-        current_session=None,  # Lazy initialization
-        agent=agent,
         deployment=deployment,
         full_history_store=full_history_store,
         mcp_servers=mcp_servers_dict,

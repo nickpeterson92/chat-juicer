@@ -67,7 +67,10 @@ class TestInitializeApplication:
 
         # Verify state
         assert app_state is not None
-        assert app_state.agent is not None
+        # Phase 3: Agent is now created lazily when first session is created
+        # At bootstrap time, active_sessions is empty so app_state.agent returns None
+        assert app_state.agent is None  # No sessions yet
+        assert app_state.active_sessions == {}  # No active sessions yet
         assert app_state.deployment == "gpt-4o"
         assert app_state.session_manager is not None
         assert app_state.full_history_store is not None
