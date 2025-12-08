@@ -5,7 +5,6 @@ Handles all streaming event types from OpenAI Agent/Runner pattern.
 
 from __future__ import annotations
 
-from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol, cast
@@ -71,22 +70,39 @@ class ResponseEventData(Protocol):
 
 @dataclass
 class CallTracker:
-    """Tracks tool call IDs for matching outputs with their calls."""
+    """Tracks tool call IDs for matching outputs with their calls.
 
-    active_calls: deque[dict[str, str]] = field(default_factory=deque)
+    Uses dict for O(1) lookup and proper parallel tool call support.
+    The old deque-based FIFO approach broke when tools completed out-of-order.
+    """
+
+    active_calls: dict[str, str] = field(default_factory=dict)  # {call_id: tool_name}
 
     def add_call(self, call_id: str, tool_name: str) -> None:
         """Add a new tool call to track."""
-        if call_id and not self.has_call(call_id):
-            self.active_calls.append({"call_id": call_id, "tool_name": tool_name})
+        if call_id and call_id not in self.active_calls:
+            self.active_calls[call_id] = tool_name
 
     def has_call(self, call_id: str) -> bool:
-        """Check if a call_id is already being tracked."""
-        return any(call["call_id"] == call_id for call in self.active_calls)
+        """Check if a call_id is being tracked. O(1) dict lookup."""
+        return call_id in self.active_calls
 
-    def pop_call(self) -> dict[str, str] | None:
-        """Get and remove the oldest tracked call."""
-        return self.active_calls.popleft() if self.active_calls else None
+    def pop_call_by_id(self, call_id: str) -> dict[str, str] | None:
+        """Remove and return call info by specific call_id (parallel-safe)."""
+        if call_id in self.active_calls:
+            tool_name = self.active_calls.pop(call_id)
+            return {"call_id": call_id, "tool_name": tool_name}
+        return None
+
+    def drain_all(self) -> list[dict[str, str]]:
+        """Drain all remaining calls (for interrupt handling with synthetic completions)."""
+        result = [{"call_id": cid, "tool_name": name} for cid, name in self.active_calls.items()]
+        self.active_calls.clear()
+        return result
+
+    def __len__(self) -> int:
+        """Return number of active calls."""
+        return len(self.active_calls)
 
 
 def handle_message_output(item: RunItem) -> str | None:
@@ -163,18 +179,29 @@ def handle_reasoning(item: RunItem) -> str | None:
 
 
 def handle_tool_output(item: RunItem, tracker: CallTracker) -> str | None:
-    """Handle tool call output items (function results) with validation."""
+    """Handle tool call output items (function results) with proper call_id matching.
+
+    Extracts call_id from the output item itself for parallel-safe matching,
+    rather than assuming FIFO order which breaks when tools complete out-of-order.
+    """
     call_id = ""
     success = True
     tool_name = "unknown"
 
-    # Match output with a call_id from tracker
-    call_info = tracker.pop_call()
-    if call_info:
-        call_id = call_info["call_id"]
-        tool_name = call_info.get("tool_name", "unknown")
+    # Extract call_id from the output item itself (parallel-safe matching)
+    if hasattr(item, "raw_item"):
+        raw = item.raw_item
+        call_id = raw.get("call_id", "") if isinstance(raw, dict) else getattr(raw, "call_id", "") or ""
+
+    # Match by call_id (works for both sequential and parallel tool execution)
+    if call_id:
+        call_info = tracker.pop_call_by_id(call_id)
+        if call_info:
+            tool_name = call_info["tool_name"]
+        else:
+            logger.warning(f"Tool output for untracked call_id: {call_id}")
     else:
-        logger.info("Tool output received but no tracked call_id in queue")
+        logger.warning("Tool output missing call_id - cannot match to tool call")
 
     # Get output
     if hasattr(item, "output"):

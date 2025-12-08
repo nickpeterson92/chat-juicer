@@ -165,6 +165,42 @@ class TestFullHistoryStore:
         messages = store.get_messages("chat_test")
         assert len(messages) == 1
 
+    def test_save_message_extracts_sdk_content_array(self, temp_db_path: Path) -> None:
+        """Test that SDK content arrays are properly extracted to plain text.
+
+        SDK assistant messages have content in array format:
+        [{"text": "...", "type": "output_text", "annotations": [], "logprobs": []}]
+
+        Layer 2 should store plain text, not JSON-serialized arrays.
+        """
+        store = FullHistoryStore(db_path=temp_db_path)
+
+        # Simulate SDK message format
+        sdk_message = {
+            "role": "assistant",
+            "content": [
+                {
+                    "text": "Hello! ",
+                    "type": "output_text",
+                    "annotations": [],
+                    "logprobs": [],
+                },
+                {
+                    "text": "How can I help?",
+                    "type": "output_text",
+                    "annotations": [],
+                    "logprobs": [],
+                },
+            ],
+        }
+        store.save_message("chat_test", sdk_message)
+
+        messages = store.get_messages("chat_test")
+        assert len(messages) == 1
+        # Content should be extracted plain text, NOT JSON array
+        assert messages[0]["content"] == "Hello! How can I help?"
+        assert not messages[0]["content"].startswith("[{")
+
     def test_save_message_with_metadata(self, temp_db_path: Path) -> None:
         """Test saving message with additional metadata fields."""
         store = FullHistoryStore(db_path=temp_db_path)

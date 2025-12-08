@@ -7,53 +7,53 @@ The message queue will be implemented as a **dedicated service** (`MessageQueueS
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      User Input                              │
+│                      User Input                             │
 └─────────────────┬───────────────────────────────────────────┘
                   │
                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  InputArea Component                                         │
-│  - Captures message                                          │
-│  - Always enabled (no disable during processing)             │
+│  InputArea Component                                        │
+│  - Captures message                                         │
+│  - Always enabled (no disable during processing)            │
 └─────────────────┬───────────────────────────────────────────┘
                   │
                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  MessageQueueService                                         │
+│  MessageQueueService                                        │
 │  ┌───────────────────────────────────────────────────────┐  │
 │  │ Queue Array: [{id, text, files, timestamp, status}]   │  │
 │  └───────────────────────────────────────────────────────┘  │
-│  - add(message) → queues message                             │
-│  - process() → sends next if idle                            │
-│  - edit(id, text) → updates queued message text              │
-│  - remove(id) → cancels queued message                       │
-│  - clear() → empties queue                                   │
+│  - add(message) → queues message                            │
+│  - process() → sends next if idle                           │
+│  - edit(id, text) → updates queued message text             │
+│  - remove(id) → cancels queued message                      │
+│  - clear() → empties queue                                  │
 └─────────────────┬───────────────────────────────────────────┘
                   │
                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  AppState (state.js)                                         │
-│  - python.status: 'idle' | 'busy_streaming' | ...            │
-│  - queue.items: QueueItem[]                                  │
-│  - queue.processingMessageId: string | null                  │
+│  AppState (state.js)                                        │
+│  - python.status: 'idle' | 'busy_streaming' | ...           │
+│  - queue.items: QueueItem[]                                 │
+│  - queue.processingMessageId: string | null                 │
 └─────────────────┬───────────────────────────────────────────┘
                   │
                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  MessageService.sendMessage()                                │
-│  - Sends to backend via IPC                                  │
+│  MessageService.sendMessage()                               │
+│  - Sends to backend via IPC                                 │
 └─────────────────┬───────────────────────────────────────────┘
                   │
                   ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Python Backend                                              │
-│  - Processes one message at a time                           │
-│  - Emits streaming events                                    │
-│  - Emits assistant_done when complete                        │
+│  Python Backend                                             │
+│  - Processes one message at a time                          │
+│  - Emits streaming events                                   │
+│  - Emits assistant_done when complete                       │
 └─────────────────┬───────────────────────────────────────────┘
                   │
                   ▼
-┌─────────────────────────────────────────────────────────────┐
+┌──────────────────────────────────────────────────────────────┐
 │  EventBus Handler (message-handlers-v2.js)                   │
 │  - On assistant_done: trigger processQueue()                 │
 └──────────────────────────────────────────────────────────────┘
@@ -363,8 +363,8 @@ User         InputArea      QueueService     AppState     MessageService     Bac
  │               │               │──update─────>│               │              │              │
  │               │               │   queue.items                │              │              │
  │               │               │              │               │              │              │
- │               │               │─────────────────publish─────────────────────────────────────>│
- │               │               │              │  'queue:added'                               │
+ │               │               │─────────────────publish───────────────────────────────────>│
+ │               │               │              │  'queue:added'                              │
  │               │               │              │               │              │              │
  │               │               │──process()──>│               │              │              │
  │               │               │              │               │              │              │
@@ -372,7 +372,7 @@ User         InputArea      QueueService     AppState     MessageService     Bac
  │               │               │              │               │              │              │
  │               │               │  [if idle]   │               │              │              │
  │               │               │              │               │              │              │
- │               │               │──sendMessage─────────────────>│              │              │
+ │               │               │──sendMessage────────────────>│              │              │
  │               │               │              │               │              │              │
  │               │               │              │               │──send IPC───>│              │
  │               │               │              │               │              │              │
@@ -383,10 +383,10 @@ User         InputArea      QueueService     AppState     MessageService     Bac
  │               │               │              │               │              │              │
  │               │               │              │               │<─done────────│              │
  │               │               │              │               │              │              │
- │               │               │              │<─────────────IPC forward─────────────────────│
- │               │               │              │  'assistant_done'                            │
+ │               │               │              │<─────────────IPC forward────────────────────│
+ │               │               │              │  'assistant_done'                           │
  │               │               │              │               │              │              │
- │               │               │<─────────────────trigger 'assistant_done'───────────────────│
+ │               │               │<─────────────────trigger 'assistant_done'──────────────────│
  │               │               │              │               │              │              │
  │               │               │──process()──>│               │              │              │
  │               │               │  (next msg)  │               │              │              │
@@ -407,10 +407,10 @@ User         ChatContainer   QueueService     AppState       EventBus
  │               │               │──update─────>│              │
  │               │               │   remove item               │
  │               │               │              │              │
- │               │               │──publish─────────────────────>│
- │               │               │  'queue:removed'             │
+ │               │               │──publish───────────────────>│
+ │               │               │  'queue:removed'            │
  │               │               │              │              │
- │               │<──event────────────────────────────────────│
+ │               │<──event─────────────────────────────────────│
  │               │   'queue:removed'            │              │
  │               │               │              │              │
  │               │──remove from DOM             │              │

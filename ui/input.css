@@ -37,6 +37,8 @@
   }
 
   #sidebar-toggle,
+  #settings-btn,
+  #restart-btn,
   #open-files-btn,
   #files-panel > div:first-child {
     -webkit-app-region: no-drag;
@@ -375,9 +377,15 @@
     transform: rotate(0deg);
   }
 
-  /* Status-based styling - only highlight errors, keep everything else chill */
+  /* Status-based styling - only highlight errors/interrupts, keep everything else chill */
   .function-disclosure[data-status="error"] .disclosure-tool-name {
     color: var(--color-status-error);
+  }
+
+  .function-disclosure[data-status="interrupted"] .disclosure-tool-name {
+    text-decoration: line-through;
+    text-decoration-color: var(--color-text-secondary);
+    opacity: 0.7;
   }
 
   /* In-progress shimmer animation - wave that lights up letters left to right */
@@ -474,7 +482,234 @@
     @apply max-h-[250px];
   }
 
-  /* File items */
+  /* Code input display (Python code in arguments) */
+  .code-input-section .code-input-display {
+    @apply font-mono text-sm rounded-md p-4 max-h-[400px] overflow-y-auto overflow-x-auto;
+    background: var(--color-surface-3);
+    line-height: 1.5;
+  }
+
+  .code-input-display code.hljs {
+    background: transparent;
+    padding: 0;
+  }
+
+  /* ==========================================
+   * CODE INTERPRETER OUTPUT STYLING
+   * ========================================== */
+
+  /* Main container for code interpreter output */
+  .code-interpreter-output {
+    @apply flex flex-col gap-3;
+  }
+
+  /* Output section wrapper */
+  .code-output-section {
+    @apply mb-2;
+  }
+
+  /* Terminal output styling (stdout/stderr) */
+  .code-output-terminal {
+    @apply font-mono text-xs rounded-md p-3 max-h-[300px] overflow-y-auto overflow-x-auto whitespace-pre-wrap break-words;
+    background: var(--color-surface-3);
+    color: var(--color-text-on-surface);
+  }
+
+  /* Error output specific styling */
+  .code-output-section.code-output-error .code-output-terminal {
+    color: var(--color-status-error);
+    border-left: 3px solid var(--color-status-error);
+  }
+
+  /* Generated files container */
+  .code-output-files {
+    @apply flex flex-col gap-2;
+  }
+
+  /* Image container */
+  .code-output-image-container {
+    @apply rounded-lg overflow-hidden;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border-secondary);
+  }
+
+  .code-output-image {
+    @apply w-full h-auto max-h-[400px] object-contain;
+    display: block;
+  }
+
+  .code-output-image-caption {
+    @apply text-xs py-2 px-3;
+    color: var(--color-text-secondary);
+    background: var(--color-surface-overlay);
+    border-top: 1px solid var(--color-border-secondary);
+  }
+
+  /* File download item */
+  .code-output-file-item {
+    @apply flex items-center gap-2.5 py-2.5 px-3 rounded-lg;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border-secondary);
+  }
+
+  .code-output-file-item:hover {
+    border-color: var(--color-border-hover);
+  }
+
+  .code-output-file-icon {
+    @apply flex-shrink-0 flex items-center justify-center w-8 h-8;
+    color: var(--color-text-secondary);
+  }
+
+  .code-output-file-icon svg {
+    @apply w-5 h-5;
+  }
+
+  .code-output-file-info {
+    @apply flex-1 flex flex-col gap-0.5;
+  }
+
+  .code-output-file-name {
+    @apply text-sm font-medium;
+    color: var(--color-text-primary);
+  }
+
+  .code-output-file-size {
+    @apply text-xs;
+    color: var(--color-text-secondary);
+  }
+
+  .code-output-download-btn {
+    @apply flex-shrink-0 flex items-center justify-center w-8 h-8 p-0 border-none rounded bg-transparent cursor-pointer transition-all;
+    color: var(--color-text-secondary);
+  }
+
+  .code-output-download-btn:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-brand-primary);
+  }
+
+  .code-output-download-btn svg {
+    @apply w-4 h-4;
+  }
+
+  /* Execution metadata footer */
+  .code-output-meta {
+    @apply text-xs mt-2;
+    color: var(--color-text-secondary);
+    opacity: 0.7;
+  }
+
+  /* ==========================================
+   * BREADCRUMB NAVIGATION (Phase 2)
+   * ========================================== */
+  .breadcrumb-nav {
+    @apply flex items-center gap-1 py-3 px-0 mb-2 flex-wrap;
+    border-bottom: 1px solid var(--color-border-secondary);
+  }
+
+  .breadcrumb-segment {
+    @apply bg-transparent border-none py-1 px-2 rounded-md text-sm cursor-pointer transition-all;
+    color: var(--color-text-secondary);
+  }
+
+  .breadcrumb-segment:hover:not(:disabled):not(.active) {
+    background-color: var(--color-surface-hover);
+    color: var(--color-text-primary);
+  }
+
+  .breadcrumb-segment.active {
+    color: var(--color-text-primary);
+    font-weight: 600;
+    cursor: default;
+  }
+
+  .breadcrumb-segment:disabled {
+    cursor: default;
+  }
+
+  .breadcrumb-separator {
+    @apply select-none text-sm;
+    color: var(--color-text-secondary);
+  }
+
+  /* ==========================================
+   * FILE PANEL TABS
+   * Sleek underline-style tabs
+   * ========================================== */
+  .file-panel-tabs {
+    @apply flex gap-1;
+    border-bottom: 1px solid var(--color-border-secondary);
+    padding-bottom: 0;
+  }
+
+  .file-panel-tab {
+    @apply bg-transparent border-none py-2 px-3 text-[13px] font-medium cursor-pointer transition-all duration-150 flex items-center gap-1.5;
+    color: var(--color-text-secondary);
+    position: relative;
+  }
+
+  .file-panel-tab::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: transparent;
+    transition: background 0.15s ease;
+  }
+
+  .file-panel-tab:hover {
+    color: var(--color-text-primary);
+  }
+
+  .file-panel-tab.active {
+    color: var(--color-text-primary);
+  }
+
+  .file-panel-tab.active::after {
+    background: var(--color-text-primary);
+  }
+
+  .file-panel-tab svg {
+    @apply w-3.5 h-3.5;
+  }
+
+  /* ==========================================
+   * FOLDER ITEMS (Phase 2)
+   * ========================================== */
+  .folder-item {
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .folder-item:hover {
+    border-color: var(--color-brand-primary);
+  }
+
+  .folder-item .file-icon {
+    color: var(--color-text-secondary);
+  }
+
+  .folder-name {
+    font-weight: 500;
+  }
+
+  .folder-count {
+    @apply ml-auto text-xs py-0.5 px-2 rounded-md;
+    color: var(--color-text-secondary);
+    background-color: var(--color-surface-overlay);
+  }
+
+  /* File items should not have delete button visible for folders */
+  .folder-item .file-delete-btn {
+    display: none;
+  }
+
+  /* ==========================================
+   * FILE ITEMS
+   * ========================================== */
   .file-item {
     @apply flex items-center gap-2.5 py-2.5 px-3 border rounded-lg transition-all cursor-pointer select-none active:scale-[0.98];
     background-color: var(--color-surface-2);
@@ -482,8 +717,7 @@
   }
 
   .file-item:hover {
-    border-color: var(--color-border-hover);
-    box-shadow: 0 0 0 3px var(--color-brand-glow);
+    border-color: var(--color-brand-primary);
   }
 
   .file-icon {
@@ -541,6 +775,7 @@
   /* Partial/interrupted response styling */
   .message-partial {
     position: relative;
+    padding-left: 12px; /* Make room for warning bar */
   }
 
   .message-partial .message-content::after {
@@ -570,6 +805,7 @@
   /* Send button streaming state - keep blue, show stop icon */
   #send-btn.streaming {
     cursor: pointer;
+    position: relative;
   }
 
   /* Hide the arrow SVG when streaming */
@@ -577,14 +813,14 @@
     display: none;
   }
 
-  /* Show stop square icon when streaming */
+  /* Stop square icon centered (no circle) */
   #send-btn.streaming::after {
     content: "";
-    display: block;
-    width: 12px;
-    height: 12px;
+    position: absolute;
+    width: 8px;
+    height: 8px;
     background-color: currentColor;
-    border-radius: 2px;
+    border-radius: 1px;
   }
 
   /* Stopping state - reduced opacity while interrupt processes */

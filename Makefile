@@ -1,4 +1,4 @@
-.PHONY: help setup setup-dev install install-node install-python install-mcp install-dev run dev clean clean-cache test lint format typecheck precommit precommit-install quality validate fix check docs docs-clean docs-serve logs logs-errors logs-all db-explore db-sessions db-compare db-layer1 db-layer2 db-tools db-types db-shell db-reset db-backup db-restore health status backend-only clean-venv clean-all reset kill restart update-deps generate-model-metadata
+.PHONY: help setup setup-dev install install-node install-python install-mcp install-dev run dev clean clean-cache test lint format typecheck precommit precommit-install quality validate fix check docs docs-clean docs-serve logs logs-errors logs-all db-explore db-sessions db-compare db-layer1 db-layer2 db-tools db-types db-shell db-reset db-backup db-restore health status backend-only clean-venv clean-all reset kill restart update-deps generate-model-metadata build-sandbox sandbox-status sandbox-test
 
 # Default target
 .DEFAULT_GOAL := help
@@ -400,6 +400,47 @@ db-restore: ## Restore database from backup (usage: make db-restore BACKUP=backu
 	@cp "data/backups/$(BACKUP)/sessions.json" data/ 2>/dev/null || true
 	@cp -r "data/backups/$(BACKUP)/files/"* data/files/ 2>/dev/null || true
 	@echo "$(GREEN)✓ Database restored from: $(BACKUP)$(NC)"
+
+##@ Code Interpreter Sandbox
+
+build-sandbox: ## Build the sandbox container image for code execution
+	@echo "$(BLUE)Building sandbox container image...$(NC)"
+	@./scripts/build-sandbox.sh
+	@echo "$(GREEN)✓ Sandbox image built$(NC)"
+
+sandbox-status: ## Check if sandbox is ready (container runtime + image)
+	@echo "$(BLUE)Checking sandbox status...$(NC)"
+	@if command -v podman >/dev/null 2>&1; then \
+		echo "  Container runtime: $(GREEN)podman$(NC)"; \
+		RUNTIME=podman; \
+	elif command -v docker >/dev/null 2>&1; then \
+		echo "  Container runtime: $(GREEN)docker$(NC)"; \
+		RUNTIME=docker; \
+	else \
+		echo "  Container runtime: $(YELLOW)NOT FOUND$(NC)"; \
+		echo "  $(YELLOW)⚠ Install Docker or Podman to use code interpreter$(NC)"; \
+		exit 1; \
+	fi; \
+	if $$RUNTIME image inspect chat-juicer-sandbox:latest >/dev/null 2>&1; then \
+		echo "  Sandbox image: $(GREEN)ready$(NC)"; \
+		$$RUNTIME images chat-juicer-sandbox:latest --format "  Size: {{.Size}}"; \
+	else \
+		echo "  Sandbox image: $(YELLOW)not built$(NC)"; \
+		echo "  $(YELLOW)⚠ Run 'make build-sandbox' to build$(NC)"; \
+	fi
+
+sandbox-test: ## Run quick smoke test of sandbox execution
+	@echo "$(BLUE)Testing sandbox execution...$(NC)"
+	@RUNTIME=$$(command -v podman || command -v docker); \
+	if [ -z "$$RUNTIME" ]; then \
+		echo "$(YELLOW)⚠ No container runtime found$(NC)"; \
+		exit 1; \
+	fi; \
+	$$RUNTIME run --rm --network=none --read-only \
+		--memory=512m --cpus=1 --user=1000:1000 \
+		chat-juicer-sandbox:latest \
+		python -c "import numpy as np; print(f'NumPy {np.__version__}: {np.array([1,2,3]).sum()}')" && \
+	echo "$(GREEN)✓ Sandbox execution test passed$(NC)"
 
 ##@ Maintenance
 

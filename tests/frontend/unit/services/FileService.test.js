@@ -188,12 +188,11 @@ describe("FileService", () => {
   });
 
   describe("uploadFile", () => {
-    const createMockFile = (name, size) => ({
-      name,
-      size,
-      arrayBuffer: () => Promise.resolve(new ArrayBuffer(size)),
-      type: "text/plain",
-    });
+    // Create real File objects for tests (FileReader requires actual Blob)
+    const createMockFile = (name, size) => {
+      const content = new Uint8Array(size).fill(65); // Fill with 'A'
+      return new File([content], name, { type: "text/plain" });
+    };
 
     it("should upload valid file", async () => {
       const file = createMockFile("test.txt", 1024);

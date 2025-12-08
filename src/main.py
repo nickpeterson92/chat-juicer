@@ -335,6 +335,11 @@ async def main() -> None:
     # Disconnect SDK token tracker
     disconnect_session()
 
+    # Shutdown sandbox pool (kill warm containers)
+    from tools.code_interpreter import shutdown_sandbox_pool
+
+    await shutdown_sandbox_pool()
+
     # Clean up MCP servers
     for server in app_state.mcp_servers.values():
         try:

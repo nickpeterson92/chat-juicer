@@ -70,13 +70,17 @@ describe("WCAG 2.1 AA Compliance", () => {
   });
 
   describe("Color Independence", () => {
-    it("should not rely solely on color for status indication", () => {
+    it("should use semantic status styling rather than color alone", () => {
       const htmlPath = resolve(process.cwd(), "ui/index.html");
       const html = readFileSync(htmlPath, "utf-8");
 
-      // Status indicator should have both color (dot) and text
-      expect(html).toContain('id="status-indicator"');
-      expect(html).toContain('id="status-text"');
+      // Toast notifications use semantic CSS classes for status indication
+      // The toast-container provides non-color visual cues (position, animation)
+      expect(html).toContain('id="toast-container"');
+
+      // File upload progress uses visual progress bar, not just color
+      expect(html).toContain('id="file-upload-progress"');
+      expect(html).toContain('id="progress-bar-fill"');
     });
   });
 });

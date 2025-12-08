@@ -11,10 +11,16 @@ import { ComponentLifecycle } from "../../core/component-lifecycle.js";
 import { globalLifecycleManager } from "../../core/lifecycle-manager.js";
 import { registerMessageHandlers } from "../../handlers/message-handlers-v2.js";
 import { setupSessionListHandlers } from "../../handlers/session-list-handlers.js";
-import { loadFiles } from "../../managers/file-manager.js";
+import { loadFilesIntoState } from "../../managers/file-manager.js";
 import { MessageHandlerPlugin } from "../../plugins/core-plugins.js";
 import { renderEmptySessionList, renderSessionList } from "../../ui/renderers/session-list-renderer.js";
 import { initializeTitlebar } from "../../ui/titlebar.js";
+import {
+  completeFileUpload,
+  finishUploadProgress,
+  startUploadProgress,
+  updateUploadProgress,
+} from "../../utils/upload-progress.js";
 
 // Event handlers component for lifecycle management
 const eventHandlersComponent = {};
@@ -298,16 +304,27 @@ export async function initializeEventHandlers({
         }
       }
 
-      // Upload each file using FileService
+      // Upload each file using FileService with progress tracking
       const { showToast } = await import("../../utils/toast.js");
       let uploadedCount = 0;
+      let failedCount = 0;
+
+      // Start progress bar
+      startUploadProgress(files.length);
 
       for (const file of files) {
+        // Update progress with current file name
+        updateUploadProgress(file.name, 0);
+
         try {
-          const result = await services.fileService.uploadFile(file, sessionService.getCurrentSessionId());
+          // Pass progress callback for real-time byte progress
+          const result = await services.fileService.uploadFile(file, sessionService.getCurrentSessionId(), (percent) =>
+            updateUploadProgress(file.name, percent)
+          );
 
           if (result.success) {
             uploadedCount++;
+            completeFileUpload(file.name, true);
 
             // Refresh the appropriate file container
             if (sessionService.getCurrentSessionId()) {
@@ -316,16 +333,14 @@ export async function initializeEventHandlers({
               if (isOnWelcomePage) {
                 appState.setState("ui.welcomeFilesSectionVisible", true);
 
-                const welcomeFilesContainer = document.getElementById("welcome-files-container");
-                if (welcomeFilesContainer) {
-                  window.setTimeout(async () => {
-                    try {
-                      await loadFiles(directory, welcomeFilesContainer);
-                    } catch (error) {
-                      console.error("Failed to load files after upload", error);
-                    }
-                  }, 100);
-                }
+                // Load files into AppState (rendering happens via subscription in view-manager)
+                window.setTimeout(async () => {
+                  try {
+                    await loadFilesIntoState(appState, directory, "sources");
+                  } catch (error) {
+                    console.error("Failed to load files after upload", error);
+                  }
+                }, 100);
               } else {
                 if (components.filePanel) {
                   window.setTimeout(async () => {
@@ -339,21 +354,24 @@ export async function initializeEventHandlers({
               }
             }
           } else {
+            failedCount++;
+            completeFileUpload(file.name, false);
             console.error(`File upload failed: ${result.error}`);
             showToast(`Failed to upload ${file.name}`, "error", 3000);
           }
         } catch (error) {
+          failedCount++;
+          completeFileUpload(file.name, false);
           console.error("Error uploading file:", error);
           showToast(`Error uploading ${file.name}`, "error", 3000);
         }
       }
 
-      // Show summary toast
-      if (files.length === 1) {
-        if (uploadedCount === 1) {
-          showToast(`File uploaded: ${files[0].name}`, "success", 2000);
-        }
-      } else if (files.length > 1) {
+      // Finish progress bar (it will auto-hide after showing completion)
+      finishUploadProgress(uploadedCount, failedCount);
+
+      // Show summary toast for multiple files (progress bar handles single file feedback)
+      if (files.length > 1) {
         if (uploadedCount === files.length) {
           showToast(`${uploadedCount} files uploaded successfully`, "success", 2000);
         } else if (uploadedCount > 0) {
@@ -388,6 +406,14 @@ export async function initializeEventHandlers({
     if (restartBtn) {
       addListener(restartBtn, "click", () => {
         ipcAdapter.restartBot();
+      });
+    }
+
+    // Settings button (placeholder)
+    const settingsBtn = document.getElementById("settings-btn");
+    if (settingsBtn) {
+      addListener(settingsBtn, "click", () => {
+        alert("Coming Soon!");
       });
     }
 

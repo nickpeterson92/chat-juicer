@@ -8,6 +8,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from tools.code_interpreter import execute_python_code
 from tools.document_generation import generate_document
 from tools.file_operations import list_directory, read_file, search_files
 from tools.text_editing import edit_file
@@ -36,6 +37,7 @@ def initialize_tools() -> tuple[list[Any], dict[str, Callable[..., str] | Callab
         search_files_tool = function_tool(search_files)
         generate_document_tool = function_tool(generate_document)
         edit_file_tool = function_tool(edit_file)
+        execute_python_code_tool = function_tool(execute_python_code)
 
         # List of tools for Agent
         agent_tools = [
@@ -44,6 +46,7 @@ def initialize_tools() -> tuple[list[Any], dict[str, Callable[..., str] | Callab
             search_files_tool,
             generate_document_tool,
             edit_file_tool,
+            execute_python_code_tool,
         ]
 
         # Function registry for direct execution
@@ -53,6 +56,7 @@ def initialize_tools() -> tuple[list[Any], dict[str, Callable[..., str] | Callab
             "search_files": search_files,
             "generate_document": generate_document,
             "edit_file": edit_file,
+            "execute_python_code": execute_python_code,
         }
 
         return agent_tools, function_registry
@@ -190,6 +194,38 @@ TOOLS: list[dict[str, Any]] = [
                 },
             },
             "required": ["file_path", "edits"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "execute_python_code",
+        "description": """Execute Python code in a secure sandbox environment.
+
+The sandbox has access to:
+- numpy, pandas, matplotlib, scipy, seaborn, scikit-learn
+- pillow, sympy, plotly
+- openpyxl, python-docx, pypdf, python-pptx (office documents)
+- tabulate, faker, dateutil, humanize, pyyaml, lxml, pypandoc (utilities)
+
+Limitations:
+- No internet access
+- No filesystem access outside /workspace
+- 60 second timeout
+- 512MB memory limit
+
+For plots, use matplotlib - figures are automatically saved to the session's
+output directory (data/files/{session_id}/output/code/) and returned.
+For data output, print to stdout or save files to /workspace/ - they will
+be collected and persisted alongside other generated documents.""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "description": "Python code to execute",
+                },
+            },
+            "required": ["code"],
         },
     },
 ]

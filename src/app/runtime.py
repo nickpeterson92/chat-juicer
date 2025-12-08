@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import uuid
 
 from datetime import datetime
 from typing import Any, cast
@@ -415,27 +416,107 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
         else:
             logger.debug("Finally block - skipping assistant_end (interrupt handled by main.py)")
 
-        # Save partial response to Layer 2 if cancelled with content
+        # Save partial response to BOTH layers if cancelled with content
         # Use app_state.interrupt_requested since SDK may suppress CancelledError
         was_interrupted = cancel_requested or app_state.interrupt_requested
         if app_state.interrupt_requested:
             logger.debug("Interrupt detected via app_state flag")
-        if was_interrupted and response_text.strip() and app_state.full_history_store:
-            try:
-                app_state.full_history_store.save_message(
-                    session.session_id,
+        if was_interrupted and response_text.strip():
+            # Append interrupt notice so LLM knows this was cut off
+            partial_with_notice = response_text + "\n\n[User interrupted response. The above text is partial.]"
+
+            # Layer 1: Inject into SDK session so LLM sees the partial response
+            # Format: ResponseOutputMessageParam with status='incomplete'
+            layer1_partial_msg: dict[str, Any] = {
+                "id": f"msg_{uuid.uuid4().hex[:24]}",
+                "type": "message",
+                "role": "assistant",
+                "status": "incomplete",  # SDK status indicating partial
+                "content": [
                     {
-                        "role": "assistant",
-                        "content": response_text,
-                        "partial": True,
-                        "interrupted_at": datetime.now().isoformat(),
-                    },
-                )
+                        "type": "output_text",
+                        "text": partial_with_notice,
+                        "annotations": [],
+                    }
+                ],
+            }
+            # Layer 1: Save with notice for LLM context (skip Layer 2 passthrough)
+            # Layer 2: Save separately with clean text + partial metadata for UI
+            try:
+                # Skip Layer 2 passthrough - we save explicitly below with different content
+                session._skip_full_history = True
+                await session.add_items([layer1_partial_msg])
                 logger.info(
-                    f"Saved partial response ({len(response_text)} chars) to Layer 2 for session {session.session_id}"
+                    f"Injected partial response ({len(response_text)} chars) into Layer 1 for session {session.session_id}"
                 )
             except Exception as e:
-                logger.warning(f"Failed to save partial response to Layer 2: {e}")
+                logger.warning(f"Failed to inject partial response to Layer 1: {e}")
+            finally:
+                session._skip_full_history = False
+
+            # Layer 2: Save clean text (no notice) with partial flag for CSS styling
+            if app_state.full_history_store:
+                try:
+                    app_state.full_history_store.save_message(
+                        session.session_id,
+                        {
+                            "role": "assistant",
+                            "content": response_text,
+                            "partial": True,
+                            "interrupted_at": datetime.now().isoformat(),
+                        },
+                    )
+                    logger.info(
+                        f"Saved partial response ({len(response_text)} chars) to Layer 2 for session {session.session_id}"
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to save partial response to Layer 2: {e}")
+
+        # Inject synthetic completions for interrupted tool calls (parallel-safe)
+        # NOTE: We only inject into Layer 2 (UI) and send IPC for live updates.
+        # Layer 1 (SDK) is left alone - the SDK cleanly skips incomplete tool calls,
+        # so injecting orphan function_call_outputs would cause API errors.
+        if was_interrupted and tracker.active_calls:
+            orphaned_calls = tracker.drain_all()
+            logger.info(
+                f"Injecting {len(orphaned_calls)} synthetic completion(s) for interrupted tool calls (Layer 2 + IPC only)"
+            )
+
+            for orphaned in orphaned_calls:
+                call_id = orphaned["call_id"]
+                tool_name = orphaned["tool_name"]
+                interrupt_result = "[User interrupted execution. Tool was cancelled before returning results.]"
+
+                # Layer 2: Full history store format for UI display and session restoration
+                if app_state.full_history_store:
+                    synthetic_completion = {
+                        "role": "tool_call",
+                        "content": tool_name,
+                        "call_id": call_id,
+                        "name": tool_name,
+                        "result": interrupt_result,
+                        "status": "completed",
+                        "success": False,
+                        "interrupted": True,
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                    try:
+                        app_state.full_history_store.save_message(session.session_id, synthetic_completion)
+                        logger.info(f"Injected Layer 2 synthetic completion for {tool_name} ({call_id})")
+                    except Exception as e:
+                        logger.warning(f"Failed to inject Layer 2 synthetic completion for {call_id}: {e}")
+
+                # IPC for live UI update
+                IPCManager.send(
+                    {
+                        "type": "function_completed",
+                        "call_id": call_id,
+                        "name": tool_name,
+                        "result": interrupt_result,
+                        "success": False,
+                        "interrupted": True,
+                    }
+                )
 
         # Conditional persistence based on cancellation state
         # - Always persist for normal completion (was_interrupted=False)

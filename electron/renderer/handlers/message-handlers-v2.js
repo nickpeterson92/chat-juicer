@@ -278,7 +278,20 @@ export function registerMessageHandlers(context) {
   createHandler("function_completed", (message) => {
     // IMPORTANT: Update UI status FIRST, before FunctionCallService moves call to completedCalls
     // FunctionCallService.setCallResult/setCallError deletes from activeCalls, breaking UI updates
-    if (message.success) {
+
+    // Handle interrupted tool calls (synthetic completions from interrupt handler)
+    if (message.interrupted) {
+      updateFunctionCallStatus(
+        appState.functions.activeCalls,
+        message.call_id,
+        "interrupted",
+        {
+          result: message.result || "[Interrupted before completion]",
+          interrupted: true,
+        },
+        true
+      );
+    } else if (message.success) {
       const result = message.result || message.output || "Success";
       updateFunctionCallStatus(appState.functions.activeCalls, message.call_id, "completed", { result }, true);
     } else {
@@ -295,7 +308,10 @@ export function registerMessageHandlers(context) {
 
     // Now update the FunctionCallService state (this moves call from activeCalls to completedCalls)
     if (services?.functionCallService) {
-      if (message.success) {
+      if (message.interrupted) {
+        // Treat interrupted as error for service state
+        services.functionCallService.setCallError(message.call_id, message.result || "[Interrupted]");
+      } else if (message.success) {
         const result = message.result || message.output || "Success";
         services.functionCallService.setCallResult(message.call_id, result);
       } else {
@@ -309,7 +325,7 @@ export function registerMessageHandlers(context) {
     // Track function completion
     globalEventBus.emit("analytics:event", {
       category: "function",
-      action: message.success ? "completed" : "failed",
+      action: message.interrupted ? "interrupted" : message.success ? "completed" : "failed",
       label: message.name || "unknown",
     });
   });

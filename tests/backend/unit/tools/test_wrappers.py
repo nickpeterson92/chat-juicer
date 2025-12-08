@@ -57,19 +57,25 @@ async def test_session_wrappers_inject_session_id(monkeypatch: pytest.MonkeyPatc
         calls["generate_document"] = (content, filename, create_backup, session_id)
         return "generated"
 
+    async def fake_execute_python_code(code: str, session_id: str | None = None) -> str:
+        calls["execute_python_code"] = (code, session_id)
+        return "executed"
+
     monkeypatch.setattr(wrappers, "list_directory", fake_list_directory)
     monkeypatch.setattr(wrappers, "read_file", fake_read_file)
     monkeypatch.setattr(wrappers, "search_files", fake_search_files)
     monkeypatch.setattr(wrappers, "edit_file", fake_edit_file)
     monkeypatch.setattr(wrappers, "generate_document", fake_generate_document)
+    monkeypatch.setattr(wrappers, "execute_python_code", fake_execute_python_code)
     _install_function_tool_stub(monkeypatch, collected)
 
     session_id = "session-123"
     tools = wrappers.create_session_aware_tools(session_id)
 
     # function_tool stub should have received each wrapper callable
-    assert len(tools) == 5
-    assert len(collected) == 5
+    # 6 tools: list_directory, read_file, search_files, edit_file, generate_document, execute_python_code
+    assert len(tools) == 6
+    assert len(collected) == 6
 
     # Invoke wrappers and ensure session_id is forwarded
     assert tools[0](path="docs", show_hidden=True) == "listed"
@@ -87,3 +93,6 @@ async def test_session_wrappers_inject_session_id(monkeypatch: pytest.MonkeyPatc
 
     assert await tools[4]("content", "out.md", create_backup=True) == "generated"
     assert calls["generate_document"] == ("content", "out.md", True, session_id)
+
+    assert await tools[5]("print('hello')") == "executed"
+    assert calls["execute_python_code"] == ("print('hello')", session_id)

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from tools.code_interpreter import execute_python_code
 from tools.document_generation import generate_document
 from tools.file_operations import list_directory, read_file, search_files
 from tools.text_editing import EditOperation, edit_file
@@ -146,6 +147,35 @@ def create_session_aware_tools(session_id: str) -> list[Any]:
             session_id=session_id,
         )
 
+    # Code Interpreter - Secure Python execution with session_id injection
+    async def wrapped_execute_python_code(code: str) -> str:
+        """Execute Python code in a secure sandbox environment.
+
+        The sandbox has access to:
+        - numpy, pandas, matplotlib, scipy, seaborn, scikit-learn
+        - pillow, sympy, plotly
+        - openpyxl, python-docx, pypdf, python-pptx (office documents)
+        - tabulate, faker, dateutil, humanize, pyyaml, lxml, pypandoc (utilities)
+
+        Limitations:
+        - No internet access
+        - No filesystem access outside /workspace
+        - 60 second timeout
+        - 512MB memory limit
+
+        For plots, use matplotlib - figures are automatically saved to the session's
+        output directory (data/files/{session_id}/output/code/) and returned.
+        For data output, print to stdout or save files to /workspace/ - they will
+        be collected and persisted alongside other generated documents.
+
+        Args:
+            code: Python code to execute
+
+        Returns:
+            JSON with stdout, files generated, and execution metadata
+        """
+        return await execute_python_code(code=code, session_id=session_id)  # type: ignore[no-any-return]
+
     # Create Agent-compatible tool objects with function_tool decorator
     return [
         function_tool(wrapped_list_directory),
@@ -153,4 +183,5 @@ def create_session_aware_tools(session_id: str) -> list[Any]:
         function_tool(wrapped_search_files),
         function_tool(wrapped_edit_file),
         function_tool(wrapped_generate_document),
+        function_tool(wrapped_execute_python_code),
     ]

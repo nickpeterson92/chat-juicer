@@ -18,10 +18,10 @@ import sys
 import uuid
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
-from pythonjsonlogger import jsonlogger
+from pythonjsonlogger import json as jsonlogger
 
 from core.constants import (
     LOG_BACKUP_COUNT_CONVERSATIONS,
@@ -42,7 +42,7 @@ class ConversationTurn:
     duration_ms: float | None = None
     tokens_used: int | None = None
     session_id: str = ""
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 class ConversationFilter(logging.Filter):
@@ -114,7 +114,7 @@ def setup_logging(name: str = "chat-juicer", debug: bool | None = None) -> loggi
     conv_handler.addFilter(ConversationFilter())
 
     # Use JSON formatter for conversations
-    conv_formatter = jsonlogger.JsonFormatter(  # type: ignore[attr-defined]
+    conv_formatter = jsonlogger.JsonFormatter(
         "%(timestamp)s %(levelname)s %(message)s %(session_id)s %(tokens)s %(functions)s %(func)s",
         timestamp=True,
     )
@@ -133,7 +133,7 @@ def setup_logging(name: str = "chat-juicer", debug: bool | None = None) -> loggi
     error_handler.addFilter(ErrorFilter())
 
     # Use JSON formatter for errors
-    error_formatter = jsonlogger.JsonFormatter(  # type: ignore[attr-defined]
+    error_formatter = jsonlogger.JsonFormatter(
         "%(timestamp)s %(levelname)s %(name)s %(message)s",
         timestamp=True,
     )

@@ -152,8 +152,20 @@ class FullHistoryStore:
                 return  # Not an error - just skip
 
             # Handle complex content structures (arrays, dicts)
+            # SDK format: content = [{"text": "...", "type": "output_text", ...}]
+            # We need to extract the actual text for UI display
             if not isinstance(content, str):
-                content = json_safe(content)
+                if isinstance(content, list) and len(content) > 0:
+                    # SDK content array - extract text from elements
+                    texts = []
+                    for item in content:
+                        if isinstance(item, dict):
+                            text = item.get("text", "")
+                            if text:
+                                texts.append(text)
+                    content = "".join(texts) if texts else json_safe(content)
+                else:
+                    content = json_safe(content)
 
             # Store other fields as metadata JSON
             metadata = {k: v for k, v in message.items() if k not in ["role", "content"]}

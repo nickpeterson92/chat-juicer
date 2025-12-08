@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, shell, dialog } = require("electron");
 const { spawn } = require("node:child_process");
 const path = require("node:path");
 const fs = require("node:fs/promises");
@@ -283,6 +283,11 @@ function sendProtocolNegotiation() {
 app.whenReady().then(() => {
   logger.info("Electron app ready, initializing...");
 
+  // Set dock icon on macOS (needed for dev mode)
+  if (process.platform === "darwin" && app.dock) {
+    app.dock.setIcon(path.join(__dirname, "icon.png"));
+  }
+
   // IPC handler for renderer logging
   ipcMain.on("renderer-log", (_event, { level, message, data }) => {
     const rendererLogger = new Logger("renderer");
@@ -448,37 +453,49 @@ app.whenReady().then(() => {
       const projectRoot = path.join(__dirname, "..");
       const absolutePath = path.join(projectRoot, dirPath);
 
-      // Recursive function to get all files in directory and subdirectories
-      async function getFilesRecursively(dir, baseDir = dir) {
-        const entries = await fs.readdir(dir, { withFileTypes: true });
-        const files = [];
+      // Get entries at current level (non-recursive for explorer navigation)
+      const entries = await fs.readdir(absolutePath, { withFileTypes: true });
+      const files = [];
 
-        for (const entry of entries) {
-          // Skip hidden files
-          if (entry.name.startsWith(HIDDEN_FILE_PREFIX)) continue;
+      for (const entry of entries) {
+        // Skip hidden files
+        if (entry.name.startsWith(HIDDEN_FILE_PREFIX)) continue;
 
-          const fullPath = path.join(dir, entry.name);
+        const fullPath = path.join(absolutePath, entry.name);
 
-          if (entry.isFile()) {
-            // Calculate relative path from base directory for display
-            const relativePath = path.relative(baseDir, fullPath);
-            const stats = await fs.stat(fullPath);
-            files.push({
-              name: relativePath,
-              size: stats.size,
-              modified: stats.mtime,
-            });
-          } else if (entry.isDirectory()) {
-            // Recursively get files from subdirectory
-            const subFiles = await getFilesRecursively(fullPath, baseDir);
-            files.push(...subFiles);
+        if (entry.isFile()) {
+          const stats = await fs.stat(fullPath);
+          files.push({
+            name: entry.name,
+            type: "file",
+            size: stats.size,
+            modified: stats.mtime,
+          });
+        } else if (entry.isDirectory()) {
+          // Count items in subdirectory
+          let fileCount = 0;
+          try {
+            const subEntries = await fs.readdir(fullPath);
+            fileCount = subEntries.filter((e) => !e.startsWith(HIDDEN_FILE_PREFIX)).length;
+          } catch {
+            // Ignore errors counting subdirectory
           }
+          files.push({
+            name: entry.name,
+            type: "folder",
+            size: 0,
+            modified: null,
+            file_count: fileCount,
+          });
         }
-
-        return files;
       }
 
-      const files = await getFilesRecursively(absolutePath);
+      // Sort: folders first, then files, alphabetically within each group
+      files.sort((a, b) => {
+        if (a.type === "folder" && b.type !== "folder") return -1;
+        if (a.type !== "folder" && b.type === "folder") return 1;
+        return a.name.localeCompare(b.name);
+      });
 
       logger.debug("Directory listed successfully", { dirPath, fileCount: files.length });
       return { success: true, files };
@@ -570,6 +587,53 @@ app.whenReady().then(() => {
       return { success: true };
     } catch (error) {
       logger.error("Failed to open file", { dirPath, filename, error: error.message });
+      return { success: false, error: error.message };
+    }
+  });
+
+  // IPC handler for downloading code interpreter output files
+  ipcMain.handle("download-code-output-file", async (_event, { path: filePath, name }) => {
+    logger.info("Code output file download requested", { path: filePath, name });
+
+    try {
+      // Security check: ensure path is within project directory
+      const projectRoot = path.join(__dirname, "..");
+      const absolutePath = path.isAbsolute(filePath) ? filePath : path.join(projectRoot, filePath);
+      const normalizedPath = path.normalize(absolutePath);
+      const normalizedRoot = path.normalize(projectRoot);
+
+      if (!normalizedPath.startsWith(normalizedRoot)) {
+        logger.error("Security: Attempted to download file outside project", { path: normalizedPath });
+        return { success: false, error: "Invalid file path" };
+      }
+
+      // Check if file exists
+      try {
+        await fs.access(normalizedPath);
+      } catch (_e) {
+        logger.error("File does not exist", { path: normalizedPath });
+        return { success: false, error: "File not found" };
+      }
+
+      // Show save dialog
+      const { canceled, filePath: savePath } = await dialog.showSaveDialog({
+        title: "Save Code Output",
+        defaultPath: name,
+        buttonLabel: "Save",
+      });
+
+      if (canceled || !savePath) {
+        logger.info("File download canceled by user");
+        return { success: false, error: "Download canceled" };
+      }
+
+      // Copy file to chosen location
+      await fs.copyFile(normalizedPath, savePath);
+
+      logger.info("File downloaded successfully", { from: normalizedPath, to: savePath });
+      return { success: true, path: savePath };
+    } catch (error) {
+      logger.error("Failed to download file", { path: filePath, name, error: error.message });
       return { success: false, error: error.message };
     }
   });

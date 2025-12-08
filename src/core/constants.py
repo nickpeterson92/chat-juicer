@@ -139,7 +139,7 @@ LOG_PREVIEW_LENGTH = 50
 
 #: File extensions that can be converted to markdown using markitdown.
 #: The read_file() tool automatically converts these formats to text/markdown
-#: for processing by the agent. Requires markitdown[all] for full support.
+#: for processing by the agent. Requires markitdown[pdf,docx,pptx,xlsx,xls] extras.
 #: Image file extensions that support native vision API processing.
 #: These formats can be passed directly to vision-enabled models (GPT-4o, GPT-4-turbo, GPT-5)
 #: for image understanding without intermediate text conversion.

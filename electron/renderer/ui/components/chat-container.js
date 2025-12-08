@@ -133,23 +133,37 @@ export class ChatContainer {
       return;
     }
 
-    // Clear existing queued messages
-    queuedContainer.innerHTML = "";
-
     // Only render items with 'queued' status (not processing)
     const queuedItems = items.filter((item) => item.status === "queued");
+    const queuedIds = new Set(queuedItems.map((item) => item.id));
 
-    if (queuedItems.length === 0) {
-      // Hide container when empty
+    // Remove elements that are no longer in queue (except those animating out)
+    const existingElements = queuedContainer.querySelectorAll("[data-queue-id]");
+    for (const el of existingElements) {
+      const id = el.dataset.queueId;
+      if (!queuedIds.has(id) && !el.classList.contains("queue-cancel-animate")) {
+        el.remove();
+      }
+    }
+
+    // Get IDs of elements still in DOM (including animating ones)
+    const existingIds = new Set(
+      Array.from(queuedContainer.querySelectorAll("[data-queue-id]")).map((el) => el.dataset.queueId)
+    );
+
+    if (queuedItems.length === 0 && existingIds.size === 0) {
+      // Hide container when empty and no animations in progress
       queuedContainer.classList.add("hidden");
       return;
     }
 
-    // Show container and render queued messages
+    // Show container and add any new queued messages
     queuedContainer.classList.remove("hidden");
     for (const item of queuedItems) {
-      const queuedElement = this._createQueuedMessageElement(item);
-      queuedContainer.appendChild(queuedElement);
+      if (!existingIds.has(item.id)) {
+        const queuedElement = this._createQueuedMessageElement(item);
+        queuedContainer.appendChild(queuedElement);
+      }
     }
 
     // Hide main indicator now that queued messages exist (show mini instead)
@@ -342,17 +356,25 @@ export class ChatContainer {
     const queueService = getMessageQueueService();
     if (!queueService) return;
 
-    // Find the element and add cancel animation
-    const wrapper = this.element.querySelector(`[data-queue-id="${id}"]`);
+    // Find the element in the queued messages container
+    const queuedContainer = document.getElementById("queued-messages-container");
+    const wrapper = queuedContainer?.querySelector(`[data-queue-id="${id}"]`);
     if (wrapper) {
       // Add the slide-out animation class
       wrapper.classList.add("queue-cancel-animate");
 
-      // Wait for animation to complete before removing from queue
+      // Wait for animation to complete before removing from queue and DOM
       wrapper.addEventListener(
         "animationend",
         () => {
+          // Remove from state (will trigger re-render but element is already removed)
           queueService.remove(id);
+          // Remove DOM element after animation
+          wrapper.remove();
+          // Hide container if now empty
+          if (queuedContainer && queuedContainer.children.length === 0) {
+            queuedContainer.classList.add("hidden");
+          }
         },
         { once: true }
       );
@@ -566,6 +588,7 @@ export class ChatContainer {
           result: msg.result || existing.result,
           status: msg.status === "completed" ? "completed" : existing.status || "detected",
           success: msg.success !== undefined ? msg.success : existing.success,
+          interrupted: msg.interrupted !== undefined ? msg.interrupted : existing.interrupted,
         });
       }
     }

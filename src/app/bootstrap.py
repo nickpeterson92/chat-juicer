@@ -31,7 +31,6 @@ async def initialize_application() -> AppState:
 
     This function performs all bootstrap operations required before entering
     the main event loop:
-    0. Increase file descriptor limit (prevent file handle exhaustion)
     1. Load environment variables and validate configuration
     2. Create OpenAI client (Azure or OpenAI provider)
     3. Configure Agent/Runner framework defaults
@@ -46,19 +45,6 @@ async def initialize_application() -> AppState:
     Raises:
         SystemExit: If configuration validation fails (prints helpful error message)
     """
-    # Increase file descriptor limit early to prevent "Too many open files" errors
-    try:
-        import resource
-
-        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-        # Try to increase to 4096 (or max allowed by system)
-        new_limit = min(4096, hard)
-        resource.setrlimit(resource.RLIMIT_NOFILE, (new_limit, hard))
-        logger.info(f"File descriptor limit increased: {soft} → {new_limit}")
-    except Exception as e:
-        # Windows doesn't support resource module, or permission issue - continue anyway
-        logger.warning(f"Could not increase file descriptor limit: {e}")
-
     # Load environment variables from src/.env
     env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
     load_dotenv(env_path)

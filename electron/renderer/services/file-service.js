@@ -186,12 +186,17 @@ export class FileService {
   /**
    * Upload file to backend
    *
+   * Progress phases:
+   * - 0-50%: Reading file into memory
+   * - 50-80%: Processing (converting to array)
+   * - 80-100%: IPC transfer complete
+   *
    * @param {File} file - File to upload
    * @param {string} sessionId - Session ID
-   * @param {Function} progressCallback - Optional progress callback (percent)
+   * @param {Function} progressCallback - Optional progress callback (percent 0-100)
    * @returns {Promise<Object>} Upload result
    */
-  async uploadFile(file, sessionId, _progressCallback = null) {
+  async uploadFile(file, sessionId, progressCallback = null) {
     const validation = this.validateFile(file);
     if (!validation.valid) {
       return { success: false, error: validation.error };
@@ -202,14 +207,20 @@ export class FileService {
     }
 
     try {
-      // Read file as ArrayBuffer and convert to plain array for IPC serialization
-      const arrayBuffer = await file.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
-      const dataArray = Array.from(uint8Array);
+      // Phase 1: Read file (0-50%)
+      const readProgress = progressCallback ? (p) => progressCallback(Math.round(p * 0.5)) : null;
+      const arrayBuffer = await this._readFileWithProgress(file, readProgress);
 
-      // Use IPCAdapter's uploadFile method
+      // Phase 2: Processing (50-80%) - chunked to allow UI updates
+      if (progressCallback) progressCallback(50);
+      const uint8Array = new Uint8Array(arrayBuffer);
+      const dataArray = await this._convertToArrayChunked(uint8Array, progressCallback);
+
+      // Phase 3: IPC transfer (80-100%)
       const filePath = `data/files/${sessionId}/sources/${file.name}`;
       const result = await this.ipc.uploadFile(filePath, dataArray, file.name, file.type || "application/octet-stream");
+
+      if (progressCallback) progressCallback(100);
 
       if (result?.success) {
         return { success: true, data: result };
@@ -219,6 +230,78 @@ export class FileService {
     } catch (error) {
       return { success: false, error: error.message };
     }
+  }
+
+  /**
+   * Read file into ArrayBuffer with progress tracking
+   * @private
+   * @param {File} file - File to read
+   * @param {Function|null} progressCallback - Progress callback (percent 0-100)
+   * @returns {Promise<ArrayBuffer>}
+   */
+  _readFileWithProgress(file, progressCallback) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      if (progressCallback) {
+        reader.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percent = Math.round((event.loaded / event.total) * 100);
+            progressCallback(percent);
+          }
+        };
+      }
+
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error("Failed to read file"));
+
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  /**
+   * Convert Uint8Array to regular array in chunks to allow UI updates
+   * Progress reports 50-80% range
+   * @private
+   * @param {Uint8Array} uint8Array - Source array
+   * @param {Function|null} progressCallback - Progress callback
+   * @returns {Promise<number[]>}
+   */
+  async _convertToArrayChunked(uint8Array, progressCallback) {
+    const length = uint8Array.length;
+
+    // For small files (< 1MB), just convert directly - it's fast enough
+    if (length < 1024 * 1024) {
+      if (progressCallback) progressCallback(80);
+      return Array.from(uint8Array);
+    }
+
+    // For larger files, process in chunks with UI breaks
+    const result = new Array(length);
+    const chunkSize = 256 * 1024; // 256KB chunks
+    let processed = 0;
+
+    while (processed < length) {
+      const end = Math.min(processed + chunkSize, length);
+
+      // Copy chunk
+      for (let i = processed; i < end; i++) {
+        result[i] = uint8Array[i];
+      }
+
+      processed = end;
+
+      // Report progress (50-80% range for this phase)
+      if (progressCallback) {
+        const phaseProgress = (processed / length) * 30; // 30% of total for this phase
+        progressCallback(Math.round(50 + phaseProgress));
+      }
+
+      // Yield to event loop for UI updates
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    return result;
   }
 
   /**

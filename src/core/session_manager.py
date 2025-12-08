@@ -10,7 +10,6 @@ import uuid
 
 from datetime import datetime
 from pathlib import Path
-from typing import cast
 
 from agents import Agent, Runner, TResponseInputItem
 
@@ -204,35 +203,16 @@ class SessionManager:
         if self.current_session_id == session_id:
             self.current_session_id = None
 
-        # Delete session files directory with handle cleanup
-        import gc
+        # Delete session files directory
         import shutil
-        import time
 
         from pathlib import Path
 
         session_files_dir = Path(f"data/files/{session_id}")
         if session_files_dir.exists():
             try:
-                # Force garbage collection to close unreferenced file handles
-                # This is critical for preventing "Too many open files" errors
-                gc.collect()
-
-                # Small delay to allow OS to release file handles
-                time.sleep(0.05)
-
                 shutil.rmtree(session_files_dir)
                 logger.info(f"Deleted session files directory: {session_files_dir}")
-            except OSError as e:
-                if e.errno == 24:  # EMFILE: Too many open files
-                    logger.error(
-                        f"File handle exhaustion deleting {session_files_dir}. "
-                        f"Consider increasing ulimit -n or closing file handles before deletion.",
-                        exc_info=True,
-                    )
-                else:
-                    logger.error(f"Failed to delete session files directory {session_files_dir}: {e}", exc_info=True)
-                # Continue with metadata save even if file cleanup fails
             except Exception as e:
                 logger.error(f"Failed to delete session files directory {session_files_dir}: {e}", exc_info=True)
                 # Continue with metadata save even if file cleanup fails
@@ -515,22 +495,10 @@ class SessionManager:
                 instructions=SESSION_TITLE_GENERATION_PROMPT,
             )
 
-            # Append title generation request as final user message
-            title_request = {
-                "role": "user",
-                "content": (
-                    "Generate a concise 3-5 word title for the conversation above. "
-                    "Use title case, be specific about the main topic, no articles unless necessary, "
-                    "no punctuation at the end. Output ONLY the title with no explanation or quotes."
-                ),
-            }
-            # Cast to TResponseInputItem for type safety (runtime-compatible dict)
-            messages_with_request = [*recent_messages, cast(TResponseInputItem, title_request)]
-
-            # Pass messages with title request to Runner
+            # Pass conversation directly - system prompt contains all instructions
             result = await Runner.run(
                 title_agent,
-                input=messages_with_request,
+                input=recent_messages,
                 session=None,  # No session for title generation (one-shot operation)
             )
 
