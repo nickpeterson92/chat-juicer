@@ -403,8 +403,8 @@ app.whenReady().then(() => {
   });
 
   // IPC handler for file uploads (Binary V2)
-  ipcMain.handle("upload-file", async (_event, { filename, data, size, type }) => {
-    logger.info("File upload requested", { filename, size, type });
+  ipcMain.handle("upload-file", async (_event, { filename, data, size, type, encoding }) => {
+    logger.info("File upload requested", { filename, size, type, encoding: encoding || "array" });
 
     if (!pythonProcess || pythonProcess.killed) {
       logger.error("Python process not running for file upload");
@@ -433,6 +433,7 @@ app.whenReady().then(() => {
           filename: filename,
           content: data,
           mime_type: type,
+          encoding: encoding || "array", // "base64" for efficient transfer, "array" for legacy
           request_id: requestId,
         });
         pythonProcess.stdin.write(binaryMessage);

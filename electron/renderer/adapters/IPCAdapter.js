@@ -188,13 +188,14 @@ export class IPCAdapter {
     if (!this.api?.uploadFile) {
       throw new Error("IPC API not available: uploadFile");
     }
-    // Backend expects: { filename, data, size, type }
-    // data should be a plain array for IPC serialization
+    // Backend expects: { filename, data, size, type, encoding }
+    // data is now base64 string (much faster IPC than array of integers)
     return this.api.uploadFile({
       filename: fileName,
       data: fileData,
-      size: fileData.length,
+      size: typeof fileData === "string" ? Math.floor((fileData.length * 3) / 4) : fileData.length,
       type: mimeType,
+      encoding: "base64",
     });
   }
 

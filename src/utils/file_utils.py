@@ -389,19 +389,26 @@ async def file_operation(
 
 
 def save_uploaded_file(
-    filename: str, data: list[int], session_id: str | None = None, target_dir: str = "sources"
+    filename: str,
+    data: list[int] | str,
+    session_id: str | None = None,
+    target_dir: str = "sources",
+    encoding: str = "array",
 ) -> UploadResult:
     """Save uploaded file data to session-specific or general directory.
 
     Args:
         filename: Name of the file to save
-        data: List of byte values (0-255)
+        data: List of byte values (0-255) or base64 encoded string
         session_id: Optional session ID for session-specific storage
         target_dir: Target directory if no session_id (default: "sources")
+        encoding: Data encoding - "array" for list[int], "base64" for base64 string
 
     Returns:
         UploadResult with success status and metadata (success + file info or error)
     """
+    import base64
+
     try:
         # Validate filename (prevent directory traversal)
         if "/" in filename or "\\" in filename or ".." in filename:
@@ -423,8 +430,9 @@ def save_uploaded_file(
             backup_path = target_path / f"{filename}.backup"
             backup_path.write_bytes(target_file.read_bytes())
 
-        # Convert list of ints to bytes and write
-        byte_data = bytes(data)
+        # Convert data to bytes based on encoding
+        # Type narrowing: base64 sends str, array sends list[int]
+        byte_data = base64.b64decode(cast(str, data)) if encoding == "base64" else bytes(cast(list[int], data))
         target_file.write_bytes(byte_data)
 
         # Get file info
