@@ -132,7 +132,7 @@ def save_tool_call_to_history(
         logger.warning(f"Failed to save tool call to Layer 2: {e}")
 
 
-def handle_streaming_error(error: Exception) -> None:
+def handle_streaming_error(error: Exception, session_id: str | None = None) -> None:
     """Handle streaming errors with appropriate user messages.
 
     Logs the error and sends user-friendly error message to UI via IPC.
@@ -140,6 +140,7 @@ def handle_streaming_error(error: Exception) -> None:
 
     Args:
         error: The exception that occurred during streaming
+        session_id: Optional session identifier for routing (Phase 1: Concurrent Sessions)
     """
 
     # Define error handlers for different exception types
@@ -171,7 +172,7 @@ def handle_streaming_error(error: Exception) -> None:
     error_msg = handler(error)
 
     # Send error message to UI (finally block handles assistant_end)
-    IPCManager.send(error_msg)
+    IPCManager.send(error_msg, session_id=session_id)
 
 
 async def ensure_session_exists(app_state: AppState) -> tuple[TokenAwareSQLiteSession, bool]:
@@ -286,7 +287,7 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
     tools_completed = False
 
     # Send start message for Electron
-    IPCManager.send_assistant_start()
+    IPCManager.send_assistant_start(session_id=session.session_id)
 
     response_text = ""
     tracker = CallTracker()
@@ -338,7 +339,7 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
                 # Normal event processing
                 ipc_msg = await handle_electron_ipc(event, tracker)
                 if ipc_msg:
-                    IPCManager.send_raw(ipc_msg)
+                    IPCManager.send_raw(ipc_msg, session_id=session.session_id)
                     save_tool_call_to_history(app_state, session, ipc_msg)
 
                 # Accumulate response text for logging
@@ -371,12 +372,12 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
                 "message": "Failed to save conversation history. Please try again.",
                 "code": "persistence_error",
             }
-            IPCManager.send(error_msg)
+            IPCManager.send(error_msg, session_id=session.session_id)
             # Note: send_assistant_end is handled by the finally block
             return
 
         except Exception as e:
-            handle_streaming_error(e)
+            handle_streaming_error(e, session_id=session.session_id)
             return
 
         # Log response (only for successful completion)
@@ -411,7 +412,7 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
         # or after timeout), so we skip it here to avoid duplicate messages
         if not app_state.interrupt_requested:
             logger.debug("Finally block - sending assistant_end")
-            IPCManager.send_assistant_end()
+            IPCManager.send_assistant_end(session_id=session.session_id)
             logger.debug("assistant_end message sent")
         else:
             logger.debug("Finally block - skipping assistant_end (interrupt handled by main.py)")
@@ -515,7 +516,8 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
                         "result": interrupt_result,
                         "success": False,
                         "interrupted": True,
-                    }
+                    },
+                    session_id=session.session_id,
                 )
 
         # Conditional persistence based on cancellation state
@@ -585,7 +587,7 @@ async def handle_file_upload(app_state: AppState, upload_data: dict[str, Any]) -
         session_meta = app_state.session_manager.get_session(session_id)
         if session_meta:
             session_info = {"type": "session_created", "session": session_meta.model_dump()}
-            IPCManager.send(session_info)
+            IPCManager.send(session_info, session_id=session_id)
             logger.info(f"New session created for upload: {session_id}")
 
     return result
@@ -656,5 +658,5 @@ def send_session_created_event(app_state: AppState, session_id: str) -> None:
     session_meta = app_state.session_manager.get_session(session_id)
     if session_meta:
         # Send full session metadata including model and reasoning_effort
-        IPCManager.send({"type": "session_created", "session": session_meta.model_dump()})
+        IPCManager.send({"type": "session_created", "session": session_meta.model_dump()}, session_id=session_id)
         logger.info(f"Sent session_created event for {session_id} after first message")

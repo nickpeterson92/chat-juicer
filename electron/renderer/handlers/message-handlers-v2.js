@@ -11,6 +11,25 @@ import {
   createStreamingAssistantMessage,
   updateAssistantMessage,
 } from "../ui/chat-ui.js";
+
+/**
+ * Check if a message is for the active session (Phase 1: Concurrent Sessions)
+ * Messages without session_id are considered for the active session (backward compatible)
+ * @param {Object} message - Message with optional session_id field
+ * @param {Object} appState - Application state with session.current
+ * @returns {boolean} True if message is for active session
+ */
+function isActiveSessionMessage(message, appState) {
+  // Backward compatible: messages without session_id are for active session
+  if (!message.session_id) {
+    return true;
+  }
+
+  // Check if message session_id matches current active session
+  const currentSessionId = appState.getState("session.current");
+  return message.session_id === currentSessionId;
+}
+
 import {
   createFunctionCallCard,
   scheduleFunctionCardCleanup,
@@ -500,3 +519,8 @@ export function processMessageV2(message, _context) {
     source: "backend",
   });
 }
+
+/**
+ * Export session routing utility for use in other modules
+ */
+export { isActiveSessionMessage };
