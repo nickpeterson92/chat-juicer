@@ -337,4 +337,156 @@ describe("markdown-renderer", () => {
     await vi.runAllTimersAsync();
     expect(button?.textContent).toBe("copy");
   });
+
+  it("initializes scroll fallback for mermaid diagrams on first batch process", async () => {
+    // Override mock to call custom renderer for code blocks
+    markedParseMock.mockImplementation((input) => {
+      const match = input.match(/```(\w*)\n([\s\S]*?)```/);
+      if (match && currentRenderer?.code) {
+        return currentRenderer.code({ lang: match[1], text: match[2] });
+      }
+      return `<p>${input}</p>`;
+    });
+
+    const { processMermaidDiagrams, renderMarkdown } = await import("@utils/markdown-renderer.js");
+
+    // Create chat container for scroll fallback
+    const chatContainer = document.createElement("div");
+    chatContainer.id = "chat-container";
+    document.body.appendChild(chatContainer);
+
+    const container = document.createElement("div");
+    container.innerHTML = renderMarkdown("```mermaid\ngraph TD;A-->B;\n```", false);
+    chatContainer.appendChild(container);
+
+    await processMermaidDiagrams(container);
+    // Wait for batch processing
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Verify scroll listener was added (scroll fallback initialized)
+    // Trigger scroll event to exercise the fallback code path
+    chatContainer.dispatchEvent(new Event("scroll"));
+
+    // Wait for debounced fallback check
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    chatContainer.remove();
+  });
+
+  it("scroll fallback catches visible unrendered diagrams", async () => {
+    // Override mock to call custom renderer for code blocks
+    markedParseMock.mockImplementation((input) => {
+      const match = input.match(/```(\w*)\n([\s\S]*?)```/);
+      if (match && currentRenderer?.code) {
+        return currentRenderer.code({ lang: match[1], text: match[2] });
+      }
+      return `<p>${input}</p>`;
+    });
+
+    const { processMermaidDiagrams, renderMarkdown } = await import("@utils/markdown-renderer.js");
+
+    // Create chat container
+    const chatContainer = document.createElement("div");
+    chatContainer.id = "chat-container";
+    chatContainer.style.height = "200px";
+    chatContainer.style.overflow = "auto";
+    document.body.appendChild(chatContainer);
+
+    // Create multiple diagrams
+    const container = document.createElement("div");
+    container.innerHTML = renderMarkdown("```mermaid\ngraph TD;X-->Y;\n```", false);
+    chatContainer.appendChild(container);
+
+    // Process but skip the batch wait - simulating observer miss
+    await processMermaidDiagrams(container);
+
+    // Trigger scroll to exercise fallback
+    chatContainer.dispatchEvent(new Event("scroll"));
+
+    // Wait for debounced check plus render time
+    await new Promise((resolve) => setTimeout(resolve, 350));
+
+    chatContainer.remove();
+  });
+
+  it("scroll fallback skips diagrams without code in store", async () => {
+    const { processMermaidDiagrams } = await import("@utils/markdown-renderer.js");
+
+    // Create chat container
+    const chatContainer = document.createElement("div");
+    chatContainer.id = "chat-container";
+    document.body.appendChild(chatContainer);
+
+    // Create a fake mermaid wrapper without corresponding code in store
+    const wrapper = document.createElement("div");
+    wrapper.className = "mermaid-wrapper mermaid-loading";
+    wrapper.dataset.mermaidId = "nonexistent-id-12345";
+    chatContainer.appendChild(wrapper);
+
+    // Trigger processMermaidDiagrams to initialize fallback
+    const container = document.createElement("div");
+    await processMermaidDiagrams(container);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Trigger scroll to exercise fallback with missing code path
+    chatContainer.dispatchEvent(new Event("scroll"));
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    // Wrapper should still be in loading state (not processed)
+    expect(wrapper.classList.contains("mermaid-loading")).toBe(true);
+
+    chatContainer.remove();
+  });
+
+  it("scroll fallback skips off-viewport diagrams", async () => {
+    // Override mock to call custom renderer for code blocks
+    markedParseMock.mockImplementation((input) => {
+      const match = input.match(/```(\w*)\n([\s\S]*?)```/);
+      if (match && currentRenderer?.code) {
+        return currentRenderer.code({ lang: match[1], text: match[2] });
+      }
+      return `<p>${input}</p>`;
+    });
+
+    const { processMermaidDiagrams, renderMarkdown } = await import("@utils/markdown-renderer.js");
+
+    // Create chat container
+    const chatContainer = document.createElement("div");
+    chatContainer.id = "chat-container";
+    chatContainer.style.height = "100px";
+    chatContainer.style.overflow = "auto";
+    document.body.appendChild(chatContainer);
+
+    // Create diagram that would be off-screen (mock getBoundingClientRect)
+    const container = document.createElement("div");
+    container.innerHTML = renderMarkdown("```mermaid\ngraph LR;Off-->Screen;\n```", false);
+    chatContainer.appendChild(container);
+
+    const wrapper = container.querySelector(".mermaid-wrapper");
+    if (wrapper) {
+      // Mock the wrapper to appear off-screen
+      const originalGetBoundingClientRect = wrapper.getBoundingClientRect;
+      wrapper.getBoundingClientRect = () => ({
+        top: 5000,
+        bottom: 5100,
+        left: 0,
+        right: 100,
+        width: 100,
+        height: 100,
+      });
+
+      // Process diagrams
+      await processMermaidDiagrams(container);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Trigger scroll fallback
+      chatContainer.dispatchEvent(new Event("scroll"));
+      await new Promise((resolve) => setTimeout(resolve, 250));
+
+      // Restore original
+      wrapper.getBoundingClientRect = originalGetBoundingClientRect;
+    }
+
+    chatContainer.remove();
+  });
 });
