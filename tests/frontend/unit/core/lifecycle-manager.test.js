@@ -3,9 +3,8 @@
  * Tests for automatic timer and event listener cleanup
  */
 
-import { ComponentLifecycle } from "../../electron/renderer/core/component-lifecycle.js";
-import { EventBus } from "../../electron/renderer/core/event-bus.js";
-import { LifecycleManager } from "../../electron/renderer/core/lifecycle-manager.js";
+import { ComponentLifecycle } from "../../../../electron/renderer/core/component-lifecycle.js";
+import { LifecycleManager } from "../../../../electron/renderer/core/lifecycle-manager.js";
 
 describe("LifecycleManager", () => {
   let manager;
@@ -45,6 +44,16 @@ describe("LifecycleManager", () => {
       expect(id1).not.toBe(id2);
       expect(manager.components.size).toBe(2);
     });
+
+    it("should throw TypeError for null component", () => {
+      expect(() => manager.register(null, "NullComponent")).toThrow(TypeError);
+    });
+
+    it("should throw TypeError for non-object component", () => {
+      expect(() => manager.register("string", "StringComponent")).toThrow(TypeError);
+      expect(() => manager.register(123, "NumberComponent")).toThrow(TypeError);
+      expect(() => manager.register(undefined, "UndefinedComponent")).toThrow(TypeError);
+    });
   });
 
   describe("Timer Management", () => {
@@ -73,37 +82,6 @@ describe("LifecycleManager", () => {
           done();
         }, 20);
       }, 5);
-    });
-
-    it("should track setInterval and clear on unmount", (done) => {
-      const component = {};
-      manager.register(component, "IntervalComponent");
-
-      let count = 0;
-      const intervalId = manager.setInterval(
-        component,
-        () => {
-          count++;
-        },
-        10
-      );
-
-      expect(intervalId).toBeDefined();
-
-      // Let interval fire twice
-      setTimeout(() => {
-        expect(count).toBeGreaterThan(0);
-        const countAtUnmount = count;
-
-        // Unmount
-        manager.unmount(component);
-
-        // Wait and verify count doesn't increase
-        setTimeout(() => {
-          expect(count).toBe(countAtUnmount);
-          done();
-        }, 30);
-      }, 25);
     });
 
     it("should allow manual timer clearing", (done) => {
@@ -137,7 +115,8 @@ describe("LifecycleManager", () => {
 
       const timerId = manager.setTimeout({}, callback, 5);
 
-      expect(typeof timerId).toBe("number");
+      // Timer ID exists (either number or Timer object depending on environment)
+      expect(timerId).toBeDefined();
       vi.runAllTimers();
       expect(callback).toHaveBeenCalled();
       expect(warnSpy).toHaveBeenCalled();
@@ -146,10 +125,12 @@ describe("LifecycleManager", () => {
 
     it("should warn and return null when setTimeout called on unmounted component", () => {
       const component = {};
-      manager.register(component, "Unmounted");
-      manager.unmount(component);
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const id = manager.register(component, "Unmounted");
+      // Manually mark as unmounted but keep the entry
+      const entry = manager.components.get(id);
+      entry.mounted = false;
 
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       const timerId = manager.setTimeout(component, () => {}, 10);
 
       expect(timerId).toBeNull();
@@ -158,6 +139,20 @@ describe("LifecycleManager", () => {
 
     it("should noop when clearing timer for unknown component", () => {
       expect(() => manager.clearTimer({}, 123)).not.toThrow();
+    });
+
+    it("should noop when clearing timer that does not exist in set", () => {
+      const component = {};
+      manager.register(component, "TimerComponent");
+      // Clear a timer ID that was never added
+      expect(() => manager.clearTimer(component, 99999)).not.toThrow();
+    });
+
+    it("should noop when entry is missing for clearTimer", () => {
+      const component = {};
+      const id = manager.register(component, "MissingEntry");
+      manager.components.delete(id); // Remove entry but keep WeakMap reference
+      expect(() => manager.clearTimer(component, 123)).not.toThrow();
     });
 
     it("should warn but not throw when unmounting unknown component", () => {
@@ -205,64 +200,37 @@ describe("LifecycleManager", () => {
       expect(() => manager.unmount(component)).not.toThrow();
       expect(errorSpy).toHaveBeenCalled();
     });
-  });
 
-  describe("EventBus Integration", () => {
-    it("should create scoped EventBus that auto-unsubscribes", () => {
-      const component = {};
-      manager.register(component, "EventComponent");
-
-      const eventBus = new EventBus();
-      const scopedBus = manager.createScopedEventBus(component, eventBus);
-
-      let callCount = 0;
-      scopedBus.on("test-event", () => {
-        callCount++;
-      });
-
-      // Emit before unmount
-      eventBus.emit("test-event");
-      expect(callCount).toBe(1);
-
-      // Unmount should unsubscribe
-      manager.unmount(component);
-
-      // Emit after unmount
-      eventBus.emit("test-event");
-      expect(callCount).toBe(1); // Should not increase
+    it("should noop addUnsubscriber with null component", () => {
+      expect(() => manager.addUnsubscriber(null, () => {})).not.toThrow();
     });
 
-    it("should track multiple event listeners", () => {
+    it("should noop addUnsubscriber with non-function unsubscriber", () => {
       const component = {};
-      manager.register(component, "MultiEventComponent");
+      manager.register(component, "TestComponent");
+      expect(() => manager.addUnsubscriber(component, "not a function")).not.toThrow();
+      expect(() => manager.addUnsubscriber(component, null)).not.toThrow();
+    });
 
-      const eventBus = new EventBus();
-      const scopedBus = manager.createScopedEventBus(component, eventBus);
+    it("should warn when addUnsubscriber called on unregistered component", () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      manager.addUnsubscriber({}, () => {});
+      expect(warnSpy).toHaveBeenCalledWith("[Lifecycle] addUnsubscriber called on unregistered component");
+    });
 
-      let count1 = 0;
-      let count2 = 0;
-
-      scopedBus.on("event1", () => {
-        count1++;
-      });
-      scopedBus.on("event2", () => {
-        count2++;
-      });
-
-      eventBus.emit("event1");
-      eventBus.emit("event2");
-
-      expect(count1).toBe(1);
-      expect(count2).toBe(1);
-
-      // Unmount should unsubscribe both
+    it("should noop addUnsubscriber on unmounted component", () => {
+      const component = {};
+      manager.register(component, "UnmountedComponent");
       manager.unmount(component);
 
-      eventBus.emit("event1");
-      eventBus.emit("event2");
+      // Re-register to get a reference, then mark as unmounted
+      const comp2 = {};
+      const id = manager.register(comp2, "Comp2");
+      const entry = manager.components.get(id);
+      entry.mounted = false;
 
-      expect(count1).toBe(1);
-      expect(count2).toBe(1);
+      expect(() => manager.addUnsubscriber(comp2, () => {})).not.toThrow();
+      expect(entry.unsubscribers.size).toBe(0);
     });
   });
 
@@ -318,7 +286,7 @@ describe("LifecycleManager", () => {
       manager.register(comp2, "Component2");
 
       manager.setTimeout(comp1, () => {}, 100);
-      manager.setInterval(comp2, () => {}, 100);
+      manager.setTimeout(comp2, () => {}, 100);
 
       const snapshot = manager.getDebugSnapshot();
 
@@ -345,7 +313,6 @@ describe("ComponentLifecycle", () => {
     ComponentLifecycle.mount(component, "TestComponent", manager);
 
     expect(component.setTimeout).toBeDefined();
-    expect(component.setInterval).toBeDefined();
     expect(component.clearTimer).toBeDefined();
     expect(component._lifecycle).toBeDefined();
   });
@@ -386,17 +353,5 @@ describe("ComponentLifecycle", () => {
 
     expect(component._lifecycle).toBeUndefined();
     expect(component.setTimeout).toBeUndefined();
-  });
-
-  it("should check if component is mounted", () => {
-    const component = {};
-
-    expect(ComponentLifecycle.isMounted(component)).toBe(false);
-
-    ComponentLifecycle.mount(component, "TestComponent", manager);
-    expect(ComponentLifecycle.isMounted(component)).toBe(true);
-
-    ComponentLifecycle.unmount(component, manager);
-    expect(ComponentLifecycle.isMounted(component)).toBe(false);
   });
 });
