@@ -37,6 +37,8 @@
   }
 
   #sidebar-toggle,
+  #settings-btn,
+  #restart-btn,
   #open-files-btn,
   #files-panel > div:first-child {
     -webkit-app-region: no-drag;
@@ -605,7 +607,7 @@
     color: var(--color-text-secondary);
   }
 
-  .breadcrumb-segment:hover:not(:disabled) {
+  .breadcrumb-segment:hover:not(:disabled):not(.active) {
     background-color: var(--color-surface-hover);
     color: var(--color-text-primary);
   }
@@ -626,6 +628,49 @@
   }
 
   /* ==========================================
+   * FILE PANEL TABS
+   * Sleek underline-style tabs
+   * ========================================== */
+  .file-panel-tabs {
+    @apply flex gap-1;
+    border-bottom: 1px solid var(--color-border-secondary);
+    padding-bottom: 0;
+  }
+
+  .file-panel-tab {
+    @apply bg-transparent border-none py-2 px-3 text-[13px] font-medium cursor-pointer transition-all duration-150 flex items-center gap-1.5;
+    color: var(--color-text-secondary);
+    position: relative;
+  }
+
+  .file-panel-tab::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: transparent;
+    transition: background 0.15s ease;
+  }
+
+  .file-panel-tab:hover {
+    color: var(--color-text-primary);
+  }
+
+  .file-panel-tab.active {
+    color: var(--color-text-primary);
+  }
+
+  .file-panel-tab.active::after {
+    background: var(--color-text-primary);
+  }
+
+  .file-panel-tab svg {
+    @apply w-3.5 h-3.5;
+  }
+
+  /* ==========================================
    * FOLDER ITEMS (Phase 2)
    * ========================================== */
   .folder-item {
@@ -634,7 +679,6 @@
   }
 
   .folder-item:hover {
-    background-color: var(--color-surface-hover);
     border-color: var(--color-brand-primary);
   }
 
@@ -667,8 +711,7 @@
   }
 
   .file-item:hover {
-    border-color: var(--color-border-hover);
-    box-shadow: 0 0 0 3px var(--color-brand-glow);
+    border-color: var(--color-brand-primary);
   }
 
   .file-icon {

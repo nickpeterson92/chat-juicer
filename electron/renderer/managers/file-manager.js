@@ -86,6 +86,7 @@ export async function loadFilesIntoState(appState, directory, listType = "source
  * @param {string} options.currentPath - Current relative path (for breadcrumb, e.g., "code/python")
  * @param {Function} options.onFolderClick - Callback when folder is clicked
  * @param {Function} options.onBreadcrumbClick - Callback when breadcrumb segment is clicked
+ * @param {string} options.headerText - Static header text (e.g., "Input") when not using breadcrumb
  */
 export function renderFileList(files, container, options = {}) {
   if (!container) {
@@ -104,6 +105,8 @@ export function renderFileList(files, container, options = {}) {
     currentPath = "",
     onFolderClick = null,
     onBreadcrumbClick = null,
+    // Static header for non-navigable tabs (e.g., Input)
+    headerText = null,
   } = options;
 
   // Loading state
@@ -124,6 +127,9 @@ export function renderFileList(files, container, options = {}) {
   // Phase 2: Render breadcrumb for Output tab with explorer mode
   if (isOutput && onBreadcrumbClick) {
     renderBreadcrumb(currentPath, container, onBreadcrumbClick);
+  } else if (headerText) {
+    // Render static header for non-navigable tabs (consistent with breadcrumb style)
+    renderStaticHeader(headerText, container);
   }
 
   // Empty state
@@ -271,6 +277,32 @@ function createBreadcrumbSegment(text, index, onNavigate, isActive = false) {
 }
 
 /**
+ * Render a static header (non-navigable) consistent with breadcrumb styling
+ * Used for Input tab to match Output tab's visual appearance
+ * @param {string} headerText - Header text to display (e.g., "Input")
+ * @param {HTMLElement} container - Container to render header into
+ */
+function renderStaticHeader(headerText, container) {
+  // Remove existing header if present
+  const existingHeader = container.querySelector(".breadcrumb-nav");
+  if (existingHeader) {
+    existingHeader.remove();
+  }
+
+  const headerContainer = document.createElement("div");
+  headerContainer.className = "breadcrumb-nav";
+  headerContainer.setAttribute("role", "heading");
+  headerContainer.setAttribute("aria-level", "2");
+
+  const headerSegment = document.createElement("span");
+  headerSegment.className = "breadcrumb-segment active";
+  headerSegment.textContent = headerText;
+
+  headerContainer.appendChild(headerSegment);
+  container.prepend(headerContainer);
+}
+
+/**
  * Render empty state for file list
  * @param {HTMLElement} container - Container element
  * @param {Object} options - Options for empty state display
@@ -297,21 +329,27 @@ function renderEmptyState(container, options = {}) {
       // Output directory - show generation message
       container.innerHTML = `
         <div class="files-empty">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="opacity-20 mb-2 mx-auto">
-            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z"/>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="opacity-20 mb-2 mx-auto">
+            <path d="M4.226 20.925A2 2 0 0 0 6 22h12a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v3.127"/>
+            <path d="M14 2v5a1 1 0 0 0 1 1h5"/>
+            <path d="m5 11-3 3"/>
+            <path d="m5 17-3-3h10"/>
           </svg>
-          <p class="text-xs text-gray-400 dark:text-gray-500 text-center">No generated files yet</p>
+          <p class="text-xs text-gray-400 dark:text-gray-500 text-center">No output files yet</p>
           <p class="text-xs text-gray-500 dark:text-gray-600 text-center mt-1">Ask me to generate documents</p>
         </div>
       `;
     } else {
-      // Sources directory - show upload message
+      // Input directory - show upload message
       container.innerHTML = `
         <div class="files-empty">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="opacity-20 mb-2 mx-auto">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="opacity-20 mb-2 mx-auto">
+            <path d="M4 11V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-1"/>
+            <path d="M14 2v5a1 1 0 0 0 1 1h5"/>
+            <path d="M2 15h10"/>
+            <path d="m9 18 3-3-3-3"/>
           </svg>
-          <p class="text-xs text-gray-400 dark:text-gray-500 text-center">No source files found</p>
+          <p class="text-xs text-gray-400 dark:text-gray-500 text-center">No input files found</p>
           <p class="text-xs text-gray-500 dark:text-gray-600 text-center mt-1">Drag files onto the canvas to upload</p>
         </div>
       `;

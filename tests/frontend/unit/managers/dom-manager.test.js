@@ -19,8 +19,7 @@ describe("DOM Manager", () => {
       userInput: createMockElement("user-input"),
       sendBtn: createMockElement("send-btn"),
       restartBtn: createMockElement("restart-btn"),
-      statusIndicator: createMockElement("status-indicator"),
-      statusText: createMockElement("status-text"),
+      settingsBtn: createMockElement("settings-btn"),
       aiThinking: createMockElement("ai-thinking"),
       filesPanel: createMockElement("files-panel"),
       filesContainer: createMockElement("files-container"),
@@ -74,8 +73,7 @@ describe("DOM Manager", () => {
       expect(elements.userInput).toBeTruthy();
       expect(elements.sendBtn).toBeTruthy();
       expect(elements.restartBtn).toBeTruthy();
-      expect(elements.statusIndicator).toBeTruthy();
-      expect(elements.statusText).toBeTruthy();
+      expect(elements.settingsBtn).toBeTruthy();
       expect(elements.aiThinking).toBeTruthy();
       expect(elements.filesPanel).toBeTruthy();
       expect(elements.filesContainer).toBeTruthy();

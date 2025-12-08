@@ -13,7 +13,7 @@ export class FilePanel {
    * @param {HTMLElement} toggleButton - Panel toggle button (#open-files-btn)
    * @param {HTMLElement} filesContainer - Files list container (#files-container)
    * @param {HTMLElement} refreshButton - Refresh button (#refresh-files-btn)
-   * @param {HTMLElement} sourcesTab - Sources tab button (#tab-sources)
+   * @param {HTMLElement} sourcesTab - Input tab button (#tab-sources)
    * @param {HTMLElement} outputTab - Output tab button (#tab-output)
    * @param {Object} options - Optional configuration
    * @param {Object} options.appState - AppState instance for reactive state management
@@ -104,6 +104,7 @@ export class FilePanel {
           currentPath: this.currentOutputPath,
           onFolderClick: (name) => this.navigateToFolder(name),
           onBreadcrumbClick: (index) => this.navigateToBreadcrumb(index),
+          onDelete: () => this.refresh(),
         });
       }
     });
@@ -116,6 +117,8 @@ export class FilePanel {
         renderFileList(files, this.filesContainer, {
           directory: `data/files/${this.currentSessionId}/sources`,
           isOutput: false,
+          headerText: "Input",
+          onDelete: () => this.refresh(),
         });
       }
     });

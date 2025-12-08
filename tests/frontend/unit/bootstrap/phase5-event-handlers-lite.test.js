@@ -354,9 +354,9 @@ describe("phase5-event-handlers coverage", () => {
     await vi.waitFor(() => expect(deps.services.fileService.uploadFile).toHaveBeenCalled());
     await vi.runAllTimersAsync();
 
-    expect(deps.services.fileService.uploadFile).toHaveBeenCalledWith(file, "sess-2");
+    expect(deps.services.fileService.uploadFile).toHaveBeenCalledWith(file, "sess-2", expect.any(Function));
     expect(deps.components.filePanel.refresh).toHaveBeenCalled();
-    expect(mockShowToast).toHaveBeenCalledWith(expect.stringContaining("ok.txt"), "success", 2000);
+    // Single file uploads use progress bar instead of toast (toast only for multiple files)
     vi.useRealTimers();
   });
 
@@ -387,8 +387,8 @@ describe("phase5-event-handlers coverage", () => {
 
     await vi.waitFor(() => expect(deps.services.fileService.uploadFile).toHaveBeenCalledTimes(2));
 
-    expect(deps.services.fileService.uploadFile).toHaveBeenCalledWith(fileA, "sess-3");
-    expect(deps.services.fileService.uploadFile).toHaveBeenCalledWith(fileB, "sess-3");
+    expect(deps.services.fileService.uploadFile).toHaveBeenCalledWith(fileA, "sess-3", expect.any(Function));
+    expect(deps.services.fileService.uploadFile).toHaveBeenCalledWith(fileB, "sess-3", expect.any(Function));
     expect(mockShowToast).toHaveBeenCalledWith("1/2 files uploaded", "warning", 3000);
   });
 

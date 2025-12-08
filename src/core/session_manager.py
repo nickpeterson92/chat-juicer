@@ -204,35 +204,16 @@ class SessionManager:
         if self.current_session_id == session_id:
             self.current_session_id = None
 
-        # Delete session files directory with handle cleanup
-        import gc
+        # Delete session files directory
         import shutil
-        import time
 
         from pathlib import Path
 
         session_files_dir = Path(f"data/files/{session_id}")
         if session_files_dir.exists():
             try:
-                # Force garbage collection to close unreferenced file handles
-                # This is critical for preventing "Too many open files" errors
-                gc.collect()
-
-                # Small delay to allow OS to release file handles
-                time.sleep(0.05)
-
                 shutil.rmtree(session_files_dir)
                 logger.info(f"Deleted session files directory: {session_files_dir}")
-            except OSError as e:
-                if e.errno == 24:  # EMFILE: Too many open files
-                    logger.error(
-                        f"File handle exhaustion deleting {session_files_dir}. "
-                        f"Consider increasing ulimit -n or closing file handles before deletion.",
-                        exc_info=True,
-                    )
-                else:
-                    logger.error(f"Failed to delete session files directory {session_files_dir}: {e}", exc_info=True)
-                # Continue with metadata save even if file cleanup fails
             except Exception as e:
                 logger.error(f"Failed to delete session files directory {session_files_dir}: {e}", exc_info=True)
                 # Continue with metadata save even if file cleanup fails

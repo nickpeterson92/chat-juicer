@@ -86,16 +86,31 @@ export async function showWelcomeView(elements, appState) {
   const unsubscribeWelcomeFiles = appState.subscribe("files.sourcesList", (files) => {
     // Only render if we're on welcome page
     if (appState.getState("ui.currentView") === "welcome") {
+      // Hide section if no files
+      if (!files || files.length === 0) {
+        appState.setState("ui.welcomeFilesSectionVisible", false);
+        return;
+      }
+
       const welcomeFilesContainer = document.getElementById("welcome-files-container");
       if (welcomeFilesContainer) {
         // Dynamic import is async, so handle it properly
-        import("./file-manager.js").then(({ renderFileList }) => {
+        import("./file-manager.js").then(({ renderFileList, loadFilesIntoState }) => {
           const sessionService = window.app?.services?.sessionService;
           const currentSessionId = sessionService?.getCurrentSessionId();
           if (currentSessionId) {
+            const directory = `data/files/${currentSessionId}/sources`;
             renderFileList(files, welcomeFilesContainer, {
-              directory: `data/files/${currentSessionId}/sources`,
+              directory,
               isWelcomePage: true,
+              onDelete: async () => {
+                // Reload files into AppState after deletion (triggers re-render via subscription)
+                const result = await loadFilesIntoState(appState, directory, "sources");
+                // Hide section if no files remain
+                if (!result.files || result.files.length === 0) {
+                  appState.setState("ui.welcomeFilesSectionVisible", false);
+                }
+              },
             });
           }
         });

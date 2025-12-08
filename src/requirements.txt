@@ -10,7 +10,8 @@ openai>=2.9.0  # Azure OpenAI client library
 python-dotenv>=1.2.1  # Load environment variables from .env file
 
 # Document Conversion (REQUIRED for file reading features)
-markitdown[all]>=0.1.4  # Microsoft's markdown converter with all format support (PDF, Word, Excel, etc.)
+# Using specific extras to avoid pydub/ffmpeg dependency from audio-transcription
+markitdown[pdf,docx,pptx,xlsx,xls]>=0.1.4  # PDF, Word, PowerPoint, Excel support
 
 # Token Counting (REQUIRED)
 tiktoken>=0.12.0  # OpenAI's official token counting library for accurate token counts

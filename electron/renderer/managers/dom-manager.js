@@ -38,8 +38,7 @@ export function initializeElements() {
   elements.userInput = document.getElementById("user-input");
   elements.sendBtn = document.getElementById("send-btn");
   elements.restartBtn = document.getElementById("restart-btn");
-  elements.statusIndicator = document.getElementById("status-indicator");
-  elements.statusText = document.getElementById("status-text");
+  elements.settingsBtn = document.getElementById("settings-btn");
   elements.aiThinking = document.getElementById("ai-thinking");
   elements.filesPanel = document.getElementById("files-panel");
   elements.filesContainer = document.getElementById("files-container");
