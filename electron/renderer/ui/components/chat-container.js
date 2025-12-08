@@ -31,6 +31,7 @@ export class ChatContainer {
     }
     this.element = element;
     this.currentStreamingMessage = null;
+    this._indicatorsHiddenForStream = false; // Track if indicators hidden for current stream
 
     // AppState integration (optional)
     this.appState = options.appState || null;
@@ -57,6 +58,8 @@ export class ChatContainer {
       if (element) {
         // New assistant message element created, scroll to show it
         this.scrollToBottom();
+        // Hide main indicator if queued messages exist (mini version shows instead)
+        this._toggleQueuedIndicators();
       }
     });
     globalLifecycleManager.addUnsubscriber(this, unsubscribeCurrentAssistant);
@@ -70,7 +73,9 @@ export class ChatContainer {
       }
 
       // When first tokens arrive, hide mini thinking indicators (thinking phase over)
-      if (buffer) {
+      // Only need to do this ONCE per stream, not on every buffer update
+      if (buffer && !this._indicatorsHiddenForStream) {
+        this._indicatorsHiddenForStream = true;
         this._toggleQueuedIndicators();
       }
     });
@@ -81,6 +86,11 @@ export class ChatContainer {
       if (!isStreaming && this.currentStreamingMessage) {
         // Streaming completed, finalize the message
         this.completeStreaming();
+      }
+
+      // Reset indicator flag when streaming starts (new stream) or ends
+      if (isStreaming) {
+        this._indicatorsHiddenForStream = false;
       }
 
       // Toggle mini thinking indicators on queued messages
@@ -142,6 +152,9 @@ export class ChatContainer {
       queuedContainer.appendChild(queuedElement);
     }
 
+    // Hide main indicator now that queued messages exist (show mini instead)
+    this._toggleQueuedIndicators();
+
     // Scroll chat to bottom to show context (only when not streaming)
     const isStreaming = this.appState?.getState("message.isStreaming");
     if (!isStreaming) {
@@ -180,27 +193,10 @@ export class ChatContainer {
     badge.textContent = "Queued";
 
     // Mini processing indicator (shows when streaming)
+    // Note: Visibility and Lottie initialization handled by _toggleQueuedIndicators()
     const miniIndicator = document.createElement("span");
     miniIndicator.className = "queued-mini-indicator";
     miniIndicator.style.cssText = "display: none; width: 20px; height: 20px; vertical-align: middle;";
-
-    // Check if thinking indicator should be visible:
-    // 1. Main smoke indicator exists in DOM
-    // 2. No tokens have started streaming yet (buffer empty = still "thinking")
-    const hasTokensStarted = !!this.appState?.getState("message.assistantBuffer");
-    const thinkingIndicatorVisible = !hasTokensStarted && !!document.querySelector("#chat-container .loading-lamp");
-    if (thinkingIndicatorVisible) {
-      miniIndicator.style.display = "inline-block";
-      requestAnimationFrame(() => {
-        try {
-          const brandColor = CRITICAL_COLORS.BRAND_PRIMARY;
-          initLottieWithColor(miniIndicator, smokeAnimationData, brandColor);
-        } catch (error) {
-          miniIndicator.textContent = "●";
-          miniIndicator.style.color = CRITICAL_COLORS.BRAND_PRIMARY;
-        }
-      });
-    }
 
     badgeContainer.appendChild(badge);
     badgeContainer.appendChild(miniIndicator);
@@ -676,21 +672,38 @@ export class ChatContainer {
   /**
    * Toggle mini thinking indicators on queued messages
    * Shows indicators only when in "thinking" phase (smoke visible, no tokens yet)
+   * IMPORTANT: When queued messages exist, hide main indicator and show mini version only
    * @private
    */
   _toggleQueuedIndicators() {
     const queuedContainer = document.getElementById("queued-messages-container");
-    if (!queuedContainer) return;
+    const mainIndicator = document.querySelector("#chat-container .loading-lamp");
 
     // Check if thinking indicator should be visible:
     // 1. Main smoke indicator exists in DOM
     // 2. No tokens have started streaming yet (buffer empty = still "thinking")
     const hasTokensStarted = !!this.appState?.getState("message.assistantBuffer");
-    const thinkingIndicatorVisible = !hasTokensStarted && !!document.querySelector("#chat-container .loading-lamp");
+    const isThinkingPhase = !hasTokensStarted && !!mainIndicator;
+
+    // Check if we have queued messages
+    const hasQueuedMessages =
+      queuedContainer && !queuedContainer.classList.contains("hidden") && queuedContainer.children.length > 0;
+
+    // Hide main indicator when queued messages exist (show mini version instead)
+    // Use visibility:hidden (not display:none) to preserve layout spacing
+    if (mainIndicator) {
+      if (hasQueuedMessages && isThinkingPhase) {
+        mainIndicator.style.visibility = "hidden";
+      } else {
+        mainIndicator.style.visibility = "visible";
+      }
+    }
+
+    if (!queuedContainer) return;
 
     const indicators = queuedContainer.querySelectorAll(".queued-mini-indicator");
     for (const indicator of indicators) {
-      if (thinkingIndicatorVisible) {
+      if (isThinkingPhase && hasQueuedMessages) {
         indicator.style.display = "inline-block";
         // Initialize Lottie if empty (first time showing)
         if (!indicator.hasChildNodes() && !indicator.textContent) {
@@ -698,7 +711,7 @@ export class ChatContainer {
             try {
               const brandColor = CRITICAL_COLORS.BRAND_PRIMARY;
               initLottieWithColor(indicator, smokeAnimationData, brandColor);
-            } catch (error) {
+            } catch (_error) {
               indicator.textContent = "●";
               indicator.style.color = CRITICAL_COLORS.BRAND_PRIMARY;
             }

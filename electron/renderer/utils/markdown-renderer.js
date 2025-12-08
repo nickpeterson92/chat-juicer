@@ -217,6 +217,10 @@ const pendingElements = new Set();
 let batchTimeout = null;
 const BATCH_DELAY_MS = 50; // Wait 50ms to collect all elements before processing
 
+// Scroll-based fallback for large conversations where observer may miss elements
+let scrollFallbackTimeout = null;
+let scrollFallbackInitialized = false;
+
 /**
  * Get or create the mermaid visibility observer
  * Renders diagrams only when they enter the viewport
@@ -631,6 +635,61 @@ function isInViewport(el) {
 }
 
 /**
+ * Scroll-based fallback to catch diagrams the IntersectionObserver may have missed
+ * For large conversations, the observer can become unreliable
+ */
+function checkVisibleDiagramsFallback() {
+  // Find all unprocessed loading diagrams
+  const loadingWrappers = document.querySelectorAll(".mermaid-wrapper.mermaid-loading:not([data-processed])");
+
+  for (const wrapper of loadingWrappers) {
+    if (!isInViewport(wrapper)) continue;
+
+    const id = wrapper.dataset.mermaidId;
+    if (!id || renderingInProgress.has(id)) continue;
+
+    const code = mermaidCodeStore.get(id);
+    if (!code) continue;
+
+    // Render this visible diagram that was missed
+    renderingInProgress.add(id);
+
+    // Unobserve to prevent duplicate renders
+    if (mermaidObserver) {
+      mermaidObserver.unobserve(wrapper);
+    }
+
+    renderDiagramWhenIdle({ id, code, placeholder: wrapper }).then(() => {
+      renderingInProgress.delete(id);
+    });
+  }
+}
+
+/**
+ * Initialize scroll-based fallback for large conversations
+ * Uses debounced scroll listener to periodically check for missed diagrams
+ */
+function initScrollFallback() {
+  if (scrollFallbackInitialized) return;
+  scrollFallbackInitialized = true;
+
+  const chatContainer = document.getElementById("chat-container");
+  if (!chatContainer) return;
+
+  chatContainer.addEventListener(
+    "scroll",
+    () => {
+      // Debounce: wait 200ms after scroll stops before checking
+      if (scrollFallbackTimeout) {
+        clearTimeout(scrollFallbackTimeout);
+      }
+      scrollFallbackTimeout = setTimeout(checkVisibleDiagramsFallback, 200);
+    },
+    { passive: true }
+  );
+}
+
+/**
  * Process a batch of collected elements for mermaid diagrams
  * Called after batching delay to handle multiple rapid processMermaidDiagrams calls
  */
@@ -641,6 +700,9 @@ async function processBatchedMermaidDiagrams() {
   batchTimeout = null;
 
   if (elements.length === 0) return;
+
+  // Initialize scroll-based fallback for large conversations
+  initScrollFallback();
 
   // Find ALL loading placeholders across all pending elements
   const allWrappers = [];

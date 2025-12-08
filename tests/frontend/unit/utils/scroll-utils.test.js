@@ -150,6 +150,9 @@ describe("Scroll Utilities", () => {
 
     it("should skip auto-scroll when user is actively scrolling", () => {
       setupScrollDetection(container);
+
+      // Simulate actual user scroll (scrollTop changes - user scrolled up)
+      container.scrollTop = container.scrollTop - 50;
       container.dispatchEvent(new Event("scroll"));
 
       scheduleScroll(container);

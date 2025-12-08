@@ -8,8 +8,9 @@ let scrollPending = false;
 let scrollTarget = null;
 
 // Distance from bottom (in pixels) to consider "near bottom" for auto-scroll
-// ~6-8 lines of text - if within this range, user is "following along"
-const SCROLL_THRESHOLD = 150;
+// ~8-10 lines of text - if within this range, user is "following along"
+// 200px gives buffer room for large content chunks like mermaid placeholders (~100px)
+const SCROLL_THRESHOLD = 200;
 
 // User scroll detection (prevents scroll fighting during streaming)
 const userScrolling = new Map(); // Track which containers have active user scrolling
@@ -21,8 +22,9 @@ const SCROLL_DEBOUNCE_MS = 150; // Time to wait after scroll stops before allowi
 /**
  * Check if user is near the bottom of the container
  * Used to determine if auto-scroll should happen
+ * Also checks if we were near the PREVIOUS bottom (handles content growth)
  * @param {HTMLElement} container - Container element to check
- * @returns {boolean} True if user is near bottom
+ * @returns {boolean} True if user is near bottom or was near previous bottom
  */
 function isNearBottom(container) {
   if (!container) return false;
@@ -30,7 +32,23 @@ function isNearBottom(container) {
   const position = container.scrollTop + container.clientHeight;
   const bottom = container.scrollHeight;
 
-  return position >= bottom - SCROLL_THRESHOLD;
+  // Check if we're near the current bottom
+  if (position >= bottom - SCROLL_THRESHOLD) {
+    return true;
+  }
+
+  // Also check if we were near the PREVIOUS bottom (content just grew)
+  // This handles the case where a large chunk (e.g., mermaid placeholder) arrives
+  // and pushes us more than SCROLL_THRESHOLD away from the new bottom
+  const lastState = lastScrollState.get(container);
+  if (lastState && lastState.scrollHeight > 0) {
+    const previousBottom = lastState.scrollHeight;
+    if (position >= previousBottom - SCROLL_THRESHOLD) {
+      return true; // We were at/near the old bottom, content grew
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -60,6 +78,11 @@ function handleUserScroll(container) {
 
   // Update stored state
   lastScrollState.set(container, { scrollTop: currentScrollTop, scrollHeight: currentScrollHeight });
+
+  // If nothing changed, this is a spurious scroll event (common during rapid rendering) - ignore
+  if (scrollHeightDelta === 0 && scrollTopDelta === 0) {
+    return;
+  }
 
   // If scrollHeight grew and scrollTop didn't change much (within tolerance),
   // this is likely content growth, not user scroll - don't mark as user scrolling
