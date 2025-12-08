@@ -6,15 +6,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { globalLifecycleManager } from "@/core/lifecycle-manager.js";
 import { AppState } from "@/core/state.js";
-import { loadFiles } from "@/managers/file-manager.js";
+import { loadFilesIntoState, renderFileList } from "@/managers/file-manager.js";
 import { FilePanel } from "@/ui/components/file-panel.js";
 
 // Mock file-manager module
 vi.mock("@/managers/file-manager.js", () => ({
-  loadFiles: vi.fn().mockResolvedValue(undefined),
+  loadFilesIntoState: vi.fn().mockResolvedValue({ success: true, files: [] }),
+  renderFileList: vi.fn(),
 }));
 
-const loadFilesMock = loadFiles;
+const loadFilesIntoStateMock = loadFilesIntoState;
+const renderFileListMock = renderFileList;
 
 describe("FilePanel", () => {
   let panelElement;
@@ -50,8 +52,9 @@ describe("FilePanel", () => {
 
     appState = new AppState();
 
-    loadFilesMock.mockClear();
-    loadFilesMock.mockResolvedValue(undefined);
+    loadFilesIntoStateMock.mockClear();
+    renderFileListMock.mockClear();
+    loadFilesIntoStateMock.mockResolvedValue({ success: true, files: [] });
     globalLifecycleManager.unmountAll();
   });
 
@@ -86,8 +89,8 @@ describe("FilePanel", () => {
       expect(filePanel.appState).toBe(appState);
       const snapshot = globalLifecycleManager.getDebugSnapshot();
       const entry = snapshot.components.find((c) => c.name === "FilePanel");
-      // 5 total: 4 DOM + 1 appState subscription
-      expect(entry?.listeners).toBe(5); // session.current subscription + DOM listeners
+      // 7 total: 4 DOM + 3 appState subscriptions (session.current, files.outputList, files.sourcesList)
+      expect(entry?.listeners).toBe(7);
     });
 
     it("should throw error without required elements", () => {
@@ -207,7 +210,8 @@ describe("FilePanel", () => {
 
       const snapshotBefore = globalLifecycleManager.getDebugSnapshot();
       const entryBefore = snapshotBefore.components.find((c) => c.name === "FilePanel");
-      expect(entryBefore?.listeners).toBe(5);
+      // 7 total: 4 DOM + 3 appState subscriptions (session.current, files.outputList, files.sourcesList)
+      expect(entryBefore?.listeners).toBe(7);
 
       filePanel.destroy();
 
@@ -249,7 +253,7 @@ describe("FilePanel", () => {
   });
 
   describe("refresh", () => {
-    it("should await loadFiles for the active tab", async () => {
+    it("should load files into state for the active tab", async () => {
       const filePanel = new FilePanel(
         panelElement,
         toggleButton,
@@ -261,13 +265,12 @@ describe("FilePanel", () => {
       );
 
       filePanel.setSession("session-123");
-      loadFilesMock.mockClear();
-      loadFilesMock.mockResolvedValueOnce("done");
+      loadFilesIntoStateMock.mockClear();
+      loadFilesIntoStateMock.mockResolvedValueOnce({ success: true, files: [] });
 
-      const result = await filePanel.refresh();
+      await filePanel.refresh();
 
-      expect(loadFilesMock).toHaveBeenCalledWith("data/files/session-123/sources", filesContainer);
-      expect(result).toBe("done");
+      expect(loadFilesIntoStateMock).toHaveBeenCalledWith(appState, "data/files/session-123/sources", "sources");
     });
 
     it("should resolve immediately when no session is set", async () => {
@@ -275,10 +278,10 @@ describe("FilePanel", () => {
 
       await filePanel.refresh();
 
-      expect(loadFilesMock).not.toHaveBeenCalled();
+      expect(loadFilesIntoStateMock).not.toHaveBeenCalled();
     });
 
-    it("should propagate errors from loadFiles", async () => {
+    it("should propagate errors from loadFilesIntoState", async () => {
       const filePanel = new FilePanel(
         panelElement,
         toggleButton,
@@ -289,10 +292,627 @@ describe("FilePanel", () => {
         { appState }
       );
       filePanel.setSession("session-err");
-      loadFilesMock.mockClear();
-      loadFilesMock.mockRejectedValueOnce(new Error("load failed"));
+      loadFilesIntoStateMock.mockClear();
+      loadFilesIntoStateMock.mockRejectedValueOnce(new Error("load failed"));
 
       await expect(filePanel.refresh()).rejects.toThrow("load failed");
+    });
+  });
+
+  describe("Phase 1: Folder Navigation", () => {
+    describe("currentOutputPath state", () => {
+      it("should initialize to empty string", () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab
+        );
+
+        expect(filePanel.currentOutputPath).toBe("");
+      });
+
+      it("should reset on tab switch", async () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab,
+          { appState }
+        );
+        filePanel.setSession("session-123");
+
+        // Navigate into a folder
+        filePanel.currentOutputPath = "code/python";
+
+        // Switch to output tab
+        loadFilesIntoStateMock.mockClear();
+        await filePanel.switchTab(outputTab);
+
+        expect(filePanel.currentOutputPath).toBe("");
+        expect(loadFilesIntoStateMock).toHaveBeenCalledWith(appState, "data/files/session-123/output", "output");
+      });
+
+      it("should reset when switching to sources tab", async () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab,
+          { appState }
+        );
+        filePanel.setSession("session-123");
+
+        // Navigate into a folder
+        filePanel.currentOutputPath = "code/python";
+
+        // Switch to sources tab
+        loadFilesIntoStateMock.mockClear();
+        await filePanel.switchTab(sourcesTab);
+
+        expect(filePanel.currentOutputPath).toBe("");
+        expect(loadFilesIntoStateMock).toHaveBeenCalledWith(appState, "data/files/session-123/sources", "sources");
+      });
+    });
+
+    describe("navigateToFolder", () => {
+      it("should navigate from root to subfolder", async () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab,
+          { appState }
+        );
+        filePanel.setSession("session-123");
+
+        // Switch to output tab first
+        outputTab.classList.add("active");
+        sourcesTab.classList.remove("active");
+
+        loadFilesIntoStateMock.mockClear();
+        await filePanel.navigateToFolder("code");
+
+        expect(filePanel.currentOutputPath).toBe("code");
+        expect(loadFilesIntoStateMock).toHaveBeenCalledWith(appState, "data/files/session-123/output/code", "output");
+      });
+
+      it("should navigate deeper into nested folders", async () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab,
+          { appState }
+        );
+        filePanel.setSession("session-123");
+
+        // Switch to output tab
+        outputTab.classList.add("active");
+        sourcesTab.classList.remove("active");
+
+        // Navigate to first level
+        loadFilesIntoStateMock.mockClear();
+        await filePanel.navigateToFolder("code");
+        expect(filePanel.currentOutputPath).toBe("code");
+
+        // Navigate to second level
+        loadFilesIntoStateMock.mockClear();
+        await filePanel.navigateToFolder("python");
+        expect(filePanel.currentOutputPath).toBe("code/python");
+        expect(loadFilesIntoStateMock).toHaveBeenCalledWith(
+          appState,
+          "data/files/session-123/output/code/python",
+          "output"
+        );
+
+        // Navigate to third level
+        loadFilesIntoStateMock.mockClear();
+        await filePanel.navigateToFolder("scripts");
+        expect(filePanel.currentOutputPath).toBe("code/python/scripts");
+        expect(loadFilesIntoStateMock).toHaveBeenCalledWith(
+          appState,
+          "data/files/session-123/output/code/python/scripts",
+          "output"
+        );
+      });
+
+      it("should handle empty folder name gracefully", async () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab,
+          { appState }
+        );
+        filePanel.setSession("session-123");
+        filePanel.currentOutputPath = "code";
+
+        loadFilesIntoStateMock.mockClear();
+        await filePanel.navigateToFolder("");
+
+        expect(filePanel.currentOutputPath).toBe("code");
+        expect(loadFilesIntoStateMock).not.toHaveBeenCalled();
+      });
+
+      it("should handle null folder name gracefully", async () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab,
+          { appState }
+        );
+        filePanel.setSession("session-123");
+        filePanel.currentOutputPath = "code";
+
+        loadFilesIntoStateMock.mockClear();
+        await filePanel.navigateToFolder(null);
+
+        expect(filePanel.currentOutputPath).toBe("code");
+        expect(loadFilesIntoStateMock).not.toHaveBeenCalled();
+      });
+
+      it("should call refresh after navigation", async () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab,
+          { appState }
+        );
+        filePanel.setSession("session-123");
+
+        // Switch to output tab
+        outputTab.classList.add("active");
+        sourcesTab.classList.remove("active");
+
+        const refreshSpy = vi.spyOn(filePanel, "refresh");
+
+        await filePanel.navigateToFolder("code");
+
+        expect(refreshSpy).toHaveBeenCalled();
+      });
+    });
+
+    describe("navigateToBreadcrumb", () => {
+      it("should navigate to root with index 0", async () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab,
+          { appState }
+        );
+        filePanel.setSession("session-123");
+        filePanel.currentOutputPath = "code/python/scripts";
+
+        // Switch to output tab
+        outputTab.classList.add("active");
+        sourcesTab.classList.remove("active");
+
+        loadFilesIntoStateMock.mockClear();
+        await filePanel.navigateToBreadcrumb(0);
+
+        expect(filePanel.currentOutputPath).toBe("");
+        expect(loadFilesIntoStateMock).toHaveBeenCalledWith(appState, "data/files/session-123/output", "output");
+      });
+
+      it("should reconstruct path for intermediate segments", async () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab,
+          { appState }
+        );
+        filePanel.setSession("session-123");
+        filePanel.currentOutputPath = "code/python/scripts";
+
+        // Switch to output tab
+        outputTab.classList.add("active");
+        sourcesTab.classList.remove("active");
+
+        // Navigate to "code" (index 1)
+        loadFilesIntoStateMock.mockClear();
+        await filePanel.navigateToBreadcrumb(1);
+        expect(filePanel.currentOutputPath).toBe("code");
+        expect(loadFilesIntoStateMock).toHaveBeenCalledWith(appState, "data/files/session-123/output/code", "output");
+
+        // Reset path
+        filePanel.currentOutputPath = "code/python/scripts";
+
+        // Navigate to "code/python" (index 2)
+        loadFilesIntoStateMock.mockClear();
+        await filePanel.navigateToBreadcrumb(2);
+        expect(filePanel.currentOutputPath).toBe("code/python");
+        expect(loadFilesIntoStateMock).toHaveBeenCalledWith(
+          appState,
+          "data/files/session-123/output/code/python",
+          "output"
+        );
+      });
+
+      it("should handle edge cases with negative index", async () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab,
+          { appState }
+        );
+        filePanel.setSession("session-123");
+        filePanel.currentOutputPath = "code/python";
+
+        // Switch to output tab
+        outputTab.classList.add("active");
+        sourcesTab.classList.remove("active");
+
+        loadFilesIntoStateMock.mockClear();
+        await filePanel.navigateToBreadcrumb(-1);
+
+        // Negative index with slice(0, -1) returns all but last element
+        // ["code", "python"].slice(0, -1) = ["code"]
+        expect(filePanel.currentOutputPath).toBe("code");
+        expect(loadFilesIntoStateMock).toHaveBeenCalledWith(appState, "data/files/session-123/output/code", "output");
+      });
+
+      it("should handle index beyond path length", async () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab,
+          { appState }
+        );
+        filePanel.setSession("session-123");
+        filePanel.currentOutputPath = "code";
+
+        // Switch to output tab
+        outputTab.classList.add("active");
+        sourcesTab.classList.remove("active");
+
+        loadFilesIntoStateMock.mockClear();
+        await filePanel.navigateToBreadcrumb(5);
+
+        // slice(0, 5) on 1-element array returns full array
+        expect(filePanel.currentOutputPath).toBe("code");
+        expect(loadFilesIntoStateMock).toHaveBeenCalledWith(appState, "data/files/session-123/output/code", "output");
+      });
+    });
+
+    describe("getFullOutputPath", () => {
+      it("should return base path when at root", () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab
+        );
+        filePanel.setSession("session-123");
+        filePanel.currentOutputPath = "";
+
+        expect(filePanel.getFullOutputPath()).toBe("data/files/session-123/output");
+      });
+
+      it("should append subdirectory to base path", () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab
+        );
+        filePanel.setSession("session-123");
+        filePanel.currentOutputPath = "code";
+
+        expect(filePanel.getFullOutputPath()).toBe("data/files/session-123/output/code");
+      });
+
+      it("should handle nested paths correctly", () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab
+        );
+        filePanel.setSession("session-123");
+        filePanel.currentOutputPath = "code/python/scripts";
+
+        expect(filePanel.getFullOutputPath()).toBe("data/files/session-123/output/code/python/scripts");
+      });
+
+      it("should work with different session IDs", () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab
+        );
+        filePanel.setSession("different-session");
+        filePanel.currentOutputPath = "docs";
+
+        expect(filePanel.getFullOutputPath()).toBe("data/files/different-session/output/docs");
+      });
+    });
+
+    describe("getBreadcrumbSegments", () => {
+      it("should return empty array at root", () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab
+        );
+        filePanel.currentOutputPath = "";
+
+        expect(filePanel.getBreadcrumbSegments()).toEqual([]);
+      });
+
+      it("should split path into segments", () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab
+        );
+        filePanel.currentOutputPath = "code/python";
+
+        expect(filePanel.getBreadcrumbSegments()).toEqual(["code", "python"]);
+      });
+
+      it("should filter empty segments", () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab
+        );
+        filePanel.currentOutputPath = "code//python///scripts";
+
+        // filter(Boolean) removes empty strings
+        expect(filePanel.getBreadcrumbSegments()).toEqual(["code", "python", "scripts"]);
+      });
+
+      it("should handle single-level path", () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab
+        );
+        filePanel.currentOutputPath = "code";
+
+        expect(filePanel.getBreadcrumbSegments()).toEqual(["code"]);
+      });
+
+      it("should handle deeply nested paths", () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab
+        );
+        filePanel.currentOutputPath = "a/b/c/d/e/f";
+
+        expect(filePanel.getBreadcrumbSegments()).toEqual(["a", "b", "c", "d", "e", "f"]);
+      });
+    });
+
+    describe("navigateUp", () => {
+      it("should navigate up one level", async () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab,
+          { appState }
+        );
+        filePanel.setSession("session-123");
+        filePanel.currentOutputPath = "code/python";
+
+        // Switch to output tab
+        outputTab.classList.add("active");
+        sourcesTab.classList.remove("active");
+
+        loadFilesIntoStateMock.mockClear();
+        await filePanel.navigateUp();
+
+        expect(filePanel.currentOutputPath).toBe("code");
+        expect(loadFilesIntoStateMock).toHaveBeenCalledWith(appState, "data/files/session-123/output/code", "output");
+      });
+
+      it("should do nothing at root", async () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab,
+          { appState }
+        );
+        filePanel.setSession("session-123");
+        filePanel.currentOutputPath = "";
+
+        loadFilesIntoStateMock.mockClear();
+        await filePanel.navigateUp();
+
+        expect(filePanel.currentOutputPath).toBe("");
+        expect(loadFilesIntoStateMock).not.toHaveBeenCalled();
+      });
+
+      it("should handle single-level paths", async () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab,
+          { appState }
+        );
+        filePanel.setSession("session-123");
+        filePanel.currentOutputPath = "code";
+
+        // Switch to output tab
+        outputTab.classList.add("active");
+        sourcesTab.classList.remove("active");
+
+        loadFilesIntoStateMock.mockClear();
+        await filePanel.navigateUp();
+
+        expect(filePanel.currentOutputPath).toBe("");
+        expect(loadFilesIntoStateMock).toHaveBeenCalledWith(appState, "data/files/session-123/output", "output");
+      });
+
+      it("should handle deeply nested paths", async () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab,
+          { appState }
+        );
+        filePanel.setSession("session-123");
+        filePanel.currentOutputPath = "code/python/scripts/utils";
+
+        // Switch to output tab
+        outputTab.classList.add("active");
+        sourcesTab.classList.remove("active");
+
+        loadFilesIntoStateMock.mockClear();
+        await filePanel.navigateUp();
+
+        expect(filePanel.currentOutputPath).toBe("code/python/scripts");
+        expect(loadFilesIntoStateMock).toHaveBeenCalledWith(
+          appState,
+          "data/files/session-123/output/code/python/scripts",
+          "output"
+        );
+      });
+
+      it("should call refresh after navigation", async () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab,
+          { appState }
+        );
+        filePanel.setSession("session-123");
+        filePanel.currentOutputPath = "code/python";
+
+        // Switch to output tab
+        outputTab.classList.add("active");
+        sourcesTab.classList.remove("active");
+
+        const refreshSpy = vi.spyOn(filePanel, "refresh");
+
+        await filePanel.navigateUp();
+
+        expect(refreshSpy).toHaveBeenCalled();
+      });
+    });
+
+    describe("Integration: refresh with navigation", () => {
+      it("should use getFullOutputPath for output tab", async () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab,
+          { appState }
+        );
+        filePanel.setSession("session-123");
+        filePanel.currentOutputPath = "code/python";
+
+        // Switch to output tab
+        outputTab.classList.add("active");
+        sourcesTab.classList.remove("active");
+
+        loadFilesIntoStateMock.mockClear();
+        await filePanel.refresh();
+
+        expect(loadFilesIntoStateMock).toHaveBeenCalledWith(
+          appState,
+          "data/files/session-123/output/code/python",
+          "output"
+        );
+      });
+
+      it("should not use currentOutputPath for sources tab", async () => {
+        const filePanel = new FilePanel(
+          panelElement,
+          toggleButton,
+          filesContainer,
+          refreshButton,
+          sourcesTab,
+          outputTab,
+          { appState }
+        );
+        filePanel.setSession("session-123");
+        filePanel.currentOutputPath = "code/python";
+
+        // Sources tab is active by default
+        sourcesTab.classList.add("active");
+        outputTab.classList.remove("active");
+
+        loadFilesIntoStateMock.mockClear();
+        await filePanel.refresh();
+
+        // Should ignore currentOutputPath for sources
+        expect(loadFilesIntoStateMock).toHaveBeenCalledWith(appState, "data/files/session-123/sources", "sources");
+      });
     });
   });
 });

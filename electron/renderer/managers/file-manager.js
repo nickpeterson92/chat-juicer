@@ -3,16 +3,18 @@
  * Manages file operations UI (listing, deleting, uploading)
  * Uses AppState for reactive file list management
  *
- * STATE MANAGEMENT ARCHITECTURE (Phase 5 Complete):
- * - Primary method: loadFilesIntoState() → AppState (lines 28-59)
- * - Pure render function: renderFileList() → DOM (lines 74-114)
- * - Legacy methods: loadFiles(), loadSessionFiles() (deprecated, lines 305-368)
+ * STATE MANAGEMENT ARCHITECTURE (AppState Pattern):
+ * - Primary method: loadFilesIntoState() → AppState (lines 39-70)
+ * - Pure render function: renderFileList() → DOM (lines 88-147)
  *
  * REACTIVE PATTERN:
  * 1. Load files into state: `await loadFilesIntoState(appState, directory, 'sources')`
  * 2. Subscribe to changes: `appState.subscribe('files.sourcesList', (files) => { renderFileList(files, container, options) })`
  * 3. Render is automatic when state changes
  *
+ * LEGACY METHODS REMOVED:
+ * - loadFiles() - DELETED, use loadFilesIntoState() + subscriptions
+ * - loadSessionFiles() - DELETED, use loadFilesIntoState() + subscriptions
  */
 
 import {
@@ -81,6 +83,9 @@ export async function loadFilesIntoState(appState, directory, listType = "source
  * @param {boolean} options.isLoading - Show loading state
  * @param {string} options.error - Error message to display
  * @param {Function} options.onDelete - Callback when file is deleted
+ * @param {string} options.currentPath - Current relative path (for breadcrumb, e.g., "code/python")
+ * @param {Function} options.onFolderClick - Callback when folder is clicked
+ * @param {Function} options.onBreadcrumbClick - Callback when breadcrumb segment is clicked
  */
 export function renderFileList(files, container, options = {}) {
   if (!container) {
@@ -95,6 +100,10 @@ export function renderFileList(files, container, options = {}) {
     isLoading = false,
     error = null,
     onDelete = null,
+    // Phase 2: Explorer options for Output tab
+    currentPath = "",
+    onFolderClick = null,
+    onBreadcrumbClick = null,
   } = options;
 
   // Loading state
@@ -109,19 +118,156 @@ export function renderFileList(files, container, options = {}) {
     return;
   }
 
+  // Clear container
+  container.innerHTML = "";
+
+  // Phase 2: Render breadcrumb for Output tab with explorer mode
+  if (isOutput && onBreadcrumbClick) {
+    renderBreadcrumb(currentPath, container, onBreadcrumbClick);
+  }
+
   // Empty state
   if (!files || files.length === 0) {
     renderEmptyState(container, { directory, isOutput, isWelcomePage });
     return;
   }
 
-  // Clear and populate with file items
-  container.innerHTML = "";
-
+  // Render files and folders
   files.forEach((file) => {
-    const fileItem = createFileItem(file, directory, container, onDelete);
+    let fileItem;
+
+    if (file.type === "folder" && onFolderClick) {
+      // Phase 2: Render as clickable folder
+      fileItem = createFolderItem(file, onFolderClick);
+    } else {
+      // Render as regular file
+      fileItem = createFileItem(file, directory, container, onDelete);
+    }
+
     container.appendChild(fileItem);
   });
+}
+
+/**
+ * Phase 2: Create a folder item element with navigation capability
+ * @param {Object} folder - Folder FileInfo object
+ * @param {Function} onClick - Callback when folder is clicked
+ * @returns {HTMLElement}
+ */
+export function createFolderItem(folder, onClick) {
+  const folderItem = document.createElement("div");
+  folderItem.className = "file-item folder-item";
+  folderItem.setAttribute("role", "button");
+  folderItem.setAttribute("tabindex", "0");
+  folderItem.setAttribute("aria-label", `Open ${folder.name} folder, ${folder.file_count || 0} items`);
+
+  const folderIcon = document.createElement("span");
+  folderIcon.className = "file-icon folder-icon";
+  folderIcon.innerHTML = getFolderIcon();
+
+  const folderName = document.createElement("span");
+  folderName.className = "file-name folder-name";
+  folderName.textContent = folder.name;
+  folderName.title = folder.name;
+
+  const itemCount = document.createElement("span");
+  itemCount.className = "folder-count";
+  itemCount.textContent = `${folder.file_count || 0} items`;
+
+  // Click and keyboard handlers
+  const handleOpen = () => onClick(folder.name);
+  folderItem.onclick = handleOpen;
+  folderItem.onkeydown = (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleOpen();
+    }
+  };
+
+  folderItem.appendChild(folderIcon);
+  folderItem.appendChild(folderName);
+  folderItem.appendChild(itemCount);
+
+  return folderItem;
+}
+
+/**
+ * Phase 2: Get folder icon SVG
+ * @returns {string} SVG markup for folder icon
+ */
+export function getFolderIcon() {
+  const strokeColor = getComputedStyle(document.documentElement).getPropertyValue("--color-text-secondary").trim();
+
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${strokeColor}" stroke-width="2">
+    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+  </svg>`;
+}
+
+/**
+ * Phase 2: Render breadcrumb navigation at top of container
+ * @param {string} currentPath - Current relative path (e.g., "code/python")
+ * @param {HTMLElement} container - Container to render breadcrumb into
+ * @param {Function} onNavigate - Callback when breadcrumb segment clicked
+ */
+export function renderBreadcrumb(currentPath, container, onNavigate) {
+  // Remove existing breadcrumb if present
+  const existingBreadcrumb = container.querySelector(".breadcrumb-nav");
+  if (existingBreadcrumb) {
+    existingBreadcrumb.remove();
+  }
+
+  const breadcrumbContainer = document.createElement("div");
+  breadcrumbContainer.className = "breadcrumb-nav";
+  breadcrumbContainer.setAttribute("role", "navigation");
+  breadcrumbContainer.setAttribute("aria-label", "File path");
+
+  // Root segment (Output/)
+  const isAtRoot = !currentPath;
+  const rootSegment = createBreadcrumbSegment("Output", 0, onNavigate, isAtRoot);
+  breadcrumbContainer.appendChild(rootSegment);
+
+  // Path segments
+  if (currentPath) {
+    const segments = currentPath.split("/").filter(Boolean);
+    segments.forEach((segment, index) => {
+      const separator = document.createElement("span");
+      separator.className = "breadcrumb-separator";
+      separator.textContent = "/";
+      separator.setAttribute("aria-hidden", "true");
+
+      const isLast = index === segments.length - 1;
+      const segmentEl = createBreadcrumbSegment(segment, index + 1, onNavigate, isLast);
+
+      breadcrumbContainer.appendChild(separator);
+      breadcrumbContainer.appendChild(segmentEl);
+    });
+  }
+
+  container.prepend(breadcrumbContainer);
+}
+
+/**
+ * Phase 2: Create a single breadcrumb segment
+ * @param {string} text - Display text
+ * @param {number} index - Segment index (0 = root)
+ * @param {Function} onNavigate - Click handler
+ * @param {boolean} isActive - Whether this is the current segment
+ * @returns {HTMLElement}
+ */
+function createBreadcrumbSegment(text, index, onNavigate, isActive = false) {
+  const segment = document.createElement("button");
+  segment.className = `breadcrumb-segment ${isActive ? "active" : ""}`;
+  segment.textContent = text;
+  segment.setAttribute("aria-current", isActive ? "location" : "false");
+
+  if (!isActive) {
+    segment.onclick = () => onNavigate(index);
+  } else {
+    // Active segment not clickable
+    segment.disabled = true;
+  }
+
+  return segment;
 }
 
 /**
@@ -259,9 +405,10 @@ async function handleDeleteFile(filename, directory = "sources", container = nul
       // Call onDelete callback if provided (for AppState updates)
       if (typeof onDelete === "function") {
         onDelete(filename, directory);
-      } else if (container) {
-        // Fallback: refresh the files list with legacy method
-        await loadFiles(directory, container);
+      } else {
+        console.warn(
+          "[FileManager] handleDeleteFile: No onDelete callback provided. File deleted but UI may not refresh."
+        );
       }
     } else {
       // If file doesn't exist (ENOENT), just refresh the list without error
@@ -269,8 +416,6 @@ async function handleDeleteFile(filename, directory = "sources", container = nul
         console.log(`File ${filename} already deleted, refreshing list`);
         if (typeof onDelete === "function") {
           onDelete(filename, directory);
-        } else if (container) {
-          await loadFiles(directory, container);
         }
       } else {
         showToast(
@@ -288,96 +433,9 @@ async function handleDeleteFile(filename, directory = "sources", container = nul
       console.log(`File ${filename} already deleted, refreshing list`);
       if (typeof onDelete === "function") {
         onDelete(filename, directory);
-      } else if (container) {
-        await loadFiles(directory, container);
       }
     } else {
       showToast(MSG_FILE_DELETE_ERROR.replace("{filename}", filename), "error", 4000);
     }
-  }
-}
-
-// ============================================================================
-// LEGACY FUNCTIONS (Backward Compatibility)
-// These functions maintain the old API during migration
-// ============================================================================
-
-/**
- * Load session-specific files
- * @param {string} sessionId - Session ID to load files for
- * @param {HTMLElement} container - Container element to render files into
- * @deprecated Use loadFilesIntoState() with AppState subscriptions instead
- *
- * Migration path:
- * 1. Get AppState instance: `const appState = window.app?.appState`
- * 2. Call: `await loadFilesIntoState(appState, directory, 'sources')`
- * 3. Subscribe to state changes: `appState.subscribe('files.sourcesList', (files) => { renderFileList(files, container, options) })`
- */
-export async function loadSessionFiles(sessionId, container) {
-  console.warn(
-    "[FileManager] loadSessionFiles() is deprecated. Use loadFilesIntoState() with AppState subscriptions instead.",
-    { sessionId, containerId: container?.id }
-  );
-
-  if (!container || !sessionId) return;
-
-  const sessionDirectory = `data/files/${sessionId}/sources`;
-  await loadFiles(sessionDirectory, container);
-}
-
-/**
- * Load files from a directory and display them
- * @param {string} directory - Directory to load files from
- * @param {HTMLElement} container - Container element to render files into
- * @deprecated Use loadFilesIntoState() + renderFileList() with AppState subscriptions instead
- *
- * Migration path:
- * 1. Get AppState instance: `const appState = window.app?.appState`
- * 2. Call: `await loadFilesIntoState(appState, directory, 'sources')`
- * 3. Subscribe to state changes: `appState.subscribe('files.sourcesList', (files) => { renderFileList(files, container, options) })`
- *
- * This function remains for backward compatibility but logs deprecation warnings.
- */
-export async function loadFiles(directory = "sources", container = null) {
-  console.warn(
-    "[FileManager] loadFiles() is deprecated. Use loadFilesIntoState() with AppState subscriptions instead.",
-    { directory, containerId: container?.id }
-  );
-  // Dynamic import to avoid circular dependency with index.js
-  const { elements } = await import("./dom-manager.js");
-
-  // Use provided container or default to elements.filesContainer
-  const targetContainer = container || elements.filesContainer;
-
-  if (!targetContainer) {
-    console.error("[FileManager] loadFiles: No container element found", { directory, container, elements });
-    return;
-  }
-
-  console.log("[FileManager] loadFiles called:", { directory, containerId: targetContainer.id });
-
-  // Show loading state
-  renderFileList([], targetContainer, { directory, isLoading: true });
-
-  try {
-    const result = await window.electronAPI.listDirectory(directory);
-
-    if (!result.success) {
-      renderFileList([], targetContainer, { directory, error: result.error });
-      return;
-    }
-
-    const files = result.files || [];
-    const isOutput = directory.includes("/output");
-    const isWelcomePage = targetContainer.id === "welcome-files-container";
-
-    renderFileList(files, targetContainer, {
-      directory,
-      isOutput,
-      isWelcomePage,
-    });
-  } catch (error) {
-    window.electronAPI?.log("error", "Failed to load source files", { error: error.message });
-    renderFileList([], targetContainer, { directory, error: MSG_FILES_LOAD_FAILED });
   }
 }

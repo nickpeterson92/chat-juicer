@@ -11,7 +11,7 @@ import { ComponentLifecycle } from "../../core/component-lifecycle.js";
 import { globalLifecycleManager } from "../../core/lifecycle-manager.js";
 import { registerMessageHandlers } from "../../handlers/message-handlers-v2.js";
 import { setupSessionListHandlers } from "../../handlers/session-list-handlers.js";
-import { loadFiles } from "../../managers/file-manager.js";
+import { loadFilesIntoState } from "../../managers/file-manager.js";
 import { MessageHandlerPlugin } from "../../plugins/core-plugins.js";
 import { renderEmptySessionList, renderSessionList } from "../../ui/renderers/session-list-renderer.js";
 import { initializeTitlebar } from "../../ui/titlebar.js";
@@ -316,16 +316,14 @@ export async function initializeEventHandlers({
               if (isOnWelcomePage) {
                 appState.setState("ui.welcomeFilesSectionVisible", true);
 
-                const welcomeFilesContainer = document.getElementById("welcome-files-container");
-                if (welcomeFilesContainer) {
-                  window.setTimeout(async () => {
-                    try {
-                      await loadFiles(directory, welcomeFilesContainer);
-                    } catch (error) {
-                      console.error("Failed to load files after upload", error);
-                    }
-                  }, 100);
-                }
+                // Load files into AppState (rendering happens via subscription in view-manager)
+                window.setTimeout(async () => {
+                  try {
+                    await loadFilesIntoState(appState, directory, "sources");
+                  } catch (error) {
+                    console.error("Failed to load files after upload", error);
+                  }
+                }, 100);
               } else {
                 if (components.filePanel) {
                   window.setTimeout(async () => {

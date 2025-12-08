@@ -82,6 +82,28 @@ export async function showWelcomeView(elements, appState) {
     ComponentLifecycle.mount(viewManagerComponent, "ViewManager", globalLifecycleManager);
   }
 
+  // Setup subscription to render welcome page files when sources list changes
+  const unsubscribeWelcomeFiles = appState.subscribe("files.sourcesList", (files) => {
+    // Only render if we're on welcome page
+    if (appState.getState("ui.currentView") === "welcome") {
+      const welcomeFilesContainer = document.getElementById("welcome-files-container");
+      if (welcomeFilesContainer) {
+        // Dynamic import is async, so handle it properly
+        import("./file-manager.js").then(({ renderFileList }) => {
+          const sessionService = window.app?.services?.sessionService;
+          const currentSessionId = sessionService?.getCurrentSessionId();
+          if (currentSessionId) {
+            renderFileList(files, welcomeFilesContainer, {
+              directory: `data/files/${currentSessionId}/sources`,
+              isWelcomePage: true,
+            });
+          }
+        });
+      }
+    }
+  });
+  globalLifecycleManager.addUnsubscriber(viewManagerComponent, unsubscribeWelcomeFiles);
+
   // Initialize ModelSelector with cached config (instant, no waiting)
   if (cachedConfig?.models) {
     // Use requestAnimationFrame to wait for DOM, then initialize async
@@ -113,9 +135,9 @@ export async function showWelcomeView(elements, appState) {
         appState.setState("ui.welcomeFilesSectionVisible", true);
 
         // Then load the files (will show placeholder if empty)
-        import("../managers/file-manager.js").then(async ({ loadFiles }) => {
+        import("../managers/file-manager.js").then(async ({ loadFilesIntoState }) => {
           const directory = `data/files/${currentSessionId}/sources`;
-          await loadFiles(directory, welcomeFilesContainer);
+          await loadFilesIntoState(appState, directory, "sources");
         });
       }
     }
@@ -225,9 +247,6 @@ function attachWelcomePageListeners(elements, appState) {
   const suggestionPills = document.querySelectorAll(".suggestion-pill");
   const welcomeContainer = elements.welcomePageContainer;
 
-  // Import loadFiles from file-manager (will be available after refactor)
-  // For now, we'll keep the import dynamic to avoid circular dependencies
-
   // NOTE: File drag-and-drop handlers are managed globally in bootstrap.js
   // to prevent duplicate listeners. We only handle visual feedback here.
   if (welcomeContainer) {
@@ -271,13 +290,11 @@ function attachWelcomePageListeners(elements, appState) {
       const sessionId = sessionService?.getCurrentSessionId();
 
       if (sessionId) {
-        // Load session-specific files
-        const container = document.getElementById("welcome-files-container");
-        if (container) {
-          import("./file-manager.js").then(({ loadSessionFiles }) => {
-            loadSessionFiles(sessionId, container);
-          });
-        }
+        // Load session-specific files using AppState pattern
+        const directory = `data/files/${sessionId}/sources`;
+        import("./file-manager.js").then(({ loadFilesIntoState }) => {
+          loadFilesIntoState(appState, directory, "sources");
+        });
       }
     };
     welcomeFilesRefreshBtn.addEventListener("click", refreshHandler);

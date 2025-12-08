@@ -592,7 +592,74 @@
     opacity: 0.7;
   }
 
-  /* File items */
+  /* ==========================================
+   * BREADCRUMB NAVIGATION (Phase 2)
+   * ========================================== */
+  .breadcrumb-nav {
+    @apply flex items-center gap-1 py-3 px-0 mb-2 flex-wrap;
+    border-bottom: 1px solid var(--color-border-secondary);
+  }
+
+  .breadcrumb-segment {
+    @apply bg-transparent border-none py-1 px-2 rounded-md text-sm cursor-pointer transition-all;
+    color: var(--color-text-secondary);
+  }
+
+  .breadcrumb-segment:hover:not(:disabled) {
+    background-color: var(--color-surface-hover);
+    color: var(--color-text-primary);
+  }
+
+  .breadcrumb-segment.active {
+    color: var(--color-text-primary);
+    font-weight: 600;
+    cursor: default;
+  }
+
+  .breadcrumb-segment:disabled {
+    cursor: default;
+  }
+
+  .breadcrumb-separator {
+    @apply select-none text-sm;
+    color: var(--color-text-secondary);
+  }
+
+  /* ==========================================
+   * FOLDER ITEMS (Phase 2)
+   * ========================================== */
+  .folder-item {
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .folder-item:hover {
+    background-color: var(--color-surface-hover);
+    border-color: var(--color-brand-primary);
+  }
+
+  .folder-item .file-icon {
+    color: var(--color-text-secondary);
+  }
+
+  .folder-name {
+    font-weight: 500;
+  }
+
+  .folder-count {
+    @apply ml-auto text-xs py-0.5 px-2 rounded-md;
+    color: var(--color-text-secondary);
+    background-color: var(--color-surface-overlay);
+  }
+
+  /* File items should not have delete button visible for folders */
+  .folder-item .file-delete-btn {
+    display: none;
+  }
+
+  /* ==========================================
+   * FILE ITEMS
+   * ========================================== */
   .file-item {
     @apply flex items-center gap-2.5 py-2.5 px-3 border rounded-lg transition-all cursor-pointer select-none active:scale-[0.98];
     background-color: var(--color-surface-2);
@@ -696,17 +763,7 @@
     display: none;
   }
 
-  /* Circle outline around stop square */
-  #send-btn.streaming::before {
-    content: "";
-    position: absolute;
-    width: 22px;
-    height: 22px;
-    border: 2px solid currentColor;
-    border-radius: 50%;
-  }
-
-  /* Smaller stop square icon centered */
+  /* Stop square icon centered (no circle) */
   #send-btn.streaming::after {
     content: "";
     position: absolute;

@@ -181,6 +181,8 @@ Write the summary as continuous prose. Keep it information-dense while preservin
 # Used as system prompt for one-shot summarization agent
 CONVERSATION_SUMMARIZATION_INSTRUCTIONS = """You are a conversation summarizer. Given conversation history, create a CONCISE but TECHNICALLY COMPLETE summary.
 
+You are a third party observer of the conversation between a user and an AI assistant.
+
 Your summary MUST capture:
 1. **Main user requests and goals** - What the user wanted to accomplish
 2. **Key tools/functions used** - Tools invoked and their purposes (files read, documents generated, etc.)

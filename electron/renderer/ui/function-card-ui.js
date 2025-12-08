@@ -134,7 +134,18 @@ function extractPrimaryArg(args, _functionName) {
   if (!args) return "";
 
   // Priority order for common argument keys
-  const priorityKeys = ["path", "file_path", "filename", "url", "query", "pattern", "thought", "name", "command"];
+  const priorityKeys = [
+    "path",
+    "file_path",
+    "filename",
+    "url",
+    "query",
+    "pattern",
+    "thought",
+    "name",
+    "command",
+    "code",
+  ];
 
   // If args is a string (streaming JSON), try regex extraction first
   if (typeof args === "string") {
@@ -590,7 +601,7 @@ function flushStatusUpdates(activeCalls) {
 
     if (data.arguments && !isSummarization) {
       const argsPreview = card.element.querySelector(".disclosure-args-preview");
-      if (argsPreview && !isCodeInterpreter) {
+      if (argsPreview) {
         const primaryArg = extractPrimaryArg(data.arguments, card.rawName || card.name);
         argsPreview.textContent = primaryArg;
 

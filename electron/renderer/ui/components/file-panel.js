@@ -5,7 +5,7 @@
 
 import { ComponentLifecycle } from "../../core/component-lifecycle.js";
 import { globalLifecycleManager } from "../../core/lifecycle-manager.js";
-import { loadFiles } from "../../managers/file-manager.js";
+import { loadFilesIntoState, renderFileList } from "../../managers/file-manager.js";
 
 export class FilePanel {
   /**
@@ -30,6 +30,10 @@ export class FilePanel {
     this.sourcesTab = sourcesTab;
     this.outputTab = outputTab;
     this.currentSessionId = null;
+
+    // NEW Phase 1: Track current subdirectory for Output tab navigation
+    // Relative path from output/ root (e.g., "", "code", "code/subfolder")
+    this.currentOutputPath = "";
 
     // AppState integration (optional)
     this.appState = options.appState || null;
@@ -90,6 +94,33 @@ export class FilePanel {
     });
 
     globalLifecycleManager.addUnsubscriber(this, unsubscribeSession);
+
+    // Subscribe to output file list changes
+    const unsubscribeOutput = this.appState.subscribe("files.outputList", (files) => {
+      if (this.getActiveTab()?.dataset.directory === "output") {
+        renderFileList(files, this.filesContainer, {
+          directory: this.getFullOutputPath(),
+          isOutput: true,
+          currentPath: this.currentOutputPath,
+          onFolderClick: (name) => this.navigateToFolder(name),
+          onBreadcrumbClick: (index) => this.navigateToBreadcrumb(index),
+        });
+      }
+    });
+
+    globalLifecycleManager.addUnsubscriber(this, unsubscribeOutput);
+
+    // Subscribe to sources file list changes
+    const unsubscribeSources = this.appState.subscribe("files.sourcesList", (files) => {
+      if (this.getActiveTab()?.dataset.directory === "sources") {
+        renderFileList(files, this.filesContainer, {
+          directory: `data/files/${this.currentSessionId}/sources`,
+          isOutput: false,
+        });
+      }
+    });
+
+    globalLifecycleManager.addUnsubscriber(this, unsubscribeSources);
   }
 
   /**
@@ -134,12 +165,13 @@ export class FilePanel {
 
   /**
    * Switch tab (sources/output)
+   * MODIFIED Phase 1: Reset currentOutputPath when switching tabs
    *
    * @param {HTMLElement} tab - Tab element to activate
    */
   async switchTab(tab) {
     const tabs = [this.sourcesTab, this.outputTab].filter(Boolean);
-    let directory = tab.dataset.directory;
+    const dirType = tab.dataset.directory;
 
     // Update active tab styling
     for (const t of tabs) {
@@ -152,15 +184,21 @@ export class FilePanel {
       return;
     }
 
-    // Use session-specific directories
-    if (directory === "sources") {
+    // Phase 1: Reset output path when switching to any tab
+    this.currentOutputPath = "";
+
+    // Determine full directory path
+    let directory;
+    if (dirType === "sources") {
       directory = `data/files/${this.currentSessionId}/sources`;
-    } else if (directory === "output") {
+    } else if (dirType === "output") {
       directory = `data/files/${this.currentSessionId}/output`;
     }
 
+    // Load files into AppState (rendering happens via subscription)
+    const listType = dirType === "output" ? "output" : "sources";
     try {
-      await loadFiles(directory, this.filesContainer);
+      await loadFilesIntoState(this.appState, directory, listType);
     } catch (error) {
       console.error("Failed to load files for tab switch", error);
     }
@@ -194,17 +232,102 @@ export class FilePanel {
   }
 
   /**
+   * Phase 1: Navigate into a folder (Output tab only)
+   * Updates currentOutputPath and reloads files for the new directory
+   *
+   * @param {string} folderName - Name of folder to enter
+   */
+  async navigateToFolder(folderName) {
+    if (!folderName) return;
+
+    // Append folder to current path
+    this.currentOutputPath = this.currentOutputPath ? `${this.currentOutputPath}/${folderName}` : folderName;
+
+    // Reload files for new path
+    await this.refresh();
+  }
+
+  /**
+   * Phase 1: Navigate up one level in the folder hierarchy
+   * Goes from "code/python" to "code", or from "code" to "" (root)
+   */
+  async navigateUp() {
+    if (!this.currentOutputPath) return; // Already at root
+
+    const segments = this.currentOutputPath.split("/").filter(Boolean);
+    // Remove last segment
+    segments.pop();
+    this.currentOutputPath = segments.join("/");
+
+    await this.refresh();
+  }
+
+  /**
+   * Phase 1: Navigate to a specific breadcrumb segment
+   * Index 0 = root, index 1 = first folder, etc.
+   *
+   * @param {number} index - Breadcrumb segment index (0 = root)
+   */
+  async navigateToBreadcrumb(index) {
+    if (index === 0) {
+      // Navigate to root
+      this.currentOutputPath = "";
+    } else {
+      // Reconstruct path up to segment
+      const segments = this.currentOutputPath.split("/").filter(Boolean);
+      this.currentOutputPath = segments.slice(0, index).join("/");
+    }
+
+    await this.refresh();
+  }
+
+  /**
+   * Phase 1: Get full path for current output directory
+   * Combines session ID, output directory, and current subdirectory path
+   *
+   * @returns {string} Full path including session ID and subdirectory
+   */
+  getFullOutputPath() {
+    const basePath = `data/files/${this.currentSessionId}/output`;
+    return this.currentOutputPath ? `${basePath}/${this.currentOutputPath}` : basePath;
+  }
+
+  /**
+   * Phase 1: Get breadcrumb segments for current path
+   * Returns array of path segments for breadcrumb rendering
+   * Example: "code/python" -> ["code", "python"]
+   *
+   * @returns {string[]} Array of path segments (empty array if at root)
+   */
+  getBreadcrumbSegments() {
+    if (!this.currentOutputPath) {
+      return [];
+    }
+    return this.currentOutputPath.split("/").filter(Boolean);
+  }
+
+  /**
    * Refresh files in current directory
+   * MODIFIED Phase 1: Use getFullOutputPath() for Output tab
    */
   async refresh() {
     if (!this.currentSessionId) return;
 
     const activeTab = this.getActiveTab();
     const dirType = activeTab?.dataset.directory || "sources";
-    const directory = `data/files/${this.currentSessionId}/${dirType}`;
 
+    // Phase 1: Use getFullOutputPath() for output tab to support subdirectory navigation
+    let directory;
+    if (dirType === "output") {
+      directory = this.getFullOutputPath();
+    } else {
+      directory = `data/files/${this.currentSessionId}/${dirType}`;
+    }
+
+    // Load files into AppState (rendering happens via subscription)
+    const listType = dirType === "output" ? "output" : "sources";
     try {
-      return await loadFiles(directory, this.filesContainer);
+      return await loadFilesIntoState(this.appState, directory, listType);
     } catch (error) {
       console.error("FilePanel refresh failed", error);
       throw error;
@@ -213,16 +336,27 @@ export class FilePanel {
 
   /**
    * Load files for current session
+   * Uses AppState pattern - files loaded into state, rendering via subscriptions
    */
   async loadSessionFiles() {
     if (!this.currentSessionId) return;
 
     const activeTab = this.getActiveTab();
     const dirType = activeTab?.dataset.directory || "sources";
-    const directory = `data/files/${this.currentSessionId}/${dirType}`;
 
+    // Determine directory and list type
+    let directory;
+    const listType = dirType === "output" ? "output" : "sources";
+
+    if (dirType === "output") {
+      directory = this.getFullOutputPath();
+    } else {
+      directory = `data/files/${this.currentSessionId}/${dirType}`;
+    }
+
+    // Load files into AppState (rendering happens via subscription)
     try {
-      await loadFiles(directory, this.filesContainer);
+      await loadFilesIntoState(this.appState, directory, listType);
     } catch (error) {
       console.error("Failed to load session files", error);
     }
