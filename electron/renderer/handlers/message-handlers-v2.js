@@ -806,7 +806,14 @@ export function registerMessageHandlers(context) {
 
       // Render the buffered content (if any)
       if (mergedBuffer && textSpan) {
-        updateAssistantMessage(elements.chatContainer, textSpan, mergedBuffer);
+        // If stream is complete, render fully processed markdown immediately
+        if (!isStreaming) {
+          textSpan.innerHTML = renderMarkdown(mergedBuffer, true);
+          completeStreamingMessage(elements.chatContainer);
+          appState.setState("message.currentAssistantId", null);
+        } else {
+          updateAssistantMessage(elements.chatContainer, textSpan, mergedBuffer);
+        }
       }
     }
 

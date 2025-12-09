@@ -28,8 +28,17 @@ if (!markdownRendererComponent._lifecycle) {
  * @returns {Object} Mermaid configuration object
  */
 function getMermaidConfig() {
-  // Detect current theme
-  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  // Single dark-friendly palette pulled from CSS tokens
+  // Higher-contrast, dark-friendly palette for ER diagrams (hard-coded to avoid CSS var overrides)
+  const primaryColor = "#7dd3fc"; // light blue accent
+  const textColor = "#e5e7eb";
+  const surface1 = "#0b1220"; // base canvas
+  const surface2 = "#111827"; // entity fill
+  const surface3 = "#182235"; // headers/alt rows
+  const borderStrong = "#94a3b8";
+  const successColor = getCSSVariable("--color-status-success", "#22c55e");
+  const warningColor = getCSSVariable("--color-status-warning", "#f59e0b");
+  const errorColor = getCSSVariable("--color-status-error", "#ef4444");
 
   return {
     startOnLoad: false,
@@ -38,61 +47,61 @@ function getMermaidConfig() {
     fontFamily: "system-ui, -apple-system, sans-serif",
     themeVariables: {
       // Primary colors
-      primaryColor: getCSSVariable("--color-brand-primary", "#0066cc"),
-      primaryTextColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
-      primaryBorderColor: getCSSVariable("--color-brand-primary", "#0066cc"),
+      primaryColor,
+      primaryTextColor: textColor,
+      primaryBorderColor: primaryColor,
 
       // Lines and edges
-      lineColor: getCSSVariable("--color-brand-primary", "#0066cc"),
-      edgeLabelBackground: getCSSVariable("--color-surface-1", isDark ? "#2a2d3a" : "#f8f8f6"),
+      lineColor: primaryColor,
+      edgeLabelBackground: surface1,
 
       // Secondary and tertiary colors with better contrast
-      secondaryColor: isDark ? "#10b981" : "#059669", // Green for variety
-      tertiaryColor: isDark ? "#f59e0b" : "#d97706", // Amber for distinction
+      secondaryColor: successColor, // Green for variety
+      tertiaryColor: warningColor, // Amber for distinction
 
       // Text
-      textColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
+      textColor,
 
       // Backgrounds
-      mainBkg: getCSSVariable("--color-surface-1", isDark ? "#2a2d3a" : "#f8f8f6"),
-      nodeBorder: getCSSVariable("--color-brand-primary", "#0066cc"),
-      clusterBkg: getCSSVariable("--color-surface-3", isDark ? "#363947" : "#e8e8e6"),
-      clusterBorder: getCSSVariable("--color-brand-primary", "#0066cc"),
-      nodeTextColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
+      mainBkg: surface1,
+      nodeBorder: primaryColor,
+      clusterBkg: surface3,
+      clusterBorder: primaryColor,
+      nodeTextColor: textColor,
 
       // Gantt chart specific colors (critical for readability)
-      gridColor: isDark ? "#4b5563" : "#d1d5db", // Subtle grid lines
-      todayLineColor: getCSSVariable("--color-status-error", "#ef4444"), // Red for today marker
+      gridColor: "#475569",
+      todayLineColor: errorColor, // Red for today marker
 
       // Section colors (different background for each section)
-      sectionBkgColor: isDark ? "#1e293b" : "#f1f5f9",
-      sectionBkgColor2: isDark ? "#334155" : "#e2e8f0",
-      altSectionBkgColor: isDark ? "#0f172a" : "#f8fafc",
+      sectionBkgColor: surface2,
+      sectionBkgColor2: surface3,
+      altSectionBkgColor: surface1,
 
       // Task colors (colorful bars for tasks)
-      taskBkgColor: isDark ? "#3b82f6" : "#2563eb", // Blue
+      taskBkgColor: "#3b82f6", // Blue
       taskTextColor: "#ffffff",
-      taskTextOutsideColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
-      taskTextClickableColor: getCSSVariable("--color-brand-primary", "#0066cc"),
-      taskBorderColor: isDark ? "#1e40af" : "#1d4ed8",
+      taskTextOutsideColor: textColor,
+      taskTextClickableColor: primaryColor,
+      taskBorderColor: "#1d4ed8",
 
       // Active task (different color for active/in-progress)
-      activeTaskBkgColor: getCSSVariable("--color-status-success", "#10b981"), // Green
-      activeTaskBorderColor: isDark ? "#059669" : "#047857",
+      activeTaskBkgColor: successColor, // Green
+      activeTaskBorderColor: "#059669",
 
       // Done tasks (completed)
-      doneTaskBkgColor: isDark ? "#64748b" : "#94a3b8", // Gray for completed
-      doneTaskBorderColor: isDark ? "#475569" : "#64748b",
+      doneTaskBkgColor: "#94a3b8", // Gray for completed
+      doneTaskBorderColor: "#64748b",
 
       // Critical tasks (high priority)
-      critBkgColor: getCSSVariable("--color-status-error", "#ef4444"), // Red
-      critBorderColor: isDark ? "#dc2626" : "#b91c1c",
+      critBkgColor: errorColor, // Red
+      critBorderColor: "#dc2626",
 
       // Pie chart colors (distinct palette for slices)
-      pie1: getCSSVariable("--color-brand-primary", "#0066cc"), // Blue
-      pie2: getCSSVariable("--color-status-success", "#10b981"), // Green
-      pie3: getCSSVariable("--color-status-warning", "#f59e0b"), // Amber
-      pie4: getCSSVariable("--color-status-error", "#ef4444"), // Red
+      pie1: primaryColor, // Blue
+      pie2: successColor, // Green
+      pie3: warningColor, // Amber
+      pie4: errorColor, // Red
       pie5: "#8b5cf6", // Purple
       pie6: "#ec4899", // Pink
       pie7: "#14b8a6", // Teal
@@ -101,31 +110,130 @@ function getMermaidConfig() {
       pie10: "#84cc16", // Lime
       pie11: "#06b6d4", // Cyan
       pie12: "#a855f7", // Violet
-      pieTitleTextColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
-      pieSectionTextColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
-      pieLegendTextColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
-      pieStrokeColor: getCSSVariable("--color-surface-1", isDark ? "#1e293b" : "#ffffff"),
+      pieTitleTextColor: textColor,
+      pieSectionTextColor: textColor,
+      pieLegendTextColor: textColor,
+      pieStrokeColor: surface1,
       pieStrokeWidth: "2px",
       pieOpacity: "0.9",
 
       // Sequence diagram specific colors
-      actorBorder: getCSSVariable("--color-brand-primary", "#0066cc"),
-      actorBkg: getCSSVariable("--color-surface-1", isDark ? "#2a2d3a" : "#f8f8f6"),
-      actorTextColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
-      actorLineColor: getCSSVariable("--color-brand-primary", "#0066cc"),
-      signalColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
-      signalTextColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
-      labelBoxBkgColor: getCSSVariable("--color-surface-3", isDark ? "#363947" : "#e8e8e6"),
-      labelBoxBorderColor: getCSSVariable("--color-brand-primary", "#0066cc"),
-      labelTextColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
-      loopTextColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
-      noteBorderColor: getCSSVariable("--color-brand-primary", "#0066cc"),
-      noteBkgColor: getCSSVariable("--color-surface-3", isDark ? "#363947" : "#e8e8e6"),
-      noteTextColor: getCSSVariable("--color-text-primary", isDark ? "#f1f5f9" : "#191b29"),
-      activationBorderColor: getCSSVariable("--color-brand-primary", "#0066cc"),
-      activationBkgColor: getCSSVariable("--color-brand-primary", "#0066cc"),
+      actorBorder: primaryColor,
+      actorBkg: surface1,
+      actorTextColor: textColor,
+      actorLineColor: primaryColor,
+      signalColor: textColor,
+      signalTextColor: textColor,
+      labelBoxBkgColor: surface3,
+      labelBoxBorderColor: primaryColor,
+      labelTextColor: textColor,
+      loopTextColor: textColor,
+      noteBorderColor: primaryColor,
+      noteBkgColor: surface3,
+      noteTextColor: textColor,
+      activationBorderColor: primaryColor,
+      activationBkgColor: primaryColor,
       sequenceNumberColor: "#ffffff", // Always white for contrast on brand color
     },
+    // Explicit ER diagram styling for readability in dark mode
+    themeCSS: `
+      /* ER diagram global primitives (fallback catch-alls) */
+      .er rect,
+      .er polygon {
+        fill: ${surface2} !important;
+        stroke: ${borderStrong} !important;
+        stroke-width: 1.6px !important;
+      }
+      .er path,
+      .er line {
+        stroke: ${primaryColor} !important;
+        stroke-width: 2px !important;
+        fill: none !important;
+      }
+      .er text,
+      .er .label {
+        fill: ${textColor} !important;
+        font-weight: 500 !important;
+      }
+      /* Entity shells */
+      .er .entityBox {
+        fill: ${surface3} !important;
+        stroke: ${borderStrong} !important;
+        stroke-width: 2px !important;
+      }
+      .er .entityLabel {
+        fill: ${textColor} !important;
+        font-weight: 700 !important;
+      }
+      /* Attribute rows */
+      .er .attributeBoxEven {
+        fill: ${surface2} !important;
+        stroke: ${borderStrong} !important;
+        stroke-width: 1.4px !important;
+      }
+      .er .attributeBoxOdd {
+        fill: ${surface1} !important;
+        stroke: ${borderStrong} !important;
+        stroke-width: 1.4px !important;
+      }
+      .er .attributeLabel {
+        fill: ${textColor} !important;
+        font-weight: 500 !important;
+      }
+      .er .key {
+        fill: ${warningColor} !important;
+        font-weight: 700 !important;
+      }
+      /* Relationships */
+      .er .relationshipLabel {
+        fill: ${textColor} !important;
+        font-weight: 600 !important;
+      }
+      .er .relationshipLine {
+        stroke: ${primaryColor} !important;
+        stroke-width: 2.25px !important;
+      }
+      /* Relationship label backgrounds and markers */
+      .er .relationshipLabelBox,
+      .er .labelBkg,
+      .er .edgeLabel .label {
+        fill: ${surface2} !important;
+        background-color: ${surface2} !important;
+        color: ${textColor} !important;
+      }
+      .er .edgeLabel .label {
+        font-weight: 600 !important;
+      }
+      .er .marker {
+        fill: none !important;
+        stroke: ${primaryColor} !important;
+        stroke-width: 1.25px !important;
+      }
+      /* Row fills and borders (Mermaid uses inline hsl fills on path nodes) */
+      .er .row-rect-odd path,
+      svg.erDiagram .row-rect-odd path,
+      .erDiagram .row-rect-odd path,
+      svg[id^="mermaid-"] .row-rect-odd path {
+        fill: ${surface2} !important;
+        stroke: ${borderStrong} !important;
+        stroke-width: 1.4px !important;
+      }
+      .er .row-rect-even path,
+      svg.erDiagram .row-rect-even path,
+      .erDiagram .row-rect-even path,
+      svg[id^="mermaid-"] .row-rect-even path {
+        fill: ${surface1} !important;
+        stroke: ${borderStrong} !important;
+        stroke-width: 1.4px !important;
+      }
+      /* Generic node fallback (Mermaid sometimes uses .node) */
+      .er .node rect,
+      .er .node polygon {
+        fill: ${surface2} !important;
+        stroke: ${borderStrong} !important;
+        stroke-width: 1.25px !important;
+      }
+    `,
   };
 }
 

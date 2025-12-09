@@ -318,7 +318,21 @@ async function handleSwitch(sessionId, sessionService, streamManager, updateSess
 
       // AFTER history is loaded, reconstruct streaming state if session is actively streaming
       // This must happen AFTER clear() and setMessages() to avoid being wiped
-      if (streamManager?.isStreaming(sessionId)) {
+      const isStreaming = streamManager?.isStreaming(sessionId);
+      const hasBuffer = streamManager?.getBuffer(sessionId)?.length > 0;
+
+      // Check for race condition: Stale history but we have buffered content
+      // If backend run finished during switch, history might be stale (missing last message)
+      // but StreamManager has the full content buffered.
+      const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+      const historyIsStale = hasBuffer && (!lastMessage || lastMessage.role !== "assistant");
+
+      if (isStreaming || historyIsStale) {
+        console.log("[session] Reconstructing stream state (streaming or stale history)", {
+          isStreaming,
+          historyIsStale,
+          hasBuffer,
+        });
         sessionService.reconstructStreamState(sessionId, streamManager);
       }
 

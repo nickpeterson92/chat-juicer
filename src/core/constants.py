@@ -418,10 +418,10 @@ SESSION_TITLE_MAX_TOKENS = 20
 SUMMARY_CALL_ID_PREFIX = "sum_"
 
 #: Trigger conversation summarization at this fraction of model's token limit.
-#: Example: 0.2 × GPT-5's 272k tokens = 54,400 token trigger point.
+#: Example: 0.8 × GPT-5's 272k tokens = 217,600 token trigger point.
 #: When total_tokens exceeds this threshold, TokenAwareSQLiteSession automatically
 #: summarizes the conversation and resets the context.
-CONVERSATION_SUMMARIZATION_THRESHOLD = 0.2
+CONVERSATION_SUMMARIZATION_THRESHOLD = 0.8
 
 #: Number of recent user messages to keep when summarizing conversations.
 #: Keeps the last N complete user-assistant exchanges unsummarized.
