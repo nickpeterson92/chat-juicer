@@ -10,11 +10,11 @@ import { globalEventBus } from "../../core/event-bus.js";
 import { globalLifecycleManager } from "../../core/lifecycle-manager.js";
 import { getMessageQueueService } from "../../services/message-queue-service.js";
 import { initLottieWithColor } from "../../utils/lottie-color.js";
-import { renderMarkdown } from "../../utils/markdown-renderer.js";
 import {
   addMessage,
   clearChat,
   completeStreamingMessage,
+  createMessageElement,
   createStreamingAssistantMessage,
   updateAssistantMessage,
 } from "../chat-ui.js";
@@ -532,46 +532,59 @@ export class ChatContainer {
       return;
     }
 
-    // Track tool calls by call_id for pairing detected+completed
-    const toolCallMap = new Map();
+    const sortedMessages = this._sortMessagesIfPossible(messages);
 
-    // First pass: collect all tool calls
-    for (const msg of messages) {
-      if (msg.role === "tool_call" && msg.call_id) {
-        const existing = toolCallMap.get(msg.call_id) || {};
-        toolCallMap.set(msg.call_id, {
-          ...existing,
-          ...msg,
-          // Keep both arguments (from detected) and result (from completed)
-          arguments: msg.arguments || existing.arguments,
-          result: msg.result || existing.result,
-          status: msg.status === "completed" ? "completed" : existing.status || "detected",
-          success: msg.success !== undefined ? msg.success : existing.success,
-        });
+    // Track completed tool calls by call_id for pairing detected+completed
+    const toolCallCompleted = new Map();
+    for (const msg of sortedMessages) {
+      if (msg.role === "tool_call" && msg.call_id && msg.status === "completed") {
+        toolCallCompleted.set(msg.call_id, msg);
       }
     }
 
     // Second pass: render messages in order
-    for (const msg of messages) {
+    // Create a document fragment for efficient DOM insertion
+    const fragment = document.createDocumentFragment();
+    for (const msg of sortedMessages) {
       const { role, content, partial } = msg;
       const textContent = this._extractTextContent(content);
+      let element = null;
 
       if (role === "user" && textContent) {
-        addMessage(this.element, textContent, "user");
+        element = createMessageElement(this.element, textContent, "user").messageDiv;
       } else if (role === "assistant" && textContent) {
         // Pass partial flag if present
-        addMessage(this.element, textContent, "assistant", { partial: partial === true });
+        element = createMessageElement(this.element, textContent, "assistant", {
+          partial: partial === true,
+        }).messageDiv;
       } else if (role === "system" && textContent) {
-        addMessage(this.element, textContent, "system");
-      } else if (role === "tool_call" && msg.status === "completed") {
-        // Render completed tool cards (only for "completed" status, not "detected")
-        const toolData = toolCallMap.get(msg.call_id);
-        if (toolData) {
-          createCompletedToolCard(this.element, toolData);
+        element = createMessageElement(this.element, textContent, "system").messageDiv;
+      } else if (role === "tool_call") {
+        if (msg.status === "detected" && msg.call_id) {
+          const completed = toolCallCompleted.get(msg.call_id);
+          if (completed) {
+            const merged = { ...completed, arguments: completed.arguments || msg.arguments };
+            element = this._createToolCardElement(merged);
+            toolCallCompleted.delete(msg.call_id);
+          }
+        } else if (msg.status === "completed") {
+          // If we didn't render via detected, render now
+          if (!msg.call_id || !toolCallCompleted.has(msg.call_id)) {
+            element = this._createToolCardElement(msg);
+          } else {
+            toolCallCompleted.delete(msg.call_id);
+          }
         }
+      }
+
+      if (element) {
+        fragment.appendChild(element);
       }
       // Skip tool_call with status="detected" - we'll render when we see "completed"
     }
+
+    // Append all messages at once
+    this.element.appendChild(fragment);
 
     // Scroll to bottom after loading
     this.scrollToBottom();
@@ -588,26 +601,17 @@ export class ChatContainer {
       return;
     }
 
+    const sortedMessages = this._sortMessagesIfPossible(messages);
+
     // Store current scroll position to maintain user's view
     const scrollHeightBefore = this.element.scrollHeight;
     const scrollTopBefore = this.element.scrollTop;
 
-    // Track tool calls by call_id for pairing detected+completed
-    const toolCallMap = new Map();
-
-    // First pass: collect all tool calls
-    for (const msg of messages) {
-      if (msg.role === "tool_call" && msg.call_id) {
-        const existing = toolCallMap.get(msg.call_id) || {};
-        toolCallMap.set(msg.call_id, {
-          ...existing,
-          ...msg,
-          arguments: msg.arguments || existing.arguments,
-          result: msg.result || existing.result,
-          status: msg.status === "completed" ? "completed" : existing.status || "detected",
-          success: msg.success !== undefined ? msg.success : existing.success,
-          interrupted: msg.interrupted !== undefined ? msg.interrupted : existing.interrupted,
-        });
+    // Track completed tool calls by call_id for pairing detected+completed
+    const toolCallCompleted = new Map();
+    for (const msg of sortedMessages) {
+      if (msg.role === "tool_call" && msg.call_id && msg.status === "completed") {
+        toolCallCompleted.set(msg.call_id, msg);
       }
     }
 
@@ -615,22 +619,34 @@ export class ChatContainer {
     const fragment = document.createDocumentFragment();
 
     // Second pass: render messages into fragment (in order - oldest first)
-    for (const msg of messages) {
+    for (const msg of sortedMessages) {
       const { role, content, partial } = msg;
       const textContent = this._extractTextContent(content);
 
       let messageElement = null;
 
       if (role === "user" && textContent) {
-        messageElement = this._createMessageElement(textContent, "user", { partial: false });
+        messageElement = createMessageElement(this.element, textContent, "user", { partial: false }).messageDiv;
       } else if (role === "assistant" && textContent) {
-        messageElement = this._createMessageElement(textContent, "assistant", { partial: partial === true });
+        messageElement = createMessageElement(this.element, textContent, "assistant", {
+          partial: partial === true,
+        }).messageDiv;
       } else if (role === "system" && textContent) {
-        messageElement = this._createMessageElement(textContent, "system", { partial: false });
-      } else if (role === "tool_call" && msg.status === "completed") {
-        const toolData = toolCallMap.get(msg.call_id);
-        if (toolData) {
-          messageElement = this._createToolCardElement(toolData);
+        messageElement = createMessageElement(this.element, textContent, "system", { partial: false }).messageDiv;
+      } else if (role === "tool_call") {
+        if (msg.status === "detected" && msg.call_id) {
+          const completed = toolCallCompleted.get(msg.call_id);
+          if (completed) {
+            const merged = { ...completed, arguments: completed.arguments || msg.arguments };
+            messageElement = this._createToolCardElement(merged);
+            toolCallCompleted.delete(msg.call_id);
+          }
+        } else if (msg.status === "completed") {
+          if (!msg.call_id || !toolCallCompleted.has(msg.call_id)) {
+            messageElement = this._createToolCardElement(msg);
+          } else {
+            toolCallCompleted.delete(msg.call_id);
+          }
         }
       }
 
@@ -654,52 +670,6 @@ export class ChatContainer {
   }
 
   /**
-   * Create a message element without appending to container
-   * Uses same structure and styling as addMessage in chat-ui.js
-   * @private
-   */
-  _createMessageElement(content, role, options = {}) {
-    const messageDiv = document.createElement("div");
-    // Match exact classes from addMessage in chat-ui.js
-    const baseClasses = "message mb-6 animate-slideIn [contain:layout_style]";
-    const typeClasses = {
-      user: "user text-left",
-      assistant: "assistant",
-      system: "system",
-      error: "error",
-    };
-    messageDiv.className = `${baseClasses} ${typeClasses[role] || ""}`;
-
-    // Add partial indicator class if this is an interrupted response
-    if (options.partial && role === "assistant") {
-      messageDiv.classList.add("message-partial");
-    }
-
-    const contentDiv = document.createElement("div");
-
-    // Match exact styling from addMessage
-    if (role === "user") {
-      contentDiv.className =
-        "message-content inline-block py-3 px-4 rounded-2xl max-w-[70%] break-words whitespace-pre-wrap leading-snug min-h-6 bg-user-gradient text-[var(--color-text-user)]";
-      contentDiv.textContent = content;
-    } else if (role === "assistant") {
-      contentDiv.className =
-        "message-content prose prose-invert max-w-none break-words whitespace-pre-wrap leading-snug text-[var(--color-text-assistant)]";
-      contentDiv.innerHTML = renderMarkdown(content, true);
-    } else if (role === "system") {
-      contentDiv.className =
-        "inline-block py-3 px-4 rounded-2xl max-w-[70%] break-words whitespace-pre-wrap leading-snug min-h-6 bg-amber-50 text-amber-900 text-sm italic";
-      contentDiv.textContent = content;
-    } else {
-      contentDiv.className = "message-content";
-      contentDiv.textContent = content;
-    }
-
-    messageDiv.appendChild(contentDiv);
-    return messageDiv;
-  }
-
-  /**
    * Create a tool card element without appending to container
    * @private
    */
@@ -708,6 +678,34 @@ export class ChatContainer {
     const wrapper = document.createElement("div");
     createCompletedToolCard(wrapper, toolData);
     return wrapper.firstChild;
+  }
+
+  /**
+   * Best-effort sort by created_at if present on all messages.
+   * Falls back to original order if timestamps are missing or mixed types.
+   * @param {Array<Object>} messages
+   * @returns {Array<Object>}
+   */
+  _sortMessagesIfPossible(messages) {
+    if (!Array.isArray(messages) || messages.length === 0) return messages;
+    const allHaveTs = messages.every((m) => m && m.created_at !== undefined && m.created_at !== null);
+    if (!allHaveTs) return messages;
+
+    const coerce = (v) => {
+      if (typeof v === "number") return v;
+      const parsed = Date.parse(v);
+      return Number.isNaN(parsed) ? null : parsed;
+    };
+
+    const withTs = messages.map((m, idx) => ({ m, t: coerce(m.created_at), idx }));
+    if (withTs.some((x) => x.t === null)) return messages;
+
+    return withTs
+      .sort((a, b) => {
+        if (a.t === b.t) return a.idx - b.idx;
+        return a.t - b.t;
+      })
+      .map((x) => x.m);
   }
 
   /**
@@ -751,7 +749,13 @@ export class ChatContainer {
           requestAnimationFrame(() => {
             try {
               const brandColor = CRITICAL_COLORS.BRAND_PRIMARY;
-              initLottieWithColor(indicator, smokeAnimationData, brandColor);
+              const animation = initLottieWithColor(indicator, smokeAnimationData, brandColor);
+              if (animation) {
+                indicator._lottieAnimation = animation;
+              } else {
+                indicator.textContent = "●";
+                indicator.style.color = CRITICAL_COLORS.BRAND_PRIMARY;
+              }
             } catch (_error) {
               indicator.textContent = "●";
               indicator.style.color = CRITICAL_COLORS.BRAND_PRIMARY;
@@ -760,6 +764,17 @@ export class ChatContainer {
         }
       } else {
         indicator.style.display = "none";
+        // Clean up Lottie animation when hiding
+        if (indicator._lottieAnimation) {
+          try {
+            indicator._lottieAnimation.destroy();
+            indicator._lottieAnimation = null;
+          } catch (e) {
+            console.error("Error destroying queued indicator Lottie:", e);
+          }
+          indicator.innerHTML = ""; // Clear content
+          indicator.textContent = "";
+        }
       }
     }
   }
@@ -770,7 +785,6 @@ export class ChatContainer {
    */
   scrollToBottom() {
     if (this.element) {
-      // Smooth scroll to bottom
       this.element.scrollTo({
         top: this.element.scrollHeight,
         behavior: "smooth",

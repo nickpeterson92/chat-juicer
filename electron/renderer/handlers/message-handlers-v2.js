@@ -753,8 +753,15 @@ export function registerMessageHandlers(context) {
     }
 
     // Reconstruct tool cards for any buffered tools
+    // IMPORTANT: Only recreate in-flight calls. Completed/error calls are already
+    // persisted in Layer 2 and rendered in-order by setMessages; recreating them
+    // here would append them to the bottom of the chat.
     if (tools && tools.length > 0) {
       for (const [callId, toolState] of tools) {
+        if (toolState.status === "completed" || toolState.status === "error") {
+          continue;
+        }
+
         // Skip if card already exists in DOM (rendered by setMessages from Layer 2)
         const existingCard = document.getElementById(`function-${callId}`);
         if (existingCard) {
@@ -777,11 +784,6 @@ export function registerMessageHandlers(context) {
             arguments: toolState.arguments,
             result: toolState.result,
           });
-        }
-
-        // If completed, schedule cleanup
-        if (toolState.status === "completed" || toolState.status === "error") {
-          scheduleFunctionCardCleanup(appState.functions.activeCalls, appState.functions.activeTimers, callId);
         }
       }
     }

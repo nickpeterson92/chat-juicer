@@ -272,20 +272,28 @@ export class InputArea {
 
   /**
    * Adjust textarea height based on content
+   * Uses requestAnimationFrame to prevent layout thrashing
    */
   adjustHeight() {
     if (!this.textarea) return;
 
-    // Reset height to recalculate
-    this.textarea.style.height = "auto";
+    if (this._adjustHeightRAF) {
+      cancelAnimationFrame(this._adjustHeightRAF);
+    }
 
-    // Get scroll height and apply constraints
-    const scrollHeight = this.textarea.scrollHeight || 40;
-    const minHeight = 40;
-    const maxHeight = 200;
-    const newHeight = Math.max(minHeight, Math.min(scrollHeight, maxHeight));
+    this._adjustHeightRAF = requestAnimationFrame(() => {
+      // Reset height to recalculate
+      this.textarea.style.height = "auto";
 
-    this.textarea.style.height = `${newHeight}px`;
+      // Get scroll height and apply constraints
+      const scrollHeight = this.textarea.scrollHeight || 40;
+      const minHeight = 40;
+      const maxHeight = 200;
+      const newHeight = Math.max(minHeight, Math.min(scrollHeight, maxHeight));
+
+      this.textarea.style.height = `${newHeight}px`;
+      this._adjustHeightRAF = null;
+    });
   }
 
   /**

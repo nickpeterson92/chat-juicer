@@ -139,6 +139,7 @@ export function renderFileList(files, container, options = {}) {
   }
 
   // Render files and folders
+  const fragment = document.createDocumentFragment();
   files.forEach((file) => {
     let fileItem;
 
@@ -150,8 +151,10 @@ export function renderFileList(files, container, options = {}) {
       fileItem = createFileItem(file, directory, container, onDelete);
     }
 
-    container.appendChild(fileItem);
+    fragment.appendChild(fileItem);
   });
+
+  container.appendChild(fragment);
 }
 
 /**

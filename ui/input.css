@@ -1577,6 +1577,12 @@
     line-height: 1.5;
   }
 
+  /* Optimize rendering performance for long message lists */
+  .message {
+    content-visibility: auto;
+    contain-intrinsic-size: 0 100px; /* Estimated height to prevent scrollbar jumping */
+  }
+
   .message-content h1,
   .message-content h2,
   .message-content h3,

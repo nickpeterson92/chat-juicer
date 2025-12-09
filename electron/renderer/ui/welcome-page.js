@@ -258,9 +258,12 @@ export function showWelcomePage(container, userName = "User") {
 
   if (welcomeInput) {
     welcomeInput.addEventListener("input", () => {
-      welcomeInput.style.height = "auto";
-      welcomeInput.style.height = `${Math.min(welcomeInput.scrollHeight, 200)}px`;
-      updateSendButtonState();
+      // Use requestAnimationFrame to prevent layout thrashing
+      requestAnimationFrame(() => {
+        welcomeInput.style.height = "auto";
+        welcomeInput.style.height = `${Math.min(welcomeInput.scrollHeight, 200)}px`;
+        updateSendButtonState();
+      });
     });
   }
 

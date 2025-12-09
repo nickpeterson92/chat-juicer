@@ -39,7 +39,7 @@ if (!chatUIComponent._lifecycle) {
  * @param {boolean} options.partial - Whether this is a partial/interrupted response
  * @returns {HTMLElement} The message content element
  */
-export function addMessage(chatContainer, content, type = "assistant", options = {}) {
+export function createMessageElement(chatContainer, content, type = "assistant", options = {}) {
   const messageDiv = document.createElement("div");
   // Base message styles + type-specific styles
   const baseClasses = "message mb-6 animate-slideIn [contain:layout_style]";
@@ -86,8 +86,9 @@ export function addMessage(chatContainer, content, type = "assistant", options =
         .finally(() => {
           initializeCodeCopyButtons(contentDiv);
           // Scroll again after Mermaid diagrams render (they add height to the message)
-          // Note: No forced scroll - session-level scroll at end handles bulk loading
-          scheduleScroll(chatContainer);
+          if (chatContainer) {
+            scheduleScroll(chatContainer);
+          }
         });
     }, 0);
   } else {
@@ -95,7 +96,6 @@ export function addMessage(chatContainer, content, type = "assistant", options =
   }
 
   messageDiv.appendChild(contentDiv);
-  chatContainer.appendChild(messageDiv);
 
   // Cache reference for O(1) access
   messageCache.set(messageId, messageDiv);
@@ -110,6 +110,13 @@ export function addMessage(chatContainer, content, type = "assistant", options =
     }
     messageCache.delete(firstKey);
   }
+
+  return { messageDiv, contentDiv };
+}
+
+export function addMessage(chatContainer, content, type = "assistant", options = {}) {
+  const { messageDiv, contentDiv } = createMessageElement(chatContainer, content, type, options);
+  chatContainer.appendChild(messageDiv);
 
   // Batched scroll update (prevents layout thrashing during streaming)
   scheduleScroll(chatContainer);
