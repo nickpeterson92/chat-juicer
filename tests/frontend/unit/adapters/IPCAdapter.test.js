@@ -238,9 +238,9 @@ describe("IPCAdapter", () => {
       document.documentElement.style.setProperty("--color-status-error", "#123456");
 
       await adapter._showToast("Hello", "info");
-      await new Promise((resolve) => setTimeout(resolve, 0));
-
-      expect(showToastSpy).toHaveBeenCalledWith("Hello", "info");
+      await vi.waitFor(() => {
+        expect(showToastSpy).toHaveBeenCalledWith("Hello", "info");
+      });
 
       showToastSpy.mockRestore();
       container.remove();
