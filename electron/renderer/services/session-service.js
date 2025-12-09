@@ -47,6 +47,16 @@ export class SessionService {
     this.appState = appState;
   }
 
+  _getLastUsedTimestamp(session) {
+    const rawTimestamp = session?.last_used || session?.updated_at || session?.created_at;
+    const timestamp = rawTimestamp ? new Date(rawTimestamp).getTime() : 0;
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  }
+
+  _sortSessionsByLastUsed(sessions) {
+    return [...sessions].sort((a, b) => this._getLastUsedTimestamp(b) - this._getLastUsedTimestamp(a));
+  }
+
   /**
    * Load sessions from backend
    *
@@ -67,7 +77,8 @@ export class SessionService {
       if (response?.sessions) {
         // Append or replace sessions based on offset
         const currentList = this.appState.getState("session.list");
-        const newList = offset === 0 ? response.sessions : [...currentList, ...response.sessions];
+        const mergedList = offset === 0 ? response.sessions : [...currentList, ...response.sessions];
+        const newList = this._sortSessionsByLastUsed(mergedList);
 
         this.appState.setState("session.list", newList);
         this.appState.setState("session.totalCount", response.total_count || newList.length);
@@ -192,6 +203,14 @@ export class SessionService {
 
       if (response?.session) {
         this.appState.setState("session.current", sessionId);
+
+        // Update local session ordering so the newly opened session jumps to the top
+        const lastUsed = response.session?.last_used || new Date().toISOString();
+        this.updateSession({
+          ...response.session,
+          session_id: sessionId,
+          last_used: lastUsed,
+        });
 
         // NOTE: Stream reconstruction is now handled by the caller (session-list-handlers)
         // AFTER chat is cleared and history is loaded, to avoid being wiped
@@ -415,13 +434,9 @@ export class SessionService {
     }
 
     // Sort by last_used to ensure most recently used sessions appear first
-    const getLastUsedTimestamp = (session) => {
-      const timestamp = session?.last_used ? new Date(session.last_used).getTime() : 0;
-      return Number.isFinite(timestamp) ? timestamp : 0;
-    };
-    updatedSessions.sort((a, b) => getLastUsedTimestamp(b) - getLastUsedTimestamp(a));
+    const sortedSessions = this._sortSessionsByLastUsed(updatedSessions);
 
-    this.appState.setState("session.list", updatedSessions);
+    this.appState.setState("session.list", sortedSessions);
   }
 
   /**
