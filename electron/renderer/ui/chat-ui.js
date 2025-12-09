@@ -286,7 +286,7 @@ export function createStreamingAssistantMessage(chatContainer) {
   // Batched scroll update
   scheduleScroll(chatContainer);
 
-  return textSpan;
+  return { textSpan, messageId };
 }
 
 /**

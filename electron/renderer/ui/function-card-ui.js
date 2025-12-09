@@ -39,6 +39,10 @@ function prettyPrintJson(content) {
 const pendingUpdates = new Map();
 let updateScheduled = false;
 
+// Throttled arguments update queue for batched DOM updates
+const pendingArgUpdates = new Map();
+let argUpdateScheduled = false;
+
 // Chevron SVG for expand/collapse indicator
 const CHEVRON_DOWN =
   '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>';
@@ -353,10 +357,10 @@ export function createFunctionCallCard(
 
     // Insert function card BEFORE the current streaming assistant message
     // This ensures tool calls appear above the model's response
-    if (appState?.message?.currentAssistant) {
-      // Find the parent message div of the current assistant text span
-      const currentAssistantSpan = appState.message.currentAssistant;
-      const assistantMessageDiv = currentAssistantSpan.closest(".message");
+    const currentAssistantId = appState?.message?.currentAssistantId;
+    if (currentAssistantId) {
+      // Find the streaming message element by ID
+      const assistantMessageDiv = chatContainer.querySelector(`[data-message-id="${currentAssistantId}"]`);
 
       if (assistantMessageDiv) {
         // Insert before the streaming assistant message
@@ -417,7 +421,7 @@ function renderCodeInterpreterOutput(result) {
   container.className = "code-interpreter-output";
 
   // Show stdout if present
-  if (result.stdout && result.stdout.trim()) {
+  if (result.stdout?.trim()) {
     const stdoutSection = document.createElement("div");
     stdoutSection.className = "code-output-section";
 
@@ -435,7 +439,7 @@ function renderCodeInterpreterOutput(result) {
   }
 
   // Show stderr if present
-  if (result.stderr && result.stderr.trim()) {
+  if (result.stderr?.trim()) {
     const stderrSection = document.createElement("div");
     stderrSection.className = "code-output-section code-output-error";
 
@@ -466,7 +470,7 @@ function renderCodeInterpreterOutput(result) {
     filesContainer.className = "code-output-files";
 
     for (const file of result.files) {
-      if (file.type && file.type.startsWith("image/") && file.base64) {
+      if (file.type?.startsWith("image/") && file.base64) {
         // Render inline image
         const imageContainer = document.createElement("div");
         imageContainer.className = "code-output-image-container";
@@ -596,6 +600,22 @@ export function updateFunctionCallStatus(activeCalls, callId, status, data = {},
 }
 
 /**
+ * Get or create cached element references for a card
+ * @param {Object} card - The function card object
+ * @returns {Object} Cached element references
+ */
+function getCardElements(card) {
+  if (!card._statusElements) {
+    card._statusElements = {
+      contentDiv: card.element.querySelector(".disclosure-content"),
+      argsPreview: card.element.querySelector(".disclosure-args-preview"),
+      chevron: card.element.querySelector(".disclosure-chevron"),
+    };
+  }
+  return card._statusElements;
+}
+
+/**
  * Flush all pending status updates in a single batch
  * Reduces layout thrashing by batching DOM writes
  * @param {Map} activeCalls - Map of active function calls
@@ -611,8 +631,8 @@ function flushStatusUpdates(activeCalls) {
     // Update data-status attribute for CSS styling
     card.element.dataset.status = status;
 
-    // Update expanded content with detailed info
-    const contentDiv = card.element.querySelector(".disclosure-content");
+    // Get cached element references
+    const { contentDiv, argsPreview, chevron } = getCardElements(card);
 
     // Update args preview in header when arguments arrive
     // Skip args display entirely for summarize_conversation (cleaner card like Thought)
@@ -620,7 +640,6 @@ function flushStatusUpdates(activeCalls) {
     const isCodeInterpreter = card.rawName === "execute_python_code" || card.rawName === "wrapped_execute_python_code";
 
     if (data.arguments && !isSummarization) {
-      const argsPreview = card.element.querySelector(".disclosure-args-preview");
       if (argsPreview) {
         const primaryArg = extractPrimaryArg(data.arguments, card.rawName || card.name);
         argsPreview.textContent = primaryArg;
@@ -628,12 +647,11 @@ function flushStatusUpdates(activeCalls) {
         // Fade in args and chevron when we have content
         if (primaryArg) {
           argsPreview.classList.add("visible");
-          const chevron = card.element.querySelector(".disclosure-chevron");
           if (chevron) chevron.classList.add("visible");
         }
       }
 
-      // Add full arguments to expanded content
+      // Add full arguments to expanded content (only once)
       if (contentDiv && !contentDiv.querySelector(".disclosure-arguments")) {
         // For code interpreter, show code with syntax highlighting
         if (isCodeInterpreter) {
@@ -663,7 +681,6 @@ function flushStatusUpdates(activeCalls) {
             contentDiv.appendChild(codeSection);
 
             // Show chevron since we have code to display
-            const chevron = card.element.querySelector(".disclosure-chevron");
             if (chevron) chevron.classList.add("visible");
           }
         } else {
@@ -746,7 +763,6 @@ function flushStatusUpdates(activeCalls) {
         contentDiv.appendChild(summarySection);
 
         // Show chevron for summarization (we skipped args, so need to show it here)
-        const chevron = card.element.querySelector(".disclosure-chevron");
         if (chevron) chevron.classList.add("visible");
       } else if (isCodeInterpreterResult) {
         // Code interpreter: Special rendering with syntax highlighting, images, file downloads
@@ -829,7 +845,7 @@ function flushStatusUpdates(activeCalls) {
 }
 
 /**
- * Update function arguments during streaming (optimized with JSON cache)
+ * Update function arguments during streaming (throttled with RAF batching)
  * @param {Map} activeCalls - Map of active function calls
  * @param {Map} argumentsBuffer - Arguments buffer map
  * @param {string} callId - Call identifier
@@ -850,55 +866,104 @@ export function updateFunctionArguments(activeCalls, argumentsBuffer, callId, de
     argumentsBuffer.set(callId, argumentsBuffer.get(callId) + delta);
   }
 
-  const bufferedArgs = argumentsBuffer.get(callId);
+  // Queue the update for batched processing
+  pendingArgUpdates.set(callId, { isDone, card, argumentsBuffer });
 
-  // Update header args preview with streaming content
-  const argsPreview = card.element.querySelector(".disclosure-args-preview");
-  if (argsPreview) {
-    const primaryArg = extractPrimaryArg(bufferedArgs, card.rawName || card.name);
-    argsPreview.textContent = primaryArg || "";
-
-    // Fade in args and chevron when we have extractable content
-    if (primaryArg && !argsPreview.classList.contains("visible")) {
-      argsPreview.classList.add("visible");
-      const chevron = card.element.querySelector(".disclosure-chevron");
-      if (chevron) chevron.classList.add("visible");
-    }
+  if (isDone) {
+    // Flush immediately on completion
+    flushArgUpdates();
+  } else if (!argUpdateScheduled) {
+    // Schedule batched update via RAF
+    argUpdateScheduled = true;
+    requestAnimationFrame(() => {
+      flushArgUpdates();
+      argUpdateScheduled = false;
+    });
   }
+}
 
-  // Update expanded content if exists
-  const contentDiv = card.element.querySelector(".disclosure-content");
-  if (contentDiv) {
-    let argsSection = contentDiv.querySelector(".disclosure-arguments");
+/**
+ * Flush all pending argument updates in a single batch
+ * Reduces layout thrashing by batching DOM reads/writes
+ */
+function flushArgUpdates() {
+  for (const [callId, { isDone, card, argumentsBuffer }] of pendingArgUpdates.entries()) {
+    if (!card || !card.element) continue;
 
-    if (!argsSection) {
-      argsSection = document.createElement("div");
-      argsSection.className = "disclosure-arguments";
+    const bufferedArgs = argumentsBuffer.get(callId) || "";
 
-      const argsLabel = document.createElement("div");
-      argsLabel.className = "disclosure-section-label";
-      argsLabel.textContent = "Arguments";
-      argsSection.appendChild(argsLabel);
-
-      const argsContent = document.createElement("pre");
-      argsContent.className = "disclosure-section-content streaming";
-      argsSection.appendChild(argsContent);
-
-      contentDiv.appendChild(argsSection);
+    // Cache element references on the card to avoid repeated querySelector
+    if (!card._cachedElements) {
+      card._cachedElements = {
+        argsPreview: card.element.querySelector(".disclosure-args-preview"),
+        chevron: card.element.querySelector(".disclosure-chevron"),
+        contentDiv: card.element.querySelector(".disclosure-content"),
+      };
     }
 
-    const argsContent = argsSection.querySelector(".disclosure-section-content");
-    if (argsContent) {
-      if (isDone) {
-        argsContent.classList.remove("streaming");
-        const parsedArgs = safeParse(bufferedArgs, bufferedArgs);
-        argsContent.textContent = typeof parsedArgs === "string" ? parsedArgs : JSON.stringify(parsedArgs, null, 2);
-        argumentsBuffer.delete(callId);
-      } else {
-        argsContent.textContent = `${bufferedArgs}...`;
+    const { argsPreview, chevron, contentDiv } = card._cachedElements;
+
+    // Update header args preview with streaming content
+    if (argsPreview) {
+      const primaryArg = extractPrimaryArg(bufferedArgs, card.rawName || card.name);
+      argsPreview.textContent = primaryArg || "";
+
+      // Fade in args and chevron when we have extractable content
+      if (primaryArg && !argsPreview.classList.contains("visible")) {
+        argsPreview.classList.add("visible");
+        if (chevron) chevron.classList.add("visible");
+      }
+    }
+
+    // Update expanded content if exists
+    if (contentDiv) {
+      // Cache argsSection reference
+      if (!card._cachedElements.argsSection) {
+        card._cachedElements.argsSection = contentDiv.querySelector(".disclosure-arguments");
+      }
+
+      let argsSection = card._cachedElements.argsSection;
+
+      if (!argsSection) {
+        argsSection = document.createElement("div");
+        argsSection.className = "disclosure-arguments";
+
+        const argsLabel = document.createElement("div");
+        argsLabel.className = "disclosure-section-label";
+        argsLabel.textContent = "Arguments";
+        argsSection.appendChild(argsLabel);
+
+        const argsContent = document.createElement("pre");
+        argsContent.className = "disclosure-section-content streaming";
+        argsSection.appendChild(argsContent);
+
+        contentDiv.appendChild(argsSection);
+        card._cachedElements.argsSection = argsSection;
+        card._cachedElements.argsContent = argsContent;
+      }
+
+      // Cache argsContent reference
+      if (!card._cachedElements.argsContent) {
+        card._cachedElements.argsContent = argsSection.querySelector(".disclosure-section-content");
+      }
+
+      const argsContent = card._cachedElements.argsContent;
+      if (argsContent) {
+        if (isDone) {
+          argsContent.classList.remove("streaming");
+          const parsedArgs = safeParse(bufferedArgs, bufferedArgs);
+          argsContent.textContent = typeof parsedArgs === "string" ? parsedArgs : JSON.stringify(parsedArgs, null, 2);
+          argumentsBuffer.delete(callId);
+          // Clear cached elements on completion
+          delete card._cachedElements;
+        } else {
+          argsContent.textContent = `${bufferedArgs}...`;
+        }
       }
     }
   }
+
+  pendingArgUpdates.clear();
 }
 
 /**

@@ -73,7 +73,7 @@ export class BoundedMap extends Map {
  * @property {number} totalCount - Total session count
  *
  * @typedef {Object} MessageState
- * @property {string|null} currentAssistant - Current assistant message ID
+ * @property {string|null} currentAssistantId - Current assistant message ID
  * @property {string} assistantBuffer - Buffer for streaming assistant messages
  * @property {boolean} isTyping - User typing indicator
  * @property {boolean} isStreaming - Assistant streaming indicator
@@ -144,7 +144,7 @@ export class AppState {
 
     // Message state
     this.message = {
-      currentAssistant: null,
+      currentAssistantId: null,
       assistantBuffer: "",
       isTyping: false, // User typing indicator
       isStreaming: false, // Assistant streaming indicator
@@ -369,7 +369,7 @@ export class AppState {
    * {
    *   isStreaming: boolean,
    *   assistantBuffer: string,
-   *   currentAssistant: HTMLElement | null,
+   *   currentAssistantId: string | null,
    *   interrupted: boolean,
    *   toolInProgress: boolean,
    *   functionCalls: Map (callId -> {name, arguments, status, result}),
@@ -392,7 +392,7 @@ export class AppState {
     return {
       isStreaming: false,
       assistantBuffer: "",
-      currentAssistant: null,
+      currentAssistantId: null,
       interrupted: false,
       toolInProgress: false,
       functionCalls: new Map(),

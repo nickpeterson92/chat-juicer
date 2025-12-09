@@ -33,7 +33,28 @@ vi.mock("@/ui/chat-ui.js", () => ({
   addMessage: vi.fn(),
   clearChat: vi.fn(),
   completeStreamingMessage: vi.fn(),
-  createStreamingAssistantMessage: vi.fn(() => document.createElement("div")),
+  createStreamingAssistantMessage: vi.fn(() => {
+    // Return structure matching new return signature + DOM expectations
+    const span = document.createElement("span");
+    span.className = "streaming-text";
+
+    // Parent wrapper needed for closest('.message') lookups
+    const wrapper = document.createElement("div");
+    wrapper.className = "message";
+    wrapper.dataset.messageId = "mock-msg-id";
+    wrapper.appendChild(span);
+
+    // Return object format as expected by updated code
+    return {
+      textSpan: span,
+      messageId: "mock-msg-id",
+    };
+  }),
+  createMessageElement: vi.fn((_container, text) => {
+    const node = document.createElement("div");
+    node.textContent = text;
+    return { messageDiv: node };
+  }),
   updateAssistantMessage: vi.fn(),
 }));
 
@@ -142,17 +163,18 @@ describe("ChatContainer", () => {
       const result = chatContainer.createStreamingMessage();
 
       expect(createStreamingAssistantMessage).toHaveBeenCalledWith(containerElement);
-      expect(chatContainer.currentStreamingMessage).toBe(result);
+      // Result is now an object { textSpan, messageId }
+      expect(chatContainer.currentStreamingMessage).toBe(result.textSpan);
     });
 
     it("should update streaming message", async () => {
       const { updateAssistantMessage } = await import("@/ui/chat-ui.js");
       const chatContainer = new ChatContainer(containerElement);
 
-      const streamingElement = chatContainer.createStreamingMessage();
+      const result = chatContainer.createStreamingMessage();
       chatContainer.updateStreamingMessage("New content");
 
-      expect(updateAssistantMessage).toHaveBeenCalledWith(containerElement, streamingElement, "New content");
+      expect(updateAssistantMessage).toHaveBeenCalledWith(containerElement, result.textSpan, "New content");
     });
 
     it("should complete streaming", async () => {
@@ -207,7 +229,7 @@ describe("ChatContainer", () => {
     });
 
     it("should set messages from history and render completed tool cards", async () => {
-      const { addMessage } = await import("@/ui/chat-ui.js");
+      const { createMessageElement } = await import("@/ui/chat-ui.js");
       const { createCompletedToolCard } = await import("@/ui/function-card-ui.js");
       const chatContainer = new ChatContainer(containerElement);
 
@@ -218,10 +240,10 @@ describe("ChatContainer", () => {
         { role: "tool_call", call_id: "123", status: "completed", result: "ok", success: true },
       ]);
 
-      expect(addMessage).toHaveBeenCalledWith(containerElement, "hello", "user");
-      expect(addMessage).toHaveBeenCalledWith(containerElement, "hi", "assistant", { partial: false });
+      expect(createMessageElement).toHaveBeenCalledWith(containerElement, "hello", "user");
+      expect(createMessageElement).toHaveBeenCalledWith(containerElement, "hi", "assistant", { partial: false });
       expect(createCompletedToolCard).toHaveBeenCalledWith(
-        containerElement,
+        expect.any(HTMLElement),
         expect.objectContaining({
           call_id: "123",
           arguments: "{a:1}",

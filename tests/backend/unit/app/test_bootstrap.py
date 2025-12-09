@@ -24,14 +24,12 @@ class TestInitializeApplication:
     @patch("app.bootstrap.set_tracing_disabled")
     @patch("app.bootstrap.patch_sdk_for_auto_tracking")
     @patch("app.bootstrap.initialize_all_mcp_servers", new_callable=AsyncMock)
-    @patch("app.bootstrap.create_agent")
     @patch("app.bootstrap.FullHistoryStore")
     @patch("app.bootstrap.SessionManager")
     async def test_initialize_application_openai(
         self,
         mock_session_manager: Mock,
         mock_full_history: Mock,
-        mock_create_agent: Mock,
         mock_init_mcp: AsyncMock,
         mock_patch_sdk: Mock,
         mock_disable_tracing: Mock,
@@ -54,7 +52,6 @@ class TestInitializeApplication:
         mock_create_client.return_value = Mock()
         mock_patch_sdk.return_value = True
         mock_init_mcp.return_value = {"test_server": Mock()}
-        mock_create_agent.return_value = Mock()
         mock_full_history_instance = Mock()
         mock_full_history.return_value = mock_full_history_instance
         mock_session_manager_instance = Mock()
@@ -84,14 +81,12 @@ class TestInitializeApplication:
     @patch("app.bootstrap.set_tracing_disabled")
     @patch("app.bootstrap.patch_sdk_for_auto_tracking")
     @patch("app.bootstrap.initialize_all_mcp_servers", new_callable=AsyncMock)
-    @patch("app.bootstrap.create_agent")
     @patch("app.bootstrap.FullHistoryStore")
     @patch("app.bootstrap.SessionManager")
     async def test_initialize_application_azure(
         self,
         mock_session_manager: Mock,
         mock_full_history: Mock,
-        mock_create_agent: Mock,
         mock_init_mcp: AsyncMock,
         mock_patch_sdk: Mock,
         mock_disable_tracing: Mock,
@@ -115,7 +110,6 @@ class TestInitializeApplication:
         mock_create_client.return_value = Mock()
         mock_patch_sdk.return_value = True
         mock_init_mcp.return_value = {}
-        mock_create_agent.return_value = Mock()
         mock_full_history.return_value = Mock()
         mock_session_manager_instance = Mock()
         mock_session_manager_instance.sync_metadata_with_database.return_value = 0
@@ -154,14 +148,12 @@ class TestInitializeApplication:
     @patch("app.bootstrap.set_tracing_disabled")
     @patch("app.bootstrap.patch_sdk_for_auto_tracking")
     @patch("app.bootstrap.initialize_all_mcp_servers", new_callable=AsyncMock)
-    @patch("app.bootstrap.create_agent")
     @patch("app.bootstrap.FullHistoryStore")
     @patch("app.bootstrap.SessionManager")
     async def test_initialize_with_session_repair(
         self,
         mock_session_manager: Mock,
         mock_full_history: Mock,
-        mock_create_agent: Mock,
         mock_init_mcp: AsyncMock,
         mock_patch_sdk: Mock,
         mock_disable_tracing: Mock,
@@ -183,7 +175,6 @@ class TestInitializeApplication:
         mock_create_client.return_value = Mock()
         mock_patch_sdk.return_value = False  # SDK tracking not available
         mock_init_mcp.return_value = {}
-        mock_create_agent.return_value = Mock()
         mock_full_history.return_value = Mock()
         mock_session_manager_instance = Mock()
         mock_session_manager_instance.sync_metadata_with_database.return_value = 0

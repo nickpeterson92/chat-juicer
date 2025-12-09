@@ -243,7 +243,7 @@ describe("Session List Handlers", () => {
     const { item } = createSessionItem("next");
 
     item.dispatchEvent(new Event("click", { bubbles: true }));
-    await Promise.resolve();
+    await vi.waitFor(() => expect(window.components.chatContainer.setMessages).toHaveBeenCalled());
 
     expect(sessionService.switchSession).toHaveBeenCalledWith("next", expect.any(Object));
     // setMessages handles message rendering (including tool cards from Layer 2)

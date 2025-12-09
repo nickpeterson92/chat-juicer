@@ -178,7 +178,7 @@ describe("AppState", () => {
 
     it("should initialize message state", () => {
       expect(appState.message).toEqual({
-        currentAssistant: null,
+        currentAssistantId: null,
         assistantBuffer: "",
         isTyping: false,
         isStreaming: false,
@@ -229,9 +229,9 @@ describe("AppState", () => {
     });
 
     it("should set deeply nested path", () => {
-      appState.setState("message.currentAssistant", "msg-123");
+      appState.setState("message.currentAssistantId", "msg-123");
 
-      expect(appState.message.currentAssistant).toBe("msg-123");
+      expect(appState.message.currentAssistantId).toBe("msg-123");
     });
 
     it("should notify listeners on state change", () => {
@@ -247,10 +247,10 @@ describe("AppState", () => {
       const callback = vi.fn();
       appState.subscribe("*", callback);
 
-      appState.setState("message.currentAssistant", "msg-123");
+      appState.setState("message.currentAssistantId", "msg-123");
 
       expect(callback).toHaveBeenCalledWith({
-        path: "message.currentAssistant",
+        path: "message.currentAssistantId",
         newValue: "msg-123",
         oldValue: null,
       });
@@ -445,7 +445,7 @@ describe("AppState", () => {
       appState.subscribe("*", wildcardCallback);
 
       appState.setState("message.assistantBuffer", "Hello");
-      appState.setState("message.currentAssistant", "msg-456");
+      appState.setState("message.currentAssistantId", "msg-456");
 
       expect(messageCallback).toHaveBeenCalledTimes(1);
       expect(wildcardCallback).toHaveBeenCalledTimes(2);

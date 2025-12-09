@@ -53,7 +53,8 @@ describe("IPCAdapter", () => {
     it("should send message", async () => {
       await adapter.sendMessage("Hello World");
       // Messages are normalized to array format for batch support
-      expect(mockAPI.sendUserInput).toHaveBeenCalledWith(["Hello World"]);
+      // Session ID is forwarded as second argument (null when not provided)
+      expect(mockAPI.sendUserInput).toHaveBeenCalledWith(["Hello World"], null);
       expect(mockAPI.sendUserInput).toHaveBeenCalledTimes(1);
     });
 
