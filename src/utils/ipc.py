@@ -51,9 +51,10 @@ class IPCManager:
             message: Message dictionary to send
             session_id: Optional session identifier for routing (Phase 1: Concurrent Sessions)
         """
+        payload = message.copy()
         if session_id:
-            message["session_id"] = session_id
-        write_message(message)
+            payload["session_id"] = session_id
+        write_message(payload)
 
     @staticmethod
     def send_raw(message: str, session_id: str | None = None) -> None:

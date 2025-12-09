@@ -172,13 +172,14 @@ describe("MessageQueueService", () => {
         timestamp: Date.now(),
         status: "queued",
       };
+      const sessionId = item.sessionId;
       appState.setState("python.status", "busy_streaming");
       appState.setState("queue.items", [item]);
 
       const result = await queueService.process();
 
       expect(result).toBe(true);
-      expect(mockMessageService.sendMessage).toHaveBeenCalledWith(["Hello"], null);
+      expect(mockMessageService.sendMessage).toHaveBeenCalledWith(["Hello"], sessionId);
     });
 
     it("should batch multiple messages including those with files", async () => {
@@ -200,11 +201,12 @@ describe("MessageQueueService", () => {
           status: "queued",
         },
       ];
+      const sessionId = items[0].sessionId;
       appState.setState("queue.items", items);
 
       await queueService.process();
 
-      expect(mockMessageService.sendMessage).toHaveBeenCalledWith(["Hello", "World"], null);
+      expect(mockMessageService.sendMessage).toHaveBeenCalledWith(["Hello", "World"], sessionId);
     });
 
     it("should emit processing event and update state", async () => {

@@ -185,14 +185,6 @@ export function registerMessageHandlers(context) {
       const isFirstToken = appState.message.assistantBuffer === "";
       const newBuffer = appState.message.assistantBuffer + message.content;
 
-      // DEBUG: Log buffer state when receiving tokens after reconstruction
-      if (isFirstToken) {
-        console.log(
-          "[message-handlers] assistant_delta FIRST TOKEN, buffer was:",
-          appState.message.assistantBuffer.length
-        );
-      }
-
       appState.setState("message.assistantBuffer", newBuffer);
       // Sync StreamManager buffer with active session buffer
       if (sessionId) {
@@ -742,20 +734,9 @@ export function registerMessageHandlers(context) {
     const eventData = eventDataWrapper.data || eventDataWrapper;
     const { sessionId, buffer, tools, isStreaming } = eventData;
 
-    console.log("[message-handlers] stream:reconstruct received:", {
-      sessionId,
-      bufferLength: buffer?.length || 0,
-      bufferPreview: buffer?.substring(0, 100) || "(empty)",
-      isStreaming,
-    });
-
     // Only reconstruct if this is now the active session
     const currentSessionId = appState.getState("session.current");
     if (sessionId !== currentSessionId) {
-      console.log("[message-handlers] stream:reconstruct SKIPPED - not active session", {
-        sessionId,
-        currentSessionId,
-      });
       return;
     }
 
@@ -770,12 +751,6 @@ export function registerMessageHandlers(context) {
       // If arrivedDuringSwitch is non-empty but different from cached, we might need to reconcile
       // But typically we trust StreamManager as SSOT for session history
       const mergedBuffer = cached || buffer || arrivedDuringSwitch;
-
-      console.log("[message-handlers] stream:reconstruct MERGE buffers:", {
-        fromStreamManager: cached.length,
-        fromEvent: buffer?.length || 0,
-        merged: mergedBuffer.length,
-      });
 
       // Create streaming message element
       const chatContainerComponent = getChatContainerComponent();
@@ -802,12 +777,9 @@ export function registerMessageHandlers(context) {
         }
       }
 
-      console.log("[message-handlers] stream:reconstruct element created ID:", messageId);
-
       // Set up appState so live updates continue to work
       appState.setState("message.currentAssistantId", messageId);
       appState.setState("message.assistantBuffer", mergedBuffer);
-      console.log("[message-handlers] stream:reconstruct SET buffer to appState:", mergedBuffer.length);
 
       // If still streaming, mark UI as streaming
       if (isStreaming) {
