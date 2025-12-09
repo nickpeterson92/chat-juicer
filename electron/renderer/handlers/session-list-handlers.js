@@ -257,6 +257,8 @@ async function handleSwitch(sessionId, sessionService, streamManager, updateSess
   }
 
   try {
+    const wasOnWelcomePage = document.body.classList.contains("view-welcome");
+
     const result = await sessionService.switchSession(sessionId, streamManager);
 
     if (result.success) {
@@ -271,6 +273,12 @@ async function handleSwitch(sessionId, sessionService, streamManager, updateSess
         import("../utils/chat-model-updater.js").then(({ updateChatModelSelector }) => {
           updateChatModelSelector(result.session);
         });
+      }
+
+      // If coming from welcome, switch the view BEFORE heavy rendering to match session-to-session flow
+      if (wasOnWelcomePage) {
+        const { showChatView } = await import("../managers/view-manager.js");
+        await showChatView(elements, appState);
       }
 
       // Clear current chat UI
@@ -315,12 +323,6 @@ async function handleSwitch(sessionId, sessionService, streamManager, updateSess
       }
 
       updateSessionsList();
-
-      // Switch to chat view if on welcome page
-      if (document.body.classList.contains("view-welcome")) {
-        const { showChatView } = await import("../managers/view-manager.js");
-        await showChatView(elements, appState);
-      }
 
       // Update FilePanel
       if (window.components?.filePanel) {

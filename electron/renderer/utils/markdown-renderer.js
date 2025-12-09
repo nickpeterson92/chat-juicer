@@ -230,6 +230,8 @@ function scheduleMermaidRender(diagram) {
     renderDiagramWhenIdle(diagram)
       .catch(() => {})
       .finally(() => {
+        // Always clear in-progress flag so future renders can proceed if needed
+        renderingInProgress.delete(diagram.id);
         activeMermaidRenders = Math.max(0, activeMermaidRenders - 1);
         const next = mermaidRenderQueue.shift();
         if (next) {
@@ -772,19 +774,14 @@ async function processBatchedMermaidDiagrams() {
     }
   }
 
-  // Phase 1: Render visible diagrams with yields between each
+  // Visible diagrams: queue via concurrency-controlled scheduler
   for (const diagram of visibleDiagrams) {
     if (renderingInProgress.has(diagram.id)) continue;
     renderingInProgress.add(diagram.id);
-
-    await renderDiagramWhenIdle(diagram);
-    renderingInProgress.delete(diagram.id);
-
-    // Explicit yield to let browser paint and handle user input
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    scheduleMermaidRender(diagram);
   }
 
-  // Phase 2: Set up lazy loading for off-screen diagrams
+  // Off-screen diagrams: observe only; render when in view
   for (const wrapper of deferredWrappers) {
     observer.observe(wrapper);
   }

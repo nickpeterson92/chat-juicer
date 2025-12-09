@@ -655,8 +655,12 @@ export function registerMessageHandlers(context) {
 
     // Transition to chat view if from first message
     if (!isFromFileUpload && appState.ui && appState.ui.currentView === "welcome") {
+      // Align with session-to-session flow: set current session before view switch
+      appState.setState("session.current", sessionId);
       appState.setState("ui.currentView", "chat");
       appState.setState("ui.bodyViewClass", "view-chat");
+      // Trigger reconstruction for this session (in-flight streams/tools)
+      globalEventBus.emit("stream:reconstruct", { sessionId, buffer: "", tools: [], isStreaming: false });
     } else if (isFromFileUpload) {
       appState.setState("ui.welcomeFilesSectionVisible", true);
     }
