@@ -288,9 +288,6 @@ async def ensure_session_exists(app_state: AppState, session_id: str | None = No
 
     app_state.active_sessions[session_meta.session_id] = session_ctx
 
-    # Update current session pointer for backward compatibility
-    app_state._current_session_id = session_meta.session_id
-
     # Return session context and flag indicating if this is a newly created session
     # Session creation event will be sent AFTER first message completes
     return session_ctx, is_new

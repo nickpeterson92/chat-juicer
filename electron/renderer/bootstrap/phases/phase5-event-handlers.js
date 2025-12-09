@@ -474,6 +474,7 @@ export async function initializeEventHandlers({
         fileService: services.fileService,
         functionCallService: services.functionCallService,
         sessionService: services.sessionService,
+        streamManager: services.streamManager,
       },
     });
 

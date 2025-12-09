@@ -15,6 +15,13 @@ import { scheduleScroll } from "../utils/scroll-utils.js";
 // Message cache for O(1) message management (replaces O(n) querySelectorAll)
 const messageCache = new Map();
 
+// RAF batching state for streaming updates
+// Coalesces rapid token updates into single render per frame (~60fps)
+let pendingRenderContent = null;
+let pendingRenderElement = null;
+let pendingRenderContainer = null;
+let pendingRenderRAF = null;
+
 // Chat UI component for lifecycle management
 const chatUIComponent = {};
 
@@ -117,8 +124,9 @@ export function addMessage(chatContainer, content, type = "assistant", options =
  * @param {string} content - New content to display
  */
 /**
- * Update assistant message with new streaming content - IMMEDIATE RENDERING
- * Renders tokens immediately as they arrive for smooth streaming UX
+ * Update assistant message with new streaming content - RAF BATCHED RENDERING
+ * Uses requestAnimationFrame to coalesce rapid token updates (~60fps batching)
+ * This prevents UI thread blocking during heavy streaming and keeps session switching responsive
  * @param {HTMLElement} chatContainer - The chat container element
  * @param {HTMLElement} currentAssistantElement - The current assistant text element
  * @param {string} content - New content to display
@@ -128,22 +136,57 @@ export function updateAssistantMessage(chatContainer, currentAssistantElement, c
     return;
   }
 
-  // Render immediately - no debouncing for smooth token-by-token display
-  currentAssistantElement.innerHTML = renderMarkdown(content);
+  // Store latest content - will be rendered on next animation frame
+  pendingRenderContent = content;
+  pendingRenderElement = currentAssistantElement;
+  pendingRenderContainer = chatContainer;
 
-  // DO NOT process Mermaid during streaming - it causes race conditions
-  // Mermaid will be processed after streaming completes in handleAssistantEnd
+  // Schedule RAF render if not already pending
+  if (!pendingRenderRAF) {
+    pendingRenderRAF = requestAnimationFrame(() => {
+      // Clear RAF handle first so new updates can schedule
+      pendingRenderRAF = null;
 
-  // Smart scroll - content growth detection handles large chunks automatically
-  scheduleScroll(chatContainer);
+      // Render the latest content (skips intermediate states)
+      if (pendingRenderElement && pendingRenderContent !== null) {
+        pendingRenderElement.innerHTML = renderMarkdown(pendingRenderContent);
+
+        // DO NOT process Mermaid during streaming - it causes race conditions
+        // Mermaid will be processed after streaming completes in handleAssistantEnd
+
+        // Smart scroll - content growth detection handles large chunks automatically
+        scheduleScroll(pendingRenderContainer);
+      }
+    });
+  }
 }
 
 /**
- * No-op function for backward compatibility
- * Previously used to flush pending debounced renders, no longer needed with immediate rendering
+ * Cancel any pending RAF render and FLUSH pending content
+ * CRITICAL: Renders any pending content immediately before clearing state
+ * Otherwise the final streaming content gets lost when stream ends
+ * Called on stream completion or session switch
  */
 export function cancelPendingRender() {
-  // No pending renders with immediate rendering - kept for backward compatibility
+  if (pendingRenderRAF) {
+    cancelAnimationFrame(pendingRenderRAF);
+    pendingRenderRAF = null;
+  }
+
+  // CRITICAL: Render any pending content immediately before clearing
+  // This ensures the final tokens aren't lost when streaming ends
+  if (pendingRenderContent !== null && pendingRenderElement) {
+    pendingRenderElement.innerHTML = renderMarkdown(pendingRenderContent);
+
+    if (pendingRenderContainer) {
+      scheduleScroll(pendingRenderContainer);
+    }
+  }
+
+  // Clear state after flushing
+  pendingRenderContent = null;
+  pendingRenderElement = null;
+  pendingRenderContainer = null;
 }
 
 /**

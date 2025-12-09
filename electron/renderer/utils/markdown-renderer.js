@@ -501,8 +501,10 @@ export function renderMarkdown(markdown, isComplete = false) {
       "rowspan",
       // Details/summary attributes
       "open",
-      // KaTeX attributes
+      // Accessibility attributes (KaTeX, footnotes, etc.)
       "aria-hidden",
+      "aria-label",
+      "aria-describedby",
       "focusable",
       // Comprehensive SVG attributes for Mermaid
       "viewBox",

@@ -69,8 +69,23 @@ export class StreamManager {
    * @returns {string} Current buffer content
    */
   getBuffer(sessionId) {
+    if (!this.appState.sessionStreams.has(sessionId)) {
+      return "";
+    }
     const state = this.appState.getSessionStreamState(sessionId);
     return state.assistantBuffer;
+  }
+
+  /**
+   * Set (replace) the entire buffer content for a session.
+   * Used when switching away from active session to sync appState buffer to streamManager.
+   *
+   * @param {string} sessionId - Session ID
+   * @param {string} content - Content to set as the buffer
+   */
+  setBuffer(sessionId, content) {
+    const state = this.appState.getSessionStreamState(sessionId);
+    state.assistantBuffer = content;
   }
 
   /**
@@ -83,7 +98,8 @@ export class StreamManager {
     if (!this.appState.sessionStreams.has(sessionId)) {
       return false;
     }
-    return this.appState.getSessionStreamState(sessionId).isStreaming;
+    const state = this.appState.getSessionStreamState(sessionId);
+    return state.isStreaming;
   }
 
   /**

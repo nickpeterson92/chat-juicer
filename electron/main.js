@@ -330,10 +330,11 @@ app.whenReady().then(() => {
   });
 
   // IPC handler for user input (Binary V2)
-  // Accepts array of message strings from preload.js (unified array format)
-  ipcMain.on("user-input", (event, messageArray) => {
-    logger.logIPC("receive", "user-input", messageArray, { fromRenderer: true });
-    logger.logUserInteraction("chat-input", { messageCount: messageArray.length });
+  // Accepts payload with messages array and optional session_id from preload.js
+  ipcMain.on("user-input", (event, payload) => {
+    const { messages: messageArray, session_id } = payload;
+    logger.logIPC("receive", "user-input", messageArray, { fromRenderer: true, sessionId: session_id });
+    logger.logUserInteraction("chat-input", { messageCount: messageArray.length, sessionId: session_id });
 
     if (pythonProcess && !pythonProcess.killed) {
       try {
@@ -342,11 +343,13 @@ app.whenReady().then(() => {
         const binaryMessage = IPCProtocolV2.encode({
           type: "message",
           messages: messages, // Array format: [{content: "text1"}, {content: "text2"}]
+          session_id: session_id, // Include session_id for routing
         });
         pythonProcess.stdin.write(binaryMessage);
         logger.debug("Sent user messages as V2 binary", {
           messageCount: messages.length,
           binarySize: binaryMessage.length,
+          sessionId: session_id,
         });
       } catch (error) {
         logger.error("Failed to encode user message", { error: error.message });
@@ -669,10 +672,11 @@ app.whenReady().then(() => {
   });
 
   // IPC handler for stream interruption
-  ipcMain.handle("interrupt-stream", () => {
+  ipcMain.handle("interrupt-stream", (event, payload) => {
+    const { session_id } = payload || {};
     if (pythonProcess?.stdin && !isShuttingDown) {
-      logger.info("Sending interrupt signal to Python");
-      const msg = { type: "interrupt" };
+      logger.info("Sending interrupt signal to Python", { sessionId: session_id });
+      const msg = { type: "interrupt", session_id: session_id };
       const binaryMessage = IPCProtocolV2.encode(msg);
       pythonProcess.stdin.write(binaryMessage);
       return { success: true };

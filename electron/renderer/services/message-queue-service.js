@@ -51,18 +51,20 @@ export class MessageQueueService {
    * Add message to queue and attempt to process
    * @param {string} text - Message text
    * @param {Array} files - File attachments (optional)
+   * @param {string|null} sessionId - Session ID for routing (Phase 3: Concurrent Sessions)
    * @returns {string} Queue item ID
    */
-  add(text, files = []) {
+  add(text, files = [], sessionId = null) {
     if (!text || typeof text !== "string" || !text.trim()) {
       throw new Error("Message text cannot be empty");
     }
 
-    // Create queue item
+    // Create queue item with sessionId for concurrent session support
     const item = {
       id: crypto.randomUUID(),
       text: text.trim(),
       files: files || [],
+      sessionId: sessionId, // Track which session this message belongs to
       timestamp: Date.now(),
       status: "queued",
     };
@@ -85,17 +87,13 @@ export class MessageQueueService {
   }
 
   /**
-   * Process all queued messages as a batch if system is idle
+   * Process all queued messages as a batch
    * All queued messages are sent together and receive a single agent response.
+   * Note: With concurrent sessions, we don't check global python.status.
+   * The backend enforces MAX_CONCURRENT_STREAMS and rejects if limit exceeded.
    * @returns {Promise<boolean>} True if messages were sent
    */
   async process() {
-    // Check if backend is idle
-    const pythonStatus = this.appState.getState("python.status");
-    if (pythonStatus !== "idle") {
-      return false;
-    }
-
     // Get ALL queued messages (not just the next one)
     const items = this.appState.getState("queue.items") || [];
     const queuedItems = items.filter((item) => item.status === "queued");
@@ -122,9 +120,11 @@ export class MessageQueueService {
       // Extract text from all queued items and send as batch
       const messageTexts = queuedItems.map((item) => item.text);
 
-      // Send all messages via MessageService (accepts string[] now)
-      // Backend processes all messages and returns a single response
-      await this.messageService.sendMessage(messageTexts);
+      // Get sessionId from first queued item (all should be for same session)
+      const sessionId = queuedItems[0]?.sessionId || null;
+
+      // Send all messages via MessageService with sessionId for proper routing
+      await this.messageService.sendMessage(messageTexts, sessionId);
 
       // Remove ALL processed items from queue (they're now "in flight")
       const remainingItems = updatedItems.filter((item) => !queuedIds.has(item.id));

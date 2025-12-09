@@ -4,10 +4,10 @@ const { contextBridge, ipcRenderer } = require("electron");
 // Expose protected methods that allow the renderer process to communicate with the main process
 contextBridge.exposeInMainWorld("electronAPI", {
   // Send user input to Python bot (accepts single string or array of strings)
-  sendUserInput: (messages) => {
+  sendUserInput: (messages, sessionId = null) => {
     // Normalize to array format for unified backend handling
     const messageArray = Array.isArray(messages) ? messages : [messages];
-    ipcRenderer.send("user-input", messageArray);
+    ipcRenderer.send("user-input", { messages: messageArray, session_id: sessionId });
   },
 
   // Request bot restart
@@ -76,7 +76,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   // Stream interruption
-  interruptStream: () => ipcRenderer.invoke("interrupt-stream"),
+  interruptStream: (sessionId = null) => ipcRenderer.invoke("interrupt-stream", { session_id: sessionId }),
 
   // Window controls (for custom titlebar on Windows/Linux)
   windowMinimize: () => {

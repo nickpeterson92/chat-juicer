@@ -102,6 +102,47 @@ describe("Message Handlers V2 - Phase 3 State Management", () => {
     registerMessageHandlers(context);
   });
 
+  describe("Active session detection", () => {
+    it("should not treat background session messages as active when no current session", () => {
+      globalEventBus.emit("message:assistant_start", { session_id: "background" });
+
+      expect(appState.getState("python.status")).toBe("idle");
+      expect(appState.getState("message.isStreaming")).toBe(false);
+    });
+
+    it("should drop background buffering when no session can be resolved", () => {
+      globalEventBus.emit("message:assistant_delta", { content: "hi" });
+
+      expect(services.streamManager.appendToBuffer).not.toHaveBeenCalled();
+    });
+
+    it("should not buffer function events when no session can be resolved", () => {
+      globalEventBus.emit("message:function_detected", { call_id: "c1", name: "tool" });
+
+      expect(services.streamManager.bufferToolEvent).not.toHaveBeenCalled();
+    });
+
+    it("should treat message as active when session_id matches current session", () => {
+      appState.setState("session.current", "active-session");
+
+      globalEventBus.emit("message:assistant_start", { session_id: "active-session" });
+
+      expect(appState.getState("python.status")).toBe("busy_streaming");
+      expect(appState.getState("message.isStreaming")).toBe(true);
+    });
+
+    it("should treat message without session_id as active only when current session exists", () => {
+      // No current session yet
+      globalEventBus.emit("message:assistant_start", {});
+      expect(appState.getState("python.status")).toBe("idle");
+
+      // Set current session and retry
+      appState.setState("session.current", "active-session");
+      globalEventBus.emit("message:assistant_start", {});
+      expect(appState.getState("python.status")).toBe("busy_streaming");
+    });
+  });
+
   describe("Phase 3: AppState Integration", () => {
     it("should use AppState for aiThinkingActive instead of direct DOM manipulation", () => {
       // Subscribe to state changes

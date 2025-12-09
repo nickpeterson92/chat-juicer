@@ -293,8 +293,81 @@ async def main() -> None:
                                 write_message({"type": "assistant_end", "session_id": session_ctx.session.session_id})
                                 logger.info("assistant_end sent (interrupt handler)")
                                 break
+                            elif next_type == "session":
+                                # Session commands can be processed during streaming (concurrent sessions)
+                                # They don't interfere with the active stream
+                                request_id = next_message.get("request_id") or f"session_{uuid.uuid4().hex[:8]}"
+                                try:
+                                    command = next_message.get("command")
+                                    params = next_message.get("params", {})
+                                    logger.info(f"Processing session command during streaming: {command}")
+                                    result = await handle_session_command_wrapper(app_state, command, params)
+                                    write_message(
+                                        {"type": "session_response", "data": result, "request_id": request_id}
+                                    )
+                                except Exception as e:
+                                    logger.error(f"Error handling session command during streaming: {e}")
+                                    write_message(
+                                        {
+                                            "type": "session_response",
+                                            "data": {"error": str(e)},
+                                            "request_id": request_id,
+                                        }
+                                    )
+                                # Start a new read task
+                                read_future = loop.run_in_executor(None, read_message)
+                                app_state.pending_read_task = asyncio.ensure_future(read_future)
+                            elif next_type == "message":
+                                # Check if message is for a DIFFERENT session - allow concurrent
+                                next_session_id = next_message.get("session_id")
+                                current_streaming_session_id = session_ctx.session.session_id
+
+                                if next_session_id and next_session_id != current_streaming_session_id:
+                                    # Different session - check concurrent limit
+                                    active_count = get_active_stream_count(app_state)
+                                    if active_count >= MAX_CONCURRENT_STREAMS:
+                                        logger.warning(
+                                            f"Max concurrent streams ({MAX_CONCURRENT_STREAMS}) reached, queuing"
+                                        )
+                                        queued_message = next_message
+                                    else:
+                                        # Start concurrent stream for different session
+                                        logger.info(f"Starting concurrent stream for session {next_session_id}")
+                                        concurrent_messages = next_message.get("messages", [])
+                                        if not concurrent_messages and next_message.get("content"):
+                                            concurrent_messages = [{"content": next_message.get("content")}]
+
+                                        # Validate messages
+                                        validated_concurrent = []
+                                        for msg in concurrent_messages:
+                                            try:
+                                                content = msg.get("content", "") if isinstance(msg, dict) else str(msg)
+                                                validated_input = UserInput(content=content)
+                                                validated_concurrent.append(validated_input.content)
+                                            except ValueError:
+                                                continue
+
+                                        if validated_concurrent:
+                                            # Get or create session context for concurrent session
+                                            concurrent_ctx, is_new = await ensure_session_exists(
+                                                app_state, next_session_id
+                                            )
+                                            # Start concurrent task
+                                            concurrent_ctx.stream_task = asyncio.create_task(
+                                                process_messages(app_state, concurrent_ctx, validated_concurrent)
+                                            )
+                                            logger.info(f"Concurrent stream started for {next_session_id}")
+                                            # Note: session_created event will be sent when the concurrent
+                                            # stream completes (handled by process_messages)
+                                else:
+                                    # Same session - queue for after current stream completes
+                                    logger.info("Queuing message for same session during streaming")
+                                    queued_message = next_message
+                                # Start a new read task
+                                read_future = loop.run_in_executor(None, read_message)
+                                app_state.pending_read_task = asyncio.ensure_future(read_future)
                             else:
-                                # Non-interrupt message during streaming - queue for after stream completes
+                                # Other message types during streaming - queue for after stream completes
                                 logger.info(f"Queuing {next_type} message received during streaming")
                                 queued_message = next_message
                                 # Start a new read task for potential interrupt

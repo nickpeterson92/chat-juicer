@@ -477,11 +477,29 @@ export class ChatContainer {
 
   /**
    * Extract text content from various SDK message formats
-   * Handles: string, array [{type: "text", text: "..."}], object {text: "..."}
+   * Handles: string, JSON string, array [{type: "text", text: "..."}], object {text: "..."}
    * @private
    */
   _extractTextContent(content) {
     if (typeof content === "string") {
+      // Check if string is JSON that needs parsing (matches main branch logic)
+      if (content.startsWith("[") || content.startsWith("{")) {
+        try {
+          const parsed = JSON.parse(content);
+          if (Array.isArray(parsed)) {
+            // SDK format: [{type: "text", text: "..."}, {type: "output_text", text: "..."}]
+            return parsed
+              .filter((part) => part && (part.type === "text" || part.type === "output_text"))
+              .map((part) => part.text)
+              .join("\n");
+          } else if (parsed.text) {
+            return parsed.text;
+          }
+          // Parsed but no text field - fall through to return original
+        } catch (_e) {
+          // Not valid JSON, use as-is
+        }
+      }
       return content;
     }
 

@@ -1639,10 +1639,13 @@
     display: none;
   }
 
-  /* Hide paragraphs that only contain whitespace/br */
-  .message-content p:has(> br:only-child) {
+  /* DISABLED: This rule was hiding legitimate content like "Hey<br>World"
+   * The :has(> br:only-child) selector should only match <p><br></p> but
+   * may have browser quirks. Commenting out to fix rendering issues.
+   */
+  /* .message-content p:has(> br:only-child) {
     display: none;
-  }
+  } */
 
   /* Hide standalone br tags between paragraph and code */
   .message-content p + br {
@@ -1988,11 +1991,14 @@
     margin-bottom: 0.25em !important;
   }
 
-  /* Remove any extra spacing from br tags in li */
-  .message-content li > br,
+  /* DISABLED: This was hiding intentional line breaks in list items
+   * e.g., "- Line one  \n  Line two" produces <li>Line one<br>Line two</li>
+   * and the br was being hidden, merging the lines together.
+   */
+  /* .message-content li > br,
   .prose li > br {
     display: none;
-  }
+  } */
 
   .message-content p + pre {
     margin-top: 0.15em;
@@ -2064,10 +2070,10 @@ body.view-chat {
   margin-bottom: 0.2em !important;
 }
 
-/* Hide br tags that create gaps */
-.prose li > br {
+/* DISABLED: Same issue as above - hides intentional line breaks in list items */
+/* .prose li > br {
   display: none;
-}
+} */
 
 /* Override prose paragraph margins before code */
 .prose p + pre,

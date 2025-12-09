@@ -278,10 +278,15 @@ async function handleSwitch(sessionId, sessionService, streamManager, updateSess
         window.components.chatContainer.clear();
       }
 
-      // Reset app state
+      // Reset app state for the new session
       if (appState) {
         appState.setState("message.currentAssistant", null);
         appState.setState("message.assistantBuffer", "");
+        // Reset streaming state - will be set correctly by reconstruction if target session is streaming
+        appState.setState("message.isStreaming", false);
+        appState.setState("python.status", "idle");
+        appState.setState("ui.aiThinkingActive", false);
+        appState.setState("ui.loadingLampVisible", false);
         if (appState.functions) {
           appState.functions.activeCalls?.clear();
           appState.functions.argumentsBuffer?.clear();
@@ -294,13 +299,19 @@ async function handleSwitch(sessionId, sessionService, streamManager, updateSess
         window.components.chatContainer.setMessages(messages);
       }
 
-      // Load remaining messages in background if there are more
+      // Load remaining messages before stream reconstruction to preserve ordering
       if (result.hasMore && result.loadedCount > 0) {
         console.log("[session] Loading remaining messages in background...", {
           loadedCount: result.loadedCount,
           messageCount: result.messageCount,
         });
-        loadRemainingMessages(sessionId, result.loadedCount, result.messageCount, sessionService);
+        await loadRemainingMessages(sessionId, result.loadedCount, result.messageCount, sessionService);
+      }
+
+      // AFTER history is loaded, reconstruct streaming state if session is actively streaming
+      // This must happen AFTER clear() and setMessages() to avoid being wiped
+      if (streamManager?.isStreaming(sessionId)) {
+        sessionService.reconstructStreamState(sessionId, streamManager);
       }
 
       updateSessionsList();

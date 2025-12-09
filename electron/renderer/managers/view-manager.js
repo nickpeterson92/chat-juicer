@@ -571,8 +571,9 @@ function attachWelcomePageListeners(elements, appState) {
       appState.setState("message.currentAssistant", null);
       appState.setState("message.assistantBuffer", "");
 
-      // Send to main process
-      window.electronAPI.sendUserInput(message);
+      // Send to main process WITH session_id to prevent routing to wrong session
+      // This is critical when another session is actively streaming
+      window.electronAPI.sendUserInput(message, sessionId);
 
       // Session list will be updated automatically via session-created event
     } catch (error) {

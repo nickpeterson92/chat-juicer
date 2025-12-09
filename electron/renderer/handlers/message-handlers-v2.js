@@ -20,14 +20,31 @@ import {
  * @returns {boolean} True if message is for active session
  */
 function isActiveSessionMessage(message, appState) {
-  // Backward compatible: messages without session_id are for active session
+  // Check if message session_id matches current active session
+  const currentSessionId = appState.getState("session.current");
+
+  // No active session yet (startup or mid-switch) — do not treat as active
+  if (!currentSessionId) {
+    return false;
+  }
+
+  // Backward compatible: messages without session_id are for the current session when it exists
   if (!message.session_id) {
     return true;
   }
 
-  // Check if message session_id matches current active session
-  const currentSessionId = appState.getState("session.current");
   return message.session_id === currentSessionId;
+}
+
+/**
+ * Resolve session ID for incoming message, returning null when unavailable.
+ * Avoids buffering under undefined which would merge multiple sessions.
+ * @param {Object} message
+ * @param {Object} appState
+ * @returns {string|null}
+ */
+function resolveSessionId(message, appState) {
+  return message.session_id || appState.getState("session.current") || null;
 }
 
 import {
@@ -84,13 +101,20 @@ export function registerMessageHandlers(context) {
   // ===== Assistant Message Handlers =====
 
   createHandler("assistant_start", (message) => {
-    const sessionId = message.session_id || appState.getState("session.current");
+    const sessionId = resolveSessionId(message, appState);
+    const isActive = isActiveSessionMessage(message, appState);
+
+    // Drop messages that cannot be associated with a session to avoid undefined buffer keys
+    if (!sessionId) {
+      console.warn("[MessageHandlersV2] assistant_start without session_id and no active session");
+      return;
+    }
 
     // Start stream tracking for this session
     streamManager.startStream(sessionId);
 
     // Only update UI for active session
-    if (isActiveSessionMessage(message, appState)) {
+    if (isActive) {
       // Track Python status - streaming started
       appState.setState("python.status", "busy_streaming");
       appState.setState("message.isStreaming", true);
@@ -115,26 +139,50 @@ export function registerMessageHandlers(context) {
   });
 
   createHandler("assistant_delta", (message) => {
-    const sessionId = message.session_id || appState.getState("session.current");
+    const sessionId = resolveSessionId(message, appState);
+    const isActive = isActiveSessionMessage(message, appState);
 
-    if (isActiveSessionMessage(message, appState)) {
-      // Active session - render immediately
-      if (appState.message.currentAssistant) {
-        const isFirstToken = appState.message.assistantBuffer === "";
-        const newBuffer = appState.message.assistantBuffer + message.content;
-        appState.setState("message.assistantBuffer", newBuffer);
+    // CRITICAL FIX: If we have an active streaming element, always render to it
+    // This matches main branch behavior and prevents message loss when:
+    // 1. session.current is null (timing issue during session creation)
+    // 2. Backend sends assistant_delta without session_id (which is normal)
+    // The currentAssistant element existing means we're actively streaming TO the UI
+    if (appState.message.currentAssistant) {
+      const isFirstToken = appState.message.assistantBuffer === "";
+      const newBuffer = appState.message.assistantBuffer + message.content;
 
-        // Hide lottie indicator on first token arrival for instant feedback
-        if (isFirstToken) {
-          // Update state - subscriptions will handle DOM manipulation
-          appState.setState("ui.loadingLampVisible", false);
-
-          // NOTE: UI update handled by subscription in bootstrap/phases/phase5a-subscriptions.js
-          // Subscription listens to ui.loadingLampVisible and applies transition + removal
-        }
-
-        updateAssistantMessage(elements.chatContainer, appState.message.currentAssistant, newBuffer);
+      // DEBUG: Log buffer state when receiving tokens after reconstruction
+      if (isFirstToken) {
+        console.log(
+          "[message-handlers] assistant_delta FIRST TOKEN with currentAssistant, buffer was:",
+          appState.message.assistantBuffer.length
+        );
       }
+
+      appState.setState("message.assistantBuffer", newBuffer);
+
+      // Hide lottie indicator on first token arrival for instant feedback
+      if (isFirstToken) {
+        // Update state - subscriptions will handle DOM manipulation
+        appState.setState("ui.loadingLampVisible", false);
+      }
+
+      updateAssistantMessage(elements.chatContainer, appState.message.currentAssistant, newBuffer);
+      return;
+    }
+
+    // If no active streaming element, use session routing for background buffering
+    if (!sessionId && !isActive) {
+      // No way to route this message - drop it
+      console.warn("[MessageHandlersV2] assistant_delta without session_id and no active session");
+      return;
+    }
+
+    if (isActive) {
+      // Active session but no streaming element yet - this shouldn't normally happen
+      // (assistant_start should have created it), but handle gracefully
+      const newBuffer = appState.message.assistantBuffer + message.content;
+      appState.setState("message.assistantBuffer", newBuffer);
     } else {
       // Background session - buffer only
       streamManager.appendToBuffer(sessionId, message.content);
@@ -142,7 +190,12 @@ export function registerMessageHandlers(context) {
   });
 
   createHandler("assistant_end", async (message) => {
-    const sessionId = message.session_id || appState.getState("session.current");
+    const sessionId = resolveSessionId(message, appState);
+
+    if (!sessionId) {
+      console.warn("[MessageHandlersV2] assistant_end without session_id and no active session");
+      return;
+    }
 
     // End stream tracking for this session
     streamManager.endStream(sessionId);
@@ -280,7 +333,7 @@ export function registerMessageHandlers(context) {
   // ===== Function Call Handlers =====
 
   createHandler("function_detected", (message) => {
-    const sessionId = message.session_id || appState.getState("session.current");
+    const sessionId = resolveSessionId(message, appState);
 
     if (isActiveSessionMessage(message, appState)) {
       // Active session - render tool card
@@ -306,9 +359,11 @@ export function registerMessageHandlers(context) {
       }
     } else {
       // Background session - buffer for later reconstruction
-      streamManager.bufferToolEvent(sessionId, message.call_id, "start", {
-        name: message.name,
-      });
+      if (!sessionId) {
+        console.warn("[MessageHandlersV2] function_detected without session_id and no active session");
+        return;
+      }
+      streamManager.bufferToolEvent(sessionId, message.call_id, "start", { name: message.name });
     }
 
     // Track function call
@@ -320,7 +375,7 @@ export function registerMessageHandlers(context) {
   });
 
   createHandler("function_executing", (message) => {
-    const sessionId = message.session_id || appState.getState("session.current");
+    const sessionId = resolveSessionId(message, appState);
 
     if (isActiveSessionMessage(message, appState)) {
       // Active session - update UI
@@ -337,6 +392,10 @@ export function registerMessageHandlers(context) {
     } else {
       // Background session - buffer arguments
       if (message.arguments) {
+        if (!sessionId) {
+          console.warn("[MessageHandlersV2] function_executing without session_id and no active session");
+          return;
+        }
         streamManager.bufferToolEvent(sessionId, message.call_id, "arguments_delta", {
           delta: JSON.stringify(message.arguments),
         });
@@ -345,51 +404,68 @@ export function registerMessageHandlers(context) {
   });
 
   createHandler("function_completed", (message) => {
-    // IMPORTANT: Update UI status FIRST, before FunctionCallService moves call to completedCalls
-    // FunctionCallService.setCallResult/setCallError deletes from activeCalls, breaking UI updates
+    const sessionId = resolveSessionId(message, appState);
 
-    // Handle interrupted tool calls (synthetic completions from interrupt handler)
-    if (message.interrupted) {
-      updateFunctionCallStatus(
-        appState.functions.activeCalls,
-        message.call_id,
-        "interrupted",
-        {
-          result: message.result || "[Interrupted before completion]",
-          interrupted: true,
-        },
-        true
-      );
-    } else if (message.success) {
-      const result = message.result || message.output || "Success";
-      updateFunctionCallStatus(appState.functions.activeCalls, message.call_id, "completed", { result }, true);
-    } else {
-      updateFunctionCallStatus(
-        appState.functions.activeCalls,
-        message.call_id,
-        "error",
-        {
-          error: message.error || message.result || message.output || "Unknown error",
-        },
-        true
-      );
-    }
+    if (isActiveSessionMessage(message, appState)) {
+      // Active session - update UI
+      // IMPORTANT: Update UI status FIRST, before FunctionCallService moves call to completedCalls
+      // FunctionCallService.setCallResult/setCallError deletes from activeCalls, breaking UI updates
 
-    // Now update the FunctionCallService state (this moves call from activeCalls to completedCalls)
-    if (services?.functionCallService) {
+      // Handle interrupted tool calls (synthetic completions from interrupt handler)
       if (message.interrupted) {
-        // Treat interrupted as error for service state
-        services.functionCallService.setCallError(message.call_id, message.result || "[Interrupted]");
+        updateFunctionCallStatus(
+          appState.functions.activeCalls,
+          message.call_id,
+          "interrupted",
+          {
+            result: message.result || "[Interrupted before completion]",
+            interrupted: true,
+          },
+          true
+        );
       } else if (message.success) {
         const result = message.result || message.output || "Success";
-        services.functionCallService.setCallResult(message.call_id, result);
+        updateFunctionCallStatus(appState.functions.activeCalls, message.call_id, "completed", { result }, true);
       } else {
-        const error = message.error || message.result || message.output || "Unknown error";
-        services.functionCallService.setCallError(message.call_id, error);
+        updateFunctionCallStatus(
+          appState.functions.activeCalls,
+          message.call_id,
+          "error",
+          {
+            error: message.error || message.result || message.output || "Unknown error",
+          },
+          true
+        );
       }
-    }
 
-    scheduleFunctionCardCleanup(appState.functions.activeCalls, appState.functions.activeTimers, message.call_id);
+      // Now update the FunctionCallService state (this moves call from activeCalls to completedCalls)
+      if (services?.functionCallService) {
+        if (message.interrupted) {
+          // Treat interrupted as error for service state
+          services.functionCallService.setCallError(message.call_id, message.result || "[Interrupted]");
+        } else if (message.success) {
+          const result = message.result || message.output || "Success";
+          services.functionCallService.setCallResult(message.call_id, result);
+        } else {
+          const error = message.error || message.result || message.output || "Unknown error";
+          services.functionCallService.setCallError(message.call_id, error);
+        }
+      }
+
+      scheduleFunctionCardCleanup(appState.functions.activeCalls, appState.functions.activeTimers, message.call_id);
+    } else {
+      // Background session - update buffer state so reconstruction shows correct status
+      if (!sessionId) {
+        console.warn("[MessageHandlersV2] function_completed without session_id and no active session");
+        return;
+      }
+      const result = message.result || message.output || message.error;
+      const error = !message.success && !message.interrupted ? result : null;
+      streamManager.bufferToolEvent(sessionId, message.call_id, "end", {
+        result: message.success ? result : null,
+        error: error,
+      });
+    }
 
     // Track function completion
     globalEventBus.emit("analytics:event", {
@@ -400,41 +476,58 @@ export function registerMessageHandlers(context) {
   });
 
   createHandler("function_executed", (message) => {
-    // IMPORTANT: Update UI status FIRST, before FunctionCallService moves call to completedCalls
-    if (message.success) {
-      updateFunctionCallStatus(
-        appState.functions.activeCalls,
-        message.call_id,
-        "completed",
-        {
-          result: message.result_preview || "Success",
-        },
-        true
-      );
-    } else {
-      updateFunctionCallStatus(
-        appState.functions.activeCalls,
-        message.call_id,
-        "error",
-        { error: message.error },
-        true
-      );
-    }
+    const sessionId = resolveSessionId(message, appState);
 
-    // Now update the FunctionCallService state (this moves call from activeCalls to completedCalls)
-    if (services?.functionCallService) {
+    if (isActiveSessionMessage(message, appState)) {
+      // Active session - update UI
+      // IMPORTANT: Update UI status FIRST, before FunctionCallService moves call to completedCalls
       if (message.success) {
-        services.functionCallService.setCallResult(message.call_id, message.result_preview || "Success");
+        updateFunctionCallStatus(
+          appState.functions.activeCalls,
+          message.call_id,
+          "completed",
+          {
+            result: message.result_preview || "Success",
+          },
+          true
+        );
       } else {
-        services.functionCallService.setCallError(message.call_id, message.error || "Unknown error");
+        updateFunctionCallStatus(
+          appState.functions.activeCalls,
+          message.call_id,
+          "error",
+          { error: message.error },
+          true
+        );
       }
-    }
 
-    scheduleFunctionCardCleanup(appState.functions.activeCalls, appState.functions.activeTimers, message.call_id);
+      // Now update the FunctionCallService state (this moves call from activeCalls to completedCalls)
+      if (services?.functionCallService) {
+        if (message.success) {
+          services.functionCallService.setCallResult(message.call_id, message.result_preview || "Success");
+        } else {
+          services.functionCallService.setCallError(message.call_id, message.error || "Unknown error");
+        }
+      }
+
+      scheduleFunctionCardCleanup(appState.functions.activeCalls, appState.functions.activeTimers, message.call_id);
+    } else {
+      // Background session - update buffer state so reconstruction shows correct status
+      if (!sessionId) {
+        console.warn("[MessageHandlersV2] function_executed without session_id and no active session");
+        return;
+      }
+      const result = message.result_preview || message.error;
+      const error = !message.success ? result : null;
+      streamManager.bufferToolEvent(sessionId, message.call_id, "end", {
+        result: message.success ? result : null,
+        error: error,
+      });
+    }
   });
 
   createHandler("function_call_arguments_delta", (message) => {
-    const sessionId = message.session_id || appState.getState("session.current");
+    const sessionId = resolveSessionId(message, appState);
 
     if (message.item_id || message.call_id) {
       const callId = message.call_id || message.item_id;
@@ -450,6 +543,10 @@ export function registerMessageHandlers(context) {
         );
       } else {
         // Background session - buffer delta
+        if (!sessionId) {
+          console.warn("[MessageHandlersV2] function_call_arguments_delta without session_id and no active session");
+          return;
+        }
         streamManager.bufferToolEvent(sessionId, callId, "arguments_delta", {
           delta: message.delta,
         });
@@ -458,6 +555,11 @@ export function registerMessageHandlers(context) {
   });
 
   createHandler("function_call_arguments_done", (message) => {
+    // Only update UI for active session - background sessions don't need this intermediate state
+    if (!isActiveSessionMessage(message, appState)) {
+      return;
+    }
+
     if (message.item_id || message.call_id) {
       const callId = message.call_id || message.item_id;
       updateFunctionArguments(appState.functions.activeCalls, appState.functions.argumentsBuffer, callId, null, true);
@@ -465,6 +567,11 @@ export function registerMessageHandlers(context) {
   });
 
   createHandler("function_call_ready", (message) => {
+    // Only update UI for active session - background sessions don't need this intermediate state
+    if (!isActiveSessionMessage(message, appState)) {
+      return;
+    }
+
     updateFunctionCallStatus(appState.functions.activeCalls, message.call_id, "ready to execute");
   });
 
@@ -561,6 +668,126 @@ export function registerMessageHandlers(context) {
       category: "session",
       action: "updated",
     });
+  });
+
+  // ===== Stream Reconstruction Handler =====
+  // Called when switching to a session that's streaming in background
+
+  globalEventBus.on("stream:reconstruct", (eventDataWrapper) => {
+    // CRITICAL: Unwrap data from EventBus wrapper (same pattern as createHandler)
+    const eventData = eventDataWrapper.data || eventDataWrapper;
+    const { sessionId, buffer, tools, isStreaming } = eventData;
+
+    console.log("[message-handlers] stream:reconstruct received:", {
+      sessionId,
+      bufferLength: buffer?.length || 0,
+      bufferPreview: buffer?.substring(0, 100) || "(empty)",
+      isStreaming,
+    });
+
+    // Only reconstruct if this is now the active session
+    const currentSessionId = appState.getState("session.current");
+    if (sessionId !== currentSessionId) {
+      console.log("[message-handlers] stream:reconstruct SKIPPED - not active session", {
+        sessionId,
+        currentSessionId,
+      });
+      return;
+    }
+
+    // If still streaming (even with empty buffer = thinking phase), create streaming message
+    // This ensures the thinking indicator shows during tool orchestration
+    if (isStreaming || buffer) {
+      // RACE CONDITION FIX: Tokens may have arrived between session switch and reconstruction.
+      // Those tokens went to appState.message.assistantBuffer (which was cleared on switch).
+      // We need to preserve them by appending to the reconstructed buffer.
+      const arrivedDuringSwitch = appState.getState("message.assistantBuffer") || "";
+      const mergedBuffer = (buffer || "") + arrivedDuringSwitch;
+
+      console.log("[message-handlers] stream:reconstruct MERGE buffers:", {
+        fromStreamManager: buffer?.length || 0,
+        arrivedDuringSwitch: arrivedDuringSwitch.length,
+        merged: mergedBuffer.length,
+      });
+
+      // Create streaming message element
+      const chatContainerComponent = getChatContainerComponent();
+      console.log(
+        "[message-handlers] stream:reconstruct creating element, chatContainer:",
+        !!chatContainerComponent,
+        !!elements.chatContainer
+      );
+
+      const textSpan =
+        chatContainerComponent?.createStreamingMessage?.() || createStreamingAssistantMessage(elements.chatContainer);
+
+      console.log(
+        "[message-handlers] stream:reconstruct element created:",
+        !!textSpan,
+        "parent:",
+        textSpan?.parentElement?.className
+      );
+
+      // Set up appState so live updates continue to work
+      appState.setState("message.currentAssistant", textSpan);
+      appState.setState("message.assistantBuffer", mergedBuffer);
+      console.log("[message-handlers] stream:reconstruct SET buffer to appState:", mergedBuffer.length);
+
+      // If still streaming, mark UI as streaming
+      if (isStreaming) {
+        appState.setState("message.isStreaming", true);
+        appState.setState("python.status", "busy_streaming");
+        // Only show loading lamp if no content yet (thinking phase)
+        // If we have content, tokens have already arrived - don't show thinking indicator
+        appState.setState("ui.loadingLampVisible", mergedBuffer.length === 0);
+      }
+
+      // Render the buffered content (if any)
+      if (mergedBuffer) {
+        updateAssistantMessage(elements.chatContainer, textSpan, mergedBuffer);
+        console.log(
+          "[message-handlers] stream:reconstruct RENDERED content, textSpan innerHTML length:",
+          textSpan?.innerHTML?.length
+        );
+      }
+    }
+
+    // Reconstruct tool cards for any buffered tools
+    if (tools && tools.length > 0) {
+      for (const [callId, toolState] of tools) {
+        // Skip if card already exists in DOM (rendered by setMessages from Layer 2)
+        const existingCard = document.getElementById(`function-${callId}`);
+        if (existingCard) {
+          continue;
+        }
+
+        // Create the tool card
+        createFunctionCallCard(
+          elements.chatContainer,
+          appState.functions.activeCalls,
+          appState,
+          callId,
+          toolState.name,
+          toolState.status
+        );
+
+        // If there are arguments, update the card
+        if (toolState.arguments) {
+          updateFunctionCallStatus(appState.functions.activeCalls, callId, toolState.status, {
+            arguments: toolState.arguments,
+            result: toolState.result,
+          });
+        }
+
+        // If completed, schedule cleanup
+        if (toolState.status === "completed" || toolState.status === "error") {
+          scheduleFunctionCardCleanup(appState.functions.activeCalls, appState.functions.activeTimers, callId);
+        }
+      }
+    }
+
+    // Scroll to bottom to show reconstructed content
+    scheduleScroll(elements.chatContainer);
   });
 
   // Legacy/no-op handlers

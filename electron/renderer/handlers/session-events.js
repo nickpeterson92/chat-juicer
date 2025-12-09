@@ -22,6 +22,7 @@ import {
  * @param {Object} dependencies.ipcAdapter - IPC adapter
  * @param {Object} dependencies.domAdapter - DOM adapter
  * @param {Object} dependencies.appState - Application state manager
+ * @param {Object} dependencies.streamManager - Stream manager for concurrent sessions
  * @returns {Object} Event handler cleanup function
  */
 export function setupSessionEventHandlers({
@@ -32,6 +33,7 @@ export function setupSessionEventHandlers({
   ipcAdapter,
   domAdapter,
   appState,
+  streamManager,
 }) {
   const handlers = [];
   let currentSessionId = null;
@@ -78,8 +80,8 @@ export function setupSessionEventHandlers({
         messageQueueService.clear();
       }
 
-      // Load session data
-      const sessionData = await sessionService.switchSession(sessionId);
+      // Load session data (pass streamManager for concurrent session reconstruction)
+      const sessionData = await sessionService.switchSession(sessionId, streamManager);
 
       // Only proceed with UI updates if switch was successful
       if (!sessionData?.success) {
@@ -143,6 +145,12 @@ export function setupSessionEventHandlers({
             sessionService,
             chatContainer
           );
+        }
+
+        // Reconstruct streaming state if session has active streaming (e.g., tool orchestration)
+        // This must happen AFTER setMessages to avoid being cleared
+        if (streamManager?.isStreaming(sessionId)) {
+          sessionService.reconstructStreamState(sessionId, streamManager);
         }
       }
     } catch (error) {

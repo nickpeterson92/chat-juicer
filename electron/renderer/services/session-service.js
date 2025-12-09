@@ -4,6 +4,8 @@
  * Optimized with batch DOM updates for fast session switching
  */
 
+import { globalEventBus } from "../core/event-bus.js";
+
 // ============================================================================
 // NEW: Class-based SessionService with Dependency Injection
 // ============================================================================
@@ -159,16 +161,40 @@ export class SessionService {
       streamManager.cleanupSession(currentSessionId);
     }
 
+    // CRITICAL: Sync appState buffer to streamManager when switching away from ACTIVE streaming session
+    // The active session uses appState.message.assistantBuffer for rendering, but streamManager
+    // only receives tokens via appendToBuffer() when session is in background.
+    // Without this sync, returning to the session loses all tokens seen before switching away.
+    const isCurrentStreaming = currentSessionId && streamManager && streamManager.isStreaming(currentSessionId);
+    console.log("[session-service] switchSession check:", {
+      currentSessionId,
+      targetSessionId: sessionId,
+      hasStreamManager: !!streamManager,
+      isCurrentStreaming,
+      appStateBuffer: this.appState.getState("message.assistantBuffer")?.length || 0,
+    });
+
+    if (isCurrentStreaming) {
+      const activeBuffer = this.appState.getState("message.assistantBuffer") || "";
+      console.log("[session-service] SYNC BUFFER on switch away:", {
+        currentSessionId,
+        targetSessionId: sessionId,
+        bufferLength: activeBuffer.length,
+        bufferPreview: activeBuffer.substring(0, 100),
+      });
+      if (activeBuffer) {
+        streamManager.setBuffer(currentSessionId, activeBuffer);
+      }
+    }
+
     try {
       const response = await this.ipc.sendSessionCommand("switch", { session_id: sessionId });
 
       if (response?.session) {
         this.appState.setState("session.current", sessionId);
 
-        // If target session was streaming, reconstruct state
-        if (streamManager && streamManager.isStreaming(sessionId)) {
-          this.reconstructStreamState(sessionId, streamManager);
-        }
+        // NOTE: Stream reconstruction is now handled by the caller (session-list-handlers)
+        // AFTER chat is cleared and history is loaded, to avoid being wiped
 
         return {
           success: true,
@@ -187,7 +213,8 @@ export class SessionService {
   }
 
   /**
-   * Reconstruct streaming state when switching to a session that's streaming in background
+   * Reconstruct streaming state when switching to a session that's streaming in background.
+   * Emits a stream:reconstruct event that message handlers listen to for DOM rendering.
    *
    * @param {string} sessionId - Session ID to reconstruct
    * @param {Object} streamManager - StreamManager instance
@@ -199,26 +226,24 @@ export class SessionService {
     // Get buffered tools
     const tools = streamManager.getBufferedTools(sessionId);
 
-    // TODO: Render buffered assistant content
-    // This would require access to chat UI elements and rendering functions
-    // For now, we just log that reconstruction would happen
-    if (buffer) {
-      window.electronAPI?.log("info", "Stream reconstruction needed", {
-        sessionId,
-        bufferLength: buffer.length,
-        toolCount: tools.length,
-      });
-    }
+    const isStreaming = streamManager.isStreaming(sessionId);
 
-    // TODO: Render buffered tool cards
-    // This would iterate over tools and create/update tool cards
-    // For now, we just track that tools need reconstruction
-    if (tools.length > 0) {
-      window.electronAPI?.log("info", "Tool cards need reconstruction", {
-        sessionId,
-        toolCount: tools.length,
-      });
-    }
+    console.log("[session-service] RECONSTRUCT stream state:", {
+      sessionId,
+      bufferLength: buffer?.length || 0,
+      bufferPreview: buffer?.substring(0, 100) || "(empty)",
+      toolsCount: tools?.length || 0,
+      isStreaming,
+    });
+
+    // Emit event for message handlers to render the buffered content
+    // This keeps DOM manipulation in the handler layer where it belongs
+    globalEventBus.emit("stream:reconstruct", {
+      sessionId,
+      buffer: buffer || "",
+      tools: tools || [],
+      isStreaming,
+    });
   }
 
   /**
