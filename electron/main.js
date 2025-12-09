@@ -696,7 +696,7 @@ app.whenReady().then(() => {
   });
 
   // IPC handler for stream interruption
-  ipcMain.handle("interrupt-stream", (event, payload) => {
+  ipcMain.handle("interrupt-stream", (_event, payload) => {
     const { session_id } = payload || {};
     if (pythonProcess?.stdin && !isShuttingDown) {
       logger.info("Sending interrupt signal to Python", { sessionId: session_id });

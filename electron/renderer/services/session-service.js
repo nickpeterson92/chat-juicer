@@ -177,13 +177,16 @@ export class SessionService {
     // only receives tokens via appendToBuffer() when session is in background.
     // Without this sync, returning to the session loses all tokens seen before switching away.
     const isCurrentStreaming = currentSessionId && streamManager && streamManager.isStreaming(currentSessionId);
-    console.log("[session-service] switchSession check:", {
-      currentSessionId,
-      targetSessionId: sessionId,
-      hasStreamManager: !!streamManager,
-      isCurrentStreaming,
-      appStateBuffer: this.appState.getState("message.assistantBuffer")?.length || 0,
-    });
+
+    if (import.meta.env.DEV) {
+      console.log("[session-service] switchSession check:", {
+        currentSessionId,
+        targetSessionId: sessionId,
+        hasStreamManager: !!streamManager,
+        isCurrentStreaming,
+        appStateBuffer: this.appState.getState("message.assistantBuffer")?.length || 0,
+      });
+    }
 
     if (isCurrentStreaming) {
       const activeBuffer = this.appState.getState("message.assistantBuffer") || "";
@@ -257,7 +260,7 @@ export class SessionService {
         sessionId,
         bufferLength: buffer?.length || 0,
         bufferPreview: buffer?.substring(0, 100) || "(empty)",
-        toolsCount: tools?.length ||0,
+        toolsCount: tools?.length || 0,
         isStreaming,
       });
     }

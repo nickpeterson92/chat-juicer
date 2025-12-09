@@ -50,7 +50,7 @@ vi.mock("@/ui/chat-ui.js", () => ({
       messageId: "mock-msg-id",
     };
   }),
-  createMessageElement: vi.fn((_container, text, role, options) => {
+  createMessageElement: vi.fn((_container, text, _role, _options) => {
     const node = document.createElement("div");
     node.textContent = text;
     return { messageDiv: node };

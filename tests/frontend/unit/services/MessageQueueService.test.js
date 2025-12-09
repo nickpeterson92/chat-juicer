@@ -271,6 +271,25 @@ describe("MessageQueueService", () => {
       expect(appState.getState("queue.items")).toHaveLength(0);
     });
 
+    it("should process messages for different sessions separately", async () => {
+      const items = [
+        { id: "id-1", text: "Msg A", files: [], sessionId: "session-A", timestamp: Date.now(), status: "queued" },
+        { id: "id-2", text: "Msg B", files: [], sessionId: "session-B", timestamp: Date.now(), status: "queued" },
+      ];
+      appState.setState("queue.items", items);
+
+      await queueService.process();
+
+      // Should be called twice, once for each session
+      expect(mockMessageService.sendMessage).toHaveBeenCalledTimes(2);
+
+      // Order is not guaranteed by Object.entries, so we check with specific calls
+      expect(mockMessageService.sendMessage).toHaveBeenCalledWith(["Msg A"], "session-A");
+      expect(mockMessageService.sendMessage).toHaveBeenCalledWith(["Msg B"], "session-B");
+
+      expect(appState.getState("queue.items")).toHaveLength(0);
+    });
+
     it("should handle sendMessage errors gracefully", async () => {
       mockMessageService.sendMessage.mockRejectedValue(new Error("Network error"));
       const items = [

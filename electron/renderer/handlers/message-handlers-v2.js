@@ -133,7 +133,7 @@ export function registerMessageHandlers(context) {
       // Handle Component or Utility creation
       if (chatContainerComponent?.createStreamingMessage) {
         const result = chatContainerComponent.createStreamingMessage();
-        if (result && result.messageId) {
+        if (result?.messageId) {
           messageId = result.messageId;
         } else if (result) {
           // Fallback if component returns element directly
@@ -141,7 +141,7 @@ export function registerMessageHandlers(context) {
         }
       } else {
         const result = createStreamingAssistantMessage(elements.chatContainer);
-        if (result && result.messageId) {
+        if (result?.messageId) {
           messageId = result.messageId;
         } else if (result) {
           // Fallback if utility returns element directly
@@ -759,7 +759,7 @@ export function registerMessageHandlers(context) {
 
       if (chatContainerComponent?.createStreamingMessage) {
         const result = chatContainerComponent.createStreamingMessage();
-        if (result && result.messageId) {
+        if (result?.messageId) {
           messageId = result.messageId;
           textSpan = result.textSpan;
         } else if (result) {
@@ -768,7 +768,7 @@ export function registerMessageHandlers(context) {
         }
       } else {
         const result = createStreamingAssistantMessage(elements.chatContainer);
-        if (result && result.messageId) {
+        if (result?.messageId) {
           messageId = result.messageId;
           textSpan = result.textSpan;
         } else {
