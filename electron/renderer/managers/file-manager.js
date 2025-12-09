@@ -23,7 +23,6 @@ import {
   MSG_FILE_DELETE_FAILED,
   MSG_FILE_DELETED,
   MSG_FILES_ERROR,
-  MSG_FILES_LOAD_FAILED,
   MSG_LOADING_FILES,
   MSG_NO_FILE_SELECTED,
   MSG_NO_FILES,
@@ -139,6 +138,7 @@ export function renderFileList(files, container, options = {}) {
   }
 
   // Render files and folders
+  const fragment = document.createDocumentFragment();
   files.forEach((file) => {
     let fileItem;
 
@@ -150,8 +150,10 @@ export function renderFileList(files, container, options = {}) {
       fileItem = createFileItem(file, directory, container, onDelete);
     }
 
-    container.appendChild(fileItem);
+    fragment.appendChild(fileItem);
   });
+
+  container.appendChild(fragment);
 }
 
 /**
@@ -425,7 +427,7 @@ function createFileItem(file, directory, container, onDelete = null) {
  * @param {HTMLElement} container - Container element to refresh after deletion
  * @param {Function} onDelete - Optional callback after successful delete
  */
-async function handleDeleteFile(filename, directory = "sources", container = null, onDelete = null) {
+async function handleDeleteFile(filename, directory = "sources", _container = null, onDelete = null) {
   if (!filename) {
     showToast(MSG_NO_FILE_SELECTED, "error", 3000);
     return;

@@ -36,15 +36,16 @@ export class IPCAdapter {
   /**
    * Send message(s) to Python backend
    * @param {string|string[]} content - Single message or array of messages
+   * @param {string|null} sessionId - Optional session ID for routing
    * @returns {Promise<void>}
    */
-  async sendMessage(content) {
+  async sendMessage(content, sessionId = null) {
     if (!this.api?.sendUserInput) {
       throw new Error("IPC API not available: sendUserInput");
     }
     // Normalize to array format for unified backend handling
     const messages = Array.isArray(content) ? content : [content];
-    return this.api.sendUserInput(messages);
+    return this.api.sendUserInput(messages, sessionId);
   }
 
   /**
@@ -57,6 +58,19 @@ export class IPCAdapter {
       return Promise.resolve();
     }
     return this.api.restartBot();
+  }
+
+  /**
+   * Interrupt current stream for specific session
+   * @param {string|null} sessionId - Optional session ID for per-session interrupt
+   * @returns {Promise<any>}
+   */
+  async interruptStream(sessionId = null) {
+    if (!this.api?.interruptStream) {
+      console.warn("IPC API not available: interruptStream");
+      return Promise.resolve({ success: false, error: "Not implemented" });
+    }
+    return this.api.interruptStream(sessionId);
   }
 
   /**
@@ -103,22 +117,9 @@ export class IPCAdapter {
    * @returns {Promise<any>} Response from backend
    */
   async sendSessionCommand(command, data = {}) {
-    // Check if we should queue the command
-    if (this.appState && this.appState.python?.status !== "idle") {
-      // Python is busy - queue the command
-      return new Promise((resolve, reject) => {
-        this.commandQueue.push({ command, data, resolve, reject });
-
-        // Show toast notification
-        const status = this.appState.python.status;
-        const action = status === "busy_streaming" ? "generating response" : "summarizing history";
-        this._showToast(`Command queued: Python ${action}`, "info");
-
-        console.log(`⏳ Queued session command: ${command} (Python ${status})`);
-      });
-    }
-
-    // Python is idle - execute immediately
+    // Phase 3: Concurrent Sessions - ALL session commands execute immediately
+    // Backend supports concurrent streams, so no need to queue session commands
+    // Session switch, create, delete, list, etc. all work during streaming
     return this._executeSessionCommand(command, data);
   }
 

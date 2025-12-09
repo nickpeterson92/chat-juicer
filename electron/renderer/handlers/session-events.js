@@ -22,6 +22,7 @@ import {
  * @param {Object} dependencies.ipcAdapter - IPC adapter
  * @param {Object} dependencies.domAdapter - DOM adapter
  * @param {Object} dependencies.appState - Application state manager
+ * @param {Object} dependencies.streamManager - Stream manager for concurrent sessions
  * @returns {Object} Event handler cleanup function
  */
 export function setupSessionEventHandlers({
@@ -32,6 +33,7 @@ export function setupSessionEventHandlers({
   ipcAdapter,
   domAdapter,
   appState,
+  streamManager,
 }) {
   const handlers = [];
   let currentSessionId = null;
@@ -78,13 +80,28 @@ export function setupSessionEventHandlers({
         messageQueueService.clear();
       }
 
-      // Load session data
-      const sessionData = await sessionService.switchSession(sessionId);
+      // Load session data (pass streamManager for concurrent session reconstruction)
+      const sessionData = await sessionService.switchSession(sessionId, streamManager);
 
       // Only proceed with UI updates if switch was successful
       if (!sessionData?.success) {
         console.error("Session switch failed:", sessionData?.error || "Unknown error");
         return;
+      }
+
+      // Seed token usage so the indicator is accurate immediately after switch
+      try {
+        const existingUsage = appState.getState("session.tokenUsage") || {};
+        const limit =
+          typeof sessionData.max_tokens === "number" ? sessionData.max_tokens : (existingUsage.limit ?? 128000);
+        const threshold =
+          typeof sessionData.trigger_tokens === "number"
+            ? sessionData.trigger_tokens
+            : (existingUsage.threshold ?? Math.floor(limit * 0.8));
+        const current = typeof sessionData.tokens === "number" ? sessionData.tokens : (existingUsage.current ?? 0);
+        appState.setState("session.tokenUsage", { current, limit, threshold });
+      } catch (seedError) {
+        console.error("Failed to seed token usage on session switch:", seedError);
       }
 
       // Close sidebar after successful switch (UX: only close on success)
@@ -143,6 +160,12 @@ export function setupSessionEventHandlers({
             sessionService,
             chatContainer
           );
+        }
+
+        // Reconstruct streaming state if session has active streaming (e.g., tool orchestration)
+        // This must happen AFTER setMessages to avoid being cleared
+        if (streamManager?.isStreaming(sessionId)) {
+          sessionService.reconstructStreamState(sessionId, streamManager);
         }
       }
     } catch (error) {

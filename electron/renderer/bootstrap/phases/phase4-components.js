@@ -47,13 +47,16 @@ export async function initializeComponents({ elements, appState, services, ipcAd
           await showChatView(elements, appState);
         }
 
-        // Check if backend is busy - if so, queue the message
-        const pythonStatus = appState.getState("python.status");
-        const isBusy = pythonStatus !== "idle";
+        // Phase 3: Concurrent Sessions - check if CURRENT session is streaming
+        // For concurrent sessions, only queue if the same session is busy
+        // Different sessions can stream simultaneously (backend enforces MAX_CONCURRENT_STREAMS)
+        const currentSessionId = services.sessionService.getCurrentSessionId();
+        const isCurrentSessionStreaming = currentSessionId && services.streamManager?.isStreaming(currentSessionId);
 
-        if (isBusy) {
-          // Queue the message - it will be sent when backend is idle
-          messageQueueService.add(message.trim());
+        if (isCurrentSessionStreaming) {
+          // Queue the message - it will be sent when THIS session is idle
+          // Store sessionId with the queued message for proper routing
+          messageQueueService.add(message.trim(), [], currentSessionId);
 
           // Clear input immediately (message is queued)
           if (clearInput) {
@@ -76,8 +79,7 @@ export async function initializeComponents({ elements, appState, services, ipcAd
           console.error("ChatContainer component not available");
         }
 
-        // Send via MessageService using SessionService
-        const currentSessionId = services.sessionService.getCurrentSessionId();
+        // Send via MessageService using SessionService (currentSessionId already defined above)
         const sendResult = await services.messageService.sendMessage(message.trim(), currentSessionId);
 
         if (!sendResult.success) {

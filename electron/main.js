@@ -3,6 +3,7 @@ const { spawn } = require("node:child_process");
 const path = require("node:path");
 const fs = require("node:fs/promises");
 const os = require("node:os");
+const { fileURLToPath } = require("node:url");
 const Logger = require("./logger");
 const PythonManager = require("../scripts/python-manager");
 const platformConfig = require("../scripts/platform-config");
@@ -330,10 +331,11 @@ app.whenReady().then(() => {
   });
 
   // IPC handler for user input (Binary V2)
-  // Accepts array of message strings from preload.js (unified array format)
-  ipcMain.on("user-input", (event, messageArray) => {
-    logger.logIPC("receive", "user-input", messageArray, { fromRenderer: true });
-    logger.logUserInteraction("chat-input", { messageCount: messageArray.length });
+  // Accepts payload with messages array and optional session_id from preload.js
+  ipcMain.on("user-input", (event, payload) => {
+    const { messages: messageArray, session_id } = payload;
+    logger.logIPC("receive", "user-input", messageArray, { fromRenderer: true, sessionId: session_id });
+    logger.logUserInteraction("chat-input", { messageCount: messageArray.length, sessionId: session_id });
 
     if (pythonProcess && !pythonProcess.killed) {
       try {
@@ -342,11 +344,13 @@ app.whenReady().then(() => {
         const binaryMessage = IPCProtocolV2.encode({
           type: "message",
           messages: messages, // Array format: [{content: "text1"}, {content: "text2"}]
+          session_id: session_id, // Include session_id for routing
         });
         pythonProcess.stdin.write(binaryMessage);
         logger.debug("Sent user messages as V2 binary", {
           messageCount: messages.length,
           binarySize: binaryMessage.length,
+          sessionId: session_id,
         });
       } catch (error) {
         logger.error("Failed to encode user message", { error: error.message });
@@ -650,9 +654,32 @@ app.whenReady().then(() => {
         return { success: false, error: "Invalid URL" };
       }
 
-      // Only allow http and https protocols
-      const urlLower = url.toLowerCase();
-      if (!urlLower.startsWith("http://") && !urlLower.startsWith("https://")) {
+      const parsedUrl = new URL(url);
+
+      // Allow trusted local file URLs for bundled docs/markdown
+      if (parsedUrl.protocol === "file:") {
+        const filePath = path.normalize(fileURLToPath(parsedUrl));
+        const allowedRoots = [path.normalize(app.getAppPath()), path.normalize(path.join(__dirname, ".."))];
+
+        const isAllowed = allowedRoots.some((root) => filePath.startsWith(root));
+        if (!isAllowed) {
+          logger.error("Security: File URL outside allowed roots", { url, path: filePath });
+          return { success: false, error: "File URL not permitted" };
+        }
+
+        try {
+          await fs.access(filePath);
+        } catch (_err) {
+          logger.error("File URL does not exist", { url, path: filePath });
+          return { success: false, error: "File does not exist" };
+        }
+
+        await shell.openExternal(url);
+        logger.info("File URL opened successfully", { url });
+        return { success: true };
+      }
+
+      if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
         logger.error("Security: Rejected non-HTTP(S) URL", { url });
         return { success: false, error: "Only HTTP and HTTPS URLs are allowed" };
       }
@@ -669,10 +696,11 @@ app.whenReady().then(() => {
   });
 
   // IPC handler for stream interruption
-  ipcMain.handle("interrupt-stream", () => {
+  ipcMain.handle("interrupt-stream", (_event, payload) => {
+    const { session_id } = payload || {};
     if (pythonProcess?.stdin && !isShuttingDown) {
-      logger.info("Sending interrupt signal to Python");
-      const msg = { type: "interrupt" };
+      logger.info("Sending interrupt signal to Python", { sessionId: session_id });
+      const msg = { type: "interrupt", session_id: session_id };
       const binaryMessage = IPCProtocolV2.encode(msg);
       pythonProcess.stdin.write(binaryMessage);
       return { success: true };

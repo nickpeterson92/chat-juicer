@@ -35,10 +35,10 @@ export class MessageService {
    * Send message(s) to backend
    *
    * @param {string|string[]} content - Single message string or array of message strings
-   * @param {string|null} sessionId - Optional session ID
+   * @param {string|null} sessionId - Session ID for routing (CRITICAL for concurrent sessions)
    * @returns {Promise<Object>} Result with success/error
    */
-  async sendMessage(content, _sessionId = null) {
+  async sendMessage(content, sessionId = null) {
     // Normalize to array format
     const messages = Array.isArray(content) ? content : [content];
 
@@ -54,8 +54,8 @@ export class MessageService {
 
     try {
       // Use IPCAdapter's sendMessage method (which normalizes to array)
-      // Backend processes all messages and returns a single response
-      await this.ipc.sendMessage(validMessages);
+      // CRITICAL: Pass sessionId for proper routing in concurrent sessions
+      await this.ipc.sendMessage(validMessages, sessionId);
       return { success: true, messageCount: validMessages.length };
     } catch (error) {
       return { success: false, error: error.message };

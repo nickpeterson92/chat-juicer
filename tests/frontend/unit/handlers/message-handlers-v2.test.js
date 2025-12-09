@@ -38,6 +38,7 @@ describe("Message Handlers V2 - Phase 3 State Management", () => {
   let elements;
   let ipcAdapter;
   let services;
+  const setActiveSession = (id = "active-session") => appState.setState("session.current", id);
 
   beforeEach(() => {
     // Clear all event listeners
@@ -75,7 +76,19 @@ describe("Message Handlers V2 - Phase 3 State Management", () => {
         setCallResult: vi.fn(),
         setCallError: vi.fn(),
       },
-      sessionService: {},
+      sessionService: {
+        getSession: vi.fn(() => ({ title: "Test Session" })),
+      },
+      streamManager: {
+        startStream: vi.fn(),
+        appendToBuffer: vi.fn(),
+        endStream: vi.fn(),
+        isStreaming: vi.fn(() => false),
+        bufferToolEvent: vi.fn(),
+        getBuffer: vi.fn(() => ""),
+        getBufferedTools: vi.fn(() => []),
+        cleanupSession: vi.fn(),
+      },
     };
 
     // Create context
@@ -90,8 +103,50 @@ describe("Message Handlers V2 - Phase 3 State Management", () => {
     registerMessageHandlers(context);
   });
 
+  describe("Active session detection", () => {
+    it("should not treat background session messages as active when no current session", () => {
+      globalEventBus.emit("message:assistant_start", { session_id: "background" });
+
+      expect(appState.getState("python.status")).toBe("idle");
+      expect(appState.getState("message.isStreaming")).toBe(false);
+    });
+
+    it("should drop background buffering when no session can be resolved", () => {
+      globalEventBus.emit("message:assistant_delta", { content: "hi" });
+
+      expect(services.streamManager.appendToBuffer).not.toHaveBeenCalled();
+    });
+
+    it("should not buffer function events when no session can be resolved", () => {
+      globalEventBus.emit("message:function_detected", { call_id: "c1", name: "tool" });
+
+      expect(services.streamManager.bufferToolEvent).not.toHaveBeenCalled();
+    });
+
+    it("should treat message as active when session_id matches current session", () => {
+      appState.setState("session.current", "active-session");
+
+      globalEventBus.emit("message:assistant_start", { session_id: "active-session" });
+
+      expect(appState.getState("python.status")).toBe("busy_streaming");
+      expect(appState.getState("message.isStreaming")).toBe(true);
+    });
+
+    it("should treat message without session_id as active only when current session exists", () => {
+      // No current session yet
+      globalEventBus.emit("message:assistant_start", {});
+      expect(appState.getState("python.status")).toBe("idle");
+
+      // Set current session and retry
+      appState.setState("session.current", "active-session");
+      globalEventBus.emit("message:assistant_start", {});
+      expect(appState.getState("python.status")).toBe("busy_streaming");
+    });
+  });
+
   describe("Phase 3: AppState Integration", () => {
     it("should use AppState for aiThinkingActive instead of direct DOM manipulation", () => {
+      setActiveSession();
       // Subscribe to state changes
       const stateCallback = vi.fn();
       appState.subscribe("ui.aiThinkingActive", stateCallback);
@@ -105,6 +160,7 @@ describe("Message Handlers V2 - Phase 3 State Management", () => {
     });
 
     it("should set aiThinkingActive to false on assistant_start", () => {
+      setActiveSession();
       appState.setState("ui.aiThinkingActive", true);
 
       globalEventBus.emit("message:assistant_start", {});
@@ -113,6 +169,7 @@ describe("Message Handlers V2 - Phase 3 State Management", () => {
     });
 
     it("should set aiThinkingActive to false on assistant_end", async () => {
+      setActiveSession();
       appState.setState("ui.aiThinkingActive", true);
 
       globalEventBus.emit("message:assistant_end", {});
@@ -172,12 +229,14 @@ describe("Message Handlers V2 - Phase 3 State Management", () => {
 
   describe("Python Status Management", () => {
     it("should set python status to busy_streaming on assistant_start", () => {
+      setActiveSession();
       globalEventBus.emit("message:assistant_start", {});
 
       expect(appState.getState("python.status")).toBe("busy_streaming");
     });
 
     it("should set python status to idle on assistant_end", async () => {
+      setActiveSession();
       appState.setState("python.status", "busy_streaming");
 
       globalEventBus.emit("message:assistant_end", {});
@@ -189,6 +248,7 @@ describe("Message Handlers V2 - Phase 3 State Management", () => {
     });
 
     it("should process command queue when python status becomes idle", async () => {
+      setActiveSession();
       ipcAdapter.commandQueue = [{ type: "test" }];
       appState.setState("python.status", "busy_streaming");
 
@@ -203,6 +263,7 @@ describe("Message Handlers V2 - Phase 3 State Management", () => {
 
   describe("Message Flow Integration", () => {
     it("should handle complete message flow with AppState updates", async () => {
+      setActiveSession();
       const stateChanges = [];
       appState.subscribe("*", (change) => {
         stateChanges.push(change);
@@ -227,7 +288,7 @@ describe("Message Handlers V2 - Phase 3 State Management", () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(appState.getState("python.status")).toBe("idle");
-      expect(appState.getState("message.currentAssistant")).toBe(null);
+      expect(appState.getState("message.currentAssistantId")).toBe(null);
 
       // Verify state changes were tracked
       expect(stateChanges.length).toBeGreaterThan(0);
@@ -255,6 +316,7 @@ describe("Message Handlers V2 - Phase 3 State Management", () => {
 
   describe("Function Call Integration", () => {
     it("should use FunctionCallService when available", () => {
+      setActiveSession();
       globalEventBus.emit("message:function_detected", {
         call_id: "call-123",
         name: "test_function",
@@ -267,6 +329,7 @@ describe("Message Handlers V2 - Phase 3 State Management", () => {
     });
 
     it("should update function call status", () => {
+      setActiveSession();
       globalEventBus.emit("message:function_executing", {
         call_id: "call-123",
         arguments: { param: "value" },
@@ -276,6 +339,7 @@ describe("Message Handlers V2 - Phase 3 State Management", () => {
     });
 
     it("should handle function completion success", () => {
+      setActiveSession();
       globalEventBus.emit("message:function_completed", {
         call_id: "call-123",
         success: true,
@@ -289,6 +353,7 @@ describe("Message Handlers V2 - Phase 3 State Management", () => {
     });
 
     it("should handle function completion error", () => {
+      setActiveSession();
       globalEventBus.emit("message:function_completed", {
         call_id: "call-123",
         success: false,

@@ -225,9 +225,33 @@
     color: var(--color-text-user);
   }
 
+  /* Streaming indicator for background sessions */
+  .session-item.session-streaming {
+    position: relative;
+    padding-left: 2rem; /* Make room for indicator */
+  }
+
+  .session-item.session-streaming::before {
+    content: '';
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 8px;
+    height: 8px;
+    background: var(--color-brand-primary);
+    border-radius: 50%;
+    animation: streaming-pulse 1.5s ease-in-out infinite;
+  }
+
+  /* Active streaming session uses different color */
+  .session-item.session-streaming.active::before {
+    background: var(--color-text-user);
+  }
+
   .session-title {
     @apply overflow-hidden text-ellipsis whitespace-nowrap;
-    max-width: 180px; /* Less aggressive truncation */
+    max-width: 240px; /* Allow longer titles when actions are hidden */
   }
 
   .session-content {
@@ -240,10 +264,15 @@
 
   .session-actions {
     @apply flex gap-1 opacity-0 transition-opacity duration-200 flex-shrink-0;
+    max-width: 0;
+    overflow: hidden;
+    pointer-events: none;
   }
 
   .session-item:hover .session-actions {
     @apply opacity-100;
+    max-width: 120px;
+    pointer-events: auto;
   }
 
   .session-action-btn {
@@ -252,12 +281,6 @@
 
   .session-action-btn svg {
     @apply transition-colors duration-150;
-  }
-
-  /* Summarize button - Lime green (matches pill accent-1) */
-  .session-action-btn.summarize-btn:hover svg {
-    color: var(--color-brand-accent-1);
-    @apply stroke-current;
   }
 
   /* Rename button - Light purple (matches pill accent-2) */
@@ -1553,6 +1576,12 @@
     line-height: 1.5;
   }
 
+  /* Optimize rendering performance for long message lists */
+  .message {
+    content-visibility: auto;
+    contain-intrinsic-size: 0 100px; /* Estimated height to prevent scrollbar jumping */
+  }
+
   .message-content h1,
   .message-content h2,
   .message-content h3,
@@ -1615,10 +1644,13 @@
     display: none;
   }
 
-  /* Hide paragraphs that only contain whitespace/br */
-  .message-content p:has(> br:only-child) {
+  /* DISABLED: This rule was hiding legitimate content like "Hey<br>World"
+   * The :has(> br:only-child) selector should only match <p><br></p> but
+   * may have browser quirks. Commenting out to fix rendering issues.
+   */
+  /* .message-content p:has(> br:only-child) {
     display: none;
-  }
+  } */
 
   /* Hide standalone br tags between paragraph and code */
   .message-content p + br {
@@ -1964,11 +1996,14 @@
     margin-bottom: 0.25em !important;
   }
 
-  /* Remove any extra spacing from br tags in li */
-  .message-content li > br,
+  /* DISABLED: This was hiding intentional line breaks in list items
+   * e.g., "- Line one  \n  Line two" produces <li>Line one<br>Line two</li>
+   * and the br was being hidden, merging the lines together.
+   */
+  /* .message-content li > br,
   .prose li > br {
     display: none;
-  }
+  } */
 
   .message-content p + pre {
     margin-top: 0.15em;
@@ -2040,10 +2075,10 @@ body.view-chat {
   margin-bottom: 0.2em !important;
 }
 
-/* Hide br tags that create gaps */
-.prose li > br {
+/* DISABLED: Same issue as above - hides intentional line breaks in list items */
+/* .prose li > br {
   display: none;
-}
+} */
 
 /* Override prose paragraph margins before code */
 .prose p + pre,
@@ -2092,6 +2127,18 @@ body.view-chat {
     }
     50% {
       transform: scale(1.05);
+    }
+  }
+
+  @keyframes streaming-pulse {
+    0%,
+    100% {
+      opacity: 1;
+      transform: translateY(-50%) scale(1);
+    }
+    50% {
+      opacity: 0.5;
+      transform: translateY(-50%) scale(0.8);
     }
   }
 

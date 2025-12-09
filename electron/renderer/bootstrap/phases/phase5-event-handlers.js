@@ -92,21 +92,105 @@ export async function initializeEventHandlers({
       }
     });
 
-    // Handle external links in chat - open in system browser
-    const chatContainer = document.getElementById("chat-container");
-    if (chatContainer) {
-      addListener(chatContainer, "click", async (e) => {
-        const link = e.target.closest("a");
-        if (link?.href && !link.href.startsWith("#")) {
-          e.preventDefault();
-          try {
-            await ipcAdapter.openExternalUrl(link.href);
-          } catch (error) {
-            console.error("Failed to open external URL:", error);
-          }
+    // Handle links anywhere in the renderer:
+    // - Same-page file:// anchors: scroll within the current window
+    // - Other links: open in system browser via IPC
+    const ensureLinkTitle = (anchor) => {
+      if (!anchor || anchor.getAttribute("title")) return;
+      const rawHref = anchor.getAttribute("href") || "";
+      const displayHref = rawHref || anchor.href || "";
+      if (displayHref) {
+        anchor.setAttribute("title", displayHref);
+      }
+    };
+
+    const findScrollableAncestor = (el) => {
+      let node = el?.parentElement;
+      while (node && node !== document.body) {
+        const hasScroll = node.scrollHeight > node.clientHeight || node.scrollWidth > node.clientWidth;
+        const overflow = window.getComputedStyle(node).overflowY;
+        if (hasScroll && (overflow === "auto" || overflow === "scroll" || overflow === "overlay")) {
+          return node;
         }
-      });
-    }
+        node = node.parentElement;
+      }
+      return document.scrollingElement || document.documentElement;
+    };
+
+    const handleAnchorClick = async (e) => {
+      if (e.defaultPrevented) return;
+      // Respect modifier clicks (new tab/window)
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+
+      const link = e.target.closest("a");
+      if (!link?.href) return;
+      ensureLinkTitle(link);
+
+      try {
+        const rawHref = link.getAttribute("href") || "";
+        const targetUrl = new URL(link.href, window.location.href);
+        const currentUrl = new URL(window.location.href);
+
+        const hash = targetUrl.hash || (rawHref.startsWith("#") ? rawHref : "");
+        const isSameFile =
+          targetUrl.protocol === currentUrl.protocol &&
+          targetUrl.host === currentUrl.host &&
+          targetUrl.pathname === currentUrl.pathname;
+
+        // Handle same-document navigation first (supports dev server + bundled file://)
+        if (isSameFile && hash) {
+          e.preventDefault();
+          const targetId = decodeURIComponent(hash.slice(1));
+          const targetEl =
+            document.getElementById(targetId) ||
+            document.querySelector(`[name="${CSS?.escape ? CSS.escape(targetId) : targetId}"]`);
+
+          if (targetEl) {
+            // Defer to ensure layout is settled before scrolling
+            requestAnimationFrame(() => {
+              targetEl.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+              const scrollContainer = findScrollableAncestor(targetEl);
+              if (scrollContainer) {
+                const containerTop = scrollContainer.getBoundingClientRect().top;
+                const targetTop = targetEl.getBoundingClientRect().top;
+                const offset = targetTop - containerTop + scrollContainer.scrollTop - 12; // small padding
+                scrollContainer.scrollTo({ top: offset, behavior: "smooth" });
+              }
+            });
+            return;
+          }
+
+          console.warn("Anchor target not found for hash", { hash, targetId });
+          // Fallback to updating hash to let browser handle if element not found
+          window.location.hash = hash;
+          return;
+        }
+
+        // Block same-file navigation (even without hash) from opening externally
+        if (isSameFile && targetUrl.protocol === "file:") {
+          e.preventDefault();
+          return;
+        }
+
+        if (!link.href.startsWith("#")) {
+          e.preventDefault();
+          await ipcAdapter.openExternalUrl(link.href);
+        }
+      } catch (error) {
+        console.error("Failed to handle link click:", error);
+      }
+    };
+
+    addListener(document, "click", handleAnchorClick, true); // capture to catch early
+    addListener(
+      document,
+      "mouseover",
+      (e) => {
+        const link = e.target.closest("a");
+        if (link) ensureLinkTitle(link);
+      },
+      true
+    );
 
     // ======================
     // 1.5. Reactive DOM Bindings (AppState → DOM)
@@ -474,6 +558,7 @@ export async function initializeEventHandlers({
         fileService: services.fileService,
         functionCallService: services.functionCallService,
         sessionService: services.sessionService,
+        streamManager: services.streamManager,
       },
     });
 
@@ -520,10 +605,15 @@ export async function initializeEventHandlers({
       const transformedSessions = sessionsToRender.map((session) => ({
         id: session.session_id,
         title: session.title,
-        created_at: session.created_at || session.last_used,
+        created_at: session.last_used || session.updated_at || session.created_at,
       }));
 
-      const fragment = renderSessionList(transformedSessions, sessionService.getCurrentSessionId(), domAdapter);
+      const fragment = renderSessionList(
+        transformedSessions,
+        sessionService.getCurrentSessionId(),
+        domAdapter,
+        services.streamManager
+      );
 
       if (fragment) {
         sessionsList.appendChild(fragment);
@@ -579,6 +669,7 @@ export async function initializeEventHandlers({
       setupSessionListHandlers({
         sessionListContainer: sessionsList,
         sessionService,
+        streamManager: services.streamManager,
         updateSessionsList,
         elements,
         appState,

@@ -23,6 +23,11 @@ describe("AppState - Phase 1 Extensions", () => {
         isLoading: false,
         hasMore: false,
         totalCount: 0,
+        tokenUsage: {
+          current: 0,
+          limit: 128000,
+          threshold: 100000,
+        },
       });
     });
 
@@ -236,7 +241,7 @@ describe("AppState - Phase 1 Extensions", () => {
     });
 
     it("should preserve existing message state properties", () => {
-      expect(appState.message.currentAssistant).toBeDefined();
+      expect(appState.message.currentAssistantId).toBeDefined();
       expect(appState.message.assistantBuffer).toBeDefined();
     });
   });
@@ -266,7 +271,7 @@ describe("AppState - Phase 1 Extensions", () => {
       it("should validate deep nested paths", () => {
         expect(appState.validatePath("connection.isInitial")).toBe(true);
         expect(appState.validatePath("ui.cachedModelConfig")).toBe(true);
-        expect(appState.validatePath("message.currentAssistant")).toBe(true);
+        expect(appState.validatePath("message.currentAssistantId")).toBe(true);
       });
 
       it("should reject invalid top-level path", () => {

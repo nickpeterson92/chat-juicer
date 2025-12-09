@@ -28,13 +28,28 @@ class TestEnsureSessionExists:
     @pytest.mark.asyncio
     async def test_ensure_session_when_exists(self) -> None:
         """Test ensure_session_exists when session already exists."""
+        from app.state import SessionContext
+
         mock_session = Mock()
+        mock_session.session_id = "chat_existing"
+        mock_agent = Mock()
+
+        # Create SessionContext
+        mock_context = SessionContext(
+            session=mock_session,
+            agent=mock_agent,
+            stream_task=None,
+            interrupt_requested=False,
+        )
+
         mock_app_state = Mock()
-        mock_app_state.current_session = mock_session
+        mock_app_state.active_sessions = {"chat_existing": mock_context}
+        mock_app_state.session_manager = Mock()
+        mock_app_state.session_manager.current_session_id = "chat_existing"
 
-        session, is_new = await ensure_session_exists(mock_app_state)
+        session_ctx, is_new = await ensure_session_exists(mock_app_state, session_id="chat_existing")
 
-        assert session == mock_session
+        assert session_ctx == mock_context
         assert is_new is False
 
     @pytest.mark.asyncio
@@ -52,9 +67,12 @@ class TestEnsureSessionExists:
         mock_create_tools: Mock,
     ) -> None:
         """Test ensure_session_exists creates new session when none exists."""
+        from app.state import SessionContext
+
         mock_app_state = Mock()
-        mock_app_state.current_session = None
+        mock_app_state.active_sessions = {}
         mock_app_state.session_manager = Mock()
+        mock_app_state.session_manager.current_session_id = None
         mock_app_state.deployment = "gpt-4o"
         mock_app_state.full_history_store = Mock()
         mock_app_state.mcp_servers = {}
@@ -66,16 +84,21 @@ class TestEnsureSessionExists:
 
         mock_create_tools.return_value = []
         mock_filter_mcp.return_value = []
-        mock_create_agent.return_value = Mock()
+        mock_agent = Mock()
+        mock_create_agent.return_value = mock_agent
         mock_session_instance = Mock()
+        mock_session_instance.session_id = "chat_new123"
         mock_session_instance.get_items = AsyncMock(return_value=[])
         mock_session_instance.total_tokens = 0
         mock_session_instance._calculate_total_tokens.return_value = 0
         mock_session_class.return_value = mock_session_instance
 
-        session, is_new = await ensure_session_exists(mock_app_state)
+        session_ctx, is_new = await ensure_session_exists(mock_app_state)
 
-        assert session is not None
+        # Should return SessionContext, not TokenAwareSQLiteSession
+        assert isinstance(session_ctx, SessionContext)
+        assert session_ctx.session == mock_session_instance
+        assert session_ctx.agent == mock_agent
         assert is_new is True
         mock_connect.assert_called_once()
 
@@ -88,9 +111,11 @@ class TestProcessMessages:
     @patch("app.runtime.IPCManager")
     async def test_process_messages_success(self, mock_ipc: Mock, mock_runner: Mock) -> None:
         """Test processing user messages successfully."""
+        from app.state import SessionContext
+
         mock_app_state = Mock()
         mock_app_state.full_history_store = None
-        mock_app_state.interrupt_requested = False  # Normal completion, not interrupted
+
         mock_session = Mock()
         mock_session.agent = Mock()
         mock_session.session_id = "chat_test"
@@ -101,6 +126,14 @@ class TestProcessMessages:
         mock_session.total_tokens = 0
         mock_session.trigger_tokens = 10000
 
+        # Create SessionContext
+        mock_context = SessionContext(
+            session=mock_session,
+            agent=mock_session.agent,
+            stream_task=None,
+            interrupt_requested=False,
+        )
+
         # Create an async generator for stream_events
         async def mock_stream() -> AsyncGenerator[Any, None]:
             return
@@ -110,7 +143,7 @@ class TestProcessMessages:
         mock_result.stream_events = mock_stream
         mock_runner.run_streamed.return_value = mock_result
 
-        await process_messages(mock_app_state, mock_session, ["Test input"])
+        await process_messages(mock_app_state, mock_context, ["Test input"])
 
         mock_ipc.send_assistant_start.assert_called_once()
         mock_ipc.send_assistant_end.assert_called_once()
@@ -121,11 +154,12 @@ class TestProcessMessages:
     @patch("app.runtime.handle_streaming_error")
     async def test_process_messages_error(self, mock_handle_error: Mock, mock_ipc: Mock, mock_runner: Mock) -> None:
         """Test processing user messages with error."""
+        from app.state import SessionContext
+
         mock_app_state = Mock()
         mock_app_state.session_manager = Mock()
         mock_app_state.session_manager.get_session.return_value = Mock(is_named=True)
         mock_app_state.full_history_store = None
-        mock_app_state.interrupt_requested = False  # Error during streaming, not interrupted
 
         mock_session = Mock()
         mock_session.agent = Mock()
@@ -133,10 +167,18 @@ class TestProcessMessages:
         mock_session.accumulated_tool_tokens = 0
         mock_session.get_items = AsyncMock(return_value=[])
 
+        # Create SessionContext
+        mock_context = SessionContext(
+            session=mock_session,
+            agent=mock_session.agent,
+            stream_task=None,
+            interrupt_requested=False,
+        )
+
         # Make Runner.run_streamed raise an exception
         mock_runner.run_streamed.side_effect = Exception("Test error")
 
-        await process_messages(mock_app_state, mock_session, ["Test input"])
+        await process_messages(mock_app_state, mock_context, ["Test input"])
 
         mock_handle_error.assert_called_once()
 

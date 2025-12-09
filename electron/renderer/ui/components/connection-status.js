@@ -107,7 +107,7 @@ export class ConnectionStatus {
     // On reconnect (was disconnected, now connected), resume queue processing (Section 7.F of queue spec)
     if (wasDisconnected || !wasConnected) {
       const messageQueueService = getMessageQueueService();
-      if (messageQueueService && messageQueueService.hasItems()) {
+      if (messageQueueService?.hasItems()) {
         // Delay to allow system to stabilize after reconnect
         setTimeout(() => {
           messageQueueService.process();

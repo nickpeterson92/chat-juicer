@@ -17,15 +17,21 @@ import { formatTimestamp } from "../../viewmodels/session-viewmodel.js";
  * @param {string} session.created_at - ISO timestamp
  * @param {boolean} isActive - Whether this session is active
  * @param {Object} domAdapter - DOM adapter
+ * @param {Object} streamManager - StreamManager instance (optional)
  * @returns {HTMLElement} Session list item element
  */
-export function renderSessionItem(session, isActive, domAdapter) {
+export function renderSessionItem(session, isActive, domAdapter, streamManager = null) {
   const itemDiv = domAdapter.createElement("div");
   domAdapter.addClass(itemDiv, "session-item");
   domAdapter.setAttribute(itemDiv, "data-session-id", session.id);
 
   if (isActive) {
     domAdapter.addClass(itemDiv, "active");
+  }
+
+  // Add streaming indicator if session is streaming
+  if (streamManager && streamManager.isStreaming(session.id)) {
+    domAdapter.addClass(itemDiv, "session-streaming");
   }
 
   // Main content area (clickable to switch session)
@@ -49,21 +55,6 @@ export function renderSessionItem(session, isActive, domAdapter) {
   // Actions container (visible on hover)
   const actionsDiv = domAdapter.createElement("div");
   domAdapter.addClass(actionsDiv, "session-actions");
-
-  // Summarize button
-  const summarizeBtn = domAdapter.createElement("button");
-  domAdapter.addClass(summarizeBtn, "session-action-btn", "summarize-btn");
-  domAdapter.setAttribute(summarizeBtn, "aria-label", "Summarize session");
-  domAdapter.setAttribute(summarizeBtn, "data-action", "summarize");
-  domAdapter.setAttribute(summarizeBtn, "data-session-id", session.id);
-  domAdapter.setAttribute(summarizeBtn, "title", "Summarize");
-  // SVG icon for summarize (wand - matches function card icon)
-  const summarizeSVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/>
-    <path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/>
-    <path d="m3 21 9-9"/><path d="M12.2 6.2 11 5"/>
-  </svg>`;
-  summarizeBtn.innerHTML = summarizeSVG;
 
   // Rename button
   const renameBtn = domAdapter.createElement("button");
@@ -91,7 +82,6 @@ export function renderSessionItem(session, isActive, domAdapter) {
   </svg>`;
   deleteBtn.innerHTML = deleteSVG;
 
-  domAdapter.appendChild(actionsDiv, summarizeBtn);
   domAdapter.appendChild(actionsDiv, renameBtn);
   domAdapter.appendChild(actionsDiv, deleteBtn);
 
@@ -108,9 +98,10 @@ export function renderSessionItem(session, isActive, domAdapter) {
  * @param {Array<Object>} sessions - Array of session objects
  * @param {string|null} activeSessionId - ID of currently active session
  * @param {Object} domAdapter - DOM adapter
+ * @param {Object} streamManager - StreamManager instance (optional)
  * @returns {DocumentFragment} Fragment containing all session items
  */
-export function renderSessionList(sessions, activeSessionId, domAdapter) {
+export function renderSessionList(sessions, activeSessionId, domAdapter, streamManager = null) {
   if (!domAdapter || !domAdapter.getDocument) {
     // Handle null adapter case in tests
     return null;
@@ -120,7 +111,7 @@ export function renderSessionList(sessions, activeSessionId, domAdapter) {
 
   for (const session of sessions) {
     const isActive = session.id === activeSessionId;
-    const itemElement = renderSessionItem(session, isActive, domAdapter);
+    const itemElement = renderSessionItem(session, isActive, domAdapter, streamManager);
     fragment.appendChild(itemElement);
   }
 

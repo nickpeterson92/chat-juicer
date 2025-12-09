@@ -18,7 +18,9 @@ from typing import Any
 # stdout/stderr can remain as text for logging purposes
 from app.bootstrap import initialize_application
 from app.runtime import (
+    MAX_CONCURRENT_STREAMS,
     ensure_session_exists,
+    get_active_stream_count,
     handle_file_upload,
     handle_session_command_wrapper,
     process_messages,
@@ -108,15 +110,38 @@ async def main() -> None:
             # Stream Interrupt Signal
             # ========================================================================
             if message_type == "interrupt":
-                if app_state.active_stream_task and not app_state.active_stream_task.done():
-                    logger.info("Interrupt signal received - cancelling active stream task")
-                    app_state.active_stream_task.cancel()
-                    try:
-                        await app_state.active_stream_task
-                    except asyncio.CancelledError:
-                        logger.debug("Active stream task cancelled successfully")
+                session_id = message.get("session_id")
+
+                if session_id and session_id in app_state.active_sessions:
+                    # Target specific session
+                    ctx = app_state.active_sessions[session_id]
+                    if ctx.stream_task and not ctx.stream_task.done():
+                        logger.info(f"Interrupt signal received for session {session_id} - cancelling stream task")
+                        ctx.interrupt_requested = True
+                        ctx.stream_task.cancel()
+                        try:
+                            await ctx.stream_task
+                        except asyncio.CancelledError:
+                            logger.debug(f"Stream task cancelled successfully for session {session_id}")
+                    else:
+                        logger.debug(f"Interrupt signal received for session {session_id} but no active stream task")
+                elif app_state._current_session_id and app_state._current_session_id in app_state.active_sessions:
+                    # Backward compatibility: interrupt current session if no session_id provided
+                    ctx = app_state.active_sessions[app_state._current_session_id]
+                    if ctx.stream_task and not ctx.stream_task.done():
+                        logger.info(
+                            f"Interrupt signal received - cancelling current session {app_state._current_session_id}"
+                        )
+                        ctx.interrupt_requested = True
+                        ctx.stream_task.cancel()
+                        try:
+                            await ctx.stream_task
+                        except asyncio.CancelledError:
+                            logger.debug("Active stream task cancelled successfully")
+                    else:
+                        logger.debug("Interrupt signal received but no active stream task")
                 else:
-                    logger.debug("Interrupt signal received but no active stream task")
+                    logger.debug("Interrupt signal received but no active session")
                 continue
 
             # ========================================================================
@@ -161,7 +186,8 @@ async def main() -> None:
             # Chat Messages (always array format - single or batch)
             # ========================================================================
             if message_type == "message":
-                # Extract messages array (unified format)
+                # Extract session_id and messages
+                session_id = message.get("session_id")
                 messages = message.get("messages", [])
 
                 # Backward compatibility: support legacy single-message format
@@ -170,6 +196,19 @@ async def main() -> None:
 
                 if not messages:
                     logger.warning("Empty message received")
+                    continue
+
+                # Check concurrent stream limit FIRST
+                active_count = get_active_stream_count(app_state)
+                if active_count >= MAX_CONCURRENT_STREAMS:
+                    logger.warning(f"Maximum concurrent streams ({MAX_CONCURRENT_STREAMS}) reached")
+                    write_message(
+                        {
+                            "type": "error",
+                            "message": f"Maximum concurrent sessions ({MAX_CONCURRENT_STREAMS}) reached. Please wait for one to complete.",
+                            "session_id": session_id,
+                        }
+                    )
                     continue
 
                 # Validate all messages
@@ -194,14 +233,17 @@ async def main() -> None:
                     file_msg = f"{prefix}: {msg[:LOG_PREVIEW_LENGTH]}{'...' if len(msg) > LOG_PREVIEW_LENGTH else ''}"
                     logger.info(f"{prefix}: {msg}", extra={"file_message": file_msg})
 
-                # Ensure session exists (lazy initialization on first message)
-                session, is_new_session = await ensure_session_exists(app_state)
+                # Get or create session context
+                session_ctx, is_new_session = await ensure_session_exists(app_state, session_id)
 
-                # Process messages (single or batch - handled uniformly)
-                # Wrap in task for interrupt support
-                app_state.active_stream_task = asyncio.create_task(
-                    process_messages(app_state, session, validated_messages)
+                # Create task - DON'T await, let it run concurrently
+                session_ctx.stream_task = asyncio.create_task(
+                    process_messages(app_state, session_ctx, validated_messages)
                 )
+
+                # Update backward compatibility pointer if this is the current session
+                if session_id == app_state._current_session_id or app_state._current_session_id is None:
+                    app_state._current_session_id = session_ctx.session.session_id
 
                 # Wait for stream while also checking for interrupt messages
                 # Track any message received during streaming that needs processing after
@@ -215,10 +257,10 @@ async def main() -> None:
                         read_future = loop.run_in_executor(None, read_message)
                         app_state.pending_read_task = asyncio.ensure_future(read_future)
 
-                    while not app_state.active_stream_task.done():
+                    while not session_ctx.stream_task.done():
                         # Wait for EITHER stream to complete OR new message
                         done, _pending = await asyncio.wait(
-                            {app_state.active_stream_task, app_state.pending_read_task},
+                            {session_ctx.stream_task, app_state.pending_read_task},
                             return_when=asyncio.FIRST_COMPLETED,
                         )
 
@@ -231,14 +273,16 @@ async def main() -> None:
                             if next_type == "interrupt":
                                 logger.info("Interrupt received during streaming - cancelling")
                                 # Set flag BEFORE cancel so runtime.py can detect it
-                                app_state.interrupt_requested = True
-                                app_state.active_stream_task.cancel()
+                                session_ctx.interrupt_requested = True
+                                session_ctx.stream_task.cancel()
                                 # Send stream_interrupted IMMEDIATELY for instant user feedback
-                                write_message({"type": "stream_interrupted"})
+                                write_message(
+                                    {"type": "stream_interrupted", "session_id": session_ctx.session.session_id}
+                                )
                                 logger.info("stream_interrupted sent to frontend")
                                 try:
                                     # Short timeout - task should respond quickly to cancel
-                                    await asyncio.wait_for(app_state.active_stream_task, timeout=0.5)
+                                    await asyncio.wait_for(session_ctx.stream_task, timeout=0.5)
                                     logger.debug("Stream task completed after cancel")
                                 except asyncio.TimeoutError:
                                     logger.warning("Stream task didn't complete within timeout after cancel")
@@ -246,18 +290,91 @@ async def main() -> None:
                                     logger.debug("Stream task cancelled successfully")
                                 # Always send assistant_end after interrupt - runtime.py skips it
                                 # when interrupt_requested is True to avoid duplicates
-                                write_message({"type": "assistant_end"})
+                                write_message({"type": "assistant_end", "session_id": session_ctx.session.session_id})
                                 logger.info("assistant_end sent (interrupt handler)")
                                 break
+                            elif next_type == "session":
+                                # Session commands can be processed during streaming (concurrent sessions)
+                                # They don't interfere with the active stream
+                                request_id = next_message.get("request_id") or f"session_{uuid.uuid4().hex[:8]}"
+                                try:
+                                    command = next_message.get("command")
+                                    params = next_message.get("params", {})
+                                    logger.info(f"Processing session command during streaming: {command}")
+                                    result = await handle_session_command_wrapper(app_state, command, params)
+                                    write_message(
+                                        {"type": "session_response", "data": result, "request_id": request_id}
+                                    )
+                                except Exception as e:
+                                    logger.error(f"Error handling session command during streaming: {e}")
+                                    write_message(
+                                        {
+                                            "type": "session_response",
+                                            "data": {"error": str(e)},
+                                            "request_id": request_id,
+                                        }
+                                    )
+                                # Start a new read task
+                                read_future = loop.run_in_executor(None, read_message)
+                                app_state.pending_read_task = asyncio.ensure_future(read_future)
+                            elif next_type == "message":
+                                # Check if message is for a DIFFERENT session - allow concurrent
+                                next_session_id = next_message.get("session_id")
+                                current_streaming_session_id = session_ctx.session.session_id
+
+                                if next_session_id and next_session_id != current_streaming_session_id:
+                                    # Different session - check concurrent limit
+                                    active_count = get_active_stream_count(app_state)
+                                    if active_count >= MAX_CONCURRENT_STREAMS:
+                                        logger.warning(
+                                            f"Max concurrent streams ({MAX_CONCURRENT_STREAMS}) reached, queuing"
+                                        )
+                                        queued_message = next_message
+                                    else:
+                                        # Start concurrent stream for different session
+                                        logger.info(f"Starting concurrent stream for session {next_session_id}")
+                                        concurrent_messages = next_message.get("messages", [])
+                                        if not concurrent_messages and next_message.get("content"):
+                                            concurrent_messages = [{"content": next_message.get("content")}]
+
+                                        # Validate messages
+                                        validated_concurrent = []
+                                        for msg in concurrent_messages:
+                                            try:
+                                                content = msg.get("content", "") if isinstance(msg, dict) else str(msg)
+                                                validated_input = UserInput(content=content)
+                                                validated_concurrent.append(validated_input.content)
+                                            except ValueError:
+                                                continue
+
+                                        if validated_concurrent:
+                                            # Get or create session context for concurrent session
+                                            concurrent_ctx, _is_new = await ensure_session_exists(
+                                                app_state, next_session_id
+                                            )
+                                            # Start concurrent task
+                                            concurrent_ctx.stream_task = asyncio.create_task(
+                                                process_messages(app_state, concurrent_ctx, validated_concurrent)
+                                            )
+                                            logger.info(f"Concurrent stream started for {next_session_id}")
+                                            # Note: session_created event will be sent when the concurrent
+                                            # stream completes (handled by process_messages)
+                                else:
+                                    # Same session - queue for after current stream completes
+                                    logger.info("Queuing message for same session during streaming")
+                                    queued_message = next_message
+                                # Start a new read task
+                                read_future = loop.run_in_executor(None, read_message)
+                                app_state.pending_read_task = asyncio.ensure_future(read_future)
                             else:
-                                # Non-interrupt message during streaming - queue for after stream completes
+                                # Other message types during streaming - queue for after stream completes
                                 logger.info(f"Queuing {next_type} message received during streaming")
                                 queued_message = next_message
                                 # Start a new read task for potential interrupt
                                 read_future = loop.run_in_executor(None, read_message)
                                 app_state.pending_read_task = asyncio.ensure_future(read_future)
 
-                        if app_state.active_stream_task in done:
+                        if session_ctx.stream_task in done:
                             # Stream completed normally
                             # DON'T cancel app_state.pending_read_task - keep it for next main loop iteration
                             # This prevents losing messages that arrive right after stream completes
@@ -266,13 +383,13 @@ async def main() -> None:
                 except asyncio.CancelledError:
                     logger.debug("Stream task cancelled - handled in process_messages")
                 finally:
-                    app_state.active_stream_task = None
+                    session_ctx.stream_task = None
                     # Reset interrupt flag after task completes
-                    app_state.interrupt_requested = False
+                    session_ctx.interrupt_requested = False
 
                 # Send session creation event AFTER processing completes
                 if is_new_session:
-                    send_session_created_event(app_state, session.session_id)
+                    send_session_created_event(app_state, session_ctx.session.session_id)
 
                 # Process any message that was queued during streaming
                 if queued_message:
@@ -294,13 +411,13 @@ async def main() -> None:
                                     continue
                             if validated_queued:
                                 logger.info(f"Processing queued message: {validated_queued[0][:50]}...")
-                                # Process with existing session (no need to ensure_session_exists again)
-                                app_state.active_stream_task = asyncio.create_task(
-                                    process_messages(app_state, session, validated_queued)
+                                # Process with existing session context (no need to ensure_session_exists again)
+                                session_ctx.stream_task = asyncio.create_task(
+                                    process_messages(app_state, session_ctx, validated_queued)
                                 )
                                 # Simple wait for queued message (no interrupt support for simplicity)
-                                await app_state.active_stream_task
-                                app_state.active_stream_task = None
+                                await session_ctx.stream_task
+                                session_ctx.stream_task = None
                     else:
                         logger.warning(f"Queued message type {queued_type} not supported, discarding")
                 continue

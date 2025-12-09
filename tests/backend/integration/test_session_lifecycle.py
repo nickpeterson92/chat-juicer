@@ -445,11 +445,13 @@ class TestSessionLifecycleEdgeCases:
 
     @pytest.mark.asyncio
     async def test_create_session_without_session_manager(self) -> None:
-        """Test session creation fails gracefully without session manager."""
+        """Test session creation fails gracefully without session manager.
+
+        Phase 2: Updated to use new AppState structure.
+        """
         app_state = AppState(
             session_manager=None,
-            current_session=None,
-            agent=Mock(),
+            active_sessions={},  # Empty sessions dict
             deployment="gpt-4o",
             full_history_store=None,
             mcp_servers={},

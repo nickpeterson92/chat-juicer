@@ -6,6 +6,7 @@
 
 let scrollPending = false;
 let scrollTarget = null;
+const lastScrollTs = new Map(); // Throttle rapid-fire calls
 
 // Distance from bottom (in pixels) to consider "near bottom" for auto-scroll
 // ~8-10 lines of text - if within this range, user is "following along"
@@ -157,6 +158,14 @@ export function scheduleScroll(container, options = {}) {
 
   // Only auto-scroll if user is near bottom (or forced)
   if (!force && !isNearBottom(container)) return;
+
+  // Throttle rapid-fire calls (cap at ~40fps) to reduce layout pressure on huge sessions
+  const now = performance.now();
+  const lastTs = lastScrollTs.get(container) || 0;
+  if (!force && now - lastTs < 25) {
+    return;
+  }
+  lastScrollTs.set(container, now);
 
   // Update state to latest call's values (last caller wins)
   // This is consistent with scrollTarget and ensures the most recent intent is honored

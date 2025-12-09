@@ -41,9 +41,10 @@ class TestStreamInterrupt:
     @patch("app.runtime.IPCManager")
     async def test_cancel_during_token_streaming(self, mock_ipc: Mock, mock_runner: Mock) -> None:
         """Test cancellation during token streaming causes immediate stop."""
+        from app.state import SessionContext
+
         mock_app_state = Mock()
         mock_app_state.full_history_store = None
-        mock_app_state.interrupt_requested = True  # Set by main.py before cancel
 
         mock_session = Mock()
         mock_session.agent = Mock()
@@ -52,20 +53,30 @@ class TestStreamInterrupt:
         mock_session.calculate_items_tokens.return_value = 100
         mock_session.accumulated_tool_tokens = 0
         mock_session.total_tokens = 0
+        mock_session.trigger_tokens = 10000  # Add trigger_tokens for division
+        mock_session.should_summarize = AsyncMock(return_value=False)
 
-        # Simulate cancellation during streaming
-        async def mock_stream_with_cancel() -> Any:
+        # Create SessionContext with interrupt_requested=True
+        mock_context = SessionContext(
+            session=mock_session,
+            agent=mock_session.agent,
+            stream_task=None,
+            interrupt_requested=True,  # Set by main.py before cancel
+        )
+
+        # Simulate streaming with interrupt_requested flag set
+        # The flag causes immediate break without raising CancelledError
+        async def mock_stream_with_flag() -> Any:
             yield MockEvent("raw_response_event")
             yield MockEvent("raw_response_event")
-            raise asyncio.CancelledError("User cancelled")
+            # No CancelledError needed - the interrupt_requested flag causes break
 
         mock_result = Mock()
-        mock_result.stream_events = mock_stream_with_cancel
+        mock_result.stream_events = mock_stream_with_flag
         mock_runner.run_streamed.return_value = mock_result
 
-        # Expect CancelledError to be re-raised
-        with pytest.raises(asyncio.CancelledError):
-            await process_messages(mock_app_state, mock_session, ["Test input"])
+        # Should complete normally (flag causes break, not exception)
+        await process_messages(mock_app_state, mock_context, ["Test input"])
 
         # Note: When interrupt_requested is True, process_messages skips assistant_end
         # main.py handles sending it to avoid duplicates
@@ -79,6 +90,8 @@ class TestStreamInterrupt:
         self, mock_handle_ipc: AsyncMock, mock_ipc: Mock, mock_runner: Mock
     ) -> None:
         """Test cancellation during tool execution is deferred until tool completes."""
+        from app.state import SessionContext
+
         mock_app_state = Mock()
         mock_app_state.full_history_store = None
         mock_app_state.session_manager = Mock()
@@ -91,6 +104,14 @@ class TestStreamInterrupt:
         mock_session.calculate_items_tokens.return_value = 100
         mock_session.accumulated_tool_tokens = 50
         mock_session.total_tokens = 0
+
+        # Create SessionContext
+        mock_context = SessionContext(
+            session=mock_session,
+            agent=mock_session.agent,
+            stream_task=None,
+            interrupt_requested=False,
+        )
 
         # Mock IPC handler to return None (no IPC messages)
         mock_handle_ipc.return_value = None
@@ -110,7 +131,7 @@ class TestStreamInterrupt:
 
         # Expect CancelledError to be re-raised
         with pytest.raises(asyncio.CancelledError):
-            await process_messages(mock_app_state, mock_session, ["Test input"])
+            await process_messages(mock_app_state, mock_context, ["Test input"])
 
         # Note: stream_interrupted is sent by main.py, not process_messages
         # Verify session metadata was updated (tools completed)
@@ -124,6 +145,8 @@ class TestStreamInterrupt:
         self, mock_handle_ipc: AsyncMock, mock_ipc: Mock, mock_runner: Mock
     ) -> None:
         """Test that session is persisted when tools completed before cancel."""
+        from app.state import SessionContext
+
         mock_app_state = Mock()
         mock_app_state.full_history_store = None
         mock_app_state.session_manager = Mock()
@@ -136,6 +159,14 @@ class TestStreamInterrupt:
         mock_session.calculate_items_tokens.return_value = 100
         mock_session.accumulated_tool_tokens = 25
         mock_session.total_tokens = 0
+
+        # Create SessionContext
+        mock_context = SessionContext(
+            session=mock_session,
+            agent=mock_session.agent,
+            stream_task=None,
+            interrupt_requested=False,
+        )
 
         mock_handle_ipc.return_value = None
 
@@ -151,7 +182,7 @@ class TestStreamInterrupt:
         mock_runner.run_streamed.return_value = mock_result
 
         with pytest.raises(asyncio.CancelledError):
-            await process_messages(mock_app_state, mock_session, ["Test"])
+            await process_messages(mock_app_state, mock_context, ["Test"])
 
         # Verify persistence occurred (tools_completed = True)
         mock_app_state.session_manager.update_session.assert_called_once()
@@ -161,6 +192,8 @@ class TestStreamInterrupt:
     @patch("app.runtime.IPCManager")
     async def test_cancel_without_tools_skips_persistence(self, mock_ipc: Mock, mock_runner: Mock) -> None:
         """Test that session is not persisted when cancelled with no tools."""
+        from app.state import SessionContext
+
         mock_app_state = Mock()
         mock_app_state.full_history_store = None
         mock_app_state.session_manager = Mock()
@@ -173,6 +206,14 @@ class TestStreamInterrupt:
         mock_session.accumulated_tool_tokens = 0
         mock_session.total_tokens = 0
 
+        # Create SessionContext
+        mock_context = SessionContext(
+            session=mock_session,
+            agent=mock_session.agent,
+            stream_task=None,
+            interrupt_requested=False,
+        )
+
         # Simulate cancel during token streaming (no tools)
         async def mock_stream_no_tools() -> Any:
             yield MockEvent("raw_response_event")
@@ -183,7 +224,7 @@ class TestStreamInterrupt:
         mock_runner.run_streamed.return_value = mock_result
 
         with pytest.raises(asyncio.CancelledError):
-            await process_messages(mock_app_state, mock_session, ["Test"])
+            await process_messages(mock_app_state, mock_context, ["Test"])
 
         # Persistence should be skipped (cancel_requested=True, tools_completed=False)
         mock_app_state.session_manager.update_session.assert_not_called()
@@ -193,6 +234,8 @@ class TestStreamInterrupt:
     @patch("app.runtime.IPCManager")
     async def test_cancel_after_completion_noop(self, mock_ipc: Mock, mock_runner: Mock) -> None:
         """Test that cancel after stream completion is a no-op."""
+        from app.state import SessionContext
+
         mock_app_state = Mock()
         mock_app_state.full_history_store = None
         mock_app_state.session_manager = Mock()
@@ -208,6 +251,14 @@ class TestStreamInterrupt:
         mock_session.trigger_tokens = 10000  # Add trigger_tokens for division
         mock_session.should_summarize = AsyncMock(return_value=False)
 
+        # Create SessionContext
+        mock_context = SessionContext(
+            session=mock_session,
+            agent=mock_session.agent,
+            stream_task=None,
+            interrupt_requested=False,
+        )
+
         # Normal completion without cancel
         async def mock_stream_complete() -> Any:
             yield MockEvent("run_item_stream_event", "message_output_item")
@@ -217,7 +268,7 @@ class TestStreamInterrupt:
         mock_runner.run_streamed.return_value = mock_result
 
         # Should complete normally
-        await process_messages(mock_app_state, mock_session, ["Test"])
+        await process_messages(mock_app_state, mock_context, ["Test"])
 
         # Verify no stream_interrupted was sent
         calls = [call[0][0] for call in mock_ipc.send.call_args_list if call[0]]
@@ -231,9 +282,10 @@ class TestStreamInterrupt:
         self, mock_handle_ipc: AsyncMock, mock_ipc: Mock, mock_runner: Mock
     ) -> None:
         """Test that cancel_requested flag causes loop to break at safe points."""
+        from app.state import SessionContext
+
         mock_app_state = Mock()
         mock_app_state.full_history_store = None
-        mock_app_state.interrupt_requested = True  # Set by main.py before cancel
 
         mock_session = Mock()
         mock_session.agent = Mock()
@@ -242,6 +294,14 @@ class TestStreamInterrupt:
         mock_session.calculate_items_tokens.return_value = 100
         mock_session.accumulated_tool_tokens = 0
         mock_session.total_tokens = 0
+
+        # Create SessionContext with interrupt_requested=True
+        mock_context = SessionContext(
+            session=mock_session,
+            agent=mock_session.agent,
+            stream_task=None,
+            interrupt_requested=True,  # Set by main.py before cancel
+        )
 
         mock_handle_ipc.return_value = None
 
@@ -256,7 +316,7 @@ class TestStreamInterrupt:
         mock_runner.run_streamed.return_value = mock_result
 
         with pytest.raises(asyncio.CancelledError):
-            await process_messages(mock_app_state, mock_session, ["Test"])
+            await process_messages(mock_app_state, mock_context, ["Test"])
 
         # When interrupt_requested is True, process_messages skips assistant_end
         # main.py handles sending it to avoid duplicates
@@ -270,6 +330,8 @@ class TestStreamInterrupt:
         self, mock_handle_ipc: AsyncMock, mock_ipc: Mock, mock_runner: Mock
     ) -> None:
         """Test cancellation between multiple tools persists completed tools."""
+        from app.state import SessionContext
+
         mock_app_state = Mock()
         mock_app_state.full_history_store = None
         mock_app_state.session_manager = Mock()
@@ -282,6 +344,14 @@ class TestStreamInterrupt:
         mock_session.calculate_items_tokens.return_value = 100
         mock_session.accumulated_tool_tokens = 75
         mock_session.total_tokens = 0
+
+        # Create SessionContext
+        mock_context = SessionContext(
+            session=mock_session,
+            agent=mock_session.agent,
+            stream_task=None,
+            interrupt_requested=False,
+        )
 
         mock_handle_ipc.return_value = None
 
@@ -300,7 +370,7 @@ class TestStreamInterrupt:
         mock_runner.run_streamed.return_value = mock_result
 
         with pytest.raises(asyncio.CancelledError):
-            await process_messages(mock_app_state, mock_session, ["Test"])
+            await process_messages(mock_app_state, mock_context, ["Test"])
 
         # Verify first tool's results were persisted
         mock_app_state.session_manager.update_session.assert_called_once()

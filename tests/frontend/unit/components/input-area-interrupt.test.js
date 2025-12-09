@@ -45,7 +45,7 @@ describe("InputArea - Stream Interrupt Feature", () => {
 
   describe("Button Transforms During Streaming", () => {
     it("should add .streaming class when isStreaming becomes true", () => {
-      const inputArea = new InputArea(textarea, sendButton, onSendCallback, {
+      const _inputArea = new InputArea(textarea, sendButton, onSendCallback, {
         appState,
       });
 
@@ -61,7 +61,7 @@ describe("InputArea - Stream Interrupt Feature", () => {
     });
 
     it("should remove .streaming class when isStreaming becomes false", () => {
-      const inputArea = new InputArea(textarea, sendButton, onSendCallback, {
+      const _inputArea = new InputArea(textarea, sendButton, onSendCallback, {
         appState,
       });
 
@@ -78,7 +78,7 @@ describe("InputArea - Stream Interrupt Feature", () => {
     });
 
     it("should remove both .streaming and .stopping classes on stream end", () => {
-      const inputArea = new InputArea(textarea, sendButton, onSendCallback, {
+      const _inputArea = new InputArea(textarea, sendButton, onSendCallback, {
         appState,
       });
 
@@ -95,7 +95,7 @@ describe("InputArea - Stream Interrupt Feature", () => {
     });
 
     it("should re-enable button when streaming ends and input has text", () => {
-      const inputArea = new InputArea(textarea, sendButton, onSendCallback, {
+      const _inputArea = new InputArea(textarea, sendButton, onSendCallback, {
         appState,
       });
 

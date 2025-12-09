@@ -62,12 +62,12 @@ class TestProcessMessagesExtended:
         mock_runner: Mock,
     ) -> None:
         """Test processing messages with persistence error."""
+        from app.state import SessionContext
         from core.session import PersistenceError
 
         mock_app_state = Mock()
         mock_app_state.session_manager = Mock()
         mock_app_state.session_manager.get_session.return_value = Mock(is_named=True)
-        mock_app_state.interrupt_requested = False  # Normal error, not interrupted
 
         mock_session = Mock()
         mock_session.agent = Mock()
@@ -75,10 +75,18 @@ class TestProcessMessagesExtended:
         mock_session.accumulated_tool_tokens = 0
         mock_session.get_items = AsyncMock(return_value=[])
 
+        # Create SessionContext
+        mock_context = SessionContext(
+            session=mock_session,
+            agent=mock_session.agent,
+            stream_task=None,
+            interrupt_requested=False,
+        )
+
         # Raise persistence error during run_streamed
         mock_runner.run_streamed.side_effect = PersistenceError("Layer 2 write failed")
 
-        await process_messages(mock_app_state, mock_session, ["Test input"])
+        await process_messages(mock_app_state, mock_context, ["Test input"])
 
         # Should send error message to UI (exactly one call for persistence error)
         assert mock_ipc.send.call_count == 1  # Only the error message
@@ -97,9 +105,11 @@ class TestProcessMessagesExtended:
     @patch("app.runtime.IPCManager")
     async def test_process_messages_with_response_text(self, mock_ipc: Mock, mock_runner: Mock) -> None:
         """Test processing messages with response text logging."""
+        from app.state import SessionContext
+
         mock_app_state = Mock()
         mock_app_state.full_history_store = None
-        mock_app_state.interrupt_requested = False  # Normal completion, not interrupted
+
         mock_session = Mock()
         mock_session.agent = Mock()
         mock_session.session_id = "chat_test"
@@ -115,6 +125,14 @@ class TestProcessMessagesExtended:
         ]
         mock_session.get_items = AsyncMock(return_value=mock_items)
         mock_session.calculate_items_tokens.return_value = 100
+
+        # Create SessionContext
+        mock_context = SessionContext(
+            session=mock_session,
+            agent=mock_session.agent,
+            stream_task=None,
+            interrupt_requested=False,
+        )
 
         # Create event with response text
         mock_event = Mock()
@@ -139,7 +157,7 @@ class TestProcessMessagesExtended:
         with patch("app.runtime.handle_electron_ipc") as mock_handle_ipc:
             mock_handle_ipc.return_value = None
 
-            await process_messages(mock_app_state, mock_session, ["Test input"])
+            await process_messages(mock_app_state, mock_context, ["Test input"])
 
         # Should process the message and log response
         mock_ipc.send_assistant_start.assert_called_once()
@@ -150,9 +168,11 @@ class TestProcessMessagesExtended:
     @patch("app.runtime.IPCManager")
     async def test_process_messages_triggers_summarization(self, mock_ipc: Mock, mock_runner: Mock) -> None:
         """Test that post-run summarization is triggered when needed."""
+        from app.state import SessionContext
+
         mock_app_state = Mock()
         mock_app_state.full_history_store = None
-        mock_app_state.interrupt_requested = False  # Normal completion, not interrupted
+
         mock_session = Mock()
         mock_session.agent = Mock()
         mock_session.session_id = "chat_test"
@@ -168,6 +188,14 @@ class TestProcessMessagesExtended:
         mock_session.get_items = AsyncMock(return_value=mock_items)
         mock_session.calculate_items_tokens.return_value = 9500
 
+        # Create SessionContext
+        mock_context = SessionContext(
+            session=mock_session,
+            agent=mock_session.agent,
+            stream_task=None,
+            interrupt_requested=False,
+        )
+
         # Create empty stream
         async def mock_stream() -> AsyncGenerator[Any, None]:
             return
@@ -177,7 +205,7 @@ class TestProcessMessagesExtended:
         mock_result.stream_events = mock_stream
         mock_runner.run_streamed.return_value = mock_result
 
-        await process_messages(mock_app_state, mock_session, ["Test input"])
+        await process_messages(mock_app_state, mock_context, ["Test input"])
 
         # Should trigger summarization
         mock_session.should_summarize.assert_called_once()

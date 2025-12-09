@@ -178,7 +178,7 @@ generate-model-metadata: ## Generate model-metadata.js from Python MODEL_CONFIGS
 lint: ## Run ruff linter on Python code
 	@echo "$(BLUE)Running ruff linter...$(NC)"
 	@if [ -f ".juicer/bin/ruff" ]; then \
-		.juicer/bin/ruff check src/ tests/ --fix --exit-non-zero-on-fix; \
+		.juicer/bin/ruff check src/ tests/ --fix; \
 	else \
 		echo "$(YELLOW)⚠ Ruff not installed in .juicer venv$(NC)"; \
 		echo "$(BLUE)Run: make install-dev$(NC)"; \

@@ -278,6 +278,10 @@ MSG_TYPE_ASSISTANT_START = "assistant_start"
 #: Signals to frontend that assistant has completed the response.
 MSG_TYPE_ASSISTANT_END = "assistant_end"
 
+#: Message type for token usage updates.
+#: Sends current/limit/threshold token counts to frontend.
+MSG_TYPE_TOKEN_USAGE = "token_usage"
+
 #: Message type for incremental assistant content delta.
 #: Contains streaming text chunks as assistant generates response.
 MSG_TYPE_ASSISTANT_DELTA = "assistant_delta"
@@ -418,10 +422,10 @@ SESSION_TITLE_MAX_TOKENS = 20
 SUMMARY_CALL_ID_PREFIX = "sum_"
 
 #: Trigger conversation summarization at this fraction of model's token limit.
-#: Example: 0.2 × GPT-5's 272k tokens = 54,400 token trigger point.
+#: Example: 0.8 × GPT-5's 272k tokens = 217,600 token trigger point.
 #: When total_tokens exceeds this threshold, TokenAwareSQLiteSession automatically
 #: summarizes the conversation and resets the context.
-CONVERSATION_SUMMARIZATION_THRESHOLD = 0.2
+CONVERSATION_SUMMARIZATION_THRESHOLD = 0.8
 
 #: Number of recent user messages to keep when summarizing conversations.
 #: Keeps the last N complete user-assistant exchanges unsummarized.

@@ -81,8 +81,8 @@ describe("MessageQueueService", () => {
 
   describe("add", () => {
     it("should add message to queue with unique ID", () => {
-      // Prevent auto-processing so we can verify queue state
-      appState.setState("python.status", "busy_streaming");
+      // Keep sendMessage pending so items remain visible for assertion
+      mockMessageService.sendMessage.mockReturnValue(new Promise(() => {}));
       const id = queueService.add("Hello world");
 
       expect(id).toBeDefined();
@@ -91,10 +91,11 @@ describe("MessageQueueService", () => {
       const items = appState.getState("queue.items");
       expect(items).toHaveLength(1);
       expect(items[0].text).toBe("Hello world");
-      expect(items[0].status).toBe("queued");
+      expect(items[0].status).toBe("processing");
     });
 
     it("should trim message text", () => {
+      mockMessageService.sendMessage.mockReturnValue(new Promise(() => {}));
       queueService.add("  Hello world  ");
 
       const items = appState.getState("queue.items");
@@ -108,6 +109,7 @@ describe("MessageQueueService", () => {
     });
 
     it("should store file attachments", () => {
+      mockMessageService.sendMessage.mockReturnValue(new Promise(() => {}));
       const files = [{ name: "test.txt", size: 100 }];
       queueService.add("Message with file", files);
 
@@ -116,6 +118,7 @@ describe("MessageQueueService", () => {
     });
 
     it("should emit queue:added event", () => {
+      mockMessageService.sendMessage.mockReturnValue(new Promise(() => {}));
       queueService.add("Test message");
 
       expect(eventSpy).toHaveBeenCalledWith(
@@ -128,6 +131,7 @@ describe("MessageQueueService", () => {
     });
 
     it("should add multiple messages in order", () => {
+      mockMessageService.sendMessage.mockReturnValue(new Promise(() => {}));
       queueService.add("First");
       queueService.add("Second");
       queueService.add("Third");
@@ -140,6 +144,7 @@ describe("MessageQueueService", () => {
     });
 
     it("should include timestamp", () => {
+      mockMessageService.sendMessage.mockReturnValue(new Promise(() => {}));
       const before = Date.now();
       queueService.add("Test");
       const after = Date.now();
@@ -151,96 +156,94 @@ describe("MessageQueueService", () => {
   });
 
   describe("process", () => {
-    it("should not process when python.status is not idle", async () => {
-      appState.setState("python.status", "busy_streaming");
-      queueService.add("Test");
-
-      // Clear the add() auto-process call
-      vi.clearAllMocks();
-
+    it("should return false when queue is empty", async () => {
       const result = await queueService.process();
 
       expect(result).toBe(false);
       expect(mockMessageService.sendMessage).not.toHaveBeenCalled();
     });
 
-    it("should not process when queue is empty", async () => {
-      const result = await queueService.process();
-
-      expect(result).toBe(false);
-      expect(mockMessageService.sendMessage).not.toHaveBeenCalled();
-    });
-
-    it("should send next queued message when idle", async () => {
-      // Add message but prevent auto-processing
+    it("should process queued messages even when python.status is busy", async () => {
+      const item = {
+        id: "id-1",
+        text: "Hello",
+        files: [],
+        sessionId: null,
+        timestamp: Date.now(),
+        status: "queued",
+      };
+      const sessionId = item.sessionId;
       appState.setState("python.status", "busy_streaming");
-      queueService.add("Hello");
-      vi.clearAllMocks();
+      appState.setState("queue.items", [item]);
 
-      // Now set to idle and process
-      appState.setState("python.status", "idle");
       const result = await queueService.process();
 
       expect(result).toBe(true);
-      // Batch processing sends array of message texts
-      expect(mockMessageService.sendMessage).toHaveBeenCalledWith(["Hello"]);
+      expect(mockMessageService.sendMessage).toHaveBeenCalledWith(["Hello"], sessionId);
     });
 
     it("should batch multiple messages including those with files", async () => {
-      const files = [{ name: "test.txt" }];
-      appState.setState("python.status", "busy_streaming");
-      queueService.add("Hello", files);
-      queueService.add("World");
-      vi.clearAllMocks();
+      const items = [
+        {
+          id: "id-1",
+          text: "Hello",
+          files: [{ name: "test.txt" }],
+          sessionId: null,
+          timestamp: Date.now(),
+          status: "queued",
+        },
+        {
+          id: "id-2",
+          text: "World",
+          files: [],
+          sessionId: null,
+          timestamp: Date.now(),
+          status: "queued",
+        },
+      ];
+      const sessionId = items[0].sessionId;
+      appState.setState("queue.items", items);
 
-      appState.setState("python.status", "idle");
       await queueService.process();
 
-      // Batch processing sends all message texts together
-      // Note: files are stored on queue items but batch only sends texts
-      expect(mockMessageService.sendMessage).toHaveBeenCalledWith(["Hello", "World"]);
+      expect(mockMessageService.sendMessage).toHaveBeenCalledWith(["Hello", "World"], sessionId);
     });
 
-    it("should update item status to processing", async () => {
-      appState.setState("python.status", "busy_streaming");
-      queueService.add("Hello");
-      vi.clearAllMocks();
+    it("should emit processing event and update state", async () => {
+      const items = [
+        { id: "id-1", text: "Hello", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+      ];
+      appState.setState("queue.items", items);
 
-      appState.setState("python.status", "idle");
-
-      // Start processing but don't wait for completion
-      const processPromise = queueService.process();
-
-      // During processing, status should be 'processing'
-      // Note: This is hard to test due to async nature, but we verify via event
-      await processPromise;
+      await queueService.process();
 
       expect(eventSpy).toHaveBeenCalledWith(
         "queue:processing",
         expect.objectContaining({
           item: expect.objectContaining({ text: "Hello" }),
+          batchSize: 1,
         })
       );
     });
 
-    it("should remove item from queue after successful send", async () => {
-      appState.setState("python.status", "busy_streaming");
-      queueService.add("Hello");
-      vi.clearAllMocks();
+    it("should remove items from queue after successful send", async () => {
+      const items = [
+        { id: "id-1", text: "Hello", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+      ];
+      appState.setState("queue.items", items);
 
-      appState.setState("python.status", "idle");
       await queueService.process();
 
-      const items = appState.getState("queue.items");
-      expect(items).toHaveLength(0);
+      expect(appState.getState("queue.items")).toHaveLength(0);
+      expect(appState.getState("queue.processingMessageId")).toBeNull();
     });
 
-    it("should emit queue:processed event on success", async () => {
-      appState.setState("python.status", "busy_streaming");
-      queueService.add("Hello");
-      vi.clearAllMocks();
+    it("should emit processed event on success", async () => {
+      const items = [
+        { id: "id-1", text: "Hello", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+      ];
+      appState.setState("queue.items", items);
 
-      appState.setState("python.status", "idle");
       await queueService.process();
 
       expect(eventSpy).toHaveBeenCalledWith(
@@ -248,57 +251,58 @@ describe("MessageQueueService", () => {
         expect.objectContaining({
           item: expect.objectContaining({ text: "Hello" }),
           remainingCount: 0,
+          batchSize: 1,
         })
       );
     });
 
     it("should batch process all queued messages together", async () => {
-      appState.setState("python.status", "busy_streaming");
-      queueService.add("First");
-      queueService.add("Second");
-      queueService.add("Third");
-      vi.clearAllMocks();
+      const items = [
+        { id: "id-1", text: "First", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+        { id: "id-2", text: "Second", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+        { id: "id-3", text: "Third", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+      ];
+      appState.setState("queue.items", items);
 
-      appState.setState("python.status", "idle");
       await queueService.process();
 
-      // All messages are sent together in a single batch call
       expect(mockMessageService.sendMessage).toHaveBeenCalledTimes(1);
-      expect(mockMessageService.sendMessage).toHaveBeenCalledWith(["First", "Second", "Third"]);
+      expect(mockMessageService.sendMessage).toHaveBeenCalledWith(["First", "Second", "Third"], null);
+      expect(appState.getState("queue.items")).toHaveLength(0);
+    });
 
-      // All items should be removed from queue after batch processing
-      const items = appState.getState("queue.items");
-      expect(items).toHaveLength(0);
+    it("should process messages for different sessions separately", async () => {
+      const items = [
+        { id: "id-1", text: "Msg A", files: [], sessionId: "session-A", timestamp: Date.now(), status: "queued" },
+        { id: "id-2", text: "Msg B", files: [], sessionId: "session-B", timestamp: Date.now(), status: "queued" },
+      ];
+      appState.setState("queue.items", items);
+
+      await queueService.process();
+
+      // Should be called twice, once for each session
+      expect(mockMessageService.sendMessage).toHaveBeenCalledTimes(2);
+
+      // Order is not guaranteed by Object.entries, so we check with specific calls
+      expect(mockMessageService.sendMessage).toHaveBeenCalledWith(["Msg A"], "session-A");
+      expect(mockMessageService.sendMessage).toHaveBeenCalledWith(["Msg B"], "session-B");
+
+      expect(appState.getState("queue.items")).toHaveLength(0);
     });
 
     it("should handle sendMessage errors gracefully", async () => {
       mockMessageService.sendMessage.mockRejectedValue(new Error("Network error"));
+      const items = [
+        { id: "id-1", text: "Hello", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+      ];
+      appState.setState("queue.items", items);
 
-      appState.setState("python.status", "busy_streaming");
-      queueService.add("Hello");
-      vi.clearAllMocks();
-
-      appState.setState("python.status", "idle");
       const result = await queueService.process();
 
       expect(result).toBe(false);
-
-      // Item should remain in queue with 'queued' status for retry
-      const items = appState.getState("queue.items");
-      expect(items).toHaveLength(1);
-      expect(items[0].status).toBe("queued");
-    });
-
-    it("should emit queue:error event on failure", async () => {
-      mockMessageService.sendMessage.mockRejectedValue(new Error("Network error"));
-
-      appState.setState("python.status", "busy_streaming");
-      queueService.add("Hello");
-      vi.clearAllMocks();
-
-      appState.setState("python.status", "idle");
-      await queueService.process();
-
+      const queued = appState.getState("queue.items");
+      expect(queued).toHaveLength(1);
+      expect(queued[0].status).toBe("queued");
       expect(eventSpy).toHaveBeenCalledWith(
         "queue:error",
         expect.objectContaining({
@@ -308,28 +312,25 @@ describe("MessageQueueService", () => {
       );
     });
 
-    it("should set processingMessageId during processing", async () => {
-      appState.setState("python.status", "busy_streaming");
-      const id = queueService.add("Hello");
-      vi.clearAllMocks();
+    it("should reset processingMessageId after failure", async () => {
+      mockMessageService.sendMessage.mockRejectedValue(new Error("Network error"));
+      const items = [
+        { id: "id-1", text: "Hello", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+      ];
+      appState.setState("queue.items", items);
 
-      appState.setState("python.status", "idle");
+      await queueService.process();
 
-      // Check that processingMessageId is set during processing
-      const processPromise = queueService.process();
-      // Can't easily test during async, but we verify it's reset after
-      await processPromise;
-
-      // After successful processing, processingMessageId should be null
-      // (item is removed, not tracked anymore)
+      expect(appState.getState("queue.processingMessageId")).toBeNull();
     });
   });
 
   describe("edit", () => {
     it("should edit queued message text", () => {
-      appState.setState("python.status", "busy_streaming");
-      const id = queueService.add("Original");
-      vi.clearAllMocks();
+      const id = "edit-1";
+      appState.setState("queue.items", [
+        { id, text: "Original", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+      ]);
 
       const result = queueService.edit(id, "Updated");
 
@@ -339,8 +340,10 @@ describe("MessageQueueService", () => {
     });
 
     it("should trim edited text", () => {
-      appState.setState("python.status", "busy_streaming");
-      const id = queueService.add("Original");
+      const id = "edit-2";
+      appState.setState("queue.items", [
+        { id, text: "Original", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+      ]);
 
       queueService.edit(id, "  Updated  ");
 
@@ -349,8 +352,9 @@ describe("MessageQueueService", () => {
     });
 
     it("should return false for invalid id", () => {
-      appState.setState("python.status", "busy_streaming");
-      queueService.add("Original");
+      appState.setState("queue.items", [
+        { id: "valid-id", text: "Original", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+      ]);
 
       expect(queueService.edit("invalid-id", "Updated")).toBe(false);
       expect(queueService.edit(null, "Updated")).toBe(false);
@@ -358,8 +362,10 @@ describe("MessageQueueService", () => {
     });
 
     it("should return false for empty new text", () => {
-      appState.setState("python.status", "busy_streaming");
-      const id = queueService.add("Original");
+      const id = "edit-3";
+      appState.setState("queue.items", [
+        { id, text: "Original", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+      ]);
 
       expect(queueService.edit(id, "")).toBe(false);
       expect(queueService.edit(id, "   ")).toBe(false);
@@ -367,13 +373,10 @@ describe("MessageQueueService", () => {
     });
 
     it("should not edit processing messages", async () => {
-      appState.setState("python.status", "busy_streaming");
-      const id = queueService.add("Original");
-
-      // Manually set status to processing
-      const items = appState.getState("queue.items");
-      items[0].status = "processing";
-      appState.setState("queue.items", items);
+      const id = "edit-4";
+      appState.setState("queue.items", [
+        { id, text: "Original", files: [], sessionId: null, timestamp: Date.now(), status: "processing" },
+      ]);
 
       const result = queueService.edit(id, "Updated");
 
@@ -382,8 +385,10 @@ describe("MessageQueueService", () => {
     });
 
     it("should emit queue:edited event", () => {
-      appState.setState("python.status", "busy_streaming");
-      const id = queueService.add("Original");
+      const id = "edit-5";
+      appState.setState("queue.items", [
+        { id, text: "Original", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+      ]);
       vi.clearAllMocks();
 
       queueService.edit(id, "Updated");
@@ -397,9 +402,10 @@ describe("MessageQueueService", () => {
 
   describe("remove", () => {
     it("should remove queued message", () => {
-      // Prevent auto-processing by setting busy status
-      appState.setState("python.status", "busy_streaming");
-      const id = queueService.add("Test");
+      const id = "remove-1";
+      appState.setState("queue.items", [
+        { id, text: "Test", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+      ]);
       vi.clearAllMocks();
 
       const result = queueService.remove(id);
@@ -409,8 +415,9 @@ describe("MessageQueueService", () => {
     });
 
     it("should return false for invalid id", () => {
-      appState.setState("python.status", "busy_streaming");
-      queueService.add("Test");
+      appState.setState("queue.items", [
+        { id: "valid-id", text: "Test", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+      ]);
 
       expect(queueService.remove("invalid-id")).toBe(false);
       expect(queueService.remove(null)).toBe(false);
@@ -418,13 +425,10 @@ describe("MessageQueueService", () => {
     });
 
     it("should not remove processing messages", () => {
-      appState.setState("python.status", "busy_streaming");
-      const id = queueService.add("Test");
-
-      // Manually set status to processing
-      const items = appState.getState("queue.items");
-      items[0].status = "processing";
-      appState.setState("queue.items", items);
+      const id = "remove-2";
+      appState.setState("queue.items", [
+        { id, text: "Test", files: [], sessionId: null, timestamp: Date.now(), status: "processing" },
+      ]);
 
       const result = queueService.remove(id);
 
@@ -433,8 +437,10 @@ describe("MessageQueueService", () => {
     });
 
     it("should emit queue:removed event", () => {
-      appState.setState("python.status", "busy_streaming");
-      const id = queueService.add("Test");
+      const id = "remove-3";
+      appState.setState("queue.items", [
+        { id, text: "Test", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+      ]);
       vi.clearAllMocks();
 
       queueService.remove(id);
@@ -450,10 +456,14 @@ describe("MessageQueueService", () => {
     });
 
     it("should remove correct item from multiple", () => {
-      appState.setState("python.status", "busy_streaming");
-      const id1 = queueService.add("First");
-      const id2 = queueService.add("Second");
-      const id3 = queueService.add("Third");
+      const id1 = "remove-first";
+      const id2 = "remove-second";
+      const id3 = "remove-third";
+      appState.setState("queue.items", [
+        { id: id1, text: "First", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+        { id: id2, text: "Second", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+        { id: id3, text: "Third", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+      ]);
 
       queueService.remove(id2);
 
@@ -513,22 +523,19 @@ describe("MessageQueueService", () => {
     });
 
     it("should return count of queued items", () => {
-      appState.setState("python.status", "busy_streaming");
-      queueService.add("First");
-      queueService.add("Second");
+      appState.setState("queue.items", [
+        { id: "c1", text: "First", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+        { id: "c2", text: "Second", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+      ]);
 
       expect(queueService.getCount()).toBe(2);
     });
 
     it("should not count processing items", () => {
-      appState.setState("python.status", "busy_streaming");
-      queueService.add("First");
-      queueService.add("Second");
-
-      // Manually set one to processing
-      const items = appState.getState("queue.items");
-      items[0].status = "processing";
-      appState.setState("queue.items", items);
+      appState.setState("queue.items", [
+        { id: "c1", text: "First", files: [], sessionId: null, timestamp: Date.now(), status: "processing" },
+        { id: "c2", text: "Second", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+      ]);
 
       expect(queueService.getCount()).toBe(1);
     });
@@ -540,9 +547,10 @@ describe("MessageQueueService", () => {
     });
 
     it("should return all items", () => {
-      appState.setState("python.status", "busy_streaming");
-      queueService.add("First");
-      queueService.add("Second");
+      appState.setState("queue.items", [
+        { id: "g1", text: "First", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+        { id: "g2", text: "Second", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+      ]);
 
       const items = queueService.getItems();
       expect(items).toHaveLength(2);
@@ -557,8 +565,9 @@ describe("MessageQueueService", () => {
     });
 
     it("should return true when queue has items", () => {
-      appState.setState("python.status", "busy_streaming");
-      queueService.add("Test");
+      appState.setState("queue.items", [
+        { id: "h1", text: "Test", files: [], sessionId: null, timestamp: Date.now(), status: "queued" },
+      ]);
 
       expect(queueService.hasItems()).toBe(true);
     });

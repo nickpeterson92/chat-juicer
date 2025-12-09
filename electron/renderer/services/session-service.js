@@ -4,6 +4,8 @@
  * Optimized with batch DOM updates for fast session switching
  */
 
+import { globalEventBus } from "../core/event-bus.js";
+
 // ============================================================================
 // NEW: Class-based SessionService with Dependency Injection
 // ============================================================================
@@ -45,6 +47,16 @@ export class SessionService {
     this.appState = appState;
   }
 
+  _getLastUsedTimestamp(session) {
+    const rawTimestamp = session?.last_used || session?.updated_at || session?.created_at;
+    const timestamp = rawTimestamp ? new Date(rawTimestamp).getTime() : 0;
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  }
+
+  _sortSessionsByLastUsed(sessions) {
+    return [...sessions].sort((a, b) => this._getLastUsedTimestamp(b) - this._getLastUsedTimestamp(a));
+  }
+
   /**
    * Load sessions from backend
    *
@@ -65,7 +77,8 @@ export class SessionService {
       if (response?.sessions) {
         // Append or replace sessions based on offset
         const currentList = this.appState.getState("session.list");
-        const newList = offset === 0 ? response.sessions : [...currentList, ...response.sessions];
+        const mergedList = offset === 0 ? response.sessions : [...currentList, ...response.sessions];
+        const newList = this._sortSessionsByLastUsed(mergedList);
 
         this.appState.setState("session.list", newList);
         this.appState.setState("session.totalCount", response.total_count || newList.length);
@@ -141,9 +154,10 @@ export class SessionService {
    * Switch to different session
    *
    * @param {string} sessionId - Session ID to switch to
+   * @param {Object} streamManager - StreamManager instance (optional)
    * @returns {Promise<Object>} Result with session data and history
    */
-  async switchSession(sessionId) {
+  async switchSession(sessionId, streamManager = null) {
     if (!sessionId) {
       return { success: false, error: "No session ID provided" };
     }
@@ -153,11 +167,58 @@ export class SessionService {
       return { success: false, error: "Already on this session" };
     }
 
+    // Check if switching away from completed stream - cleanup
+    if (currentSessionId && streamManager && !streamManager.isStreaming(currentSessionId)) {
+      streamManager.cleanupSession(currentSessionId);
+    }
+
+    // CRITICAL: Sync appState buffer to streamManager when switching away from ACTIVE streaming session
+    // The active session uses appState.message.assistantBuffer for rendering, but streamManager
+    // only receives tokens via appendToBuffer() when session is in background.
+    // Without this sync, returning to the session loses all tokens seen before switching away.
+    const isCurrentStreaming = currentSessionId && streamManager && streamManager.isStreaming(currentSessionId);
+
+    if (import.meta.env.DEV) {
+      console.log("[session-service] switchSession check:", {
+        currentSessionId,
+        targetSessionId: sessionId,
+        hasStreamManager: !!streamManager,
+        isCurrentStreaming,
+        appStateBuffer: this.appState.getState("message.assistantBuffer")?.length || 0,
+      });
+    }
+
+    if (isCurrentStreaming) {
+      const activeBuffer = this.appState.getState("message.assistantBuffer") || "";
+      if (import.meta.env.DEV) {
+        console.log("[session-service] SYNC BUFFER on switch away:", {
+          currentSessionId,
+          targetSessionId: sessionId,
+          bufferLength: activeBuffer.length,
+          bufferPreview: activeBuffer.substring(0, 100),
+        });
+      }
+      if (activeBuffer) {
+        streamManager.setBuffer(currentSessionId, activeBuffer);
+      }
+    }
+
     try {
       const response = await this.ipc.sendSessionCommand("switch", { session_id: sessionId });
 
       if (response?.session) {
         this.appState.setState("session.current", sessionId);
+
+        // Update local session ordering so the newly opened session jumps to the top
+        const lastUsed = response.session?.last_used || new Date().toISOString();
+        this.updateSession({
+          ...response.session,
+          session_id: sessionId,
+          last_used: lastUsed,
+        });
+
+        // NOTE: Stream reconstruction is now handled by the caller (session-list-handlers)
+        // AFTER chat is cleared and history is loaded, to avoid being wiped
 
         return {
           success: true,
@@ -166,6 +227,9 @@ export class SessionService {
           hasMore: response.has_more || false,
           loadedCount: response.loaded_count || 0,
           messageCount: response.message_count || 0,
+          tokens: response.tokens,
+          max_tokens: response.max_tokens,
+          trigger_tokens: response.trigger_tokens,
         };
       }
 
@@ -173,6 +237,42 @@ export class SessionService {
     } catch (error) {
       return { success: false, error: error.message };
     }
+  }
+
+  /**
+   * Reconstruct streaming state when switching to a session that's streaming in background.
+   * Emits a stream:reconstruct event that message handlers listen to for DOM rendering.
+   *
+   * @param {string} sessionId - Session ID to reconstruct
+   * @param {Object} streamManager - StreamManager instance
+   */
+  reconstructStreamState(sessionId, streamManager) {
+    // Get buffered content
+    const buffer = streamManager.getBuffer(sessionId);
+
+    // Get buffered tools
+    const tools = streamManager.getBufferedTools(sessionId);
+
+    const isStreaming = streamManager.isStreaming(sessionId);
+
+    if (import.meta.env.DEV) {
+      console.log("[session-service] RECONSTRUCT stream state:", {
+        sessionId,
+        bufferLength: buffer?.length || 0,
+        bufferPreview: buffer?.substring(0, 100) || "(empty)",
+        toolsCount: tools?.length || 0,
+        isStreaming,
+      });
+    }
+
+    // Emit event for message handlers to render the buffered content
+    // This keeps DOM manipulation in the handler layer where it belongs
+    globalEventBus.emit("stream:reconstruct", {
+      sessionId,
+      buffer: buffer || "",
+      tools: tools || [],
+      isStreaming,
+    });
   }
 
   /**
@@ -341,13 +441,9 @@ export class SessionService {
     }
 
     // Sort by last_used to ensure most recently used sessions appear first
-    const getLastUsedTimestamp = (session) => {
-      const timestamp = session?.last_used ? new Date(session.last_used).getTime() : 0;
-      return Number.isFinite(timestamp) ? timestamp : 0;
-    };
-    updatedSessions.sort((a, b) => getLastUsedTimestamp(b) - getLastUsedTimestamp(a));
+    const sortedSessions = this._sortSessionsByLastUsed(updatedSessions);
 
-    this.appState.setState("session.list", updatedSessions);
+    this.appState.setState("session.list", sortedSessions);
   }
 
   /**

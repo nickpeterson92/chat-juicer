@@ -10,6 +10,7 @@
  * @param {Object} deps - Dependency container
  * @param {HTMLElement} deps.sessionListContainer - Sessions list container
  * @param {Object} deps.sessionService - Session service instance (SSOT)
+ * @param {Object} deps.streamManager - StreamManager instance for concurrent streams
  * @param {Function} deps.updateSessionsList - Function to refresh sessions list
  * @param {Object} deps.elements - DOM elements
  * @param {Object} deps.appState - Application state
@@ -18,6 +19,7 @@
 export function setupSessionListHandlers({
   sessionListContainer,
   sessionService,
+  streamManager,
   updateSessionsList,
   elements,
   appState,
@@ -69,7 +71,7 @@ export function setupSessionListHandlers({
 
     // Otherwise, switch to this session (only if different)
     if (sessionId !== sessionService.getCurrentSessionId()) {
-      await handleSwitch(sessionId, sessionService, updateSessionsList, elements, appState);
+      await handleSwitch(sessionId, sessionService, streamManager, updateSessionsList, elements, appState);
     }
   });
 }
@@ -249,13 +251,15 @@ async function handleDelete(sessionId, sessionService, updateSessionsList, eleme
 /**
  * Handle session switch
  */
-async function handleSwitch(sessionId, sessionService, updateSessionsList, elements, appState) {
+async function handleSwitch(sessionId, sessionService, streamManager, updateSessionsList, elements, appState) {
   if (sessionId === sessionService.getCurrentSessionId()) {
     return;
   }
 
   try {
-    const result = await sessionService.switchSession(sessionId);
+    const wasOnWelcomePage = document.body.classList.contains("view-welcome");
+
+    const result = await sessionService.switchSession(sessionId, streamManager);
 
     if (result.success) {
       // Close sidebar after successful switch
@@ -271,15 +275,26 @@ async function handleSwitch(sessionId, sessionService, updateSessionsList, eleme
         });
       }
 
+      // If coming from welcome, switch the view BEFORE heavy rendering to match session-to-session flow
+      if (wasOnWelcomePage) {
+        const { showChatView } = await import("../managers/view-manager.js");
+        await showChatView(elements, appState);
+      }
+
       // Clear current chat UI
       if (window.components?.chatContainer) {
         window.components.chatContainer.clear();
       }
 
-      // Reset app state
+      // Reset app state for the new session
       if (appState) {
         appState.setState("message.currentAssistant", null);
         appState.setState("message.assistantBuffer", "");
+        // Reset streaming state - will be set correctly by reconstruction if target session is streaming
+        appState.setState("message.isStreaming", false);
+        appState.setState("python.status", "idle");
+        appState.setState("ui.aiThinkingActive", false);
+        appState.setState("ui.loadingLampVisible", false);
         if (appState.functions) {
           appState.functions.activeCalls?.clear();
           appState.functions.argumentsBuffer?.clear();
@@ -292,21 +307,48 @@ async function handleSwitch(sessionId, sessionService, updateSessionsList, eleme
         window.components.chatContainer.setMessages(messages);
       }
 
-      // Load remaining messages in background if there are more
+      // Refresh sidebar ordering immediately after switching sessions
+      updateSessionsList();
+
+      // Seed token usage for the loaded session so the indicator is accurate immediately
+      if (appState) {
+        const existingUsage = appState.getState("session.tokenUsage") || {};
+        const limit = typeof result.max_tokens === "number" ? result.max_tokens : (existingUsage.limit ?? 128000);
+        const threshold =
+          typeof result.trigger_tokens === "number"
+            ? result.trigger_tokens
+            : (existingUsage.threshold ?? Math.floor(limit * 0.8));
+        const current = typeof result.tokens === "number" ? result.tokens : (existingUsage.current ?? 0);
+        appState.setState("session.tokenUsage", { current, limit, threshold });
+      }
+
+      // Load remaining messages before stream reconstruction to preserve ordering
       if (result.hasMore && result.loadedCount > 0) {
         console.log("[session] Loading remaining messages in background...", {
           loadedCount: result.loadedCount,
           messageCount: result.messageCount,
         });
-        loadRemainingMessages(sessionId, result.loadedCount, result.messageCount, sessionService);
+        await loadRemainingMessages(sessionId, result.loadedCount, result.messageCount, sessionService);
       }
 
-      updateSessionsList();
+      // AFTER history is loaded, reconstruct streaming state if session is actively streaming
+      // This must happen AFTER clear() and setMessages() to avoid being wiped
+      const isStreaming = streamManager?.isStreaming(sessionId);
+      const hasBuffer = streamManager?.getBuffer(sessionId)?.length > 0;
 
-      // Switch to chat view if on welcome page
-      if (document.body.classList.contains("view-welcome")) {
-        const { showChatView } = await import("../managers/view-manager.js");
-        await showChatView(elements, appState);
+      // Check for race condition: Stale history but we have buffered content
+      // If backend run finished during switch, history might be stale (missing last message)
+      // but StreamManager has the full content buffered.
+      const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+      const historyIsStale = hasBuffer && (!lastMessage || lastMessage.role !== "assistant");
+
+      if (isStreaming || historyIsStale) {
+        console.log("[session] Reconstructing stream state (streaming or stale history)", {
+          isStreaming,
+          historyIsStale,
+          hasBuffer,
+        });
+        sessionService.reconstructStreamState(sessionId, streamManager);
       }
 
       // Update FilePanel

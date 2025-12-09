@@ -18,7 +18,7 @@ from agents import RunConfig, Runner
 from openai import APIConnectionError, APIStatusError, RateLimitError
 from openai.types.responses import EasyInputMessageParam
 
-from app.state import AppState
+from app.state import AppState, SessionContext
 from core.constants import (
     CHAT_HISTORY_DB_PATH,
     CONVERSATION_SUMMARIZATION_THRESHOLD,
@@ -42,6 +42,21 @@ from tools.wrappers import create_session_aware_tools
 from utils.file_utils import save_uploaded_file
 from utils.ipc import IPCManager
 from utils.logger import logger
+
+# Maximum concurrent streaming sessions allowed
+MAX_CONCURRENT_STREAMS = 5
+
+
+def get_active_stream_count(app_state: AppState) -> int:
+    """Count currently streaming sessions.
+
+    Args:
+        app_state: Application state container
+
+    Returns:
+        Number of sessions currently streaming
+    """
+    return sum(1 for ctx in app_state.active_sessions.values() if ctx.stream_task and not ctx.stream_task.done())
 
 
 async def handle_electron_ipc(event: StreamEvent, tracker: CallTracker) -> str | None:
@@ -132,7 +147,7 @@ def save_tool_call_to_history(
         logger.warning(f"Failed to save tool call to Layer 2: {e}")
 
 
-def handle_streaming_error(error: Exception) -> None:
+def handle_streaming_error(error: Exception, session_id: str | None = None) -> None:
     """Handle streaming errors with appropriate user messages.
 
     Logs the error and sends user-friendly error message to UI via IPC.
@@ -140,6 +155,7 @@ def handle_streaming_error(error: Exception) -> None:
 
     Args:
         error: The exception that occurred during streaming
+        session_id: Optional session identifier for routing (Phase 1: Concurrent Sessions)
     """
 
     # Define error handlers for different exception types
@@ -171,11 +187,11 @@ def handle_streaming_error(error: Exception) -> None:
     error_msg = handler(error)
 
     # Send error message to UI (finally block handles assistant_end)
-    IPCManager.send(error_msg)
+    IPCManager.send(error_msg, session_id=session_id)
 
 
-async def ensure_session_exists(app_state: AppState) -> tuple[TokenAwareSQLiteSession, bool]:
-    """Ensure a session exists, creating one if needed (lazy initialization).
+async def ensure_session_exists(app_state: AppState, session_id: str | None = None) -> tuple[SessionContext, bool]:
+    """Get or create session context, supporting concurrent sessions.
 
     Creates session-aware tools with workspace isolation and filters MCP servers
     based on session configuration. Connects session to SDK token tracker for
@@ -183,25 +199,45 @@ async def ensure_session_exists(app_state: AppState) -> tuple[TokenAwareSQLiteSe
 
     Args:
         app_state: Application state container
+        session_id: Optional session ID to retrieve or create
 
     Returns:
-        Tuple of (Active TokenAwareSQLiteSession instance, is_new_session flag)
+        Tuple of (SessionContext, is_new_session flag)
 
     Raises:
         RuntimeError: If session_manager is not initialized
     """
-    if app_state.current_session is not None:
-        return app_state.current_session, False
-
-    logger.info("No active session - creating new session on first message")
-
     # Type guard: session_manager must exist
     if app_state.session_manager is None:
         raise RuntimeError("Session manager not initialized")
 
-    # Create new session metadata
-    session_meta = app_state.session_manager.create_session()
-    logger.info(f"Created new session: {session_meta.session_id} - {session_meta.title}")
+    # If session_id provided and exists in active_sessions, return it
+    if session_id and session_id in app_state.active_sessions:
+        logger.debug(f"Retrieved existing session context: {session_id}")
+        return app_state.active_sessions[session_id], False
+
+    # Determine which session to create/load
+    target_session_id = session_id or app_state.session_manager.current_session_id
+
+    # Check if we already have this session loaded
+    if target_session_id and target_session_id in app_state.active_sessions:
+        logger.debug(f"Retrieved existing session context: {target_session_id}")
+        return app_state.active_sessions[target_session_id], False
+
+    logger.info(f"Creating new session context (session_id={target_session_id or 'new'})")
+
+    # Create new session metadata or load existing
+    if target_session_id:
+        session_meta = app_state.session_manager.get_session(target_session_id)
+        if not session_meta:
+            raise RuntimeError(f"Session {target_session_id} not found")
+        is_new = False
+    else:
+        session_meta = app_state.session_manager.create_session()
+        is_new = True
+        target_session_id = session_meta.session_id
+
+    logger.info(f"{'Created' if is_new else 'Loaded'} session: {session_meta.session_id} - {session_meta.title}")
 
     # Create session-aware tools that inject session_id for workspace isolation
     session_tools = create_session_aware_tools(session_meta.session_id)
@@ -219,7 +255,7 @@ async def ensure_session_exists(app_state: AppState) -> tuple[TokenAwareSQLiteSe
     logger.info(f"Created session-specific agent with workspace isolation for: {session_meta.session_id}")
 
     # Create token-aware session with persistent storage and full history
-    app_state.current_session = TokenAwareSQLiteSession(
+    session_instance = TokenAwareSQLiteSession(
         session_id=session_meta.session_id,
         db_path=CHAT_HISTORY_DB_PATH,
         agent=session_agent,
@@ -230,22 +266,34 @@ async def ensure_session_exists(app_state: AppState) -> tuple[TokenAwareSQLiteSe
     )
 
     # Restore token counts from stored items (if any)
-    items = await app_state.current_session.get_items()
+    items = await session_instance.get_items()
     if items:
-        app_state.current_session.total_tokens = app_state.current_session._calculate_total_tokens(items)
-        logger.info(f"Restored session with {len(items)} items, {app_state.current_session.total_tokens} tokens")
+        session_instance.total_tokens = session_instance._calculate_total_tokens(items)
+        logger.info(f"Restored session with {len(items)} items, {session_instance.total_tokens} tokens")
 
-    logger.info(f"Session ready with id: {app_state.current_session.session_id}")
+    logger.info(f"Session ready with id: {session_instance.session_id}")
 
     # Connect session to SDK token tracker for automatic tracking
-    connect_session(app_state.current_session)
+    connect_session(session_instance)
 
-    # Return session and flag indicating this is a newly created session
+    # Create SessionContext and add to active_sessions registry
+    from app.state import SessionContext
+
+    session_ctx = SessionContext(
+        session=session_instance,
+        agent=session_agent,
+        stream_task=None,
+        interrupt_requested=False,
+    )
+
+    app_state.active_sessions[session_meta.session_id] = session_ctx
+
+    # Return session context and flag indicating if this is a newly created session
     # Session creation event will be sent AFTER first message completes
-    return app_state.current_session, True
+    return session_ctx, is_new
 
 
-async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession, messages: list[str]) -> None:
+async def process_messages(app_state: AppState, session_ctx: SessionContext, messages: list[str]) -> None:
     """Process user messages (single or batch) with cancellation support.
 
     All user messages are sent to the agent in a single request, producing
@@ -261,7 +309,7 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
 
     Args:
         app_state: Application state container
-        session: TokenAwareSQLiteSession instance
+        session_ctx: SessionContext containing session, agent, and interrupt state
         messages: List of user message strings (single or multiple)
 
     Returns:
@@ -270,6 +318,7 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
     Raises:
         asyncio.CancelledError: Re-raised after handling to maintain proper task state
     """
+    session = session_ctx.session
     if not messages:
         return
 
@@ -286,7 +335,7 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
     tools_completed = False
 
     # Send start message for Electron
-    IPCManager.send_assistant_start()
+    IPCManager.send_assistant_start(session_id=session.session_id)
 
     response_text = ""
     tracker = CallTracker()
@@ -330,6 +379,12 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
                             logger.info("Deferred cancellation executing - tool completed")
                             break
 
+                # Check for interrupt via SessionContext
+                if session_ctx.interrupt_requested and not tool_in_progress:
+                    cancel_requested = True
+                    logger.info("Interrupt detected via SessionContext flag")
+                    break
+
                 # Immediate cancellation when safe (no tool in progress)
                 if cancel_requested and not tool_in_progress:
                     logger.info("Immediate cancellation - no tool in progress")
@@ -338,7 +393,7 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
                 # Normal event processing
                 ipc_msg = await handle_electron_ipc(event, tracker)
                 if ipc_msg:
-                    IPCManager.send_raw(ipc_msg)
+                    IPCManager.send_raw(ipc_msg, session_id=session.session_id)
                     save_tool_call_to_history(app_state, session, ipc_msg)
 
                 # Accumulate response text for logging
@@ -371,12 +426,12 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
                 "message": "Failed to save conversation history. Please try again.",
                 "code": "persistence_error",
             }
-            IPCManager.send(error_msg)
+            IPCManager.send(error_msg, session_id=session.session_id)
             # Note: send_assistant_end is handled by the finally block
             return
 
         except Exception as e:
-            handle_streaming_error(e)
+            handle_streaming_error(e, session_id=session.session_id)
             return
 
         # Log response (only for successful completion)
@@ -396,6 +451,14 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
             f"({int(session.total_tokens / session.trigger_tokens * 100)}%)"
         )
 
+        # Send token usage update to frontend
+        IPCManager.send_token_usage(
+            current=session.total_tokens,
+            limit=session.max_tokens,
+            threshold=session.trigger_tokens,
+            session_id=session.session_id,
+        )
+
         # Check for post-run summarization (only for successful completion)
         if await session.should_summarize():
             logger.info(f"Post-run summarization triggered: {session.total_tokens}/{session.trigger_tokens} tokens")
@@ -405,22 +468,30 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
                 f"({int(session.total_tokens / session.trigger_tokens * 100)}%)"
             )
 
+            # Send updated token usage
+            IPCManager.send_token_usage(
+                current=session.total_tokens,
+                limit=session.max_tokens,
+                threshold=session.trigger_tokens,
+                session_id=session.session_id,
+            )
+
     finally:
         # Send assistant_end unless interrupt was requested
         # When interrupted, main.py handles sending assistant_end (either after task completes
         # or after timeout), so we skip it here to avoid duplicate messages
-        if not app_state.interrupt_requested:
+        if not session_ctx.interrupt_requested:
             logger.debug("Finally block - sending assistant_end")
-            IPCManager.send_assistant_end()
+            IPCManager.send_assistant_end(session_id=session.session_id)
             logger.debug("assistant_end message sent")
         else:
             logger.debug("Finally block - skipping assistant_end (interrupt handled by main.py)")
 
         # Save partial response to BOTH layers if cancelled with content
-        # Use app_state.interrupt_requested since SDK may suppress CancelledError
-        was_interrupted = cancel_requested or app_state.interrupt_requested
-        if app_state.interrupt_requested:
-            logger.debug("Interrupt detected via app_state flag")
+        # Use session_ctx.interrupt_requested since SDK may suppress CancelledError
+        was_interrupted = cancel_requested or session_ctx.interrupt_requested
+        if session_ctx.interrupt_requested:
+            logger.debug("Interrupt detected via SessionContext flag")
         if was_interrupted and response_text.strip():
             # Append interrupt notice so LLM knows this was cut off
             partial_with_notice = response_text + "\n\n[User interrupted response. The above text is partial.]"
@@ -515,7 +586,8 @@ async def process_messages(app_state: AppState, session: TokenAwareSQLiteSession
                         "result": interrupt_result,
                         "success": False,
                         "interrupted": True,
-                    }
+                    },
+                    session_id=session.session_id,
                 )
 
         # Conditional persistence based on cancellation state
@@ -585,7 +657,7 @@ async def handle_file_upload(app_state: AppState, upload_data: dict[str, Any]) -
         session_meta = app_state.session_manager.get_session(session_id)
         if session_meta:
             session_info = {"type": "session_created", "session": session_meta.model_dump()}
-            IPCManager.send(session_info)
+            IPCManager.send(session_info, session_id=session_id)
             logger.info(f"New session created for upload: {session_id}")
 
     return result
@@ -656,5 +728,5 @@ def send_session_created_event(app_state: AppState, session_id: str) -> None:
     session_meta = app_state.session_manager.get_session(session_id)
     if session_meta:
         # Send full session metadata including model and reasoning_effort
-        IPCManager.send({"type": "session_created", "session": session_meta.model_dump()})
+        IPCManager.send({"type": "session_created", "session": session_meta.model_dump()}, session_id=session_id)
         logger.info(f"Sent session_created event for {session_id} after first message")

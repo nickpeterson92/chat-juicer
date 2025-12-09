@@ -73,7 +73,7 @@ export class BoundedMap extends Map {
  * @property {number} totalCount - Total session count
  *
  * @typedef {Object} MessageState
- * @property {string|null} currentAssistant - Current assistant message ID
+ * @property {string|null} currentAssistantId - Current assistant message ID
  * @property {string} assistantBuffer - Buffer for streaming assistant messages
  * @property {boolean} isTyping - User typing indicator
  * @property {boolean} isStreaming - Assistant streaming indicator
@@ -140,11 +140,16 @@ export class AppState {
       isLoading: false, // Loading state
       hasMore: false, // Pagination state
       totalCount: 0, // Total session count
+      tokenUsage: {
+        current: 0,
+        limit: 128000,
+        threshold: 100000,
+      },
     };
 
     // Message state
     this.message = {
-      currentAssistant: null,
+      currentAssistantId: null,
       assistantBuffer: "",
       isTyping: false, // User typing indicator
       isStreaming: false, // Assistant streaming indicator
@@ -204,6 +209,10 @@ export class AppState {
       interrupted: false, // boolean - interrupt was requested
       toolInProgress: false, // boolean - tool execution in progress (defer cancel)
     };
+
+    // Per-session streaming state (Phase 2: Concurrent Session Processing)
+    // Map of session_id -> SessionStreamState for multi-session support
+    this.sessionStreams = new Map();
 
     // State change listeners
     this.listeners = new Map();
@@ -352,6 +361,57 @@ export class AppState {
     }
 
     return true;
+  }
+
+  /**
+   * Get or create session stream state for a session.
+   * Creates default state if session doesn't have streaming state yet.
+   *
+   * @param {string} sessionId - Session ID
+   * @returns {Object} SessionStreamState object
+   *
+   * SessionStreamState structure:
+   * {
+   *   isStreaming: boolean,
+   *   assistantBuffer: string,
+   *   currentAssistantId: string | null,
+   *   interrupted: boolean,
+   *   toolInProgress: boolean,
+   *   functionCalls: Map (callId -> {name, arguments, status, result}),
+   *   argumentsBuffer: Map (callId -> accumulated arguments string)
+   * }
+   */
+  getSessionStreamState(sessionId) {
+    if (!this.sessionStreams.has(sessionId)) {
+      this.sessionStreams.set(sessionId, this._createDefaultStreamState());
+    }
+    return this.sessionStreams.get(sessionId);
+  }
+
+  /**
+   * Create default stream state for a new session.
+   * @private
+   * @returns {Object} Default SessionStreamState
+   */
+  _createDefaultStreamState() {
+    return {
+      isStreaming: false,
+      assistantBuffer: "",
+      currentAssistantId: null,
+      interrupted: false,
+      toolInProgress: false,
+      functionCalls: new Map(),
+      argumentsBuffer: new Map(),
+    };
+  }
+
+  /**
+   * Clear session stream state (cleanup on session switch after stream complete).
+   *
+   * @param {string} sessionId - Session ID to clear
+   */
+  clearSessionStreamState(sessionId) {
+    this.sessionStreams.delete(sessionId);
   }
 
   /**
