@@ -248,7 +248,19 @@ python src/main.py      # Same as: make backend-only
 #### Development & Quality
 
 ```bash
-make test               # Run syntax validation and tests
+make test               # Run all tests (alias for test-all)
+make test-all           # Run backend + frontend tests
+make test-backend       # Run Python tests
+make test-frontend      # Run JavaScript tests (vitest)
+make test-backend-unit  # Python unit tests only
+make test-backend-integration  # Python integration tests only
+make test-frontend-unit        # JS unit tests only
+make test-frontend-integration # JS integration tests only
+make test-frontend-watch       # JS tests in watch mode
+make test-frontend-ui          # Open Vitest UI
+make test-coverage-backend     # Backend coverage (htmlcov)
+make test-coverage-frontend    # Frontend coverage (coverage/index.html)
+make test-coverage-all         # Both coverage reports
 make validate           # Validate Python code syntax
 make lint               # Run ruff linter with auto-fix
 make format             # Format code with black
@@ -257,6 +269,12 @@ make fix                # Auto-fix all fixable issues (format + lint with --fix)
 make check              # Pre-commit validation gate (format check + lint + typecheck + test)
 make precommit          # Run all pre-commit hooks (comprehensive, includes JS/TS)
 make quality            # Run format + lint + typecheck (all quality checks)
+```
+
+#### Code Generation
+
+```bash
+make generate-model-metadata  # Sync renderer model-metadata.js from Python configs
 ```
 
 #### Documentation
@@ -304,6 +322,14 @@ make restart            # Quick restart (kill + sleep + dev)
 make update-deps        # Update dependencies (Node.js and Python) + health check
 ```
 
+#### Code Interpreter Sandbox
+
+```bash
+make build-sandbox      # Build sandbox container image for code interpreter
+make sandbox-status     # Check sandbox runtime/image availability
+make sandbox-test       # Smoke test sandbox execution
+```
+
 #### Information
 
 ```bash
@@ -334,13 +360,16 @@ chat-juicer/
 │       │   ├── error-recovery.js
 │       │   ├── validators.js
 │       │   └── phases/
+│       │       ├── index.js
 │       │       ├── phase1-adapters.js      # DOM/IPС/Storage adapters + global EventBus
 │       │       ├── phase2-state-dom.js     # AppState + DOM element registry
 │       │       ├── phase3-services.js      # Message/File/FunctionCall/Session services (AppState-backed)
 │       │       ├── phase4-components.js    # ChatContainer, InputArea, FilePanel wiring
 │       │       ├── phase5-event-handlers.js# DOM listeners, AppState bindings, IPC wiring
+│       │       ├── phase5a-subscriptions.js# AppState subscriptions for reactive UI
 │       │       ├── phase6-plugins.js       # Plugin registry + core plugins
 │       │       └── phase7-data-loading.js  # Renderer-ready signal, model metadata, sessions
+│       │   ├── types.js
 │       ├── adapters/             # Platform abstraction
 │       │   ├── DOMAdapter.js
 │       │   ├── IPCAdapter.js
@@ -362,7 +391,9 @@ chat-juicer/
 │       ├── services/
 │       │   ├── file-service.js
 │       │   ├── function-call-service.js
+│       │   ├── message-queue-service.js
 │       │   ├── message-service.js
+│       │   ├── stream-manager.js
 │       │   └── session-service.js
 │       ├── handlers/
 │       │   ├── message-handlers-v2.js      # EventBus-driven streaming + tool cards
@@ -396,12 +427,14 @@ chat-juicer/
 │           ├── analytics/
 │           ├── chat-model-updater.js
 │           ├── css-variables.js
+│           ├── file-icon-colors.js
 │           ├── file-utils.js
 │           ├── json-cache.js
 │           ├── lottie-color.js
 │           ├── markdown-renderer.js
 │           ├── scroll-utils.js
 │           ├── state-migration.js
+│           ├── upload-progress.js
 │           └── toast.js
 ├── ui/               # Frontend static assets
 │   ├── index.html    # Main chat UI (loads renderer/index.js as ES6 module)
@@ -425,6 +458,7 @@ chat-juicer/
 │   │   ├── full_history.py     # FullHistoryStore for UI display (Layer 2)
 │   │   ├── session_manager.py  # Multi-session lifecycle management
 │   │   ├── session_commands.py # Session command handlers
+│   │   ├── session_builder.py  # Session restoration/pagination helpers
 │   │   ├── prompts.py          # System instruction prompts
 │   │   └── constants.py        # Configuration with Pydantic Settings validation
 │   ├── models/       # Data models and type definitions
@@ -437,9 +471,10 @@ chat-juicer/
 │   ├── tools/        # Function calling tools
 │   │   ├── __init__.py
 │   │   ├── document_generation.py # Document generation from templates
-│   │   ├── file_operations.py     # File reading and directory listing
+│   │   ├── file_operations.py     # File reading and directory listing (session-scoped)
 │   │   ├── text_editing.py        # Text, regex, and insert editing operations
-│   │   ├── wrappers.py            # Tool wrapper utilities
+│   │   ├── code_interpreter.py    # Code execution wrapper with safety rails
+│   │   ├── wrappers.py            # Session-aware wrappers (sandboxed to data/files/{session_id})
 │   │   └── registry.py            # Tool registration and discovery
 │   ├── integrations/ # External integrations
 │   │   ├── __init__.py
@@ -453,6 +488,7 @@ chat-juicer/
 │       ├── ipc.py               # IPC manager with pre-cached templates
 │       ├── token_utils.py       # Token management with LRU caching
 │       ├── file_utils.py        # File system utility functions
+│       ├── binary_io.py         # Binary file helpers
 │       ├── document_processor.py # Document processing and optimization utilities
 │       ├── json_utils.py        # JSON parsing and formatting utilities
 │       ├── http_logger.py       # HTTP request logging middleware
@@ -474,7 +510,6 @@ chat-juicer/
 │   ├── python-manager.js     # Python environment management
 │   └── platform-config.js    # Platform detection and configuration
 ├── claudedocs/       # Claude-specific documentation
-│   └── SETUP_ANALYSIS.md     # Setup system analysis and troubleshooting
 └── docs/             # Documentation (Sphinx)
     ├── _build/       # Generated HTML documentation
     ├── modules/      # Module documentation
@@ -509,6 +544,7 @@ chat-juicer/
 - **full_history.py**: FullHistoryStore for complete UI-facing conversation history (Layer 2)
 - **session_manager.py**: Session lifecycle management with metadata persistence, file handle cleanup
 - **session_commands.py**: Session command handlers (create, switch, delete, list)
+- **session_builder.py**: Session restoration/pagination helpers used during session switches
 - **prompts.py**: System instruction prompts and templates
 - **constants.py**: Centralized configuration with Pydantic Settings validation
 
@@ -521,9 +557,10 @@ chat-juicer/
 
 **Tools** (`tools/`)
 - **document_generation.py**: Template-based document generation with placeholder replacement
-- **file_operations.py**: Directory listing and file reading with markitdown support
+- **file_operations.py**: Directory listing and file reading with markitdown support (session-scoped)
 - **text_editing.py**: Text, regex, and insert editing operations
-- **wrappers.py**: Tool wrapper utilities for consistent interface
+- **code_interpreter.py**: Code execution wrapper with safety rails
+- **wrappers.py**: Session-aware wrappers enforcing sandbox `data/files/{session_id}`
 - **registry.py**: Tool registration and discovery system
 
 **Integrations** (`integrations/`)
@@ -537,6 +574,7 @@ chat-juicer/
 - **ipc.py**: IPC manager with pre-cached templates for performance
 - **token_utils.py**: Token management utilities with LRU caching
 - **file_utils.py**: File system utility functions
+- **binary_io.py**: Binary file helpers
 - **document_processor.py**: Document processing and optimization utilities
 - **json_utils.py**: JSON parsing and formatting utilities
 - **http_logger.py**: HTTP request logging middleware
@@ -596,9 +634,11 @@ chat-juicer/
   - **index.js**: Handler exports
 - **services/**: Business logic services
   - **session-service.js**: Session CRUD operations
+  - **message-queue-service.js**: Renderer message queueing/backpressure control
   - **message-service.js**: Message processing and formatting
   - **file-service.js**: File operations and management
   - **function-call-service.js**: Function call handling
+  - **stream-manager.js**: Stream lifecycle coordination for agent responses
   - **index.js**: Service exports
 - **managers/**: UI state managers
   - **view-manager.js**: View state management (welcome vs chat)
@@ -620,9 +660,11 @@ chat-juicer/
   - **file-utils.js**: File handling utilities
   - **chat-model-updater.js**: Model configuration update utilities
   - **lottie-color.js**: Lottie animation color utilities
+  - **file-icon-colors.js**: File icon color mapping helpers
+  - **upload-progress.js**: Upload progress state helpers
+  - **css-variables.js**: Semantic CSS tokens
+  - **state-migration.js**: Client-side state migration helpers
   - **analytics/**: Analytics and tracking
-  - **debug/**: Debugging utilities
-  - **performance/**: Performance monitoring and profiling
 
 ## Function Calling
 
@@ -634,6 +676,8 @@ The application supports both native functions and MCP server tools:
 - **search_files**: Glob search with configurable max results
 - **edit_file**: Batch text edits with git-style diff output and whitespace-flexible matching (auto-prefixes `output/` unless scoped)
 - **generate_document**: Save generated content to `output/` with optional backups and session sandboxing
+- **code_interpreter**: Sandboxed code execution with guarded environment
+- **Session-aware wrappers**: All file/doc tools are wrapped to `data/files/{session_id}` via `wrappers.py`
 
 ### MCP Server Integration
 - **Sequential Thinking** (Node.js): Advanced multi-step reasoning with revision capabilities and hypothesis testing
@@ -912,8 +956,8 @@ Using tiktoken for exact token counting:
 
 ### Code Organization
 Recent improvements for better maintainability:
-- **Modular utilities**: Token and rate limiting functions in `utils.py`
-- **Centralized constants**: All configuration values in `constants.py`
+- **Utilities clarity**: Token helpers in `utils/token_utils.py`, validation in `utils/validation.py`, file helpers in `utils/file_utils.py`
+- **Centralized constants**: All configuration values in `core/constants.py`
 - **Clean separation**: Each module has a single, clear responsibility
 - **Type hints**: Improved type annotations throughout the codebase
 

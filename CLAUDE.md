@@ -24,7 +24,7 @@ chat-juicer/
 │       ├── index.js              # Entry point (imports CSS + bootstrapSimple)
 │       ├── bootstrap.js          # 7-phase bootstrap orchestrator
 │       ├── bootstrap/            # Error recovery, validators, phases 1-7
-│       │   └── phases/phase1-7   # Adapters → State/DOM → Services → Components → Handlers → Plugins → Data
+│       │   └── phases/phase1-7   # Adapters → State/DOM → Services → Components → Handlers → Subscriptions → Plugins → Data
 │       ├── adapters/             # DOM, IPC, Storage adapters + barrel
 │       ├── config/               # constants, colors, model-metadata
 │       ├── core/                 # AppState + EventBus + lifecycle helpers
@@ -51,7 +51,7 @@ chat-juicer/
 │       │   ├── chat-ui.js, function-card-ui.js, welcome-page.js, titlebar.js
 │       │   └── utils/welcome-animations.js
 │       ├── viewmodels/           # message-viewmodel.js, session-viewmodel.js
-│       └── utils/                # css-variables, markdown-renderer, scroll-utils, toast, chat-model-updater, etc.
+│       └── utils/                # css-variables, markdown-renderer, scroll-utils, toast, chat-model-updater, upload-progress, state-migration
 ├── ui/               # Frontend static assets
 │   ├── index.html    # Main chat UI (loads renderer/index.js as ES6 module)
 │   ├── input.css     # Tailwind CSS source
@@ -123,7 +123,6 @@ chat-juicer/
 │   ├── python-manager.js     # Python environment management
 │   └── platform-config.js    # Platform detection and configuration
 ├── claudedocs/       # Claude-specific documentation
-│   └── SETUP_ANALYSIS.md     # Setup system analysis and troubleshooting
 └── docs/             # Documentation (Sphinx)
     ├── _build/       # Generated HTML documentation
     ├── modules/      # Module documentation
@@ -246,15 +245,6 @@ The renderer process uses a component-based modular architecture for maintainabi
 - `index.js`: Clean component exports for simplified imports
 
 **UI Renderers** (`renderer/ui/renderers/`):
-- `file-list-renderer.js`: File list visualization
-  - Renders uploaded files with metadata (size, type)
-  - File removal and preview controls
-- `function-card-renderer.js`: Function call card rendering
-  - Visual representation of tool calls with status
-  - Argument display and result formatting
-- `message-renderer.js`: Message formatting and rendering
-  - Markdown rendering with syntax highlighting
-  - Role-based styling (user, assistant, system)
 - `session-list-renderer.js`: Session list rendering
   - Session metadata display (title, timestamp, message count)
   - Active session highlighting and selection controls
@@ -291,6 +281,9 @@ The renderer process uses a component-based modular architecture for maintainabi
 - `json-cache.js`: JSON parsing cache with LRU eviction
 - `toast.js`: Toast notification system
 - `file-utils.js`: File handling utilities
+- `upload-progress.js`: Upload progress state helpers
+- `css-variables.js`: Semantic CSS token helpers
+- `state-migration.js`: Client-side state migration utilities
 
 **Benefits**:
 - Component-based architecture enables code reuse (ModelSelector shared across views)
@@ -511,7 +504,7 @@ import { getBrandPrimaryColor } from './utils/css-variables.js';
 const brandColor = getBrandPrimaryColor(); // '#0066cc'
 ```
 
-**Maintenance**: See `claudedocs/COLOR_SYSTEM_MASTER_DESIGN.md` Part 5 for how to add new colors or change values.
+**Maintenance**: Use `ui/input.css` as the source of truth for semantic tokens; update renderer/utils `css-variables.js` and any token docs when adding or changing tokens.
 
 **Implementation Status**:
 - Phase 1 Complete (Foundation) - CSS variables and Tailwind configuration ✅
