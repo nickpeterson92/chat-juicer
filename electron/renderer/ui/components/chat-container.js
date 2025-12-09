@@ -41,6 +41,13 @@ export class ChatContainer {
     }
 
     this.setupStateSubscriptions();
+
+    // Virtualization state
+    this.virtualizationEnabled = true;
+    this.viewportBuffer = 800; // px buffer above/below viewport
+    this.itemHeights = new Map(); // messageId -> height
+    this.idOrder = []; // ordered list of messageIds
+    this.anchorIndex = 0; // index in idOrder
   }
 
   /**
@@ -534,38 +541,8 @@ export class ChatContainer {
 
     const { sortedMessages, mergedToolCalls } = this._prepareMessagesWithMergedTools(messages);
 
-    // Second pass: render messages in order
-    // Create a document fragment for efficient DOM insertion
-    const fragment = document.createDocumentFragment();
-    for (const msg of sortedMessages) {
-      const { role, content, partial } = msg;
-      const textContent = this._extractTextContent(content);
-      let element = null;
-
-      if (role === "user" && textContent) {
-        element = createMessageElement(this.element, textContent, "user").messageDiv;
-      } else if (role === "assistant" && textContent) {
-        // Pass partial flag if present
-        element = createMessageElement(this.element, textContent, "assistant", {
-          partial: partial === true,
-        }).messageDiv;
-      } else if (role === "system" && textContent) {
-        element = createMessageElement(this.element, textContent, "system").messageDiv;
-      } else if (role === "tool_call") {
-        element = this._renderToolCallMerged(msg, mergedToolCalls);
-      }
-
-      if (element) {
-        fragment.appendChild(element);
-      }
-      // Skip tool_call with status="detected" - we'll render when we see "completed"
-    }
-
-    // Append all messages at once
-    this.element.appendChild(fragment);
-
-    // Scroll to bottom after loading
-    this.scrollToBottom();
+    // Virtualized render in batches to reduce main-thread blocking
+    this._renderVirtualizedBatched(sortedMessages, mergedToolCalls, { prepend: false });
   }
 
   /**
@@ -585,45 +562,12 @@ export class ChatContainer {
     const scrollHeightBefore = this.element.scrollHeight;
     const scrollTopBefore = this.element.scrollTop;
 
-    // Create a document fragment for efficient DOM insertion
-    const fragment = document.createDocumentFragment();
-
-    // Second pass: render messages into fragment (in order - oldest first)
-    for (const msg of sortedMessages) {
-      const { role, content, partial } = msg;
-      const textContent = this._extractTextContent(content);
-
-      let messageElement = null;
-
-      if (role === "user" && textContent) {
-        messageElement = createMessageElement(this.element, textContent, "user", { partial: false }).messageDiv;
-      } else if (role === "assistant" && textContent) {
-        messageElement = createMessageElement(this.element, textContent, "assistant", {
-          partial: partial === true,
-        }).messageDiv;
-      } else if (role === "system" && textContent) {
-        messageElement = createMessageElement(this.element, textContent, "system", { partial: false }).messageDiv;
-      } else if (role === "tool_call") {
-        messageElement = this._renderToolCallMerged(msg, mergedToolCalls);
-      }
-
-      if (messageElement) {
-        fragment.appendChild(messageElement);
-      }
-    }
-
-    // Insert all prepended messages at the beginning
-    if (this.element.firstChild) {
-      this.element.insertBefore(fragment, this.element.firstChild);
-    } else {
-      this.element.appendChild(fragment);
-    }
-
-    // Restore scroll position so user doesn't get jumped
-    // New content was added above, so adjust scroll to maintain view
-    const scrollHeightAfter = this.element.scrollHeight;
-    const heightAdded = scrollHeightAfter - scrollHeightBefore;
-    this.element.scrollTop = scrollTopBefore + heightAdded;
+    // Virtualized render (prepend) in batches
+    this._renderVirtualizedBatched(sortedMessages, mergedToolCalls, {
+      prepend: true,
+      scrollHeightBefore,
+      scrollTopBefore,
+    });
   }
 
   /**
@@ -671,6 +615,162 @@ export class ChatContainer {
     if (!merged) return null;
     mergedToolCalls.delete(msg.call_id);
     return this._createToolCardElement(merged);
+  }
+
+  /**
+   * Virtualized render: mounts only items within viewport buffer.
+   * @param {Array<Object>} messages
+   * @param {Map<string,Object>} mergedToolCalls
+   * @param {Object} options
+   * @param {boolean} options.prepend
+   * @param {number} [options.scrollHeightBefore]
+   * @param {number} [options.scrollTopBefore]
+   */
+  _renderVirtualized(messages, mergedToolCalls, options = {}) {
+    // Fallback to full render if virtualization disabled or small dataset
+    if (!this.virtualizationEnabled || messages.length < 200) {
+      const fragment = document.createDocumentFragment();
+      for (const msg of messages) {
+        const element = this._renderMessageNode(msg, mergedToolCalls);
+        if (element) fragment.appendChild(element);
+      }
+      if (options.prepend) {
+        if (this.element.firstChild) {
+          this.element.insertBefore(fragment, this.element.firstChild);
+        } else {
+          this.element.appendChild(fragment);
+        }
+        if (options.scrollHeightBefore !== undefined && options.scrollTopBefore !== undefined) {
+          const scrollHeightAfter = this.element.scrollHeight;
+          const heightAdded = scrollHeightAfter - options.scrollHeightBefore;
+          this.element.scrollTop = options.scrollTopBefore + heightAdded;
+        }
+      } else {
+        this.element.appendChild(fragment);
+        this.scrollToBottom();
+      }
+      return;
+    }
+
+    // Virtualized path
+    const fragment = document.createDocumentFragment();
+    this.idOrder = [];
+
+    // Compute which items to render based on current scroll
+    const viewportTop = this.element.scrollTop;
+    const viewportBottom = viewportTop + this.element.clientHeight;
+    const minY = viewportTop - this.viewportBuffer;
+    const maxY = viewportBottom + this.viewportBuffer;
+
+    let cursorY = 0;
+
+    for (const msg of messages) {
+      const messageId = msg.id || msg.call_id || `anon-${this.idOrder.length}`;
+      this.idOrder.push(messageId);
+
+      const estimatedHeight = this.itemHeights.get(messageId) || 120; // fallback estimate
+      const nextY = cursorY + estimatedHeight;
+
+      if (nextY >= minY && cursorY <= maxY) {
+        const element = this._renderMessageNode(msg, mergedToolCalls, messageId);
+        if (element) {
+          fragment.appendChild(element);
+          // After append, measure real height
+          const actualHeight = element.getBoundingClientRect().height;
+          this.itemHeights.set(messageId, actualHeight);
+          cursorY += actualHeight;
+        } else {
+          // No element; advance cursor by estimate
+          cursorY = nextY;
+        }
+      } else {
+        // Placeholder to preserve space
+        const spacer = document.createElement("div");
+        spacer.style.height = `${estimatedHeight}px`;
+        fragment.appendChild(spacer);
+        cursorY = nextY;
+      }
+    }
+
+    if (options.appendToExisting) {
+      this.element.appendChild(fragment);
+    } else {
+      this.element.innerHTML = "";
+      this.element.appendChild(fragment);
+    }
+  }
+
+  /**
+   * Batched virtualization to avoid blocking on huge message sets.
+   * Renders in small chunks via requestIdleCallback/RAF.
+   */
+  _renderVirtualizedBatched(messages, mergedToolCalls, options = {}) {
+    const BATCH_SIZE = 150;
+    const total = messages.length;
+    if (total === 0) return;
+
+    // For small sets, render immediately
+    if (total <= BATCH_SIZE) {
+      this._renderVirtualized(messages, mergedToolCalls, options);
+      return;
+    }
+
+    // Chunk rendering
+    let index = 0;
+    const container = this.element;
+    // Clear container first for main render
+    container.innerHTML = "";
+    const initialFragment = document.createDocumentFragment();
+    container.appendChild(initialFragment);
+
+    const renderChunk = () => {
+      const start = index;
+      const end = Math.min(index + BATCH_SIZE, total);
+      const slice = messages.slice(start, end);
+      this._renderVirtualized(slice, mergedToolCalls, {
+        ...options,
+        appendToExisting: true,
+      });
+      index = end;
+      if (index < total) {
+        if (typeof requestIdleCallback !== "undefined") {
+          requestIdleCallback(renderChunk, { timeout: 500 });
+        } else {
+          requestAnimationFrame(renderChunk);
+        }
+      }
+    };
+
+    renderChunk();
+  }
+
+  /**
+   * Render a single message node
+   * @param {Object} msg
+   * @param {Map<string,Object>} mergedToolCalls
+   * @param {string} [messageId]
+   * @returns {HTMLElement|null}
+   */
+  _renderMessageNode(msg, mergedToolCalls, messageId) {
+    const { role, content, partial } = msg;
+    const textContent = this._extractTextContent(content);
+    let element = null;
+
+    if (role === "user" && textContent) {
+      element = createMessageElement(this.element, textContent, "user").messageDiv;
+    } else if (role === "assistant" && textContent) {
+      element = createMessageElement(this.element, textContent, "assistant", { partial: partial === true }).messageDiv;
+    } else if (role === "system" && textContent) {
+      element = createMessageElement(this.element, textContent, "system").messageDiv;
+    } else if (role === "tool_call") {
+      element = this._renderToolCallMerged(msg, mergedToolCalls);
+    }
+
+    if (element && messageId) {
+      element.dataset.messageId = messageId;
+    }
+
+    return element;
   }
 
   /**

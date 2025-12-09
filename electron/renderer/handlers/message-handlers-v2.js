@@ -64,6 +64,8 @@ import { showToast } from "../utils/toast.js";
 export function registerMessageHandlers(context) {
   const { appState, elements, services, ipcAdapter, components } = context;
   const { streamManager } = services;
+  // Persist streaming buffers per session to restore after session switches
+  const sessionStreamBuffers = new Map();
 
   // Prefer the ChatContainer component when available to keep internal streaming state in sync
   const getChatContainerComponent = () =>
@@ -112,6 +114,7 @@ export function registerMessageHandlers(context) {
 
     // Start stream tracking for this session
     streamManager.startStream(sessionId);
+    sessionStreamBuffers.set(sessionId, "");
 
     // Only update UI for active session
     if (isActive) {
@@ -141,6 +144,21 @@ export function registerMessageHandlers(context) {
   createHandler("assistant_delta", (message) => {
     const sessionId = resolveSessionId(message, appState);
     const isActive = isActiveSessionMessage(message, appState);
+    const targetSession = sessionId || appState.getState("session.current");
+
+    // If message is NOT for the active session, never touch UI state; just buffer for that session
+    if (!isActive) {
+      if (sessionId) {
+        streamManager.appendToBuffer(sessionId, message.content);
+        const existing = sessionStreamBuffers.get(sessionId) || "";
+        sessionStreamBuffers.set(sessionId, existing + message.content);
+      } else {
+        console.warn(
+          "[MessageHandlersV2] assistant_delta without session_id while multiple sessions may stream; dropped"
+        );
+      }
+      return;
+    }
 
     // CRITICAL FIX: If we have an active streaming element, always render to it
     // This matches main branch behavior and prevents message loss when:
@@ -160,6 +178,10 @@ export function registerMessageHandlers(context) {
       }
 
       appState.setState("message.assistantBuffer", newBuffer);
+      if (targetSession) {
+        const existing = sessionStreamBuffers.get(targetSession) || "";
+        sessionStreamBuffers.set(targetSession, existing + message.content);
+      }
 
       // Hide lottie indicator on first token arrival for instant feedback
       if (isFirstToken) {
@@ -183,9 +205,17 @@ export function registerMessageHandlers(context) {
       // (assistant_start should have created it), but handle gracefully
       const newBuffer = appState.message.assistantBuffer + message.content;
       appState.setState("message.assistantBuffer", newBuffer);
+      if (targetSession) {
+        const existing = sessionStreamBuffers.get(targetSession) || "";
+        sessionStreamBuffers.set(targetSession, existing + message.content);
+      }
     } else {
       // Background session - buffer only
       streamManager.appendToBuffer(sessionId, message.content);
+      if (targetSession) {
+        const existing = sessionStreamBuffers.get(targetSession) || "";
+        sessionStreamBuffers.set(targetSession, existing + message.content);
+      }
     }
   });
 
@@ -199,6 +229,7 @@ export function registerMessageHandlers(context) {
 
     // End stream tracking for this session
     streamManager.endStream(sessionId);
+    sessionStreamBuffers.delete(sessionId);
 
     if (isActiveSessionMessage(message, appState)) {
       const currentAssistantElement = appState.message.currentAssistant;
@@ -701,8 +732,9 @@ export function registerMessageHandlers(context) {
       // RACE CONDITION FIX: Tokens may have arrived between session switch and reconstruction.
       // Those tokens went to appState.message.assistantBuffer (which was cleared on switch).
       // We need to preserve them by appending to the reconstructed buffer.
+      const cached = sessionStreamBuffers.get(sessionId) || "";
       const arrivedDuringSwitch = appState.getState("message.assistantBuffer") || "";
-      const mergedBuffer = (buffer || "") + arrivedDuringSwitch;
+      const mergedBuffer = (buffer || "") + cached + arrivedDuringSwitch;
 
       console.log("[message-handlers] stream:reconstruct MERGE buffers:", {
         fromStreamManager: buffer?.length || 0,

@@ -225,20 +225,29 @@ let activeMermaidRenders = 0;
 const mermaidRenderQueue = [];
 
 function scheduleMermaidRender(diagram) {
+  const run = () => {
+    activeMermaidRenders += 1;
+    renderDiagramWhenIdle(diagram)
+      .catch(() => {})
+      .finally(() => {
+        activeMermaidRenders = Math.max(0, activeMermaidRenders - 1);
+        const next = mermaidRenderQueue.shift();
+        if (next) {
+          scheduleMermaidRender(next);
+        }
+      });
+  };
+
   if (activeMermaidRenders >= MAX_MERMAID_CONCURRENCY) {
     mermaidRenderQueue.push(diagram);
     return;
   }
-  activeMermaidRenders += 1;
-  renderDiagramWhenIdle(diagram)
-    .catch(() => {})
-    .finally(() => {
-      activeMermaidRenders = Math.max(0, activeMermaidRenders - 1);
-      const next = mermaidRenderQueue.shift();
-      if (next) {
-        scheduleMermaidRender(next);
-      }
-    });
+
+  if (typeof requestIdleCallback !== "undefined") {
+    requestIdleCallback(run, { timeout: 1000 });
+  } else {
+    setTimeout(run, 0);
+  }
 }
 
 /**
