@@ -95,7 +95,18 @@ def mock_agent() -> Mock:
 def mock_app_state(
     session_manager: SessionManager,
     full_history_store: FullHistoryStore,
-    mock_agent: Mock,
+    ) -> AppState:
+    """Provide AppState with real persistence and mocked external services.
+
+    Phase 2: Updated to use new AppState structure with active_sessions dict.
+    """
+    return AppState(
+        session_manager=session_manager,
+        active_sessions={},  # Start with empty sessions dict
+        deployment="gpt-4o",
+        full_history_store=full_history_store,
+        mcp_servers={"test-mcp": mock_mcp_server},
+    )
     mock_mcp_server: Mock,
 ) -> AppState:
     """Provide AppState with real persistence and mocked external services.

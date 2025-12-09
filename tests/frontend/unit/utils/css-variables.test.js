@@ -18,7 +18,7 @@ describe("css-variables utils", () => {
   it("uses fallback and logs a warning when the variable is missing", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    const value = getCSSVariable("missing-variable", "#ffffff");
+    const value = getCSSVariable("--missing-variable", "#ffffff");
 
     expect(value).toBe("#ffffff");
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("CSS variable --missing-variable not found"));

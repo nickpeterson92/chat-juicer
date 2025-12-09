@@ -187,12 +187,14 @@ export class SessionService {
 
     if (isCurrentStreaming) {
       const activeBuffer = this.appState.getState("message.assistantBuffer") || "";
-      console.log("[session-service] SYNC BUFFER on switch away:", {
-        currentSessionId,
-        targetSessionId: sessionId,
-        bufferLength: activeBuffer.length,
-        bufferPreview: activeBuffer.substring(0, 100),
-      });
+      if (import.meta.env.DEV) {
+        console.log("[session-service] SYNC BUFFER on switch away:", {
+          currentSessionId,
+          targetSessionId: sessionId,
+          bufferLength: activeBuffer.length,
+          bufferPreview: activeBuffer.substring(0, 100),
+        });
+      }
       if (activeBuffer) {
         streamManager.setBuffer(currentSessionId, activeBuffer);
       }
@@ -250,13 +252,15 @@ export class SessionService {
 
     const isStreaming = streamManager.isStreaming(sessionId);
 
-    console.log("[session-service] RECONSTRUCT stream state:", {
-      sessionId,
-      bufferLength: buffer?.length || 0,
-      bufferPreview: buffer?.substring(0, 100) || "(empty)",
-      toolsCount: tools?.length || 0,
-      isStreaming,
-    });
+    if (import.meta.env.DEV) {
+      console.log("[session-service] RECONSTRUCT stream state:", {
+        sessionId,
+        bufferLength: buffer?.length || 0,
+        bufferPreview: buffer?.substring(0, 100) || "(empty)",
+        toolsCount: tools?.length ||0,
+        isStreaming,
+      });
+    }
 
     // Emit event for message handlers to render the buffered content
     // This keeps DOM manipulation in the handler layer where it belongs
