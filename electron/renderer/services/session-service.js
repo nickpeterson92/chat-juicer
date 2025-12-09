@@ -187,12 +187,14 @@ export class SessionService {
 
     if (isCurrentStreaming) {
       const activeBuffer = this.appState.getState("message.assistantBuffer") || "";
-      console.log("[session-service] SYNC BUFFER on switch away:", {
-        currentSessionId,
-        targetSessionId: sessionId,
-        bufferLength: activeBuffer.length,
-        bufferPreview: activeBuffer.substring(0, 100),
-      });
+      if (import.meta.env.DEV) {
+        console.log("[session-service] SYNC BUFFER on switch away:", {
+          currentSessionId,
+          targetSessionId: sessionId,
+          bufferLength: activeBuffer.length,
+          bufferPreview: activeBuffer.substring(0, 100),
+        });
+      }
       if (activeBuffer) {
         streamManager.setBuffer(currentSessionId, activeBuffer);
       }
