@@ -69,7 +69,7 @@ import { showToast } from "../utils/toast.js";
  */
 export function registerMessageHandlers(context) {
   const { appState, elements, services, ipcAdapter, components } = context;
-  const { streamManager } = services;
+  const { streamManager } = services || {};
 
   // Prefer the ChatContainer component when available to keep internal streaming state in sync
   const getChatContainerComponent = () =>
