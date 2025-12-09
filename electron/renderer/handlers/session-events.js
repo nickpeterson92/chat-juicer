@@ -89,6 +89,21 @@ export function setupSessionEventHandlers({
         return;
       }
 
+      // Seed token usage so the indicator is accurate immediately after switch
+      try {
+        const existingUsage = appState.getState("session.tokenUsage") || {};
+        const limit =
+          typeof sessionData.max_tokens === "number" ? sessionData.max_tokens : (existingUsage.limit ?? 128000);
+        const threshold =
+          typeof sessionData.trigger_tokens === "number"
+            ? sessionData.trigger_tokens
+            : (existingUsage.threshold ?? Math.floor(limit * 0.8));
+        const current = typeof sessionData.tokens === "number" ? sessionData.tokens : (existingUsage.current ?? 0);
+        appState.setState("session.tokenUsage", { current, limit, threshold });
+      } catch (seedError) {
+        console.error("Failed to seed token usage on session switch:", seedError);
+      }
+
       // Close sidebar after successful switch (UX: only close on success)
       // Update state - subscription will handle DOM manipulation
       appState.setState("ui.sidebarCollapsed", true);

@@ -166,6 +166,26 @@ class IPCManager:
             logger.error(f"Failed to serialize session update: {e}", exc_info=True)
 
     @staticmethod
+    def send_token_usage(current: int, limit: int, threshold: int, session_id: str | None = None) -> None:
+        """Send token usage update to frontend.
+
+        Args:
+            current: Current used tokens
+            limit: Maximum token limit for model
+            threshold: Summarization threshold
+            session_id: Optional session identifier
+        """
+        IPCManager.send(
+            {
+                "type": "token_usage",
+                "current": current,
+                "limit": limit,
+                "threshold": threshold,
+            },
+            session_id=session_id,
+        )
+
+    @staticmethod
     def send_upload_response(data: dict[str, Any], session_id: str | None = None) -> None:
         """Send a file upload response.
 

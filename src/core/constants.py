@@ -278,6 +278,10 @@ MSG_TYPE_ASSISTANT_START = "assistant_start"
 #: Signals to frontend that assistant has completed the response.
 MSG_TYPE_ASSISTANT_END = "assistant_end"
 
+#: Message type for token usage updates.
+#: Sends current/limit/threshold token counts to frontend.
+MSG_TYPE_TOKEN_USAGE = "token_usage"
+
 #: Message type for incremental assistant content delta.
 #: Contains streaming text chunks as assistant generates response.
 MSG_TYPE_ASSISTANT_DELTA = "assistant_delta"

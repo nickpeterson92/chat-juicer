@@ -140,6 +140,11 @@ export class AppState {
       isLoading: false, // Loading state
       hasMore: false, // Pagination state
       totalCount: 0, // Total session count
+      tokenUsage: {
+        current: 0,
+        limit: 128000,
+        threshold: 100000,
+      },
     };
 
     // Message state

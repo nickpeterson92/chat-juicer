@@ -218,6 +218,8 @@ async def switch_to_session(app_state: AppStateProtocol, session_id: str) -> dic
         "session": session_meta.model_dump(),
         "message_count": message_count,
         "tokens": app_state.current_session.total_tokens,
+        "max_tokens": app_state.current_session.max_tokens,
+        "trigger_tokens": app_state.current_session.trigger_tokens,
         "full_history": full_messages,  # Initial chunk only
         "has_more": has_more,  # Pagination flag for frontend
         "loaded_count": len(full_messages),  # Messages in this response

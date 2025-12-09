@@ -622,6 +622,19 @@ export function registerMessageHandlers(context) {
     updateFunctionCallStatus(appState.functions.activeCalls, message.call_id, "ready to execute");
   });
 
+  // ===== Token Usage Handler =====
+
+  createHandler("token_usage", (message) => {
+    // Only update UI if this is for the active session
+    if (isActiveSessionMessage(message, appState)) {
+      appState.setState("session.tokenUsage", {
+        current: message.current,
+        limit: message.limit,
+        threshold: message.threshold,
+      });
+    }
+  });
+
   // ===== Rate Limit Handlers =====
 
   createHandler("rate_limit_hit", (message) => {

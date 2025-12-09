@@ -307,6 +307,18 @@ async function handleSwitch(sessionId, sessionService, streamManager, updateSess
         window.components.chatContainer.setMessages(messages);
       }
 
+      // Seed token usage for the loaded session so the indicator is accurate immediately
+      if (appState) {
+        const existingUsage = appState.getState("session.tokenUsage") || {};
+        const limit = typeof result.max_tokens === "number" ? result.max_tokens : (existingUsage.limit ?? 128000);
+        const threshold =
+          typeof result.trigger_tokens === "number"
+            ? result.trigger_tokens
+            : (existingUsage.threshold ?? Math.floor(limit * 0.8));
+        const current = typeof result.tokens === "number" ? result.tokens : (existingUsage.current ?? 0);
+        appState.setState("session.tokenUsage", { current, limit, threshold });
+      }
+
       // Load remaining messages before stream reconstruction to preserve ordering
       if (result.hasMore && result.loadedCount > 0) {
         console.log("[session] Loading remaining messages in background...", {

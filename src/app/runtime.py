@@ -451,6 +451,14 @@ async def process_messages(app_state: AppState, session_ctx: SessionContext, mes
             f"({int(session.total_tokens / session.trigger_tokens * 100)}%)"
         )
 
+        # Send token usage update to frontend
+        IPCManager.send_token_usage(
+            current=session.total_tokens,
+            limit=session.max_tokens,
+            threshold=session.trigger_tokens,
+            session_id=session.session_id,
+        )
+
         # Check for post-run summarization (only for successful completion)
         if await session.should_summarize():
             logger.info(f"Post-run summarization triggered: {session.total_tokens}/{session.trigger_tokens} tokens")
@@ -458,6 +466,14 @@ async def process_messages(app_state: AppState, session_ctx: SessionContext, mes
             logger.info(
                 f"Token usage after summarization: {session.total_tokens}/{session.trigger_tokens} "
                 f"({int(session.total_tokens / session.trigger_tokens * 100)}%)"
+            )
+
+            # Send updated token usage
+            IPCManager.send_token_usage(
+                current=session.total_tokens,
+                limit=session.max_tokens,
+                threshold=session.trigger_tokens,
+                session_id=session.session_id,
             )
 
     finally:

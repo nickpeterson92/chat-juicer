@@ -5,6 +5,7 @@
 
 import { ComponentLifecycle } from "../../core/component-lifecycle.js";
 import { globalLifecycleManager } from "../../core/lifecycle-manager.js";
+import { showToast } from "../../utils/toast.js";
 import { ModelSelector } from "./model-selector.js";
 
 export class InputArea {
@@ -40,6 +41,14 @@ export class InputArea {
     // Queue badge element (created lazily)
     this.queueBadge = null;
 
+    // Token/context indicator
+    this.tokenIndicator = null;
+    this.tokenIndicatorRing = null;
+    this.tokenIndicatorText = null;
+    this.tokenIndicatorUnsubscribe = null;
+    this.summaryInFlightSessionId = null;
+    this.autoSummaryTriggeredFor = null;
+
     if (!this._lifecycle) {
       ComponentLifecycle.mount(this, "InputArea", globalLifecycleManager);
     }
@@ -48,6 +57,7 @@ export class InputArea {
     this.setupStateSubscriptions();
     this.setupStreamingStateListener();
     this.setupEscapeKeyListener();
+    this.setupTokenIndicator();
   }
 
   /**
@@ -114,6 +124,198 @@ export class InputArea {
     });
 
     globalLifecycleManager.addUnsubscriber(this, unsubscribe);
+  }
+
+  /**
+   * Setup token/context usage indicator
+   * @private
+   */
+  setupTokenIndicator() {
+    if (!this.appState) return;
+
+    // Place indicator immediately to the left of the model selector if present.
+    const anchor = this.modelSelectorContainer;
+    const parent = anchor?.parentElement;
+    if (!anchor || !parent) return;
+
+    // Create a tight inline-flex group: [indicator][model selector]
+    const group = document.createElement("div");
+    group.className = "token-selector-group";
+    Object.assign(group.style, {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: "8px",
+      verticalAlign: "middle",
+    });
+
+    // Insert group before the model selector and move selector inside it
+    parent.insertBefore(group, anchor);
+    group.appendChild(anchor);
+
+    // Container button (subtle circle)
+    const indicator = document.createElement("button");
+    indicator.type = "button";
+    indicator.className = "token-usage-indicator";
+    Object.assign(indicator.style, {
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: "14px",
+      height: "14px",
+      padding: "0",
+      borderRadius: "50%",
+      border: "none",
+      background: "transparent",
+      cursor: "pointer",
+      flexShrink: "0",
+      verticalAlign: "middle",
+    });
+
+    // Progress ring
+    const ring = document.createElement("span");
+    ring.className = "token-usage-ring";
+    Object.assign(ring.style, {
+      position: "relative",
+      width: "14px",
+      height: "14px",
+      borderRadius: "50%",
+      background: "conic-gradient(rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.05) 0%)",
+      display: "inline-block",
+      flexShrink: "0",
+      WebkitMask: "radial-gradient(closest-side, transparent 60%, black 61%)",
+      mask: "radial-gradient(closest-side, transparent 60%, black 61%)",
+    });
+
+    indicator.appendChild(ring);
+    indicator.setAttribute("aria-label", "Context usage. Click to summarize now.");
+
+    // Insert indicator as first item in the group
+    group.insertBefore(indicator, group.firstChild);
+
+    indicator.addEventListener("click", () => this.handleManualSummarize());
+
+    // Subscribe to token usage updates
+    this.tokenIndicatorUnsubscribe = this.appState.subscribe("session.tokenUsage", (usage) => {
+      this.updateTokenIndicator(usage);
+    });
+    globalLifecycleManager.addUnsubscriber(this, this.tokenIndicatorUnsubscribe);
+
+    this.tokenIndicator = indicator;
+    this.tokenIndicatorRing = ring;
+    this.tokenIndicatorText = null;
+  }
+
+  /**
+   * Update token indicator visuals and auto-summarize when full
+   * @param {Object} usage
+   * @private
+   */
+  updateTokenIndicator(usage) {
+    if (!this.tokenIndicator || !usage) return;
+
+    const { current = 0, limit = 1, threshold = limit } = usage;
+    const percentOfLimit = Math.min(100, Math.round((current / Math.max(limit, 1)) * 100));
+    const percentOfThreshold = Math.min(100, Math.round((current / Math.max(threshold, 1)) * 100));
+    const progress = percentOfLimit;
+
+    // Subtle, on-theme white fill with slightly higher opacity near full
+    const alpha = progress >= 100 ? 0.9 : progress >= 90 ? 0.82 : progress >= 75 ? 0.72 : 0.62;
+    const color = `rgba(255, 255, 255, ${alpha})`;
+
+    if (this.tokenIndicatorRing) {
+      // Ensure a faint base ring even at 0%
+      const end = Math.max(progress, 2);
+      this.tokenIndicatorRing.style.background = `conic-gradient(${color} ${end}%, rgba(255,255,255,0.10) ${end}% 100%)`;
+    }
+
+    const thresholdPct = Math.min(100, Math.round((threshold / Math.max(limit, 1)) * 100));
+    this.tokenIndicator.title = `Context: ${current}/${limit} tokens (${percentOfLimit}%). Auto-summary at ${threshold} (${thresholdPct}%). Click to summarize.`;
+    this.tokenIndicator.classList.toggle("token-usage-full", percentOfThreshold >= 100);
+
+    // Reset auto-trigger when comfortably below threshold
+    if (percentOfThreshold < 90) {
+      this.autoSummaryTriggeredFor = null;
+    }
+
+    if (percentOfThreshold >= 100) {
+      this.tryAutoSummarize();
+    }
+  }
+
+  /**
+   * Attempt auto-summarization when context is full
+   * @private
+   */
+  tryAutoSummarize() {
+    if (!this.sessionService?.getCurrentSessionId) return;
+    const sessionId = this.sessionService.getCurrentSessionId();
+    if (!sessionId) return;
+
+    // Avoid duplicate triggers for the same session
+    if (this.autoSummaryTriggeredFor === sessionId) return;
+    if (this.summaryInFlightSessionId) return;
+
+    // Do not interrupt active work
+    const isStreaming = this.appState?.getState("message.isStreaming");
+    const pythonStatus = this.appState?.getState("python.status");
+    if (isStreaming || pythonStatus === "busy_summarizing") return;
+
+    this.autoSummaryTriggeredFor = sessionId;
+    void this.runSummarize("auto");
+  }
+
+  /**
+   * Handle manual summarize request from indicator click
+   * @private
+   */
+  handleManualSummarize() {
+    void this.runSummarize("manual");
+  }
+
+  /**
+   * Execute summarize command with UI state handling
+   * @param {"auto"|"manual"} reason
+   * @private
+   */
+  async runSummarize(reason) {
+    if (!this.sessionService?.getCurrentSessionId || !this.sessionService.summarizeSession) return;
+    const sessionId = this.sessionService.getCurrentSessionId();
+    if (!sessionId) return;
+
+    if (this.summaryInFlightSessionId) {
+      return; // Already running
+    }
+    this.summaryInFlightSessionId = sessionId;
+
+    try {
+      // Mark busy
+      this.appState?.setState("python.status", "busy_summarizing");
+
+      const result = await this.sessionService.summarizeSession(sessionId);
+
+      if (!result?.success) {
+        throw new Error(result?.error || "Summarization failed");
+      }
+
+      if (reason === "manual") {
+        showToast("Summarization requested", "info", 2000);
+      }
+    } catch (error) {
+      console.error("[input] Summarize failed:", error);
+      showToast(`Summarize failed: ${error.message || error}`, "error", 3500);
+    } finally {
+      this.summaryInFlightSessionId = null;
+      this.appState?.setState("python.status", "idle");
+
+      // Flush queued commands if any
+      if (this.ipcAdapter?.commandQueue?.length > 0) {
+        try {
+          await this.ipcAdapter.processQueue();
+        } catch (err) {
+          console.error("[input] Failed to process queued commands after summarize:", err);
+        }
+      }
+    }
   }
 
   /**
@@ -427,6 +629,17 @@ export class InputArea {
     // Clean up model selector
     if (this.modelSelector && typeof this.modelSelector.destroy === "function") {
       this.modelSelector.destroy();
+    }
+
+    // Clean up token indicator
+    if (this.tokenIndicatorUnsubscribe) {
+      this.tokenIndicatorUnsubscribe();
+    }
+    if (this.tokenIndicator) {
+      this.tokenIndicator.remove();
+      this.tokenIndicator = null;
+      this.tokenIndicatorRing = null;
+      this.tokenIndicatorText = null;
     }
 
     // Clean up queue badge

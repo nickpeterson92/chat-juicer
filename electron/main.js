@@ -3,6 +3,7 @@ const { spawn } = require("node:child_process");
 const path = require("node:path");
 const fs = require("node:fs/promises");
 const os = require("node:os");
+const { fileURLToPath } = require("node:url");
 const Logger = require("./logger");
 const PythonManager = require("../scripts/python-manager");
 const platformConfig = require("../scripts/platform-config");
@@ -653,9 +654,32 @@ app.whenReady().then(() => {
         return { success: false, error: "Invalid URL" };
       }
 
-      // Only allow http and https protocols
-      const urlLower = url.toLowerCase();
-      if (!urlLower.startsWith("http://") && !urlLower.startsWith("https://")) {
+      const parsedUrl = new URL(url);
+
+      // Allow trusted local file URLs for bundled docs/markdown
+      if (parsedUrl.protocol === "file:") {
+        const filePath = path.normalize(fileURLToPath(parsedUrl));
+        const allowedRoots = [path.normalize(app.getAppPath()), path.normalize(path.join(__dirname, ".."))];
+
+        const isAllowed = allowedRoots.some((root) => filePath.startsWith(root));
+        if (!isAllowed) {
+          logger.error("Security: File URL outside allowed roots", { url, path: filePath });
+          return { success: false, error: "File URL not permitted" };
+        }
+
+        try {
+          await fs.access(filePath);
+        } catch (_err) {
+          logger.error("File URL does not exist", { url, path: filePath });
+          return { success: false, error: "File does not exist" };
+        }
+
+        await shell.openExternal(url);
+        logger.info("File URL opened successfully", { url });
+        return { success: true };
+      }
+
+      if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
         logger.error("Security: Rejected non-HTTP(S) URL", { url });
         return { success: false, error: "Only HTTP and HTTPS URLs are allowed" };
       }

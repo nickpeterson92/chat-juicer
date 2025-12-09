@@ -203,6 +203,9 @@ export class SessionService {
           hasMore: response.has_more || false,
           loadedCount: response.loaded_count || 0,
           messageCount: response.message_count || 0,
+          tokens: response.tokens,
+          max_tokens: response.max_tokens,
+          trigger_tokens: response.trigger_tokens,
         };
       }
 
