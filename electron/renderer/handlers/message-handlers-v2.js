@@ -752,10 +752,7 @@ export function registerMessageHandlers(context) {
       }
     }
 
-    // Reconstruct tool cards for any buffered tools
-    // IMPORTANT: Only recreate in-flight calls. Completed/error calls are already
-    // persisted in Layer 2 and rendered in-order by setMessages; recreating them
-    // here would append them to the bottom of the chat.
+    // Reconstruct in-flight tool cards only (skip completed/error)
     if (tools && tools.length > 0) {
       for (const [callId, toolState] of tools) {
         if (toolState.status === "completed" || toolState.status === "error") {
@@ -768,8 +765,8 @@ export function registerMessageHandlers(context) {
           continue;
         }
 
-        // Create the tool card
-        createFunctionCallCard(
+        // Create the tool card (requires callId)
+        const card = createFunctionCallCard(
           elements.chatContainer,
           appState.functions.activeCalls,
           appState,
@@ -777,6 +774,8 @@ export function registerMessageHandlers(context) {
           toolState.name,
           toolState.status
         );
+
+        if (!card) continue;
 
         // If there are arguments, update the card
         if (toolState.arguments) {

@@ -219,6 +219,28 @@ const BATCH_DELAY_MS = 50; // Wait 50ms to collect all elements before processin
 let scrollFallbackTimeout = null;
 let scrollFallbackInitialized = false;
 
+// Concurrency control for Mermaid rendering
+const MAX_MERMAID_CONCURRENCY = 2;
+let activeMermaidRenders = 0;
+const mermaidRenderQueue = [];
+
+function scheduleMermaidRender(diagram) {
+  if (activeMermaidRenders >= MAX_MERMAID_CONCURRENCY) {
+    mermaidRenderQueue.push(diagram);
+    return;
+  }
+  activeMermaidRenders += 1;
+  renderDiagramWhenIdle(diagram)
+    .catch(() => {})
+    .finally(() => {
+      activeMermaidRenders = Math.max(0, activeMermaidRenders - 1);
+      const next = mermaidRenderQueue.shift();
+      if (next) {
+        scheduleMermaidRender(next);
+      }
+    });
+}
+
 /**
  * Get or create the mermaid visibility observer
  * Renders diagrams only when they enter the viewport
@@ -659,9 +681,7 @@ function checkVisibleDiagramsFallback() {
       mermaidObserver.unobserve(wrapper);
     }
 
-    renderDiagramWhenIdle({ id, code, placeholder: wrapper }).then(() => {
-      renderingInProgress.delete(id);
-    });
+    scheduleMermaidRender({ id, code, placeholder: wrapper });
   }
 }
 

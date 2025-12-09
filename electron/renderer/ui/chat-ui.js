@@ -30,6 +30,25 @@ if (!chatUIComponent._lifecycle) {
   ComponentLifecycle.mount(chatUIComponent, "ChatUI", globalLifecycleManager);
 }
 
+// Lightweight render cache to avoid re-rendering identical markdown (e.g., on session reopen)
+const renderCache = new Map();
+const MAX_RENDER_CACHE = 200;
+
+function cacheRenderedMarkdown(content, isComplete, html) {
+  const key = `${isComplete ? "C" : "P"}:${content}`;
+  renderCache.set(key, html);
+  if (renderCache.size > MAX_RENDER_CACHE) {
+    const firstKey = renderCache.keys().next().value;
+    renderCache.delete(firstKey);
+  }
+  return html;
+}
+
+function getCachedRenderedMarkdown(content, isComplete) {
+  const key = `${isComplete ? "C" : "P"}:${content}`;
+  return renderCache.get(key);
+}
+
 /**
  * Add a message to the chat container
  * @param {HTMLElement} chatContainer - The chat container element
@@ -77,20 +96,33 @@ export function createMessageElement(chatContainer, content, type = "assistant",
 
   // Render markdown for assistant messages, plain text for others
   if (type === "assistant") {
-    contentDiv.innerHTML = renderMarkdown(content, true); // isComplete = true for static messages
-    // Process Mermaid diagrams and initialize copy buttons asynchronously after DOM insertion (lifecycle-managed)
-    chatUIComponent.setTimeout(() => {
-      // CRITICAL: Initialize copy buttons AFTER Mermaid processing completes
-      processMermaidDiagrams(contentDiv)
-        .catch((err) => window.electronAPI.log("error", "Mermaid processing error", { error: err.message }))
-        .finally(() => {
-          initializeCodeCopyButtons(contentDiv);
-          // Scroll again after Mermaid diagrams render (they add height to the message)
-          if (chatContainer) {
-            scheduleScroll(chatContainer);
-          }
-        });
-    }, 0);
+    const cached = getCachedRenderedMarkdown(content, true);
+    if (cached) {
+      contentDiv.innerHTML = cached;
+      chatUIComponent.setTimeout(() => {
+        processMermaidDiagrams(contentDiv)
+          .catch((err) => window.electronAPI.log("error", "Mermaid processing error", { error: err.message }))
+          .finally(() => {
+            initializeCodeCopyButtons(contentDiv);
+            if (chatContainer) {
+              scheduleScroll(chatContainer);
+            }
+          });
+      }, 0);
+    } else {
+      contentDiv.innerHTML = renderMarkdown(content, true); // isComplete = true for static messages
+      chatUIComponent.setTimeout(() => {
+        processMermaidDiagrams(contentDiv)
+          .catch((err) => window.electronAPI.log("error", "Mermaid processing error", { error: err.message }))
+          .finally(() => {
+            initializeCodeCopyButtons(contentDiv);
+            cacheRenderedMarkdown(content, true, contentDiv.innerHTML);
+            if (chatContainer) {
+              scheduleScroll(chatContainer);
+            }
+          });
+      }, 0);
+    }
   } else {
     contentDiv.textContent = content;
   }

@@ -277,9 +277,29 @@ export function createFunctionCallCard(
   functionName,
   status = "preparing"
 ) {
-  // Handle case where callId might not be provided initially
+  // Require callId for reliability; skip rendering orphan calls without IDs
   if (!callId) {
-    callId = `temp-${Date.now()}`;
+    return null;
+  }
+
+  // If a card already exists in the DOM for this call_id, reuse it and sync activeCalls
+  const existingElement = document.getElementById(`function-${callId}`);
+  if (existingElement) {
+    let existingCard = activeCalls.get(callId);
+    if (!existingCard) {
+      existingCard = {
+        id: callId,
+        name: functionName,
+        rawName: functionName,
+        element: existingElement,
+        timestamp: Date.now(),
+        cleanupTimerId: null,
+      };
+    } else if (!existingCard.element) {
+      existingCard = { ...existingCard, element: existingElement };
+    }
+    activeCalls.set(callId, existingCard);
+    return existingCard;
   }
 
   let card = activeCalls.get(callId);

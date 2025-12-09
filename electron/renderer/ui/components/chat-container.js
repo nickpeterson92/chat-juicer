@@ -532,15 +532,7 @@ export class ChatContainer {
       return;
     }
 
-    const sortedMessages = this._sortMessagesIfPossible(messages);
-
-    // Track completed tool calls by call_id for pairing detected+completed
-    const toolCallCompleted = new Map();
-    for (const msg of sortedMessages) {
-      if (msg.role === "tool_call" && msg.call_id && msg.status === "completed") {
-        toolCallCompleted.set(msg.call_id, msg);
-      }
-    }
+    const { sortedMessages, mergedToolCalls } = this._prepareMessagesWithMergedTools(messages);
 
     // Second pass: render messages in order
     // Create a document fragment for efficient DOM insertion
@@ -560,21 +552,7 @@ export class ChatContainer {
       } else if (role === "system" && textContent) {
         element = createMessageElement(this.element, textContent, "system").messageDiv;
       } else if (role === "tool_call") {
-        if (msg.status === "detected" && msg.call_id) {
-          const completed = toolCallCompleted.get(msg.call_id);
-          if (completed) {
-            const merged = { ...completed, arguments: completed.arguments || msg.arguments };
-            element = this._createToolCardElement(merged);
-            toolCallCompleted.delete(msg.call_id);
-          }
-        } else if (msg.status === "completed") {
-          // If we didn't render via detected, render now
-          if (!msg.call_id || !toolCallCompleted.has(msg.call_id)) {
-            element = this._createToolCardElement(msg);
-          } else {
-            toolCallCompleted.delete(msg.call_id);
-          }
-        }
+        element = this._renderToolCallMerged(msg, mergedToolCalls);
       }
 
       if (element) {
@@ -601,19 +579,11 @@ export class ChatContainer {
       return;
     }
 
-    const sortedMessages = this._sortMessagesIfPossible(messages);
+    const { sortedMessages, mergedToolCalls } = this._prepareMessagesWithMergedTools(messages);
 
     // Store current scroll position to maintain user's view
     const scrollHeightBefore = this.element.scrollHeight;
     const scrollTopBefore = this.element.scrollTop;
-
-    // Track completed tool calls by call_id for pairing detected+completed
-    const toolCallCompleted = new Map();
-    for (const msg of sortedMessages) {
-      if (msg.role === "tool_call" && msg.call_id && msg.status === "completed") {
-        toolCallCompleted.set(msg.call_id, msg);
-      }
-    }
 
     // Create a document fragment for efficient DOM insertion
     const fragment = document.createDocumentFragment();
@@ -634,20 +604,7 @@ export class ChatContainer {
       } else if (role === "system" && textContent) {
         messageElement = createMessageElement(this.element, textContent, "system", { partial: false }).messageDiv;
       } else if (role === "tool_call") {
-        if (msg.status === "detected" && msg.call_id) {
-          const completed = toolCallCompleted.get(msg.call_id);
-          if (completed) {
-            const merged = { ...completed, arguments: completed.arguments || msg.arguments };
-            messageElement = this._createToolCardElement(merged);
-            toolCallCompleted.delete(msg.call_id);
-          }
-        } else if (msg.status === "completed") {
-          if (!msg.call_id || !toolCallCompleted.has(msg.call_id)) {
-            messageElement = this._createToolCardElement(msg);
-          } else {
-            toolCallCompleted.delete(msg.call_id);
-          }
-        }
+        messageElement = this._renderToolCallMerged(msg, mergedToolCalls);
       }
 
       if (messageElement) {
@@ -674,10 +631,46 @@ export class ChatContainer {
    * @private
    */
   _createToolCardElement(toolData) {
+    // Deduplicate: if a card with this call_id already exists, replace it to ensure fresh args/result
+    if (toolData?.call_id) {
+      const existing = document.getElementById(`function-${toolData.call_id}`);
+      if (existing) {
+        existing.remove();
+      }
+    }
     // Create wrapper to capture the created element
     const wrapper = document.createElement("div");
     createCompletedToolCard(wrapper, toolData);
     return wrapper.firstChild;
+  }
+
+  _prepareMessagesWithMergedTools(messages) {
+    const sortedMessages = this._sortMessagesIfPossible(messages);
+    const mergedToolCalls = new Map();
+
+    for (const msg of sortedMessages) {
+      if (msg?.role !== "tool_call" || !msg.call_id) continue;
+      const existing = mergedToolCalls.get(msg.call_id) || {};
+      mergedToolCalls.set(msg.call_id, {
+        ...existing,
+        ...msg,
+        arguments: msg.arguments || existing.arguments,
+        result: msg.result || existing.result || msg.output || existing.output,
+        status: msg.status || existing.status,
+        success:
+          msg.success !== undefined ? msg.success : existing.success !== undefined ? existing.success : undefined,
+      });
+    }
+
+    return { sortedMessages, mergedToolCalls };
+  }
+
+  _renderToolCallMerged(msg, mergedToolCalls) {
+    if (!msg.call_id) return null;
+    const merged = mergedToolCalls.get(msg.call_id);
+    if (!merged) return null;
+    mergedToolCalls.delete(msg.call_id);
+    return this._createToolCardElement(merged);
   }
 
   /**
@@ -688,20 +681,30 @@ export class ChatContainer {
    */
   _sortMessagesIfPossible(messages) {
     if (!Array.isArray(messages) || messages.length === 0) return messages;
-    const allHaveTs = messages.every((m) => m && m.created_at !== undefined && m.created_at !== null);
-    if (!allHaveTs) return messages;
 
-    const coerce = (v) => {
-      if (typeof v === "number") return v;
-      const parsed = Date.parse(v);
-      return Number.isNaN(parsed) ? null : parsed;
-    };
+    const withTs = messages.map((m, idx) => {
+      const rawTs = m?.created_at;
+      let t = null;
+      if (rawTs !== undefined && rawTs !== null) {
+        if (typeof rawTs === "number") {
+          t = rawTs;
+        } else {
+          const parsed = Date.parse(rawTs);
+          t = Number.isNaN(parsed) ? null : parsed;
+        }
+      }
+      return { m, t, idx };
+    });
 
-    const withTs = messages.map((m, idx) => ({ m, t: coerce(m.created_at), idx }));
-    if (withTs.some((x) => x.t === null)) return messages;
+    const anyTs = withTs.some((x) => x.t !== null);
+    if (!anyTs) return messages;
 
+    // Sort with timestamps first; items without ts keep original relative order
     return withTs
       .sort((a, b) => {
+        if (a.t === null && b.t === null) return a.idx - b.idx;
+        if (a.t === null) return 1;
+        if (b.t === null) return -1;
         if (a.t === b.t) return a.idx - b.idx;
         return a.t - b.t;
       })
