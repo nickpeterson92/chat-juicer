@@ -6,7 +6,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EventBus } from "../../../../electron/renderer/core/event-bus.js";
 import { AppState } from "../../../../electron/renderer/core/state.js";
-import { createPlugin, PluginRegistry } from "../../../../electron/renderer/plugins/plugin-interface.js";
+import {
+  createPlugin,
+  Plugin,
+  PluginRegistry,
+  plugin as pluginDecorator,
+} from "../../../../electron/renderer/plugins/plugin-interface.js";
 
 describe("Plugin Edge Cases", () => {
   let app;
@@ -307,6 +312,59 @@ describe("Plugin Edge Cases", () => {
 
       await registry.register(plugin);
       expect(registry.hasPlugin("undefined-deps")).toBe(true);
+    });
+  });
+
+  describe("Base Plugin contract", () => {
+    it("should require install to be implemented", async () => {
+      const basePlugin = new Plugin();
+
+      await expect(basePlugin.install(app)).rejects.toThrow("Plugin must implement install()");
+    });
+  });
+
+  describe("Plugin decorator", () => {
+    it("should apply metadata and copy instance methods", async () => {
+      const dependency = createPlugin({
+        name: "depA",
+        async install() {},
+      });
+      await registry.register(dependency);
+
+      const DecoratedPlugin = pluginDecorator({
+        name: "decorated-plugin",
+        version: "1.2.3",
+        description: "Decorated plugin",
+        dependencies: ["depA"],
+      })(
+        class CustomPlugin {
+          async install(appContext) {
+            appContext.decoratedInstalled = true;
+          }
+
+          async enable(appContext) {
+            appContext.decoratedEnabled = true;
+          }
+        }
+      );
+
+      const decorated = new DecoratedPlugin();
+
+      expect(decorated.name).toBe("decorated-plugin");
+      expect(decorated.version).toBe("1.2.3");
+      expect(decorated.description).toBe("Decorated plugin");
+      expect(decorated.dependencies).toEqual(["depA"]);
+
+      await registry.register(decorated);
+      await decorated.enable(app);
+
+      expect(app.decoratedInstalled).toBe(true);
+      expect(app.decoratedEnabled).toBe(true);
+      expect(decorated.getMetadata()).toMatchObject({
+        name: "decorated-plugin",
+        version: "1.2.3",
+        dependencies: ["depA"],
+      });
     });
   });
 

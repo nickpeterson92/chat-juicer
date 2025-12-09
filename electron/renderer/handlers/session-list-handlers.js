@@ -307,6 +307,9 @@ async function handleSwitch(sessionId, sessionService, streamManager, updateSess
         window.components.chatContainer.setMessages(messages);
       }
 
+      // Refresh sidebar ordering immediately after switching sessions
+      updateSessionsList();
+
       // Seed token usage for the loaded session so the indicator is accurate immediately
       if (appState) {
         const existingUsage = appState.getState("session.tokenUsage") || {};
@@ -347,8 +350,6 @@ async function handleSwitch(sessionId, sessionService, streamManager, updateSess
         });
         sessionService.reconstructStreamState(sessionId, streamManager);
       }
-
-      updateSessionsList();
 
       // Update FilePanel
       if (window.components?.filePanel) {

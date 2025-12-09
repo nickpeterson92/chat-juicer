@@ -349,7 +349,7 @@ async def main() -> None:
 
                                         if validated_concurrent:
                                             # Get or create session context for concurrent session
-                                            concurrent_ctx, is_new = await ensure_session_exists(
+                                            concurrent_ctx, _is_new = await ensure_session_exists(
                                                 app_state, next_session_id
                                             )
                                             # Start concurrent task

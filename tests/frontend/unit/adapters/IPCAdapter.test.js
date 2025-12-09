@@ -38,6 +38,14 @@ describe("IPCAdapter", () => {
       expect(adapter.isAvailable()).toBe(true);
     });
 
+    it("stores app state reference when injected", () => {
+      const state = { status: "idle" };
+
+      adapter.setAppState(state);
+
+      expect(adapter.appState).toBe(state);
+    });
+
     it("should warn when no API provided", () => {
       const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       const adapterNoAPI = new IPCAdapter(null);
@@ -72,6 +80,29 @@ describe("IPCAdapter", () => {
       const adapterNoAPI = new IPCAdapter({});
       // stopGeneration resolves gracefully when API not available
       await expect(adapterNoAPI.stopGeneration()).resolves.toBeUndefined();
+    });
+  });
+
+  describe("Stream Control", () => {
+    it("should interrupt stream when API is available", async () => {
+      mockAPI.interruptStream = vi.fn().mockResolvedValue({ success: true });
+
+      const result = await adapter.interruptStream("session-123");
+
+      expect(result).toEqual({ success: true });
+      expect(mockAPI.interruptStream).toHaveBeenCalledWith("session-123");
+    });
+
+    it("should return default interrupt response when API is missing", async () => {
+      const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const adapterNoAPI = new IPCAdapter({});
+
+      const result = await adapterNoAPI.interruptStream("session-123");
+
+      expect(result).toEqual({ success: false, error: "Not implemented" });
+      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("IPC API not available: interruptStream"));
+
+      consoleWarnSpy.mockRestore();
     });
   });
 
@@ -135,6 +166,84 @@ describe("IPCAdapter", () => {
 
       // showFileInFolder resolves gracefully when not available
       await expect(adapterNoAPI.showFileInFolder("/test")).resolves.toBeUndefined();
+    });
+  });
+
+  describe("Command Queue", () => {
+    it("should return early when queue is empty", async () => {
+      const executeSpy = vi.spyOn(adapter, "_executeSessionCommand");
+
+      await adapter.processQueue();
+
+      expect(executeSpy).not.toHaveBeenCalled();
+    });
+
+    it("should process queued commands in order", async () => {
+      const consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      const resolve = vi.fn();
+      const reject = vi.fn();
+      const executeSpy = vi.spyOn(adapter, "_executeSessionCommand").mockResolvedValue("ok");
+
+      adapter.commandQueue.push({
+        command: "switch",
+        data: { sessionId: "s-1" },
+        resolve,
+        reject,
+      });
+
+      await adapter.processQueue();
+
+      expect(executeSpy).toHaveBeenCalledWith("switch", { sessionId: "s-1" });
+      expect(resolve).toHaveBeenCalledWith("ok");
+      expect(reject).not.toHaveBeenCalled();
+
+      consoleLogSpy.mockRestore();
+    });
+
+    it("should reject queued commands when execution fails", async () => {
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const resolve = vi.fn();
+      const reject = vi.fn();
+      const error = new Error("queue failure");
+
+      vi.spyOn(adapter, "_executeSessionCommand").mockRejectedValue(error);
+
+      adapter.commandQueue.push({
+        command: "delete",
+        data: { sessionId: "s-2" },
+        resolve,
+        reject,
+      });
+
+      await adapter.processQueue();
+
+      expect(reject).toHaveBeenCalledWith(error);
+      expect(resolve).not.toHaveBeenCalled();
+
+      consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe("Toast helper", () => {
+    it("should invoke toast utility via dynamic import", async () => {
+      const toastModule = await import("@utils/toast.js");
+      const showToastSpy = vi.spyOn(toastModule, "showToast");
+      const container = document.createElement("div");
+
+      container.id = "toast-container";
+      document.body.appendChild(container);
+      document.documentElement.style.setProperty("--color-status-info", "#123456");
+      document.documentElement.style.setProperty("--color-status-success", "#123456");
+      document.documentElement.style.setProperty("--color-status-warning", "#123456");
+      document.documentElement.style.setProperty("--color-status-error", "#123456");
+
+      await adapter._showToast("Hello", "info");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(showToastSpy).toHaveBeenCalledWith("Hello", "info");
+
+      showToastSpy.mockRestore();
+      container.remove();
     });
   });
 

@@ -23,6 +23,11 @@ describe("AppState - Phase 1 Extensions", () => {
         isLoading: false,
         hasMore: false,
         totalCount: 0,
+        tokenUsage: {
+          current: 0,
+          limit: 128000,
+          threshold: 100000,
+        },
       });
     });
 
