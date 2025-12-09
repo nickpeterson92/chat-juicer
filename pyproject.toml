@@ -114,7 +114,7 @@ force-single-line = false
 # Import sections order
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 # Define first-party packages (your local modules)
-known-first-party = ["app", "core", "integrations", "models", "tools", "utils"]
+known-first-party = ["app", "core", "integrations", "models", "tools", "utils", "main"]
 
 [tool.ruff.lint.mccabe]
 # Maximum complexity
@@ -130,6 +130,7 @@ max-statements = 50
 [tool.ruff.lint.per-file-ignores]
 # Test files can have more relaxed rules
 "tests/backend/**/*.py" = ["S101", "PLR2004", "PLR0913"]
+"tests/backend/unit/test_main.py" = ["I001"]
 
 # Main.py needs prints for IPC and has cleanup loops
 "src/main.py" = ["T201", "PERF203"]

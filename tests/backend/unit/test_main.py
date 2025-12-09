@@ -7,8 +7,9 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, Mock
 
-import main
 import pytest
+
+import main
 
 from app.state import SessionContext
 
