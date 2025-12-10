@@ -254,10 +254,28 @@ async def ensure_session_exists(app_state: AppState, session_id: str | None = No
     # Import here to avoid circular dependency
     from core.agent import create_agent
 
-    session_files = await get_session_files(session_meta.session_id)
+    try:
+        session_files = await get_session_files(session_meta.session_id)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning(
+            f"Failed to load session files for prompt: {exc}",
+            extra={"session_id": session_meta.session_id},
+        )
+        session_files = []
+
+    try:
+        session_templates = await get_session_templates(session_meta.session_id)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning(
+            f"Failed to load session templates for prompt: {exc}",
+            extra={"session_id": session_meta.session_id},
+        )
+        session_templates = []
+
     dynamic_instructions = build_dynamic_instructions(
         SYSTEM_INSTRUCTIONS,
         session_files=session_files,
+        session_templates=session_templates,
         mcp_servers=active_mcp_keys,
     )
 
