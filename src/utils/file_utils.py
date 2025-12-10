@@ -5,6 +5,7 @@ Provides safe, validated file and directory operations with async support.
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 
 from collections.abc import Callable
@@ -23,6 +24,7 @@ from core.constants import (
 from models.api_models import TextEditResponse
 from models.ipc_models import UploadResult
 from utils.json_utils import json_pretty
+from utils.logger import logger
 
 
 def get_relative_path(path: Path) -> Path:
@@ -39,6 +41,47 @@ def get_relative_path(path: Path) -> Path:
     """
     cwd = Path.cwd()
     return path.relative_to(cwd) if cwd in path.parents else path
+
+
+async def get_session_files(session_id: str, subdir: str = "sources") -> list[str]:
+    """List filenames in a session subdirectory, excluding hidden files.
+
+    Args:
+        session_id: Session identifier
+        subdir: Subdirectory to scan (default: "sources")
+
+    Returns:
+        Sorted list of filenames (no paths). Returns empty list if the directory
+        does not exist or on error.
+    """
+
+    def _list_files(path: Path) -> list[str]:
+        return sorted(file.name for file in path.iterdir() if file.is_file() and not file.name.startswith("."))
+
+    try:
+        base_path = Path.cwd() / "data" / "files" / session_id / subdir
+        if not base_path.exists() or not base_path.is_dir():
+            return []
+
+        return await asyncio.to_thread(_list_files, base_path)
+    except Exception as exc:
+        logger.warning(f"Failed to list session files for {session_id}: {exc}")
+        return []
+
+
+async def get_session_templates(session_id: str) -> list[str]:
+    """List template filenames for a session (read-only).
+
+    Uses the session's templates symlink/copy created at session bootstrap. Filters
+    hidden files and returns a sorted list of filenames.
+
+    Args:
+        session_id: Session identifier
+
+    Returns:
+        Sorted list of template filenames. Empty if missing or on error.
+    """
+    return await get_session_files(session_id, subdir="templates")
 
 
 def validate_session_path(file_path: str, session_id: str | None = None) -> tuple[Path, str | None]:  # noqa: PLR0911

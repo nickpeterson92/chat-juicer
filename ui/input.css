@@ -2182,8 +2182,8 @@ body.view-chat {
     /* ========================================
      * BORDER COLORS (WCAG AA compliant)
      * ======================================== */
-    --color-border-primary: #6b7280;    /* Lightened from #374151 for 3:1 contrast */
-    --color-border-secondary: #6b7280;  /* Unified with primary for consistency */
+    --color-border-primary: #3b4254;    /* Unified, subtle border tone */
+    --color-border-secondary: #3b4254;  /* Unified, subtle border tone */
     --color-border-focus: #0d63fb;      /* Brand blue for consistency */
     --color-border-hover: #0d63fb;
 

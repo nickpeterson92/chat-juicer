@@ -12,6 +12,8 @@ import pytest
 
 from utils.file_utils import (
     get_relative_path,
+    get_session_files,
+    get_session_templates,
     read_file_content,
     save_uploaded_file,
     validate_directory_path,
@@ -44,6 +46,78 @@ class TestGetRelativePath:
             result = get_relative_path(temp_dir)
             # Path equals cwd, not within its parents
             assert result == temp_dir
+
+
+class TestGetSessionFiles:
+    """Tests for get_session_files function."""
+
+    @pytest.mark.asyncio
+    async def test_get_session_files_returns_sorted_list(self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Return sorted filenames from session sources directory."""
+        session_id = "chat_test123"
+        session_dir = temp_dir / "data" / "files" / session_id / "sources"
+        session_dir.mkdir(parents=True, exist_ok=True)
+        (session_dir / "b.txt").write_text("b")
+        (session_dir / "a.txt").write_text("a")
+
+        monkeypatch.chdir(temp_dir)
+
+        files = await get_session_files(session_id)
+        assert files == ["a.txt", "b.txt"]
+
+    @pytest.mark.asyncio
+    async def test_get_session_files_missing_dir_returns_empty(
+        self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Return empty list when directory does not exist."""
+        monkeypatch.chdir(temp_dir)
+        files = await get_session_files("missing_session")
+        assert files == []
+
+    @pytest.mark.asyncio
+    async def test_get_session_files_filters_hidden_files(
+        self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Exclude hidden files from results."""
+        session_id = "chat_test123"
+        session_dir = temp_dir / "data" / "files" / session_id / "sources"
+        session_dir.mkdir(parents=True, exist_ok=True)
+        (session_dir / ".hidden.txt").write_text("hidden")
+        (session_dir / "visible.txt").write_text("visible")
+
+        monkeypatch.chdir(temp_dir)
+
+        files = await get_session_files(session_id)
+        assert files == ["visible.txt"]
+
+
+class TestGetSessionTemplates:
+    """Tests for get_session_templates function."""
+
+    @pytest.mark.asyncio
+    async def test_get_session_templates_returns_sorted_list(
+        self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Return sorted template filenames."""
+        session_id = "chat_templates"
+        templates_dir = temp_dir / "data" / "files" / session_id / "templates"
+        templates_dir.mkdir(parents=True, exist_ok=True)
+        (templates_dir / "b.md").write_text("# b")
+        (templates_dir / "a.md").write_text("# a")
+
+        monkeypatch.chdir(temp_dir)
+
+        templates = await get_session_templates(session_id)
+        assert templates == ["a.md", "b.md"]
+
+    @pytest.mark.asyncio
+    async def test_get_session_templates_missing_dir_returns_empty(
+        self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Return empty list when templates directory missing."""
+        monkeypatch.chdir(temp_dir)
+        templates = await get_session_templates("missing_session")
+        assert templates == []
 
 
 class TestValidateSessionPath:

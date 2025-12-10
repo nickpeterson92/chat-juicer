@@ -22,6 +22,7 @@ from app.state import AppState, SessionContext
 from core.constants import (
     CHAT_HISTORY_DB_PATH,
     CONVERSATION_SUMMARIZATION_THRESHOLD,
+    DEFAULT_MODEL,
     LOG_PREVIEW_LENGTH,
     MAX_CONVERSATION_TURNS,
     MSG_TYPE_FUNCTION_COMPLETED,
@@ -29,17 +30,17 @@ from core.constants import (
     RAW_RESPONSE_EVENT,
     SESSION_NAMING_TRIGGER_MESSAGES,
 )
-from core.prompts import SYSTEM_INSTRUCTIONS
+from core.prompts import SYSTEM_INSTRUCTIONS, build_dynamic_instructions
 from core.session import PersistenceError, TokenAwareSQLiteSession
 from core.session_commands import handle_session_command
 from integrations.event_handlers import CallTracker, build_event_handlers
-from integrations.mcp_registry import filter_mcp_servers
+from integrations.mcp_registry import DEFAULT_MCP_SERVERS, filter_mcp_servers
 from integrations.sdk_token_tracker import connect_session
 from models.ipc_models import UploadResult
 from models.sdk_models import StreamEvent
 from models.session_models import SessionUpdate
 from tools.wrappers import create_session_aware_tools
-from utils.file_utils import save_uploaded_file
+from utils.file_utils import get_session_files, get_session_templates, save_uploaded_file
 from utils.ipc import IPCManager
 from utils.logger import logger
 
@@ -246,11 +247,21 @@ async def ensure_session_exists(app_state: AppState, session_id: str | None = No
     # Use MCP servers from app_state, filtered by session's mcp_config
     # Create new agent with isolated tools (instructions are global, tools are session-specific)
     session_mcp_servers = filter_mcp_servers(app_state.mcp_servers, session_meta.mcp_config)
+    mcp_config = session_meta.mcp_config or DEFAULT_MCP_SERVERS
+    safe_mcp_servers = app_state.mcp_servers if isinstance(app_state.mcp_servers, dict) else {}
+    active_mcp_keys = [key for key in mcp_config if key in safe_mcp_servers]
 
     # Import here to avoid circular dependency
     from core.agent import create_agent
 
-    session_agent = create_agent(app_state.deployment, SYSTEM_INSTRUCTIONS, session_tools, session_mcp_servers)
+    session_files = await get_session_files(session_meta.session_id)
+    dynamic_instructions = build_dynamic_instructions(
+        SYSTEM_INSTRUCTIONS,
+        session_files=session_files,
+        mcp_servers=active_mcp_keys,
+    )
+
+    session_agent = create_agent(app_state.deployment, dynamic_instructions, session_tools, session_mcp_servers)
     logger.info(f"Session agent created with {len(session_mcp_servers)} MCP servers: {session_meta.mcp_config}")
     logger.info(f"Created session-specific agent with workspace isolation for: {session_meta.session_id}")
 
@@ -293,6 +304,84 @@ async def ensure_session_exists(app_state: AppState, session_id: str | None = No
     return session_ctx, is_new
 
 
+async def refresh_session_agent(app_state: AppState, session_ctx: SessionContext) -> None:
+    """Refresh session agent with current file list before a new turn.
+
+    Builds dynamic system instructions that include current session files and
+    creates a new Agent instance using session-specific tools and MCP servers.
+    Updates both SessionContext.agent and the session's agent reference.
+
+    Args:
+        app_state: Application state container
+        session_ctx: Session context to refresh
+
+    Raises:
+        RuntimeError: If session_manager is not initialized or session metadata missing
+    """
+    if app_state.session_manager is None:
+        raise RuntimeError("Session manager not initialized")
+
+    session = session_ctx.session
+    session_id = session.session_id
+
+    session_meta = app_state.session_manager.get_session(session_id)
+    if session_meta is None:
+        raise RuntimeError(f"Session metadata not found for {session_id}")
+
+    session_tools = create_session_aware_tools(session_id)
+
+    # Some tests use bare mocks; default to empty list when config is missing or not iterable.
+    try:
+        mcp_config = list(session_meta.mcp_config) if session_meta.mcp_config else []
+    except TypeError:
+        mcp_config = []
+
+    safe_mcp_servers = app_state.mcp_servers if isinstance(app_state.mcp_servers, dict) else {}
+    session_mcp_servers = filter_mcp_servers(safe_mcp_servers, mcp_config)
+    requested_mcp_keys = mcp_config or DEFAULT_MCP_SERVERS
+    active_mcp_keys = [key for key in requested_mcp_keys if key in safe_mcp_servers]
+
+    try:
+        session_files = await get_session_files(session_id)
+    except Exception as exc:
+        logger.warning(
+            f"Failed to load session files for prompt: {exc}",
+            extra={"session_id": session_id},
+        )
+        session_files = []
+
+    try:
+        session_templates = await get_session_templates(session_id)
+    except Exception as exc:
+        logger.warning(
+            f"Failed to load session templates for prompt: {exc}",
+            extra={"session_id": session_id},
+        )
+        session_templates = []
+
+    dynamic_instructions = build_dynamic_instructions(
+        SYSTEM_INSTRUCTIONS,
+        session_files=session_files,
+        session_templates=session_templates,
+        mcp_servers=active_mcp_keys,
+    )
+
+    # Import here to avoid circular dependency
+    from core.agent import create_agent
+
+    deployment = app_state.deployment if isinstance(app_state.deployment, str) else DEFAULT_MODEL
+    refreshed_agent = create_agent(deployment, dynamic_instructions, session_tools, session_mcp_servers)
+
+    # Update both references to keep session and context in sync
+    session_ctx.agent = refreshed_agent
+    session.agent = refreshed_agent
+
+    logger.debug(
+        f"Refreshed agent for session {session_id} with {len(session_files)} files in prompt",
+        extra={"session_id": session_id, "file_count": len(session_files)},
+    )
+
+
 async def process_messages(app_state: AppState, session_ctx: SessionContext, messages: list[str]) -> None:
     """Process user messages (single or batch) with cancellation support.
 
@@ -321,6 +410,9 @@ async def process_messages(app_state: AppState, session_ctx: SessionContext, mes
     session = session_ctx.session
     if not messages:
         return
+
+    # Refresh agent with current session files before this turn
+    await refresh_session_agent(app_state, session_ctx)
 
     # Convert messages to SDK format (list of EasyInputMessageParam dicts)
     batch_input: list[EasyInputMessageParam] = [

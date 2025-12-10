@@ -605,77 +605,6 @@ The Agent/Runner pattern provides structured events:
 - SDK-level automatic token tracking for all tool calls (native, MCP, future agents)
 - Minimal client state - session handles all conversation management
 
-### Resource Management
-The application includes robust resource management to prevent file handle exhaustion:
-
-**Session Deletion (3-Layer Defense)**:
-1. **Frontend Cleanup**: FilePanel component explicitly closes all file handles before deletion
-   - `closeAllHandles()` method removes file previews and event listeners
-   - DOM cloning technique forces garbage collection
-2. **Backend Garbage Collection**: Python `gc.collect()` + 50ms delay before `shutil.rmtree()`
-   - Forces Python to close unreferenced file handles
-   - Allows OS time to release handles
-3. **Increased Limits**: File descriptor limit increased from 256→4096 at startup (macOS/Linux)
-   - Prevents "too many open files" errors (errno 24)
-   - Configured in `bootstrap.py` initialization
-
-**Benefits**:
-- Reliable session deletion without orphaned directories
-- Prevents file handle exhaustion in production
-- Graceful degradation on Windows (no resource module)
-- Comprehensive error messages for debugging
-
-## Troubleshooting
-
-### Quick Diagnosis
-
-```bash
-make health             # Check system health and configuration
-make logs-errors        # View error logs in real-time
-make test               # Validate Python syntax
-```
-
-### Common Issues
-
-1. **Setup failures**
-   - Run `make health` to identify missing dependencies
-   - Check Python version: `python3 --version` (need 3.13+)
-   - Check Node version: `node --version` (need 16+)
-   - Verify virtual environment: `ls -la .juicer/`
-
-2. **"API key not found" error**
-   - Verify `src/.env` exists and is configured
-   - Check `make health` output for environment status
-   - Ensure no placeholder values remain in .env
-
-3. **MCP server not working**
-   - Check installation: `which server-sequential-thinking`
-   - Reinstall: `make install-mcp` or `sudo make install-mcp`
-   - Verify global packages: `npm list -g --depth=0`
-
-4. **Python import errors**
-   - Ensure using .juicer venv: `make install-python`
-   - Check dependencies: `.juicer/bin/pip list`
-   - Reinstall: `make clean-venv && make install-python`
-
-5. **Build or validation errors**
-   - Run `make test` for detailed syntax validation
-   - Check `make logs-errors` for runtime issues
-   - Verify all files compile: `python -m compileall src/`
-
-### Clean Install Workflow
-
-If experiencing persistent issues:
-
-```bash
-make reset              # Complete reset (removes .env)
-make setup              # Fresh automated installation
-# Edit src/.env with credentials
-make health             # Verify configuration
-make test               # Validate syntax
-make run                # Start application
-```
-
 ## Common Development Tasks
 
 ### Adding New Functions
@@ -698,18 +627,14 @@ servers.append(new_server)
 ```
 
 ### Customizing Sequential Thinking
-The Sequential Thinking server is configured in `integrations/mcp_servers.py` and can be extended with additional MCP servers for:
-- File system operations
-- GitHub integration
-- Database access
-- Custom reasoning patterns
+The Sequential Thinking server is configured in `integrations/mcp_servers.py` and can be extended with additional MCP servers.
 
 ## Project Architecture Notes
 
 - Agent/Runner pattern with full async architecture
 - MCP servers run as subprocesses via npx
-- All functions now async (updated from original sync implementation)
-- Production-grade testing infrastructure: 1,192 tests with 87% coverage (614 Python + 578 JavaScript)
+- All functions now async
+- Production-grade testing infrastructure
 
 ## Important Implementation Notes
 
@@ -735,27 +660,3 @@ The project maintains comprehensive test coverage with modern tooling:
 - SDK-level token tracking with zero overhead when disabled
 - LRU caching for token counting (last 128 unique text/model pairs)
 - Pre-cached IPC templates for reduced serialization
-
-### Migration from Responses API
-The project has been fully migrated from the Responses API to Agent/Runner pattern:
-- No more manual response_id tracking
-- Automatic function orchestration
-- Native MCP server support
-- Cleaner, more maintainable code
-- ~50% reduction in boilerplate
-
-## Summary
-
-Chat Juicer is a production-grade application leveraging the modern Agent/Runner pattern with native MCP server integration, providing:
-
-Key strengths:
-- **Sequential Thinking**: Advanced reasoning capabilities with revision and hypothesis testing
-- **Native MCP Support**: Direct integration without bridge functions
-- **Full Async Architecture**: Consistent async/await throughout backend
-- **Type Safety**: Full mypy strict compliance with Pydantic runtime validation
-- **Production Features**: Health monitoring, memory management, error recovery
-- **Enterprise Logging**: Structured JSON with rotation and session correlation
-- **Token Management**: SDK-level universal tracking with exact counting
-- **Future-Proof**: Aligned with OpenAI's strategic direction
-
-The application combines real-time AI chat with sophisticated reasoning and document generation capabilities through a production-ready Electron interface with native MCP server support.
