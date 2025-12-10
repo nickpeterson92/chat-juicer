@@ -102,8 +102,8 @@ describe("ChatContainer", () => {
       expect(chatContainer.appState).toBe(appState);
       const snapshot = globalLifecycleManager.getDebugSnapshot();
       const entry = snapshot.components.find((c) => c.name === "ChatContainer");
-      // Should have registered 5 subscriptions: currentAssistant, assistantBuffer, isStreaming, queue.items, queue:processing event
-      expect(entry?.listeners).toBe(5);
+      // Should have registered 6 subscriptions: currentAssistant, assistantBuffer, isStreaming, queue.items, queue:processing event, session.current
+      expect(entry?.listeners).toBe(6);
     });
 
     it("should throw error without element", () => {
@@ -372,8 +372,8 @@ describe("ChatContainer", () => {
       expect(chatContainer.appState).toBe(appState);
       const snapshot = globalLifecycleManager.getDebugSnapshot();
       const entry = snapshot.components.find((c) => c.name === "ChatContainer");
-      // 5 subscriptions: currentAssistant, assistantBuffer, isStreaming, queue.items, queue:processing event
-      expect(entry?.listeners).toBe(5);
+      // 6 subscriptions: currentAssistant, assistantBuffer, isStreaming, queue.items, queue:processing event, session.current
+      expect(entry?.listeners).toBe(6);
     });
   });
 });
