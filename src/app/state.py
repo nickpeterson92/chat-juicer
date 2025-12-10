@@ -33,12 +33,14 @@ class SessionContext:
         agent: Agent instance for this session (with session-aware tools)
         stream_task: Currently running stream task for this session (None if not streaming)
         interrupt_requested: Interrupt flag for this session's stream
+        agent_stale: Flag indicating agent needs refresh (files changed since last turn)
     """
 
     session: TokenAwareSQLiteSession
     agent: Agent
     stream_task: asyncio.Task[None] | None = None
     interrupt_requested: bool = False
+    agent_stale: bool = False
 
 
 @dataclass

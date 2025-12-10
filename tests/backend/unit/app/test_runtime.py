@@ -111,13 +111,13 @@ class TestProcessMessages:
     @patch("app.runtime.refresh_session_agent")
     @patch("app.runtime.Runner")
     @patch("app.runtime.IPCManager")
-    async def test_process_messages_calls_refresh(
+    async def test_process_messages_calls_refresh_when_stale(
         self,
         mock_ipc: Mock,
         mock_runner: Mock,
         mock_refresh: Mock,
     ) -> None:
-        """Ensure process_messages refreshes agent before streaming."""
+        """Ensure process_messages refreshes agent only when agent_stale is True."""
         from app.state import SessionContext
 
         mock_app_state = Mock()
@@ -138,6 +138,7 @@ class TestProcessMessages:
             agent=mock_session.agent,
             stream_task=None,
             interrupt_requested=False,
+            agent_stale=True,  # Mark as stale to trigger refresh
         )
 
         async def mock_stream() -> AsyncGenerator[Any, None]:
@@ -151,6 +152,55 @@ class TestProcessMessages:
         await process_messages(mock_app_state, mock_context, ["Test input"])
 
         mock_refresh.assert_called_once_with(mock_app_state, mock_context)
+        assert mock_context.agent_stale is False  # Should be cleared after refresh
+        mock_ipc.send_assistant_start.assert_called_once()
+        mock_ipc.send_assistant_end.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("app.runtime.refresh_session_agent")
+    @patch("app.runtime.Runner")
+    @patch("app.runtime.IPCManager")
+    async def test_process_messages_skips_refresh_when_not_stale(
+        self,
+        mock_ipc: Mock,
+        mock_runner: Mock,
+        mock_refresh: Mock,
+    ) -> None:
+        """Ensure process_messages skips refresh when agent_stale is False."""
+        from app.state import SessionContext
+
+        mock_app_state = Mock()
+        mock_app_state.full_history_store = None
+
+        mock_session = Mock()
+        mock_session.agent = Mock()
+        mock_session.session_id = "chat_test"
+        mock_session.should_summarize = AsyncMock(return_value=False)
+        mock_session.get_items = AsyncMock(return_value=[])
+        mock_session.calculate_items_tokens.return_value = 100
+        mock_session.accumulated_tool_tokens = 0
+        mock_session.total_tokens = 0
+        mock_session.trigger_tokens = 10000
+
+        mock_context = SessionContext(
+            session=mock_session,
+            agent=mock_session.agent,
+            stream_task=None,
+            interrupt_requested=False,
+            agent_stale=False,  # Not stale - should skip refresh
+        )
+
+        async def mock_stream() -> AsyncGenerator[Any, None]:
+            return
+            yield
+
+        mock_result = Mock()
+        mock_result.stream_events = mock_stream
+        mock_runner.run_streamed.return_value = mock_result
+
+        await process_messages(mock_app_state, mock_context, ["Test input"])
+
+        mock_refresh.assert_not_called()  # Should NOT refresh when not stale
         mock_ipc.send_assistant_start.assert_called_once()
         mock_ipc.send_assistant_end.assert_called_once()
 
@@ -405,8 +455,18 @@ class TestHandleFileUpload:
         mock_ensure_session: AsyncMock,
     ) -> None:
         """Test handling file upload successfully."""
+        from app.state import SessionContext
+
         mock_session = Mock()
-        mock_ensure_session.return_value = (mock_session, False)
+        mock_session.session_id = "chat_test123"
+        mock_session_ctx = SessionContext(
+            session=mock_session,
+            agent=Mock(),
+            stream_task=None,
+            interrupt_requested=False,
+            agent_stale=False,
+        )
+        mock_ensure_session.return_value = (mock_session_ctx, False)
 
         mock_app_state = Mock()
         mock_app_state.session_manager = Mock()
@@ -425,6 +485,49 @@ class TestHandleFileUpload:
 
         assert result["success"] is True
         mock_save_file.assert_called_once()
+        # Verify agent is marked stale after successful upload
+        assert mock_session_ctx.agent_stale is True
+
+    @pytest.mark.asyncio
+    @patch("app.runtime.ensure_session_exists")
+    @patch("app.runtime.save_uploaded_file")
+    @patch("app.runtime.IPCManager")
+    async def test_handle_file_upload_failure_does_not_mark_stale(
+        self,
+        mock_ipc: Mock,
+        mock_save_file: Mock,
+        mock_ensure_session: AsyncMock,
+    ) -> None:
+        """Test that failed upload does not mark agent as stale."""
+        from app.state import SessionContext
+
+        mock_session = Mock()
+        mock_session.session_id = "chat_test123"
+        mock_session_ctx = SessionContext(
+            session=mock_session,
+            agent=Mock(),
+            stream_task=None,
+            interrupt_requested=False,
+            agent_stale=False,
+        )
+        mock_ensure_session.return_value = (mock_session_ctx, False)
+
+        mock_app_state = Mock()
+        mock_app_state.session_manager = Mock()
+        mock_app_state.session_manager.current_session_id = "chat_test123"
+
+        mock_save_file.return_value = {
+            "success": False,
+            "error": "Failed to save",
+        }
+
+        upload_data = {"filename": "test.txt", "content": list(b"data")}
+
+        result = await handle_file_upload(mock_app_state, upload_data)
+
+        assert result["success"] is False
+        # Agent should NOT be marked stale on failed upload
+        assert mock_session_ctx.agent_stale is False
 
 
 class TestUpdateSessionMetadata:
