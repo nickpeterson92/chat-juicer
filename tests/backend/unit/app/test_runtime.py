@@ -17,6 +17,7 @@ from app.runtime import (
     handle_file_upload,
     handle_streaming_error,
     process_messages,
+    refresh_session_agent,
     send_session_created_event,
     update_session_metadata,
 )
@@ -107,6 +108,53 @@ class TestProcessMessages:
     """Tests for process_messages function."""
 
     @pytest.mark.asyncio
+    @patch("app.runtime.refresh_session_agent")
+    @patch("app.runtime.Runner")
+    @patch("app.runtime.IPCManager")
+    async def test_process_messages_calls_refresh(
+        self,
+        mock_ipc: Mock,
+        mock_runner: Mock,
+        mock_refresh: Mock,
+    ) -> None:
+        """Ensure process_messages refreshes agent before streaming."""
+        from app.state import SessionContext
+
+        mock_app_state = Mock()
+        mock_app_state.full_history_store = None
+
+        mock_session = Mock()
+        mock_session.agent = Mock()
+        mock_session.session_id = "chat_test"
+        mock_session.should_summarize = AsyncMock(return_value=False)
+        mock_session.get_items = AsyncMock(return_value=[])
+        mock_session.calculate_items_tokens.return_value = 100
+        mock_session.accumulated_tool_tokens = 0
+        mock_session.total_tokens = 0
+        mock_session.trigger_tokens = 10000
+
+        mock_context = SessionContext(
+            session=mock_session,
+            agent=mock_session.agent,
+            stream_task=None,
+            interrupt_requested=False,
+        )
+
+        async def mock_stream() -> AsyncGenerator[Any, None]:
+            return
+            yield
+
+        mock_result = Mock()
+        mock_result.stream_events = mock_stream
+        mock_runner.run_streamed.return_value = mock_result
+
+        await process_messages(mock_app_state, mock_context, ["Test input"])
+
+        mock_refresh.assert_called_once_with(mock_app_state, mock_context)
+        mock_ipc.send_assistant_start.assert_called_once()
+        mock_ipc.send_assistant_end.assert_called_once()
+
+    @pytest.mark.asyncio
     @patch("app.runtime.Runner")
     @patch("app.runtime.IPCManager")
     async def test_process_messages_success(self, mock_ipc: Mock, mock_runner: Mock) -> None:
@@ -181,6 +229,91 @@ class TestProcessMessages:
         await process_messages(mock_app_state, mock_context, ["Test input"])
 
         mock_handle_error.assert_called_once()
+
+
+class TestRefreshSessionAgent:
+    """Tests for refresh_session_agent function."""
+
+    @pytest.mark.asyncio
+    async def test_refresh_session_agent_updates_references(self) -> None:
+        """Ensure agent is rebuilt with files and both references updated."""
+        from app.state import SessionContext
+
+        mock_app_state = Mock()
+        mock_app_state.deployment = "gpt-4o"
+        mock_app_state.mcp_servers = {}
+
+        session_id = "chat_refresh"
+        mock_session = Mock()
+        mock_session.session_id = session_id
+        mock_session.agent = Mock()
+
+        mock_session_ctx = SessionContext(
+            session=mock_session,
+            agent=mock_session.agent,
+            stream_task=None,
+            interrupt_requested=False,
+        )
+
+        mock_session_meta = Mock()
+        mock_session_meta.session_id = session_id
+        mock_session_meta.mcp_config = []
+
+        mock_app_state.session_manager = Mock()
+        mock_app_state.session_manager.get_session.return_value = mock_session_meta
+
+        new_agent = Mock()
+
+        with (
+            patch("app.runtime.create_session_aware_tools", return_value=[]),
+            patch("app.runtime.filter_mcp_servers", return_value=[]),
+            patch("app.runtime.get_session_files", return_value=["file.txt"]),
+            patch("core.agent.create_agent", return_value=new_agent),
+        ):
+            await refresh_session_agent(mock_app_state, mock_session_ctx)
+
+        assert mock_session_ctx.agent is new_agent
+        assert mock_session.agent is new_agent
+
+    @pytest.mark.asyncio
+    async def test_refresh_session_agent_handles_file_errors(self) -> None:
+        """Falls back gracefully when file listing fails."""
+        from app.state import SessionContext
+
+        mock_app_state = Mock()
+        mock_app_state.deployment = "gpt-4o"
+        mock_app_state.mcp_servers = {}
+
+        session_id = "chat_refresh"
+        mock_session = Mock()
+        mock_session.session_id = session_id
+        mock_session.agent = Mock()
+
+        mock_session_ctx = SessionContext(
+            session=mock_session,
+            agent=mock_session.agent,
+            stream_task=None,
+            interrupt_requested=False,
+        )
+
+        mock_session_meta = Mock()
+        mock_session_meta.session_id = session_id
+        mock_session_meta.mcp_config = []
+
+        mock_app_state.session_manager = Mock()
+        mock_app_state.session_manager.get_session.return_value = mock_session_meta
+
+        new_agent = Mock()
+
+        with (
+            patch("app.runtime.create_session_aware_tools", return_value=[]),
+            patch("app.runtime.filter_mcp_servers", return_value=[]),
+            patch("app.runtime.get_session_files", side_effect=RuntimeError("boom")),
+            patch("core.agent.create_agent", return_value=new_agent),
+        ):
+            await refresh_session_agent(mock_app_state, mock_session_ctx)
+
+        assert mock_session_ctx.agent is new_agent
 
 
 class TestHandleElectronIPC:

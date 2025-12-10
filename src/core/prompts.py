@@ -3,8 +3,23 @@ System prompts and instructions for Chat Juicer.
 Centralizes all prompt engineering for the Agent and tools.
 """
 
+from __future__ import annotations
+
+MAX_FILES_IN_PROMPT = 50
+MAX_TEMPLATES_IN_PROMPT = 50
+
+# Tokens used to inject MCP-specific guidance when servers are enabled. They are
+# replaced at runtime by build_dynamic_instructions. When all MCP servers are
+# enabled, the injected content matches the original prompt byte-for-byte.
+TOKEN_MCP_CAP_WEB = "%%MCP_CAP_WEB%%"
+TOKEN_MCP_CAP_SEQUENTIAL = "%%MCP_CAP_SEQUENTIAL%%"
+TOKEN_MCP_TOOLS = "%%MCP_TOOLS%%"
+TOKEN_MCP_WEB_SECTION = "%%MCP_WEB_SECTION%%"
+TOKEN_MCP_SEQUENTIAL_SECTION = "%%MCP_SEQUENTIAL_SECTION%%"
+TOKEN_MCP_GENERAL_BEST = "%%MCP_GENERAL_BEST%%"
+
 # Agent System Instructions
-SYSTEM_INSTRUCTIONS = r"""You are a helpful AI assistant with file system access, document processing, web content retrieval, and editing capabilities.
+SYSTEM_INSTRUCTIONS = f"""You are a helpful AI assistant with file system access, document processing, web content retrieval, and editing capabilities.
 
 Take a **deep breath** and **focus**.
 
@@ -14,11 +29,11 @@ You can help with:
 - **File System Operations**: Explore directories, search for files by pattern, read various formats
 - **Document Processing**: Read and convert PDFs, Word docs, Excel, and other formats to text
 - **Image Description**: Read images and convert them to text descriptions (screenshots, diagrams, photos)
-- **Web Content Retrieval**: Search for, fetch and process web pages (HTML to markdown conversion)
+{TOKEN_MCP_CAP_WEB}
 - **Text Editing**: Batch file editing with git-style diff preview
 - **Document Generation**: Create documents from templates with placeholder replacement
 - **Code Execution**: Run Python code in a secure sandbox for data analysis, visualization, and computation
-- **Complex Problem Solving**: Use Sequential Thinking for multi-step reasoning
+{TOKEN_MCP_CAP_SEQUENTIAL}
 
 ## Performance Best Practices
 
@@ -52,9 +67,7 @@ When reading multiple files, **ALWAYS** call read_file in parallel:
 **generate_document** - Create and save documents to output files
 **edit_file** - Make batch edits with git-style diff output and whitespace-flexible matching
 **execute_python_code** - Run Python code in a secure sandbox for data analysis, visualization, and computation
-**tavily-search** - Search the public web with AI-powered results (query, urls, snippets)
-**tavily-extract** - Extract structured data from web pages
-**fetch** - Retrieve and convert web pages to markdown for close reading
+{TOKEN_MCP_TOOLS}
 
 ## Workflow Guidance
 
@@ -75,9 +88,8 @@ Consider checking for templates that might provide a helpful starting structure:
 6. Use **generate_document** to save files - they are automatically saved to the output directory
 
 **Important**: When using generate_document:
-- Specify only the filename, like: "report.md" or "reports/quarterly.md"
+- Specify only the filename, like: "report.md"
 - Files are automatically saved to the output directory
-- You can organize with subdirectories: "reports/q1.md", "drafts/working.md"
 - Do NOT include "output/" prefix - it's added automatically
 - Do NOT store files in "sources/" - that's for uploaded input files only
 
@@ -100,14 +112,7 @@ Use **edit_file** for all text editing needs:
 - Set newText to empty string to delete text
 - Review the diff output to verify changes
 
-### When Searching the Web:
-- Use **tavily-search** to gather candidate URLs and snippets before fetching full pages.
-- Use **tavily-extract** to pull structured data from specific URLs when needed.
-- Use **tavily-map** to get a map of the URLs and their relationships.
-- Use **tavily-crawl** to crawl the web for additional information.
-- Combine multiple high-signal sources, deduplicate overlaps, and cite the URLs you used.
-- Prefer recent, authoritative sources; skip low-quality or irrelevant results.
-- Use **tavily-search** in combination with **tavily-extract**, **tavily-map**, and **tavily-crawl** to get the most comprehensive information that will spark joy in the user.
+{TOKEN_MCP_WEB_SECTION}
 
 ### When Running Code or Data Analysis:
 Use **execute_python_code** to run Python in a secure sandbox:
@@ -136,18 +141,7 @@ Use **execute_python_code** to run Python in a secure sandbox:
 - Read session files: `open('/sources/document.pdf', 'rb')` or `open('/output/report.md')`
 - Keep code focused and efficient due to timeout limits
 
-### When Solving Complex Problems:
-Consider using the Sequential Thinking tool when:
-- The problem requires multiple steps to solve
-- You need to break down the problem systematically
-- The solution benefits from hypothesis testing and revision
-- You want to maintain structured reasoning across steps
-
-Sequential Thinking helps you:
-- Break complex problems into manageable steps
-- Revise understanding as you progress
-- Generate and verify hypotheses
-- Maintain clear context across reasoning
+{TOKEN_MCP_SEQUENTIAL_SECTION}
 
 ## General Best Practices
 
@@ -160,7 +154,7 @@ Sequential Thinking helps you:
 - **Minimize mistakes**: You provide a critical service, so accuracy is paramount.
 - **If you're not confident**: say so clearly and explain why.
 - **When in doubt**: explain your reasoning and limitations so the user can decide what to trust.
-- **Use sequential thinking**: Complex reasoning can be used to solve complex problems or when the user requests you think about something."""
+{TOKEN_MCP_GENERAL_BEST}"""
 
 
 # Document Summarization System Instructions
@@ -208,3 +202,159 @@ Rules:
 - No articles unless necessary
 - No punctuation at the end
 - Output ONLY the title with no explanation, quotes, or preamble"""
+
+
+def _render_bulleted_list(items: list[str], max_items: int, label: str) -> str:
+    visible = items[:max_items]
+    remaining = len(items) - len(visible)
+    lines = "\n".join(f"- {name}" for name in visible)
+    if remaining > 0:
+        lines = f"{lines}\n- ...and {remaining} more {label}"
+    return lines
+
+
+def _build_mcp_sections(mcp_servers: list[str] | None) -> dict[str, str]:
+    """Construct MCP-specific prompt fragments for injection."""
+    active = set(mcp_servers or ["sequential", "fetch", "tavily"])
+
+    cap_web = (
+        "- **Web Content Retrieval**: Search for, fetch and process web pages (HTML to markdown conversion)"
+        if active & {"fetch", "tavily"}
+        else ""
+    )
+    cap_sequential = (
+        "- **Complex Problem Solving**: Use Sequential Thinking for multi-step reasoning"
+        if "sequential" in active
+        else ""
+    )
+
+    tool_lines: list[str] = []
+    if "tavily" in active:
+        tool_lines.append("**tavily-search** - Search the public web with AI-powered results (query, urls, snippets)")
+        tool_lines.append("**tavily-extract** - Extract structured data from web pages")
+    if "fetch" in active:
+        tool_lines.append("**fetch** - Retrieve and convert web pages to markdown for close reading")
+    tools = "\n".join(tool_lines)
+
+    web_section = (
+        (
+            "### When Searching the Web:\n"
+            "- Use **tavily-search** to gather candidate URLs and snippets before fetching full pages.\n"
+            "- Use **tavily-extract** to pull structured data from specific URLs when needed.\n"
+            "- Use **tavily-map** to get a map of the URLs and their relationships.\n"
+            "- Use **tavily-crawl** to crawl the web for additional information.\n"
+            "- Combine multiple high-signal sources, deduplicate overlaps, and cite the URLs you used.\n"
+            "- Prefer recent, authoritative sources; skip low-quality or irrelevant results.\n"
+            "- Use **tavily-search** in combination with **tavily-extract**, **tavily-map**, and **tavily-crawl** to get the most comprehensive information that will spark joy in the user.\n"
+        )
+        if "tavily" in active
+        else ""
+    )
+
+    sequential_section = (
+        (
+            "### When Solving Complex Problems:\n"
+            "Consider using the Sequential Thinking tool when:\n"
+            "- The problem requires multiple steps to solve\n"
+            "- You need to break down the problem systematically\n"
+            "- The solution benefits from hypothesis testing and revision\n"
+            "- You want to maintain structured reasoning across steps\n"
+            "\n"
+            "Sequential Thinking helps you:\n"
+            "- Break complex problems into manageable steps\n"
+            "- Revise understanding as you progress\n"
+            "- Generate and verify hypotheses\n"
+            "- Maintain clear context across reasoning\n"
+        )
+        if "sequential" in active
+        else ""
+    )
+
+    general_best = (
+        (
+            "- **Use sequential thinking**: Complex reasoning can be used to solve complex problems or when the user requests you think about something."
+        )
+        if "sequential" in active
+        else ""
+    )
+
+    return {
+        TOKEN_MCP_CAP_WEB: cap_web,
+        TOKEN_MCP_CAP_SEQUENTIAL: cap_sequential,
+        TOKEN_MCP_TOOLS: tools,
+        TOKEN_MCP_WEB_SECTION: web_section,
+        TOKEN_MCP_SEQUENTIAL_SECTION: sequential_section,
+        TOKEN_MCP_GENERAL_BEST: general_best,
+    }
+
+
+def _apply_mcp_sections(base_instructions: str, mcp_servers: list[str] | None) -> str:
+    """Inject MCP-specific guidance into the base system prompt."""
+    replacements = _build_mcp_sections(mcp_servers)
+    instructions = base_instructions
+    for token, value in replacements.items():
+        instructions = instructions.replace(token, value)
+
+    # Collapse duplicate blank lines introduced by empty inserts
+    lines = instructions.split("\n")
+    cleaned: list[str] = []
+    prev_blank = False
+    for line in lines:
+        is_blank = line.strip() == ""
+        if is_blank and prev_blank:
+            continue
+        cleaned.append(line)
+        prev_blank = is_blank
+    return "\n".join(cleaned)
+
+
+def build_dynamic_instructions(
+    base_instructions: str,
+    session_files: list[str] | None = None,
+    session_templates: list[str] | None = None,
+    mcp_servers: list[str] | None = None,
+) -> str:
+    """Build system instructions with optional session file, template, and MCP context.
+
+    Appends “Current Session Files” and “Available Templates” sections when data
+    is provided. Optionally injects MCP-specific guidance when servers are
+    enabled. When all MCP servers are enabled, the prompt matches the legacy
+    instructions.
+
+    Args:
+        base_instructions: Base system prompt text (MCP-neutral template)
+        session_files: Filenames available in the current session
+        session_templates: Template filenames available to the session
+        mcp_servers: List of MCP server keys enabled for the session. None
+            injects all MCP sections (legacy behavior).
+
+    Returns:
+        Combined system instructions string
+    """
+    instructions = _apply_mcp_sections(base_instructions, mcp_servers)
+    sections: list[str] = []
+
+    if session_files:
+        file_lines = _render_bulleted_list(session_files, MAX_FILES_IN_PROMPT, "files")
+        sections.append(
+            "## Current Session Files\n\n"
+            "The following files have been uploaded to this session and are available "
+            "via `read_file` in the `sources/` directory:\n\n"
+            f"{file_lines}\n\n"
+            "Use these files when relevant to the user's requests. You can read them "
+            'with `read_file("sources/filename")`.'
+        )
+
+    if session_templates:
+        template_lines = _render_bulleted_list(session_templates, MAX_TEMPLATES_IN_PROMPT, "templates")
+        sections.append(
+            "## Available Templates\n\n"
+            "These templates are available in the `templates/` directory for this session:\n\n"
+            f"{template_lines}\n\n"
+            "Use templates when generating documents to maintain structure and consistency."
+        )
+
+    if not sections:
+        return instructions
+
+    return f"{instructions}\n\n" + "\n\n".join(sections)

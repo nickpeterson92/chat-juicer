@@ -75,6 +75,8 @@ describe("Session List Renderer", () => {
     // update active state
     updateSessionActive(found, true, domAdapter);
     expect(found.classList.contains("active")).toBe(true);
+    updateSessionActive(found, false, domAdapter);
+    expect(found.classList.contains("active")).toBe(false);
 
     // update title
     updateSessionTitle(found, "Updated", domAdapter);
@@ -83,5 +85,26 @@ describe("Session List Renderer", () => {
     // remove item
     removeSessionItem(found, domAdapter);
     expect(container.children.length).toBe(0);
+  });
+
+  it("applies streaming indicator when session is streaming", () => {
+    const streamManager = { isStreaming: (id) => id === "s-stream" };
+
+    const streamingItem = renderSessionItem(
+      { id: "s-stream", title: "Streaming", created_at: "2024-01-01T00:00:00Z" },
+      false,
+      domAdapter,
+      streamManager
+    );
+
+    const idleItem = renderSessionItem(
+      { id: "s-idle", title: "Idle", created_at: "2024-01-02T00:00:00Z" },
+      false,
+      domAdapter,
+      streamManager
+    );
+
+    expect(streamingItem.classList.contains("session-streaming")).toBe(true);
+    expect(idleItem.classList.contains("session-streaming")).toBe(false);
   });
 });

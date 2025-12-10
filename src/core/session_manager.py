@@ -142,17 +142,24 @@ class SessionManager:
         templates_target = Path("templates").resolve()
 
         try:
-            if not templates_link.exists():
-                # Check platform for symlink support
-                if platform.system() == "Windows":
-                    # Windows fallback: copy templates instead of symlink
-                    # (requires admin privileges or Developer Mode for symlinks)
-                    shutil.copytree(templates_target, templates_link, dirs_exist_ok=True)
-                    logger.info(f"Created templates copy (Windows): {templates_link}")
-                else:
-                    # Unix-like systems: use symlink
-                    templates_link.symlink_to(templates_target, target_is_directory=True)
-                    logger.info(f"Created templates symlink: {templates_link} -> {templates_target}")
+            if templates_target.exists():
+                if not templates_link.exists():
+                    # Check platform for symlink support
+                    if platform.system() == "Windows":
+                        # Windows fallback: copy templates instead of symlink
+                        # (requires admin privileges or Developer Mode for symlinks)
+                        shutil.copytree(templates_target, templates_link, dirs_exist_ok=True)
+                        logger.info(f"Created templates copy (Windows): {templates_link}")
+                    else:
+                        # Unix-like systems: use symlink
+                        templates_link.symlink_to(templates_target, target_is_directory=True)
+                        logger.info(f"Created templates symlink: {templates_link} -> {templates_target}")
+            else:
+                # If no global templates exist, create an empty directory so tests can write files
+                if templates_link.is_symlink():
+                    templates_link.unlink(missing_ok=True)
+                templates_link.mkdir(exist_ok=True)
+                logger.info(f"Created empty templates directory (no global templates found): {templates_link}")
         except Exception as e:
             logger.warning(f"Failed to create templates link/copy: {e}")
             # Non-fatal: session can still function without templates
@@ -247,7 +254,7 @@ class SessionManager:
 
                 if sess.message_count != actual_count:
                     logger.warning(
-                        f"Syncing session {sid}: metadata says {sess.message_count}, " f"DB has {actual_count} messages"
+                        f"Syncing session {sid}: metadata says {sess.message_count}, DB has {actual_count} messages"
                     )
                     self.update_session(sid, SessionUpdate(message_count=actual_count))
                     return True

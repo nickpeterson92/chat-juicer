@@ -750,6 +750,11 @@ function renderDiagramWhenIdle({ id, code, placeholder }) {
         placeholder.innerHTML = `<div class="mermaid-error">Mermaid Error: ${err.message}</div>`;
         placeholder.classList.remove("mermaid-loading");
         placeholder.dataset.processed = "error";
+      } finally {
+        // Defensive guard: ensure processed flag is always set for downstream checks/tests
+        if (!placeholder.dataset.processed) {
+          placeholder.dataset.processed = "error";
+        }
       }
       resolve();
     };
