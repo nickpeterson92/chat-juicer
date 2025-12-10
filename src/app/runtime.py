@@ -429,8 +429,11 @@ async def process_messages(app_state: AppState, session_ctx: SessionContext, mes
     if not messages:
         return
 
-    # Refresh agent with current session files before this turn
-    await refresh_session_agent(app_state, session_ctx)
+    # Refresh agent only when files have changed (stale flag set by file upload)
+    if session_ctx.agent_stale:
+        await refresh_session_agent(app_state, session_ctx)
+        session_ctx.agent_stale = False
+        logger.debug(f"Agent refreshed for session {session.session_id} - stale flag cleared")
 
     # Convert messages to SDK format (list of EasyInputMessageParam dicts)
     batch_input: list[EasyInputMessageParam] = [
@@ -748,7 +751,7 @@ async def handle_file_upload(app_state: AppState, upload_data: dict[str, Any]) -
     logger.info(f"Processing file upload: {upload_data.get('filename')}")
 
     # Ensure session exists (create if needed)
-    _session, is_new = await ensure_session_exists(app_state)
+    session_ctx, is_new = await ensure_session_exists(app_state)
     session_id = app_state.session_manager.current_session_id if app_state.session_manager else None
 
     # Process upload with session_id
@@ -761,6 +764,11 @@ async def handle_file_upload(app_state: AppState, upload_data: dict[str, Any]) -
         session_id=session_id,
         encoding=encoding,
     )
+
+    # Mark agent as stale so next turn refreshes with new file list
+    if result["success"]:
+        session_ctx.agent_stale = True
+        logger.debug(f"Marked agent stale after file upload: {upload_data.get('filename')}")
 
     # If this is a new session, send session info to frontend
     if is_new and session_id and app_state.session_manager:

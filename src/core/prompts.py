@@ -29,10 +29,10 @@ You can help with:
 - **File System Operations**: Explore directories, search for files by pattern, read various formats
 - **Document Processing**: Read and convert PDFs, Word docs, Excel, and other formats to text
 - **Image Description**: Read images and convert them to text descriptions (screenshots, diagrams, photos)
-{TOKEN_MCP_CAP_WEB}
 - **Text Editing**: Batch file editing with git-style diff preview
 - **Document Generation**: Create documents from templates with placeholder replacement
 - **Code Execution**: Run Python code in a secure sandbox for data analysis, visualization, and computation
+{TOKEN_MCP_CAP_WEB}
 {TOKEN_MCP_CAP_SEQUENTIAL}
 
 ## Performance Best Practices
