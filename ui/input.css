@@ -271,7 +271,7 @@
 
   .session-item:hover .session-actions {
     @apply opacity-100;
-    max-width: 120px;
+    max-width: 180px;
     pointer-events: auto;
   }
 
@@ -281,18 +281,54 @@
 
   .session-action-btn svg {
     @apply transition-colors duration-150;
+    transition: color 150ms ease, transform 150ms ease;
+    color: var(--color-text-on-surface, #ffffff); /* default for all icons */
   }
 
   /* Rename button - Light purple (matches pill accent-2) */
   .session-action-btn.rename-btn:hover svg {
-    color: var(--color-brand-accent-2);
+    color: var(--color-text-secondary);
     @apply stroke-current;
   }
 
-  /* Delete button - Coral red (matches pill accent-3) */
+  /* Delete button hover keeps warning color */
   .session-action-btn.delete-btn:hover svg {
     color: var(--color-brand-accent-3);
     @apply stroke-current;
+  }
+
+  /* Pin button stateful styling */
+  .session-action-btn.pin-btn svg {
+    color: var(--color-text-on-surface, #ffffff); /* default matches rename for unpinned */
+    @apply stroke-current;
+  }
+
+  /* Hover: light gray to match rename */
+  .session-action-btn.pin-btn:hover svg {
+    color: var(--color-text-secondary);
+  }
+
+  /* Pinned default: brand accent 5 */
+  .session-item.session-pinned .session-action-btn.pin-btn svg {
+    color: var(--color-brand-accent-5);
+  }
+
+  /* Pinned hover: keep brand color and scale cue */
+  .session-item.session-pinned .session-action-btn.pin-btn:hover svg {
+    color: var(--color-brand-accent-5);
+    filter: brightness(1.12);
+    transform: scale(1.08);
+  }
+
+  /* Gentle hover scale for all session action icons */
+  .session-action-btn:hover svg {
+    transform: scale(1.05);
+  }
+
+  .session-item.session-pinned .session-title::after {
+    content: " • pinned";
+    @apply text-xs ml-1;
+    color: var(--color-brand-primary);
   }
 
   .session-title-edit {

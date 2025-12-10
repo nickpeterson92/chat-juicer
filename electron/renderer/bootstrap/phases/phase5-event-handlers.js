@@ -605,7 +605,8 @@ export async function initializeEventHandlers({
       const transformedSessions = sessionsToRender.map((session) => ({
         id: session.session_id,
         title: session.title,
-        created_at: session.last_used || session.updated_at || session.created_at,
+        created_at: session.created_at,
+        pinned: Boolean(session.pinned),
       }));
 
       const fragment = renderSessionList(

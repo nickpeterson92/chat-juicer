@@ -63,6 +63,14 @@ export function setupSessionListHandlers({
       return;
     }
 
+    if (action === "pin") {
+      const pinTarget = target.closest("[data-action='pin']") || target;
+      const currentlyPinned = pinTarget.dataset?.pinned === "true";
+      await handlePin(sessionId, !currentlyPinned, sessionService, updateSessionsList);
+      e.stopPropagation();
+      return;
+    }
+
     // If clicking on rename input, don't switch session
     if (target.classList.contains("session-title-input")) {
       e.stopPropagation();
@@ -189,6 +197,26 @@ async function handleRename(sessionItem, sessionId, sessionService, _updateSessi
       titleDiv.style.display = "";
     }
   });
+}
+
+/**
+ * Handle session pin/unpin
+ */
+async function handlePin(sessionId, shouldPin, sessionService, updateSessionsList) {
+  try {
+    const result = await sessionService.setSessionPinned(sessionId, shouldPin);
+    if (!result.success) {
+      console.error("[session] Pin toggle failed:", result.error);
+      alert(`Failed to update pin: ${result.error}`);
+      return;
+    }
+
+    // Refresh list to reflect new ordering
+    updateSessionsList();
+  } catch (error) {
+    console.error("[session] Pin toggle error:", error.message);
+    alert(`Error updating pin: ${error.message}`);
+  }
 }
 
 /**

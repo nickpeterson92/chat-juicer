@@ -143,11 +143,14 @@ export function createSessionListViewModel(sessions, activeSessionId = null) {
     return [];
   }
 
-  // Sort by updated_at (most recent first)
+  // Sort pinned first, then by created_at (newest first)
   const sorted = [...sessions].sort((a, b) => {
-    const aTime = new Date(a.updated_at || a.created_at).getTime();
-    const bTime = new Date(b.updated_at || b.created_at).getTime();
-    return bTime - aTime; // Descending order
+    const pinDelta = (b?.pinned ? 1 : 0) - (a?.pinned ? 1 : 0);
+    if (pinDelta !== 0) return pinDelta;
+
+    const aTime = new Date(a.created_at).getTime();
+    const bTime = new Date(b.created_at).getTime();
+    return bTime - aTime;
   });
 
   return sorted.map((session) => {

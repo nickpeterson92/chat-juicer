@@ -42,14 +42,25 @@ describe("SessionViewModel", () => {
 
   it("sorts sessions by recency and marks active in list view model", () => {
     const sessions = [
-      { session_id: "a", title: "Old", created_at: "2025-01-10T00:00:00Z", updated_at: "2025-01-10T00:00:00Z" },
-      { session_id: "b", title: "New", created_at: "2025-01-12T00:00:00Z", updated_at: "2025-01-12T00:00:00Z" },
+      { session_id: "a", title: "Old", created_at: "2025-01-10T00:00:00Z", pinned: false },
+      { session_id: "b", title: "New", created_at: "2025-01-12T00:00:00Z", pinned: false },
     ];
 
     const list = createSessionListViewModel(sessions, "b");
     expect(list[0].id).toBe("b");
     expect(list[0].isActive).toBe(true);
     expect(list[1].id).toBe("a");
+  });
+
+  it("sorts pinned sessions to the top and keeps created_at ordering within groups", () => {
+    const sessions = [
+      { session_id: "a", title: "Pinned older", created_at: "2025-01-10T00:00:00Z", pinned: true },
+      { session_id: "b", title: "Pinned newer", created_at: "2025-01-12T00:00:00Z", pinned: true },
+      { session_id: "c", title: "Unpinned newer", created_at: "2025-02-01T00:00:00Z", pinned: false },
+    ];
+
+    const list = createSessionListViewModel(sessions, "c");
+    expect(list.map((item) => item.id)).toEqual(["b", "a", "c"]);
   });
 
   it("validates session objects", () => {

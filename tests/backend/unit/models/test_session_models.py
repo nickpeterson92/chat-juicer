@@ -34,6 +34,7 @@ class TestSessionMetadata:
         assert metadata.session_id == "chat_test123"
         assert metadata.title == "New Conversation"
         assert metadata.is_named is False
+        assert metadata.pinned is False
         assert metadata.message_count == 0
         assert metadata.accumulated_tool_tokens == 0
 
@@ -45,6 +46,7 @@ class TestSessionMetadata:
             is_named=True,
             created_at="2025-01-01T12:00:00",
             last_used="2025-01-01T13:00:00",
+            pinned=True,
             message_count=10,
             accumulated_tool_tokens=150,
             mcp_config=["sequential", "fetch"],
@@ -54,6 +56,7 @@ class TestSessionMetadata:
         assert metadata.session_id == "chat_abc123"
         assert metadata.title == "My Test Session"
         assert metadata.is_named is True
+        assert metadata.pinned is True
         assert metadata.message_count == 10
         assert metadata.accumulated_tool_tokens == 150
         assert metadata.mcp_config == ["sequential", "fetch"]
@@ -167,6 +170,7 @@ class TestSessionUpdate:
         update = SessionUpdate()
         assert update.title is None
         assert update.last_used is None
+        assert update.pinned is None
         assert update.message_count is None
         assert update.accumulated_tool_tokens is None
         assert not update.has_updates()
@@ -202,10 +206,12 @@ class TestSessionUpdate:
             title="Updated Title",
             message_count=10,
             accumulated_tool_tokens=50,
+            pinned=True,
         )
         assert update.title == "Updated Title"
         assert update.message_count == 10
         assert update.accumulated_tool_tokens == 50
+        assert update.pinned is True
         assert update.has_updates()
 
     def test_has_updates_with_zero_values(self) -> None:

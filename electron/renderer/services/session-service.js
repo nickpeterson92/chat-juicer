@@ -47,14 +47,18 @@ export class SessionService {
     this.appState = appState;
   }
 
-  _getLastUsedTimestamp(session) {
-    const rawTimestamp = session?.last_used || session?.updated_at || session?.created_at;
+  _getCreatedTimestamp(session) {
+    const rawTimestamp = session?.created_at;
     const timestamp = rawTimestamp ? new Date(rawTimestamp).getTime() : 0;
     return Number.isFinite(timestamp) ? timestamp : 0;
   }
 
-  _sortSessionsByLastUsed(sessions) {
-    return [...sessions].sort((a, b) => this._getLastUsedTimestamp(b) - this._getLastUsedTimestamp(a));
+  _sortSessionsByPinAndCreated(sessions) {
+    return [...sessions].sort((a, b) => {
+      const pinDelta = (b?.pinned ? 1 : 0) - (a?.pinned ? 1 : 0);
+      if (pinDelta !== 0) return pinDelta;
+      return this._getCreatedTimestamp(b) - this._getCreatedTimestamp(a);
+    });
   }
 
   /**
@@ -78,7 +82,7 @@ export class SessionService {
         // Append or replace sessions based on offset
         const currentList = this.appState.getState("session.list");
         const mergedList = offset === 0 ? response.sessions : [...currentList, ...response.sessions];
-        const newList = this._sortSessionsByLastUsed(mergedList);
+        const newList = this._sortSessionsByPinAndCreated(mergedList);
 
         this.appState.setState("session.list", newList);
         this.appState.setState("session.totalCount", response.total_count || newList.length);
@@ -209,12 +213,10 @@ export class SessionService {
       if (response?.session) {
         this.appState.setState("session.current", sessionId);
 
-        // Update local session ordering so the newly opened session jumps to the top
-        const lastUsed = response.session?.last_used || new Date().toISOString();
+        // Update local session to reflect latest metadata without reordering away from pin/created order
         this.updateSession({
           ...response.session,
           session_id: sessionId,
-          last_used: lastUsed,
         });
 
         // NOTE: Stream reconstruction is now handled by the caller (session-list-handlers)
@@ -349,6 +351,35 @@ export class SessionService {
   }
 
   /**
+   * Pin or unpin a session
+   *
+   * @param {string} sessionId - Session ID to pin/unpin
+   * @param {boolean} pinned - Desired pin state
+   * @returns {Promise<Object>} Result
+   */
+  async setSessionPinned(sessionId, pinned) {
+    if (!sessionId) {
+      return { success: false, error: "No session ID provided" };
+    }
+
+    try {
+      const response = await this.ipc.sendSessionCommand("pin", { session_id: sessionId, pinned });
+
+      if (response?.success) {
+        const sessions = this.appState.getState("session.list");
+        const updatedSessions = sessions.map((s) => (s.session_id === sessionId ? { ...s, pinned } : s));
+        this.appState.setState("session.list", this._sortSessionsByPinAndCreated(updatedSessions));
+
+        return { success: true, pinned };
+      }
+
+      return { success: false, error: response?.error || "Failed to update pin state" };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Summarize current session
    *
    * @returns {Promise<Object>} Result
@@ -441,7 +472,7 @@ export class SessionService {
     }
 
     // Sort by last_used to ensure most recently used sessions appear first
-    const sortedSessions = this._sortSessionsByLastUsed(updatedSessions);
+    const sortedSessions = this._sortSessionsByPinAndCreated(updatedSessions);
 
     this.appState.setState("session.list", sortedSessions);
   }
