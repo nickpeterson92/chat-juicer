@@ -38,6 +38,12 @@ describe("FunctionCallService", () => {
       );
     });
 
+    it("should throw error if storage adapter is missing", () => {
+      expect(() => new FunctionCallService({ appState })).toThrow(
+        "FunctionCallService requires storageAdapter in constructor"
+      );
+    });
+
     it("should use AppState for call tracking", () => {
       const activeCalls = appState.getState("functions.activeCalls");
       const argumentsBuffer = appState.getState("functions.argumentsBuffer");
@@ -428,6 +434,30 @@ describe("FunctionCallService", () => {
       expect(stats.errors).toBe(1);
       expect(stats.cancelled).toBe(0);
       expect(stats.avgDuration).toBeGreaterThanOrEqual(0);
+    });
+
+    it("should compute average duration when completed calls exist", () => {
+      functionCallService.createCall("call-1", "getWeather");
+      functionCallService.createCall("call-2", "getTime");
+
+      functionCallService.updateCallStatus("call-1", CallStatus.COMPLETED);
+      functionCallService.updateCallStatus("call-2", CallStatus.ERROR);
+
+      const stats = functionCallService.getCallStats();
+
+      expect(stats.avgDuration).toBeGreaterThanOrEqual(0);
+      expect(stats.completed + stats.errors).toBe(2);
+    });
+
+    it("should calculate duration when startTime precedes completion", () => {
+      const call = functionCallService.createCall("call-3", "slowOp");
+      call.startTime = Date.now() - 50;
+
+      functionCallService.updateCallStatus("call-3", CallStatus.COMPLETED);
+
+      const stats = functionCallService.getCallStats();
+
+      expect(stats.avgDuration).toBeGreaterThan(0);
     });
   });
 

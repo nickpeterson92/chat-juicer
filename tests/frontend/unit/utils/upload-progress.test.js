@@ -201,6 +201,21 @@ describe("upload-progress", () => {
       expect(mockProgressBar.style.width).toBe("100%");
     });
 
+    it("should skip intermediate updates once all files are complete", async () => {
+      const { startUploadProgress, completeFileUpload } = await import(
+        "../../../../electron/renderer/utils/upload-progress.js"
+      );
+
+      startUploadProgress(1);
+      completeFileUpload("only-file.txt", true);
+
+      // Subsequent completions should not change text because all files are done
+      mockProgressText.textContent = "Upload complete!";
+      completeFileUpload("only-file.txt", true);
+
+      expect(mockProgressText.textContent).toBe("Upload complete!");
+    });
+
     it("should handle failed uploads", async () => {
       const { startUploadProgress, completeFileUpload } = await import(
         "../../../../electron/renderer/utils/upload-progress.js"

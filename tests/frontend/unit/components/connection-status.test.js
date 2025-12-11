@@ -3,9 +3,10 @@
  * Phase 4 State Management Migration
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { globalLifecycleManager } from "@/core/lifecycle-manager.js";
 import { AppState } from "@/core/state.js";
+import * as MessageQueueService from "@/services/message-queue-service.js";
 import { ConnectionStatus } from "@/ui/components/connection-status.js";
 
 // Mock DOM adapter
@@ -55,6 +56,8 @@ describe("ConnectionStatus", () => {
 
   afterEach(() => {
     globalLifecycleManager.unmountAll();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   describe("constructor", () => {
@@ -155,6 +158,26 @@ describe("ConnectionStatus", () => {
       expect(connectionStatus.isConnected).toBe(true);
       expect(connectionStatus.lastError).toBeNull();
       expect(connectionStatus.element.classList.contains("connected")).toBe(true);
+    });
+
+    it("should resume queue processing after reconnection when items pending", () => {
+      vi.useFakeTimers();
+      const processSpy = vi.fn();
+      const queueServiceMock = {
+        hasItems: vi.fn(() => true),
+        process: processSpy,
+      };
+      vi.spyOn(MessageQueueService, "getMessageQueueService").mockReturnValue(queueServiceMock);
+
+      const connectionStatus = new ConnectionStatus(domAdapter);
+      connectionStatus.render();
+      connectionStatus.isConnected = false;
+
+      connectionStatus.setConnected(true);
+      vi.runAllTimers();
+
+      expect(queueServiceMock.hasItems).toHaveBeenCalled();
+      expect(processSpy).toHaveBeenCalled();
     });
   });
 

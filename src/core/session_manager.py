@@ -183,12 +183,22 @@ class SessionManager:
         return self.sessions.get(session_id)
 
     def list_sessions(self) -> list[SessionMetadata]:
-        """Get all sessions sorted by last_used (most recent first).
+        """Get all sessions sorted with pinned first, then creation time descending.
 
         Returns:
             List of session metadata
         """
-        return sorted(self.sessions.values(), key=lambda s: s.last_used, reverse=True)
+
+        def sort_key(session: SessionMetadata) -> tuple[int, float]:
+            try:
+                created_ts = datetime.fromisoformat(session.created_at).timestamp()
+            except Exception:
+                created_ts = 0.0
+            # Pinned sessions first (True -> 1, False -> 0)
+            return (1 if session.pinned else 0, created_ts)
+
+        # Sort by pinned desc, then created_at desc
+        return sorted(self.sessions.values(), key=sort_key, reverse=True)
 
     def delete_session(self, session_id: str) -> bool:
         """Delete a session and its associated files.
@@ -409,6 +419,8 @@ class SessionManager:
             session.title = updates.title
         if updates.last_used is not None:
             session.last_used = updates.last_used
+        if updates.pinned is not None:
+            session.pinned = updates.pinned
         if updates.message_count is not None:
             session.message_count = updates.message_count
         if updates.accumulated_tool_tokens is not None:

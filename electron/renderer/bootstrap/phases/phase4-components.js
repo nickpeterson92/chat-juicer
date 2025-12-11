@@ -30,6 +30,7 @@ export async function initializeComponents({ elements, appState, services, ipcAd
     const messageQueueService = initializeMessageQueueService({
       appState,
       messageService: services.messageService,
+      streamManager: services.streamManager,
     });
     services.messageQueueService = messageQueueService;
 

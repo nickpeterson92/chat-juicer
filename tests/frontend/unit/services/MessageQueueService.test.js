@@ -16,6 +16,7 @@ describe("MessageQueueService", () => {
   let queueService;
   let appState;
   let mockMessageService;
+  let mockStreamManager;
   let eventSpy;
 
   beforeEach(() => {
@@ -28,10 +29,16 @@ describe("MessageQueueService", () => {
       sendMessage: vi.fn().mockResolvedValue({ success: true }),
     };
 
+    // Mock StreamManager - default to not streaming
+    mockStreamManager = {
+      isStreaming: vi.fn().mockReturnValue(false),
+    };
+
     // Create service instance
     queueService = new MessageQueueService({
       appState,
       messageService: mockMessageService,
+      streamManager: mockStreamManager,
     });
 
     // Spy on EventBus emissions
@@ -47,18 +54,27 @@ describe("MessageQueueService", () => {
 
   describe("constructor", () => {
     it("should throw error without appState", () => {
-      expect(() => new MessageQueueService({ messageService: mockMessageService })).toThrow(
-        "MessageQueueService requires appState"
-      );
+      expect(
+        () => new MessageQueueService({ messageService: mockMessageService, streamManager: mockStreamManager })
+      ).toThrow("MessageQueueService requires appState");
     });
 
     it("should throw error without messageService", () => {
-      expect(() => new MessageQueueService({ appState })).toThrow("MessageQueueService requires messageService");
+      expect(() => new MessageQueueService({ appState, streamManager: mockStreamManager })).toThrow(
+        "MessageQueueService requires messageService"
+      );
+    });
+
+    it("should throw error without streamManager", () => {
+      expect(() => new MessageQueueService({ appState, messageService: mockMessageService })).toThrow(
+        "MessageQueueService requires streamManager"
+      );
     });
 
     it("should initialize with valid dependencies", () => {
       expect(queueService.appState).toBe(appState);
       expect(queueService.messageService).toBe(mockMessageService);
+      expect(queueService.streamManager).toBe(mockStreamManager);
     });
 
     it("should subscribe to python.status changes", () => {
@@ -163,23 +179,78 @@ describe("MessageQueueService", () => {
       expect(mockMessageService.sendMessage).not.toHaveBeenCalled();
     });
 
-    it("should process queued messages even when python.status is busy", async () => {
+    it("should process queued messages when session is not streaming", async () => {
       const item = {
         id: "id-1",
         text: "Hello",
         files: [],
-        sessionId: null,
+        sessionId: "session-1",
         timestamp: Date.now(),
         status: "queued",
       };
-      const sessionId = item.sessionId;
-      appState.setState("python.status", "busy_streaming");
+      mockStreamManager.isStreaming.mockReturnValue(false);
       appState.setState("queue.items", [item]);
 
       const result = await queueService.process();
 
       expect(result).toBe(true);
-      expect(mockMessageService.sendMessage).toHaveBeenCalledWith(["Hello"], sessionId);
+      expect(mockMessageService.sendMessage).toHaveBeenCalledWith(["Hello"], "session-1");
+    });
+
+    it("should NOT process queued messages when session is streaming", async () => {
+      const item = {
+        id: "id-1",
+        text: "Hello",
+        files: [],
+        sessionId: "session-1",
+        timestamp: Date.now(),
+        status: "queued",
+      };
+      mockStreamManager.isStreaming.mockReturnValue(true);
+      appState.setState("queue.items", [item]);
+
+      const result = await queueService.process();
+
+      expect(result).toBe(false);
+      expect(mockMessageService.sendMessage).not.toHaveBeenCalled();
+      // Item should still be queued
+      const items = appState.getState("queue.items");
+      expect(items[0].status).toBe("queued");
+    });
+
+    it("should only process items for idle sessions when some are streaming", async () => {
+      const items = [
+        {
+          id: "id-1",
+          text: "Idle session msg",
+          files: [],
+          sessionId: "idle-session",
+          timestamp: Date.now(),
+          status: "queued",
+        },
+        {
+          id: "id-2",
+          text: "Streaming session msg",
+          files: [],
+          sessionId: "streaming-session",
+          timestamp: Date.now(),
+          status: "queued",
+        },
+      ];
+      mockStreamManager.isStreaming.mockImplementation((sessionId) => sessionId === "streaming-session");
+      appState.setState("queue.items", items);
+
+      const result = await queueService.process();
+
+      expect(result).toBe(true);
+      // Only idle session should be processed
+      expect(mockMessageService.sendMessage).toHaveBeenCalledTimes(1);
+      expect(mockMessageService.sendMessage).toHaveBeenCalledWith(["Idle session msg"], "idle-session");
+      // Streaming session item should remain
+      const remainingItems = appState.getState("queue.items");
+      expect(remainingItems).toHaveLength(1);
+      expect(remainingItems[0].sessionId).toBe("streaming-session");
+      expect(remainingItems[0].status).toBe("queued");
     });
 
     it("should batch multiple messages including those with files", async () => {
@@ -590,6 +661,7 @@ describe("MessageQueueService", () => {
       const instance = initializeMessageQueueService({
         appState,
         messageService: mockMessageService,
+        streamManager: mockStreamManager,
       });
 
       expect(instance).toBeInstanceOf(MessageQueueService);
@@ -600,6 +672,7 @@ describe("MessageQueueService", () => {
       const instance1 = initializeMessageQueueService({
         appState,
         messageService: mockMessageService,
+        streamManager: mockStreamManager,
       });
       const instance2 = getMessageQueueService();
 

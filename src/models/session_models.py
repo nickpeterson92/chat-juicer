@@ -89,6 +89,7 @@ class SessionMetadataParams(TypedDict, total=False):
 
     session_id: str  # Required - always provided
     title: str  # Required - always provided (or has default)
+    pinned: bool  # Optional - defaults to False
     mcp_config: list[str]  # Optional - has default_factory
     model: str  # Optional - has default_factory
     reasoning_effort: str  # Optional - has default_factory
@@ -102,6 +103,7 @@ class SessionMetadata(BaseModel):
     is_named: bool = Field(default=False, description="Whether session has been auto-named")
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     last_used: str = Field(default_factory=lambda: datetime.now().isoformat())
+    pinned: bool = Field(default=False, description="Whether the session is pinned to the top of the list")
     message_count: int = Field(default=0, ge=0, description="Non-negative message count")
     accumulated_tool_tokens: int = Field(default=0, ge=0, description="Accumulated tool tokens for this session")
     mcp_config: list[str] = Field(
@@ -166,6 +168,7 @@ class SessionUpdate:
 
     title: str | None = None
     last_used: str | None = None
+    pinned: bool | None = None
     message_count: int | None = None
     accumulated_tool_tokens: int | None = None
     model: str | None = None
@@ -182,6 +185,7 @@ class SessionUpdate:
             [
                 self.title is not None,
                 self.last_used is not None,
+                self.pinned is not None,
                 self.message_count is not None,
                 self.accumulated_tool_tokens is not None,
                 self.model is not None,
@@ -377,6 +381,27 @@ class UpdateSessionConfigCommand(BaseModel):
         return json_str
 
 
+class PinSessionCommand(BaseModel):
+    """Command to pin or unpin a session."""
+
+    command: Literal["pin"] = "pin"
+    session_id: str = Field(..., min_length=1, description="Session to pin or unpin")
+    pinned: bool = Field(..., description="Pin state to apply")
+
+    @field_validator("session_id")
+    @classmethod
+    def validate_session_id(cls, v: str) -> str:
+        """Validate session_id format."""
+        if not v.startswith("chat_"):
+            raise ValueError("session_id must start with 'chat_'")
+        return v
+
+    def to_json(self) -> str:
+        """Convert to JSON for IPC."""
+        json_str: str = self.model_dump_json(exclude_none=True)
+        return json_str
+
+
 SessionCommand = (
     CreateSessionCommand
     | SwitchSessionCommand
@@ -388,6 +413,7 @@ SessionCommand = (
     | RenameSessionCommand
     | ConfigMetadataCommand
     | UpdateSessionConfigCommand
+    | PinSessionCommand
 )
 
 
@@ -425,6 +451,8 @@ def parse_session_command(data: dict[str, Any]) -> SessionCommand:  # noqa: PLR0
         return ConfigMetadataCommand.model_validate(data)
     elif command_type == "update_config":
         return UpdateSessionConfigCommand.model_validate(data)
+    elif command_type == "pin":
+        return PinSessionCommand.model_validate(data)
     else:
         raise ValueError(f"Unknown command type: {command_type}")
 
@@ -496,6 +524,7 @@ __all__ = [
     "ListSessionsCommand",
     "LoadMoreMessagesCommand",
     "OutputTextContent",
+    "PinSessionCommand",
     "RefusalContent",
     "RenameSessionCommand",
     "SessionCommand",

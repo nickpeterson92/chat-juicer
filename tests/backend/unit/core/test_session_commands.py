@@ -173,6 +173,24 @@ class TestHandleSessionCommand:
         assert result["success"] is True
 
     @pytest.mark.asyncio
+    async def test_pin_session_command(self) -> None:
+        """Test handling 'pin' command."""
+        mock_session = Mock(model_dump=lambda: {"session_id": "chat_pin", "pinned": True})
+        mock_app_state = Mock()
+        mock_app_state.session_manager = Mock()
+        mock_app_state.session_manager.get_session.return_value = mock_session
+        mock_app_state.session_manager.update_session.return_value = True
+
+        result = await handle_session_command(
+            mock_app_state,
+            "pin",
+            {"session_id": "chat_pin", "pinned": True},
+        )
+
+        assert result["success"] is True
+        mock_app_state.session_manager.update_session.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_unknown_command(self) -> None:
         """Test handling unknown command."""
         mock_app_state = Mock()

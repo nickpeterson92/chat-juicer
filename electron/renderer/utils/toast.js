@@ -116,9 +116,7 @@ function dismissToast(toast, message) {
   activeToasts.delete(message);
 
   // Remove immediately from DOM
-  if (toast.parentNode) {
-    toast.parentNode.removeChild(toast);
-  }
+  toast.parentNode.removeChild(toast);
 }
 
 /**

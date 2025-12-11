@@ -33,6 +33,7 @@ from models.session_models import (
     DeleteSessionCommand,
     ListSessionsCommand,
     LoadMoreMessagesCommand,
+    PinSessionCommand,
     RenameSessionCommand,
     SessionUpdate,
     SummarizeSessionCommand,
@@ -566,6 +567,40 @@ async def update_session_config(
     return _session_error("Failed to retrieve updated session")
 
 
+async def set_session_pinned(app_state: AppStateProtocol, session_id: str, pinned: bool) -> dict[str, Any]:
+    """Pin or unpin a session.
+
+    Args:
+        app_state: Application state containing session manager
+        session_id: Session to update
+        pinned: Target pin state
+
+    Returns:
+        Updated session metadata
+    """
+    if not app_state.session_manager:
+        return _session_error(ERROR_SESSION_MANAGER_NOT_INITIALIZED)
+
+    session_meta = app_state.session_manager.get_session(session_id)
+    if not session_meta:
+        return _session_error(ERROR_SESSION_NOT_FOUND.format(session_id=session_id))
+
+    updates = SessionUpdate(pinned=pinned)
+    success = app_state.session_manager.update_session(session_id, updates)
+    if not success:
+        return _session_error("Failed to update pin state")
+
+    updated_session = app_state.session_manager.get_session(session_id)
+    if not updated_session:
+        return _session_error("Session disappeared after pin update")
+
+    logger.info(f"{'Pinned' if pinned else 'Unpinned'} session {session_id}")
+    return {
+        "success": True,
+        "session": updated_session.model_dump(),
+    }
+
+
 async def get_config_metadata(app_state: AppStateProtocol) -> dict[str, Any]:
     """Return available configuration options for frontend.
 
@@ -632,6 +667,7 @@ async def handle_session_command(app_state: AppStateProtocol, command: str, data
         UpdateSessionConfigCommand: lambda cmd: update_session_config(
             app_state, cmd.session_id, cmd.model, cmd.mcp_config, cmd.reasoning_effort
         ),
+        PinSessionCommand: lambda cmd: set_session_pinned(app_state, cmd.session_id, cmd.pinned),
     }
 
     try:

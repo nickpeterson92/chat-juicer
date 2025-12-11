@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from core.session_manager import SessionManager
+from models.session_models import SessionUpdate
 
 
 class TestSessionManager:
@@ -69,6 +70,27 @@ class TestSessionManager:
 
             sessions = manager.list_sessions()
             assert len(sessions) >= 2
+
+    def test_list_sessions_pinned_then_created(self, temp_dir: Path) -> None:
+        """Pinned sessions should appear first, then newest created."""
+        with patch("pathlib.Path.cwd", return_value=temp_dir):
+            metadata_path = temp_dir / "sessions.json"
+            manager = SessionManager(metadata_path=metadata_path)
+
+            newer = manager.create_session(title="Newer")
+            older = manager.create_session(title="Older")
+
+            # Force deterministic created_at values for ordering
+            older.created_at = "2024-01-01T00:00:00"
+            newer.created_at = "2025-01-01T00:00:00"
+            manager._save_metadata()
+
+            # Pin the older session; it should float to top despite earlier creation
+            manager.update_session(older.session_id, SessionUpdate(pinned=True))
+
+            ordered = manager.list_sessions()
+            assert ordered[0].session_id == older.session_id  # pinned first
+            assert ordered[1].session_id == newer.session_id  # then newest by creation
 
     def test_delete_session(self, temp_dir: Path) -> None:
         """Test deleting a session."""

@@ -26,17 +26,22 @@ export class MessageQueueService {
    * @param {Object} dependencies
    * @param {Object} dependencies.appState - AppState instance for state management
    * @param {Object} dependencies.messageService - MessageService for sending messages
+   * @param {Object} dependencies.streamManager - StreamManager for checking streaming state
    */
-  constructor({ appState, messageService }) {
+  constructor({ appState, messageService, streamManager }) {
     if (!appState) {
       throw new Error("MessageQueueService requires appState");
     }
     if (!messageService) {
       throw new Error("MessageQueueService requires messageService");
     }
+    if (!streamManager) {
+      throw new Error("MessageQueueService requires streamManager");
+    }
 
     this.appState = appState;
     this.messageService = messageService;
+    this.streamManager = streamManager;
 
     // Subscribe to python.status changes to auto-process queue when idle
     this.appState.subscribe("python.status", (status) => {
@@ -89,8 +94,8 @@ export class MessageQueueService {
   /**
    * Process all queued messages as a batch
    * All queued messages are sent together and receive a single agent response.
-   * Note: With concurrent sessions, we don't check global python.status.
-   * The backend enforces MAX_CONCURRENT_STREAMS and rejects if limit exceeded.
+   * Note: With concurrent sessions, we filter out items whose sessions are still streaming.
+   * Only items for idle sessions are processed.
    * @returns {Promise<boolean>} True if messages were sent
    */
   async process() {
@@ -102,23 +107,39 @@ export class MessageQueueService {
       return false;
     }
 
-    // Mark ALL queued items as processing
-    const queuedIds = new Set(queuedItems.map((item) => item.id));
-    const updatedItems = items.map((item) => (queuedIds.has(item.id) ? { ...item, status: "processing" } : item));
+    // Filter out items whose sessions are currently streaming
+    // These should stay queued until their session becomes idle
+    const readyItems = queuedItems.filter((item) => {
+      if (!item.sessionId) {
+        // No session ID - check global streaming state
+        return !this.appState.getState("message.isStreaming");
+      }
+      // Check if this specific session is streaming
+      return !this.streamManager.isStreaming(item.sessionId);
+    });
+
+    if (readyItems.length === 0) {
+      // All queued items belong to sessions that are still streaming
+      return false;
+    }
+
+    // Mark only READY items as processing (not all queued items)
+    const readyIds = new Set(readyItems.map((item) => item.id));
+    const updatedItems = items.map((item) => (readyIds.has(item.id) ? { ...item, status: "processing" } : item));
     this.appState.setState("queue.items", updatedItems);
     // Store first item ID for backwards compatibility
-    this.appState.setState("queue.processingMessageId", queuedItems[0].id);
+    this.appState.setState("queue.processingMessageId", readyItems[0].id);
 
     // Publish processing event for batch
     globalEventBus.emit("queue:processing", {
-      item: queuedItems[0], // First item for backwards compatibility
-      items: queuedItems, // All items for batch-aware handlers
-      batchSize: queuedItems.length,
+      item: readyItems[0], // First item for backwards compatibility
+      items: readyItems, // All items for batch-aware handlers
+      batchSize: readyItems.length,
     });
 
     // Group items by session ID to prevent cross-session message leaks
     const itemsBySession = {};
-    for (const item of queuedItems) {
+    for (const item of readyItems) {
       const sid = item.sessionId || "null"; // Use string key
       if (!itemsBySession[sid]) itemsBySession[sid] = [];
       itemsBySession[sid].push(item);
@@ -337,10 +358,11 @@ let instance = null;
  * @param {Object} dependencies
  * @param {Object} dependencies.appState - AppState instance
  * @param {Object} dependencies.messageService - MessageService instance
+ * @param {Object} dependencies.streamManager - StreamManager instance
  * @returns {MessageQueueService}
  */
-export function initializeMessageQueueService({ appState, messageService }) {
-  instance = new MessageQueueService({ appState, messageService });
+export function initializeMessageQueueService({ appState, messageService, streamManager }) {
+  instance = new MessageQueueService({ appState, messageService, streamManager });
   return instance;
 }
 

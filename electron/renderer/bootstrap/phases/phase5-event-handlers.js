@@ -586,10 +586,74 @@ export async function initializeEventHandlers({
     // 7. Session Event Listeners
     // ======================
 
+    const captureSessionItemPositions = (container) => {
+      if (!container) return new Map();
+
+      const positions = new Map();
+      const items = container.querySelectorAll(".session-item");
+
+      items.forEach((item) => {
+        const sessionId = item.dataset?.sessionId;
+        if (!sessionId) return;
+
+        const rect = item.getBoundingClientRect();
+        positions.set(sessionId, {
+          top: rect.top,
+          left: rect.left,
+        });
+      });
+
+      return positions;
+    };
+
+    const animateSessionReorder = (container, previousPositions) => {
+      if (!container || previousPositions.size === 0) return;
+
+      const items = Array.from(container.querySelectorAll(".session-item"));
+      const durationMs = 420;
+      const easing = "cubic-bezier(0.33, 1, 0.68, 1)"; // smooth ease-out
+
+      items.forEach((item) => {
+        const sessionId = item.dataset?.sessionId;
+        if (!sessionId) return;
+
+        const prev = previousPositions.get(sessionId);
+        if (!prev) return;
+
+        const rect = item.getBoundingClientRect();
+        const deltaX = prev.left - rect.left;
+        const deltaY = prev.top - rect.top;
+
+        if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) {
+          return;
+        }
+
+        item.style.willChange = "transform";
+
+        const animation = item.animate(
+          [{ transform: `translate(${deltaX}px, ${deltaY}px)` }, { transform: "translate(0, 0)" }],
+          {
+            duration: durationMs,
+            easing,
+            fill: "both",
+          }
+        );
+
+        animation.addEventListener("finish", () => {
+          item.style.willChange = "";
+        });
+      });
+    };
+
     // Helper to update sessions list
     function updateSessionsList(sessions = null) {
       const sessionsList = document.getElementById("sessions-list");
       if (!sessionsList) return;
+
+      const previousPositions = captureSessionItemPositions(sessionsList);
+      const previousOrder = Array.from(sessionsList.querySelectorAll("[data-session-id]")).map(
+        (node) => node.dataset.sessionId
+      );
 
       sessionsList.innerHTML = "";
 
@@ -605,7 +669,8 @@ export async function initializeEventHandlers({
       const transformedSessions = sessionsToRender.map((session) => ({
         id: session.session_id,
         title: session.title,
-        created_at: session.last_used || session.updated_at || session.created_at,
+        created_at: session.created_at,
+        pinned: Boolean(session.pinned),
       }));
 
       const fragment = renderSessionList(
@@ -617,6 +682,16 @@ export async function initializeEventHandlers({
 
       if (fragment) {
         sessionsList.appendChild(fragment);
+      }
+
+      const newOrder = Array.from(sessionsList.querySelectorAll("[data-session-id]")).map(
+        (node) => node.dataset.sessionId
+      );
+      const orderChanged =
+        previousOrder.length === newOrder.length ? newOrder.some((id, index) => id !== previousOrder[index]) : true;
+
+      if (orderChanged) {
+        animateSessionReorder(sessionsList, previousPositions);
       }
     }
 

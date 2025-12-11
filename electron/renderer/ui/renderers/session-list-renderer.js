@@ -24,13 +24,17 @@ export function renderSessionItem(session, isActive, domAdapter, streamManager =
   const itemDiv = domAdapter.createElement("div");
   domAdapter.addClass(itemDiv, "session-item");
   domAdapter.setAttribute(itemDiv, "data-session-id", session.id);
+  if (session.pinned) {
+    domAdapter.addClass(itemDiv, "session-pinned");
+    domAdapter.setAttribute(itemDiv, "data-pinned", "true");
+  }
 
   if (isActive) {
     domAdapter.addClass(itemDiv, "active");
   }
 
   // Add streaming indicator if session is streaming
-  if (streamManager && streamManager.isStreaming(session.id)) {
+  if (streamManager?.isStreaming(session.id)) {
     domAdapter.addClass(itemDiv, "session-streaming");
   }
 
@@ -55,6 +59,18 @@ export function renderSessionItem(session, isActive, domAdapter, streamManager =
   // Actions container (visible on hover)
   const actionsDiv = domAdapter.createElement("div");
   domAdapter.addClass(actionsDiv, "session-actions");
+
+  // Pin/unpin button
+  const pinBtn = domAdapter.createElement("button");
+  domAdapter.addClass(pinBtn, "session-action-btn", "pin-btn");
+  domAdapter.setAttribute(pinBtn, "aria-label", session.pinned ? "Unpin session" : "Pin session");
+  domAdapter.setAttribute(pinBtn, "data-action", "pin");
+  domAdapter.setAttribute(pinBtn, "data-session-id", session.id);
+  domAdapter.setAttribute(pinBtn, "title", session.pinned ? "Unpin session" : "Pin session");
+  domAdapter.setAttribute(pinBtn, "data-pinned", session.pinned ? "true" : "false");
+  // Match sizing to other action icons (14px)
+  const pinSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pin-icon lucide-pin"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>`;
+  pinBtn.innerHTML = pinSVG;
 
   // Rename button
   const renameBtn = domAdapter.createElement("button");
@@ -82,6 +98,7 @@ export function renderSessionItem(session, isActive, domAdapter, streamManager =
   </svg>`;
   deleteBtn.innerHTML = deleteSVG;
 
+  domAdapter.appendChild(actionsDiv, pinBtn);
   domAdapter.appendChild(actionsDiv, renameBtn);
   domAdapter.appendChild(actionsDiv, deleteBtn);
 

@@ -268,6 +268,19 @@ describe("LifecycleManager", () => {
       await new Promise((resolve) => setTimeout(resolve, 30));
       expect(totalCalls).toBe(0);
     });
+
+    it("should skip unmount when component entry is missing component reference", () => {
+      manager.components.set("orphan_1", {
+        component: null,
+        name: "Orphan",
+        timers: new Set(),
+        unsubscribers: new Set(),
+        mounted: true,
+      });
+
+      expect(() => manager.unmountAll()).not.toThrow();
+      expect(manager.components.has("orphan_1")).toBe(true);
+    });
   });
 
   describe("Debug Snapshot", () => {

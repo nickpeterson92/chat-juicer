@@ -152,6 +152,14 @@ export class ChatContainer {
       }
     });
     globalLifecycleManager.addUnsubscriber(this, unsubscribeQueueProcessing);
+
+    // Subscribe to session changes - clean up indicators on session switch
+    // This prevents duplicate/stale indicators from previous session
+    const unsubscribeSessionChange = this.appState.subscribe("session.current", () => {
+      // Clean up all indicators when switching sessions
+      this._cleanupAllIndicators();
+    });
+    globalLifecycleManager.addUnsubscriber(this, unsubscribeSessionChange);
   }
 
   /**
@@ -188,6 +196,8 @@ export class ChatContainer {
     if (queuedItems.length === 0 && existingIds.size === 0) {
       // Hide container when empty and no animations in progress
       queuedContainer.classList.add("hidden");
+      // CRITICAL: Restore main indicator visibility when queue becomes empty
+      this._toggleQueuedIndicators();
       return;
     }
 
@@ -853,21 +863,25 @@ export class ChatContainer {
    */
   _toggleQueuedIndicators() {
     const queuedContainer = document.getElementById("queued-messages-container");
-    const mainIndicator = document.querySelector("#chat-container .loading-lamp");
+    // Find ALL loading lamps in chat container (there should only be one, but clean up any extras)
+    const mainIndicators = document.querySelectorAll("#chat-container .loading-lamp");
 
     // Check if thinking indicator should be visible:
     // 1. Main smoke indicator exists in DOM
     // 2. No tokens have started streaming yet (buffer empty = still "thinking")
+    // 3. Currently streaming (otherwise no indicator should show)
     const hasTokensStarted = !!this.appState?.getState("message.assistantBuffer");
-    const isThinkingPhase = !hasTokensStarted && !!mainIndicator;
+    const isStreaming = !!this.appState?.getState("message.isStreaming");
+    const isThinkingPhase = isStreaming && !hasTokensStarted && mainIndicators.length > 0;
 
     // Check if we have queued messages
     const hasQueuedMessages =
       queuedContainer && !queuedContainer.classList.contains("hidden") && queuedContainer.children.length > 0;
 
-    // Hide main indicator when queued messages exist (show mini version instead)
+    // Hide main indicator(s) when queued messages exist AND in thinking phase (show mini version instead)
     // Use visibility:hidden (not display:none) to preserve layout spacing
-    if (mainIndicator) {
+    // CRITICAL: If not streaming or no queued messages, always show main indicator
+    for (const mainIndicator of mainIndicators) {
       if (hasQueuedMessages && isThinkingPhase) {
         mainIndicator.style.visibility = "hidden";
       } else {
@@ -914,6 +928,41 @@ export class ChatContainer {
         }
       }
     }
+  }
+
+  /**
+   * Clean up all thinking indicators - called on session switch
+   * Ensures no stale indicators remain from previous session
+   * @private
+   */
+  _cleanupAllIndicators() {
+    // Clean up mini indicators in queued container
+    const queuedContainer = document.getElementById("queued-messages-container");
+    if (queuedContainer) {
+      const indicators = queuedContainer.querySelectorAll(".queued-mini-indicator");
+      for (const indicator of indicators) {
+        indicator.style.display = "none";
+        if (indicator._lottieAnimation) {
+          try {
+            indicator._lottieAnimation.destroy();
+            indicator._lottieAnimation = null;
+          } catch (e) {
+            // Ignore cleanup errors
+          }
+          indicator.innerHTML = "";
+          indicator.textContent = "";
+        }
+      }
+    }
+
+    // Reset main indicator visibility
+    const mainIndicators = document.querySelectorAll("#chat-container .loading-lamp");
+    for (const mainIndicator of mainIndicators) {
+      mainIndicator.style.visibility = "visible";
+    }
+
+    // Reset the indicator hidden flag
+    this._indicatorsHiddenForStream = false;
   }
 
   /**
