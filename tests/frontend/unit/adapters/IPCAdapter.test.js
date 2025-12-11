@@ -66,6 +66,12 @@ describe("IPCAdapter", () => {
       expect(mockAPI.sendUserInput).toHaveBeenCalledTimes(1);
     });
 
+    it("should pass through array messages without re-wrapping", async () => {
+      await adapter.sendMessage(["Hello", "World"]);
+
+      expect(mockAPI.sendUserInput).toHaveBeenCalledWith(["Hello", "World"], null);
+    });
+
     it("should throw when API not available for sendMessage", async () => {
       const adapterNoAPI = new IPCAdapter({});
       await expect(adapterNoAPI.sendMessage("test")).rejects.toThrow("IPC API not available: sendUserInput");
@@ -135,6 +141,16 @@ describe("IPCAdapter", () => {
       expect(call.data).toBe(fileData);
       expect(call.size).toBe(8);
       expect(call.type).toBe("text/plain");
+    });
+
+    it("should calculate size for base64 payloads", async () => {
+      const base64Data = "YWJj"; // length 4 -> size 3 bytes
+
+      await adapter.uploadFile("/path/to/file", base64Data, "encoded.bin", "application/octet-stream");
+
+      const call = mockAPI.uploadFile.mock.calls[0][0];
+      expect(call.size).toBe(3);
+      expect(call.data).toBe(base64Data);
     });
 
     it("should delete file", async () => {

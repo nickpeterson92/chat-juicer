@@ -31,20 +31,118 @@ This specification covers the refactoring of Chat Juicer's Electron renderer fro
 
 ## Table of Contents
 
-1. [Monorepo Structure](#1-monorepo-structure)
-2. [Technology Stack](#2-technology-stack)
-3. [Zustand Store Design](#3-zustand-store-design)
-4. [API Adapter Pattern](#4-api-adapter-pattern)
-5. [Component Migration Order](#5-component-migration-order)
-6. [Custom Hooks](#6-custom-hooks)
-7. [Detailed Component Migrations](#7-detailed-component-migrations)
-8. [Testing Strategy](#8-testing-strategy)
-9. [Migration Checklist](#9-migration-checklist)
-10. [React Learning Path](#10-react-learning-path)
+1. [Branching & Migration Strategy](#1-branching--migration-strategy)
+2. [Monorepo Structure](#2-monorepo-structure)
+3. [Technology Stack](#3-technology-stack)
+4. [Zustand Store Design](#4-zustand-store-design)
+5. [API Adapter Pattern](#5-api-adapter-pattern)
+6. [Component Migration Order](#6-component-migration-order)
+7. [Custom Hooks](#7-custom-hooks)
+8. [Detailed Component Migrations](#8-detailed-component-migrations)
+9. [Testing Strategy](#9-testing-strategy)
+10. [Migration Checklist](#10-migration-checklist)
+11. [React Learning Path](#11-react-learning-path)
 
 ---
 
-## 1. Monorepo Structure
+## 1. Branching & Migration Strategy
+
+### Branch Structure
+
+```
+main                              ← Production (vanilla JS, stable)
+│
+└── feature/react-refactor        ← All React work happens here
+    │
+    ├── (week 1-4 development)
+    │
+    └── Merge to dev when ready ──► dev (team testing)
+                                      │
+                                      └── Merge to main when stoked ──► main
+```
+
+### What Stays, What Goes
+
+| Directory | During Refactor | After Merge to Main |
+|-----------|-----------------|---------------------|
+| `electron/renderer/` | Untouched on `main` | **DELETED** |
+| `electron/main.js` | Untouched | Replaced by `packages/electron-app/src/main/` |
+| `electron/preload.js` | Untouched | Replaced by `packages/electron-app/src/preload/` |
+| `packages/app-core/` | New (on branch) | **KEPT** (shared React code) |
+| `packages/electron-app/` | New (on branch) | **KEPT** (Electron shell) |
+| `src/` (Python backend) | Untouched | Untouched |
+
+### Migration Safety
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  MAIN BRANCH (always working)                                               │
+│                                                                             │
+│  • Current vanilla JS Electron app                                          │
+│  • Users never affected during development                                  │
+│  • Can ship hotfixes anytime                                                │
+│  • Stays this way until React version is proven                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                       │
+            ┌──────────────────────────┴──────────────────────────┐
+            │                                                      │
+            ▼                                                      ▼
+┌───────────────────────────────┐              ┌───────────────────────────────┐
+│  feature/react-refactor       │              │  Hotfix workflow              │
+│                               │              │                               │
+│  • All React development      │              │  main → hotfix/xxx → main     │
+│  • Can take as long as needed │              │  (unaffected by refactor)     │
+│  • Test against Python backend│              │                               │
+│  • Break things, experiment   │              │                               │
+└───────────────────────────────┘              └───────────────────────────────┘
+```
+
+### Merge Criteria
+
+Before merging `feature/react-refactor` → `dev`:
+
+- [ ] All components migrated and functional
+- [ ] All existing features work (manual testing)
+- [ ] Unit tests pass (Vitest)
+- [ ] TypeScript compiles with no errors
+- [ ] Electron app starts and connects to Python backend
+- [ ] Streaming chat works end-to-end
+- [ ] File upload/download works
+- [ ] Session management works
+
+Before merging `dev` → `main`:
+
+- [ ] Team has tested for 1+ week
+- [ ] No critical bugs found
+- [ ] Performance is acceptable
+- [ ] Ready to delete old `electron/renderer/`
+
+### Post-Merge Cleanup
+
+After merging to `main`, delete the old renderer:
+
+```bash
+# On main branch after merge
+git rm -r electron/renderer/
+git rm electron/main.js
+git rm electron/preload.js
+git commit -m "chore: remove legacy vanilla JS renderer"
+```
+
+The new structure becomes:
+
+```
+chat-juicer/
+├── packages/
+│   ├── app-core/           # Shared React components, hooks, stores
+│   └── electron-app/       # Electron shell (main, preload, renderer entry)
+├── src/                    # Python backend (unchanged)
+└── ...
+```
+
+---
+
+## 2. Monorepo Structure
 
 Using pnpm workspaces for code sharing between Electron and future Web apps.
 
@@ -179,7 +277,7 @@ packages:
 
 ---
 
-## 2. Technology Stack
+## 3. Technology Stack
 
 ### Core Dependencies
 
@@ -249,7 +347,7 @@ packages/electron-app/
 
 ---
 
-## 3. Zustand Store Design
+## 4. Zustand Store Design
 
 ### Store Structure
 
@@ -512,7 +610,7 @@ export const useUIStore = create<UIState>()(
 
 ---
 
-## 4. API Adapter Pattern
+## 5. API Adapter Pattern
 
 The key to sharing code between Electron and Web: an abstract API interface.
 
@@ -819,7 +917,7 @@ export function useAPI(): ChatAPI {
 
 ---
 
-## 5. Component Migration Order
+## 6. Component Migration Order
 
 Ordered by complexity and dependencies. Start simple, build confidence.
 
@@ -864,7 +962,7 @@ Ordered by complexity and dependencies. Start simple, build confidence.
 
 ---
 
-## 6. Custom Hooks
+## 7. Custom Hooks
 
 ### useStreamingChat
 
@@ -1133,7 +1231,7 @@ export function useMessageQueue(
 
 ---
 
-## 7. Detailed Component Migrations
+## 8. Detailed Component Migrations
 
 ### 7.1 ConnectionStatus (Week 1)
 
@@ -1473,7 +1571,7 @@ export function MessageBubble({ message, isStreaming, streamContent }: MessageBu
 
 ---
 
-## 8. Testing Strategy
+## 9. Testing Strategy
 
 ### Unit Tests (Vitest + React Testing Library)
 
@@ -1543,7 +1641,7 @@ describe('Chat Flow', () => {
 
 ---
 
-## 9. Migration Checklist
+## 10. Migration Checklist
 
 ### Week 1: Foundation
 - [ ] Create `packages/` directory structure
@@ -1583,7 +1681,7 @@ describe('Chat Flow', () => {
 
 ---
 
-## 10. React Learning Path
+## 11. React Learning Path
 
 Since you're new to React, here's what you'll learn at each stage:
 

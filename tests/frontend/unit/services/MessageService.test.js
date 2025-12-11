@@ -85,6 +85,16 @@ describe("MessageService", () => {
       expect(calls[0].content).toEqual(["Hello"]);
     });
 
+    it("should accept array inputs without re-wrapping", async () => {
+      mockIPC.setResponse("user-input", { success: true });
+
+      const result = await messageService.sendMessage(["Hello", "World"]);
+
+      expect(result.success).toBe(true);
+      const calls = mockIPC.getCalls("user-input");
+      expect(calls[0].content).toEqual(["Hello", "World"]);
+    });
+
     it("should handle IPC errors", async () => {
       mockIPC.setResponse("user-input", new Error("Network error"));
 
@@ -226,6 +236,10 @@ describe("MessageService", () => {
       expect(viewModel.content).toBe("Hello");
       expect(viewModel.id).toMatch(/^msg-\d+-[a-z0-9]+$/);
       expect(viewModel.shouldRenderMarkdown).toBe(true);
+    });
+
+    it("should throw on invalid assistant message", () => {
+      expect(() => messageService.createAssistantMessage("")).toThrow();
     });
   });
 

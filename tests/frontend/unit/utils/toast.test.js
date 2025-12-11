@@ -220,6 +220,15 @@ describe("Toast Utilities", () => {
       expect(container.children.length).toBe(0);
     });
 
+    it("should ignore unrelated key presses", () => {
+      const toast = showToast("Ignore keys", "info", 10000);
+
+      const event = new KeyboardEvent("keydown", { key: "Tab" });
+      toast.dispatchEvent(event);
+
+      expect(container.children.length).toBe(1);
+    });
+
     it("should dismiss toast when Escape key pressed", () => {
       const toast = showToast("Keyboard dismiss", "info", 10000);
       toast.focus();
@@ -255,6 +264,24 @@ describe("Toast Utilities", () => {
       expect(() => {
         vi.advanceTimersByTime(10000);
       }).not.toThrow();
+    });
+
+    it("should safely handle clicks after toast is removed from DOM", () => {
+      const toast = showToast("Detached click", "info", 10000);
+      container.removeChild(toast);
+
+      toast.click();
+
+      expect(container.children.length).toBe(0);
+    });
+
+    it("should dismiss even when timeout metadata is missing", () => {
+      const toast = showToast("No timeout id", "info", 10000);
+      delete toast.dataset.timeoutId;
+
+      toast.click();
+
+      expect(container.children.length).toBe(0);
     });
   });
 

@@ -15,6 +15,14 @@ describe("css-variables utils", () => {
     expect(value).toBe("#123456");
   });
 
+  it("allows variable names without the -- prefix", () => {
+    document.documentElement.style.setProperty("--color-surface-1", "#fedcba");
+
+    const value = getCSSVariable("color-surface-1", "#000000");
+
+    expect(value).toBe("#fedcba");
+  });
+
   it("uses fallback and logs a warning when the variable is missing", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 

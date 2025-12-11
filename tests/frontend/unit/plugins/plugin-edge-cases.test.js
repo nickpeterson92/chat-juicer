@@ -313,6 +313,18 @@ describe("Plugin Edge Cases", () => {
       await registry.register(plugin);
       expect(registry.hasPlugin("undefined-deps")).toBe(true);
     });
+
+    it("should fall back when dependencies are falsy", async () => {
+      const plugin = createPlugin({
+        name: "null-deps",
+        version: "1.0.0",
+        async install() {},
+      });
+      plugin.dependencies = null;
+
+      await registry.register(plugin);
+      expect(registry.hasPlugin("null-deps")).toBe(true);
+    });
   });
 
   describe("Base Plugin contract", () => {
@@ -365,6 +377,22 @@ describe("Plugin Edge Cases", () => {
         version: "1.2.3",
         dependencies: ["depA"],
       });
+    });
+
+    it("should default dependencies when metadata omits them", () => {
+      const DecoratedPlugin = pluginDecorator({
+        name: "no-deps-plugin",
+        version: "0.0.1",
+        description: "Missing dependency list",
+      })(
+        class MinimalPlugin {
+          async install() {}
+        }
+      );
+
+      const instance = new DecoratedPlugin();
+      expect(instance.dependencies).toEqual([]);
+      expect(instance.getMetadata().dependencies).toEqual([]);
     });
   });
 
@@ -442,6 +470,31 @@ describe("Plugin Edge Cases", () => {
 
       expect(plugins).toEqual([]);
       expect(Array.isArray(plugins)).toBe(true);
+    });
+  });
+
+  describe("Hook execution edge cases", () => {
+    it("should return data unchanged when hook has no handlers", async () => {
+      const input = { value: 1 };
+      const result = await registry.executeHook("no-handlers", input);
+
+      expect(result).toEqual(input);
+    });
+
+    it("should continue executing hooks after a handler throws", async () => {
+      const erroringHandler = vi.fn(() => {
+        throw new Error("boom");
+      });
+      const successHandler = vi.fn(async (data) => ({ ...data, processed: true }));
+
+      registry.registerHook("transform", erroringHandler);
+      registry.registerHook("transform", successHandler);
+
+      const result = await registry.executeHook("transform", { value: 42 });
+
+      expect(result).toEqual({ value: 42, processed: true });
+      expect(console.error).toHaveBeenCalledWith("[PluginRegistry] Hook transform error:", expect.any(Error));
+      expect(successHandler).toHaveBeenCalled();
     });
   });
 });
