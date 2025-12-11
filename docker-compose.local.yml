@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: chatjuicer-postgres
+    environment:
+      POSTGRES_USER: chatjuicer
+      POSTGRES_PASSWORD: localdev
+      POSTGRES_DB: chatjuicer
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./migrations/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chatjuicer"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

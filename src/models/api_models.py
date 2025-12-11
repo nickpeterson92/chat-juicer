@@ -117,3 +117,114 @@ __all__ = [
     "SearchFilesResponse",
     "TextEditResponse",
 ]
+
+
+# -----------------------------------------------------------------------------
+# API (FastAPI) response models
+# -----------------------------------------------------------------------------
+
+
+class UserInfo(BaseModel):
+    """Public user information."""
+
+    id: str
+    email: str
+    display_name: str | None = None
+
+
+class TokenResponse(BaseModel):
+    """Auth tokens with bearer type."""
+
+    access_token: str
+    refresh_token: str | None = None
+    token_type: str = "bearer"
+    user: UserInfo | None = None
+
+
+class HealthResponse(BaseModel):
+    """Health check payload."""
+
+    status: str
+    database: str
+    version: str
+
+
+class ModelConfigItem(BaseModel):
+    """Model metadata for config endpoint."""
+
+    id: str
+    name: str
+    provider: str
+    context_window: int
+    supports_reasoning: bool
+
+
+class ConfigResponse(BaseModel):
+    """Configuration payload for renderer."""
+
+    models: list[ModelConfigItem]
+    reasoning_efforts: list[str]
+    mcp_servers: list[str]
+    max_file_size: int
+
+
+class FileListResponse(BaseModel):
+    """List of files for a session."""
+
+    files: list[FileInfo]
+
+
+class FilePathResponse(BaseModel):
+    """Local path for shell.openPath."""
+
+    path: str
+
+
+class MessageItem(BaseModel):
+    """Message history item."""
+
+    id: str
+    role: str
+    content: str | None = None
+    created_at: str | None = None
+    tool_call_id: str | None = None
+    tool_name: str | None = None
+    tool_arguments: dict[str, Any] | None = None
+    tool_result: str | None = None
+    tool_success: bool | None = None
+
+
+class SessionRecord(BaseModel):
+    """Session metadata."""
+
+    id: str
+    session_id: str
+    title: str | None = None
+    model: str
+    reasoning_effort: str
+    mcp_config: list[str]
+    pinned: bool
+    is_named: bool
+    message_count: int
+    total_tokens: int
+    created_at: str | None = None
+    last_used_at: str | None = None
+
+
+class SessionWithHistoryResponse(BaseModel):
+    """Session plus history/files."""
+
+    session: SessionRecord
+    full_history: list[MessageItem]
+    files: list[FileInfo]
+    has_more: bool
+    loaded_count: int
+    message_count: int
+
+
+class SessionListResponse(BaseModel):
+    """Paginated session list."""
+
+    sessions: list[SessionRecord]
+    total_count: int
+    has_more: bool

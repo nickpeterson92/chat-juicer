@@ -83,7 +83,7 @@ src/
 │   ├── dependencies.py           # Dependency injection
 │   ├── routes/
 │   │   ├── __init__.py
-│   │   ├── auth.py              # Basic auth (single-user for Phase 1)
+│   │   ├── auth.py              # Basic auth (single-user for Phase 1, JWT)
 │   │   ├── sessions.py          # Session CRUD
 │   │   ├── messages.py          # Message history
 │   │   ├── files.py             # File operations
@@ -94,7 +94,8 @@ src/
 │   │   ├── __init__.py
 │   │   ├── session_service.py   # Session business logic
 │   │   ├── message_service.py   # Message persistence
-│   │   ├── file_service.py      # Local file operations
+│   │   ├── file_service.py      # Local file operations (FileServiceProtocol)
+│   │   ├── file_context.py      # SessionFileContext (local cache wrapper)
 │   │   ├── chat_service.py      # Chat orchestration
 │   │   └── postgres_session.py  # PostgreSQL session adapter
 │   └── websocket/
@@ -203,7 +204,8 @@ from typing import Annotated, AsyncGenerator
 import asyncpg
 from fastapi import Depends, Request
 
-from api.services.file_service import FileService, LocalFileService
+from api.services.file_service import FileServiceProtocol, LocalFileService
+from api.middleware.auth import get_current_user_from_token
 from api.services.session_service import SessionService
 
 
@@ -217,7 +219,7 @@ async def get_mcp_servers(request: Request) -> list:
     return getattr(request.app.state, 'mcp_servers', [])
 
 
-def get_file_service() -> FileService:
+def get_file_service() -> FileServiceProtocol:
     """Get file service (local filesystem for Phase 1)."""
     return LocalFileService()
 
@@ -267,6 +269,9 @@ volumes:
 
 ```sql
 -- migrations/init.sql
+
+-- Extensions (required for gen_random_uuid)
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- Users table (single user for Phase 1, multi-user ready)
 CREATE TABLE IF NOT EXISTS users (
@@ -372,6 +377,11 @@ class Settings(BaseSettings):
 
     # Phase 1: Simple auth (single user)
     default_user_email: str = "local@chatjuicer.dev"
+    allow_localhost_noauth: bool = True  # Dev toggle to allow REST/WS without auth on localhost
+
+# .env.local (append)
+# Auth dev toggle (Phase 1 convenience; disable in Phase 3)
+# ALLOW_LOCALHOST_NOAUTH=true
 ```
 
 #### Checkpoint 1.1: Verify Setup
@@ -393,9 +403,91 @@ curl http://localhost:8000/api/health
 # Expected: {"status": "healthy"}
 ```
 
+#### Task 1.7: Initialize Alembic (to avoid schema drift)
+
+```bash
+cd src
+alembic init migrations
+
+# Edit alembic.ini to point to settings.database_url (or set env var)
+# Edit migrations/env.py to use asyncpg + metadata if desired; for now keep offline/online scripts simple.
+
+# Generate initial migration from init.sql state
+alembic revision -m "init schema" --autogenerate
+
+# Apply
+alembic upgrade head
+```
+
+> Phase 1 still ships `migrations/init.sql` for docker-compose bootstrap, but Alembic is the source of truth going forward; keep both in sync.
+
 ---
 
-### Day 2: Health + Config Routes
+### Day 2: Auth + Health + Config Routes
+
+#### Task 2.0: Auth Routes (Phase 1-friendly, ready for multi-user)
+
+```python
+# src/api/routes/auth.py
+from __future__ import annotations
+
+from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel
+
+from api.dependencies import get_db
+from api.services.auth_service import AuthService
+from api.middleware.auth import get_current_user
+
+router = APIRouter()
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str | None = None
+    token_type: str = "bearer"
+
+
+@router.post("/login", response_model=TokenResponse)
+async def login(body: LoginRequest, db = Depends(get_db)) -> TokenResponse:
+    """Login and issue tokens (Phase 1: seeded user)."""
+    auth = AuthService(db)
+    try:
+        result = await auth.login(body.email, body.password)
+        return TokenResponse(
+            access_token=result["access_token"],
+            refresh_token=result["refresh_token"],
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh(body: RefreshRequest, db = Depends(get_db)) -> TokenResponse:
+    """Refresh access token."""
+    auth = AuthService(db)
+    try:
+        access = await auth.refresh(body.refresh_token)
+        return TokenResponse(access_token=access, refresh_token=body.refresh_token)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+
+
+@router.get("/me")
+async def me(user = Depends(get_current_user)) -> dict:
+    """Get current user (requires valid access token)."""
+    return user
+```
+
+> Env toggle for Phase 1: add `ALLOW_LOCALHOST_NOAUTH=true` to permit unauthenticated localhost calls; keep the middleware in place so turning this off is zero-code later.
 
 #### Task 2.1: Health Route
 
@@ -518,7 +610,7 @@ class PostgresSession:
                 {
                     "role": row["role"],
                     "content": row["content"],
-                    **(json.loads(row["metadata"]) if row["metadata"] else {})
+                    **(row["metadata"] or {}),
                 }
                 for row in rows
             ]
@@ -1311,30 +1403,49 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query
+from fastapi.websockets import WebSocketState
+from api.middleware.auth import get_current_user_from_token
 
 from api.dependencies import get_db, get_mcp_servers
 from api.websocket.manager import ws_manager
 from api.services.chat_service import ChatService
+from api.services.file_service import LocalFileService
+from api.middleware.auth import get_current_user_from_token
 
 router = APIRouter()
+
+
+async def get_current_user_from_query_token(token: str, db) -> dict:
+    """Helper for WS query param token (reuses auth middleware helper)."""
+    return await get_current_user_from_token(token, db)
 
 
 @router.websocket("/chat/{session_id}")
 async def chat_websocket(
     websocket: WebSocket,
     session_id: str,
+    token: str | None = Query(default=None),
 ):
     """WebSocket endpoint for chat streaming."""
-    # Get dependencies
+    # Lightweight auth: optional token for Phase 1, aligns with JWT later
     db = websocket.app.state.db_pool
     mcp_servers = getattr(websocket.app.state, 'mcp_servers', [])
+
+    # Validate token if provided (Phase 1: allow none for localhost via env toggle)
+    user = None
+    if token:
+        try:
+            user = await get_current_user_from_query_token(token, db)
+        except Exception:
+            await websocket.close(code=4401)
+            return
 
     # Connect
     await ws_manager.connect(websocket, session_id)
 
     # Create chat service
-    chat_service = ChatService(db, mcp_servers, ws_manager)
+    chat_service = ChatService(db, mcp_servers, ws_manager, file_service=LocalFileService())
 
     try:
         # Keepalive task
@@ -1401,6 +1512,8 @@ import asyncpg
 from agents import Agent, Runner
 
 from api.services.postgres_session import PostgresSession
+from api.services.file_context import session_file_context
+from api.services.file_service import FileServiceProtocol
 from api.websocket.manager import WebSocketManager
 from core.agent import create_agent
 from core.prompts import get_system_prompt
@@ -1417,10 +1530,12 @@ class ChatService:
         pool: asyncpg.Pool,
         mcp_servers: list,
         ws_manager: WebSocketManager,
+        file_service: FileServiceProtocol,
     ):
         self.pool = pool
         self.mcp_servers = mcp_servers
         self.ws_manager = ws_manager
+        self.file_service = file_service
         self._active_tasks: dict[str, asyncio.Task] = {}
 
     async def process_chat(
@@ -1451,53 +1566,60 @@ class ChatService:
         # Create session adapter for Agent SDK
         session = PostgresSession(session_id, session_uuid, self.pool)
 
-        # Create tools
-        tools = create_session_aware_tools(session_id)
-
-        # Create agent
-        agent = create_agent(
-            model=model,
-            tools=tools,
-            mcp_servers=self.mcp_servers,
+        # Session file context (local in Phase 1; S3 later)
+        async with session_file_context(
+            file_service=self.file_service,
+            session_id=session_id,
+            user_id=session_row["user_id"],
             reasoning_effort=reasoning_effort or session_row["reasoning_effort"],
-        )
+        ) as file_ctx:
+            # Create tools bound to the context base path
+            tools = create_session_aware_tools(file_ctx)
 
-        # Send stream start
-        await self.ws_manager.send(session_id, {
-            "type": "stream_start",
-            "session_id": session_id,
-        })
+            # Create agent
+            agent = create_agent(
+                model=model,
+                tools=tools,
+                mcp_servers=self.mcp_servers,
+                reasoning_effort=reasoning_effort or session_row["reasoning_effort"],
+            )
 
-        try:
-            # Add user messages to session
-            for msg in messages:
-                content = msg.get("content", msg) if isinstance(msg, dict) else msg
-                await session.add_items([{"role": "user", "content": content}])
-
-                # Also add to Layer 2 (full history)
-                await self._add_to_full_history(session_uuid, "user", content)
-
-            # Run agent with streaming
-            await self._run_agent_stream(agent, session, session_id, session_uuid)
-
-            # Send stream end
+            # Send stream start
             await self.ws_manager.send(session_id, {
-                "type": "stream_end",
-                "finish_reason": "stop",
+                "type": "stream_start",
+                "session_id": session_id,
             })
 
-        except asyncio.CancelledError:
-            await self.ws_manager.send(session_id, {
-                "type": "stream_end",
-                "finish_reason": "interrupted",
-            })
-        except Exception as e:
-            logger.error(f"Chat error: {e}", exc_info=True)
-            await self.ws_manager.send(session_id, {
-                "type": "error",
-                "message": str(e),
-                "retryable": True,
-            })
+            try:
+                # Add user messages to session
+                for msg in messages:
+                    content = msg.get("content", msg) if isinstance(msg, dict) else msg
+                    await session.add_items([{"role": "user", "content": content}])
+
+                    # Also add to Layer 2 (full history)
+                    await self._add_to_full_history(session_uuid, "user", content)
+
+                # Run agent with streaming
+                await self._run_agent_stream(agent, session, session_id, session_uuid)
+
+                # Send stream end
+                await self.ws_manager.send(session_id, {
+                    "type": "stream_end",
+                    "finish_reason": "stop",
+                })
+
+            except asyncio.CancelledError:
+                await self.ws_manager.send(session_id, {
+                    "type": "stream_end",
+                    "finish_reason": "interrupted",
+                })
+            except Exception as e:
+                logger.error(f"Chat error: {e}", exc_info=True)
+                await self.ws_manager.send(session_id, {
+                    "type": "error",
+                    "message": str(e),
+                    "retryable": True,
+                })
 
     async def _run_agent_stream(
         self,
@@ -1518,7 +1640,7 @@ class ChatService:
                 event_type = event.type
 
                 if event_type == "raw_response_event":
-                    # Text delta
+                    # Text delta + reasoning delta
                     if hasattr(event.data, "delta"):
                         delta = event.data.delta
                         if hasattr(delta, "content") and delta.content:
@@ -1526,6 +1648,11 @@ class ChatService:
                             await self.ws_manager.send(session_id, {
                                 "type": "delta",
                                 "content": delta.content,
+                            })
+                        if hasattr(delta, "reasoning") and delta.reasoning:
+                            await self.ws_manager.send(session_id, {
+                                "type": "reasoning_delta",
+                                "content": delta.reasoning,
                             })
 
                 elif event_type == "tool_call_item":
@@ -1537,6 +1664,13 @@ class ChatService:
                         "arguments": event.item.arguments,
                         "status": "detected",
                     })
+                    # Tool call args delta (partial)
+                    if getattr(event.item, "arguments_delta", None):
+                        await self.ws_manager.send(session_id, {
+                            "type": "tool_call_arguments_delta",
+                            "id": event.item.call_id,
+                            "delta": event.item.arguments_delta,
+                        })
 
                 elif event_type == "tool_output_item":
                     # Tool result
