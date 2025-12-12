@@ -181,17 +181,33 @@ class FilePathResponse(BaseModel):
 
 
 class MessageItem(BaseModel):
-    """Message history item."""
+    """Message history item.
+
+    For tool_call messages, uses frontend-expected field names:
+    - call_id (not tool_call_id)
+    - name (not tool_name)
+    - arguments (not tool_arguments)
+    - result (not tool_result)
+    - success (not tool_success)
+    - status: "completed" for all persisted tool calls
+
+    For interrupted messages:
+    - partial: True if response was interrupted (for CSS styling)
+    """
 
     id: str
     role: str
     content: str | None = None
     created_at: str | None = None
-    tool_call_id: str | None = None
-    tool_name: str | None = None
-    tool_arguments: dict[str, Any] | None = None
-    tool_result: str | None = None
-    tool_success: bool | None = None
+    # Tool call fields - use frontend-expected names
+    call_id: str | None = None
+    name: str | None = None
+    arguments: dict[str, Any] | str | None = None
+    result: str | None = None
+    success: bool | None = None
+    status: str | None = None
+    # Interrupted response flag
+    partial: bool | None = None
 
 
 class SessionRecord(BaseModel):

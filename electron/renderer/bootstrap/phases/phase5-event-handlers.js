@@ -513,7 +513,9 @@ export async function initializeEventHandlers({
             components.filePanel.clear();
           }
 
-          await sessionService.clearCurrentSession();
+          // Clear UI state but do NOT delete database data
+          // clearCurrentSession() was incorrectly deleting all messages
+          appState.setState("session.current", null);
 
           if (previousSessionId) {
             const sessionsList = document.getElementById("sessions-list");

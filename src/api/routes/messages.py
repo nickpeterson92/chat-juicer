@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -34,19 +36,47 @@ async def list_messages(
             offset,
         )
 
-    messages = [
-        {
+    messages = []
+    for row in rows:
+        # Extract partial flag from metadata JSONB
+        metadata = row.get("metadata") or {}
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except json.JSONDecodeError:
+                metadata = {}
+
+        msg: dict[str, Any] = {
             "id": str(row["id"]),
             "role": row["role"],
             "content": row["content"],
             "created_at": row["created_at"].isoformat() if row["created_at"] else None,
-            "tool_call_id": row["tool_call_id"],
-            "tool_name": row["tool_name"],
-            "tool_arguments": row["tool_arguments"],
-            "tool_result": row["tool_result"],
-            "tool_success": row["tool_success"],
         }
-        for row in rows
-    ]
+
+        # Add partial flag if present in metadata (for interrupted responses)
+        if metadata.get("partial"):
+            msg["partial"] = True
+
+        # For tool_call messages, include tool-specific fields matching legacy format
+        # Legacy shape: role, content (tool name), call_id, name, arguments, result, status
+        if row["role"] == "tool_call":
+            # Parse arguments from JSON string if stored that way
+            args = row["tool_arguments"]
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except json.JSONDecodeError:
+                    pass  # Keep as string if not valid JSON
+            msg.update(
+                {
+                    "call_id": row["tool_call_id"],
+                    "name": row["tool_name"],
+                    "arguments": args,
+                    "result": row["tool_result"],
+                    "status": "completed",  # All persisted tool calls are completed
+                    "success": row["tool_success"],
+                }
+            )
+        messages.append(msg)
 
     return {"messages": list(reversed(messages))}

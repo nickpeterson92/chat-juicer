@@ -5,9 +5,12 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from api.dependencies import DB, Sessions
+from api.dependencies import DB, PROJECT_ROOT, Files, Sessions
 from core.constants import get_settings
 from models.api_models import SessionListResponse, SessionRecord, SessionWithHistoryResponse
+
+# Global templates path
+TEMPLATES_PATH = PROJECT_ROOT / "templates"
 
 router = APIRouter()
 
@@ -62,6 +65,7 @@ async def create_session(
     request: CreateSessionRequest,
     db: DB,
     sessions: Sessions,
+    files: Files,
 ) -> SessionRecord:
     """Create a new session."""
     user_id = await get_default_user_id(db)
@@ -72,6 +76,10 @@ async def create_session(
         mcp_config=request.mcp_config,
         reasoning_effort=request.reasoning_effort,
     )
+
+    # Initialize session workspace with templates symlink
+    files.init_session_workspace(created["session_id"], TEMPLATES_PATH)
+
     return SessionRecord(**created)
 
 

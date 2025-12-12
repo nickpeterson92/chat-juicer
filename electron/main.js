@@ -1,20 +1,13 @@
 const { app, BrowserWindow, ipcMain, shell, dialog } = require("electron");
-const { spawn } = require("node:child_process");
 const path = require("node:path");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const { fileURLToPath } = require("node:url");
 const Logger = require("./logger");
-const PythonManager = require("../scripts/python-manager");
-const platformConfig = require("../scripts/platform-config");
-const IPCProtocolV2 = require("./utils/ipc-v2-protocol");
-const BinaryMessageParser = require("./utils/binary-message-parser");
+const { apiRequest, connectWebSocket, sendWebSocketMessage, closeWebSocket, API_BASE } = require("./api-client");
 const {
   RESTART_DELAY,
   RESTART_CALLBACK_DELAY,
-  GRACEFUL_SHUTDOWN_TIMEOUT,
-  HEALTH_CHECK_INTERVAL,
-  SIGTERM_DELAY,
   FILE_UPLOAD_TIMEOUT,
   SESSION_COMMAND_TIMEOUT,
   SUMMARIZE_COMMAND_TIMEOUT,
@@ -25,21 +18,12 @@ const {
   HIDDEN_FILE_PREFIX,
 } = require("./config/main-constants");
 
-// Initialize logger for main process
 const logger = new Logger("main");
-
-// Initialize Python manager
-const pythonManager = new PythonManager(path.join(__dirname, ".."));
-
 let mainWindow;
-let pythonProcess;
-let pythonProcessPID = null;
-let isShuttingDown = false;
-let processHealthCheckInterval = null;
-
-// Request-response correlation map for IPC
-// Key: request_id, Value: { resolve, reject, timeoutId, type }
-const pendingRequests = new Map();
+let activeSessionId = null;
+// Map of sessionId -> WebSocket for concurrent session support
+const sessionWebSockets = new Map();
+let reconnectTimer = null;
 
 function createWindow() {
   // Platform detection for cross-platform borderless window support
@@ -113,172 +97,98 @@ function createWindow() {
   });
 }
 
-async function startPythonBot() {
-  // Prevent multiple instances
-  if (pythonProcess && !pythonProcess.killed) {
-    logger.warn("Python process already running, skipping start");
-    return;
-  }
-
-  logger.info("Starting Python bot process");
-  logger.info("Platform:", platformConfig.getPlatformName());
-
-  try {
-    // Use PythonManager to find Python (cross-platform)
-    const pythonPath = await pythonManager.findPython();
-    logger.info("Found Python:", pythonPath);
-
-    const spawnOptions = platformConfig.getSpawnOptions({
-      stdio: ["pipe", "pipe", "inherit"], // [stdin, stdout, stderr -> terminal]
-    });
-
-    pythonProcess = spawn(pythonPath, [path.join(__dirname, "..", "src", "main.py")], spawnOptions);
-
-    pythonProcessPID = pythonProcess.pid;
-    logger.logPythonProcess("started", { pid: pythonProcessPID, path: pythonPath });
-
-    // IMPORTANT: Set up stdout listener BEFORE sending protocol negotiation
-    // to avoid race condition where response arrives before listener is attached
-    const binaryParser = new BinaryMessageParser({
-      onMessage: (message) => {
-        const messageType = message.type;
-        logger.trace("Python binary message received", {
-          type: messageType,
-          size: message._size,
-          compressed: message._compressed,
-        });
-
-        // Route messages by type
-        switch (messageType) {
-          case "protocol_negotiation_response":
-            logger.info("Protocol negotiation response received", {
-              selectedVersion: message.selected_version,
-              serverVersion: message.server_version,
-            });
-            // Protocol negotiation successful - no action needed for renderer
-            break;
-
-          case "session_response":
-          case "upload_response": {
-            // Route to pending request via request_id correlation
-            const requestId = message.request_id;
-            const pending = pendingRequests.get(requestId);
-            if (pending) {
-              clearTimeout(pending.timeoutId);
-              pendingRequests.delete(requestId);
-              pending.resolve(message.data);
-              logger.trace("IPC response routed", { type: messageType, requestId });
-            } else {
-              logger.warn("Received response with unknown request_id", { type: messageType, requestId });
-            }
-            break;
-          }
-
-          case "error":
-            // Error from backend
-            logger.error("Backend error received", { error: message.error });
-            if (mainWindow) {
-              mainWindow.webContents.send("bot-error", message.error);
-            }
-            break;
-
-          default:
-            // Forward messages to renderer as objects (V2 native - no conversion)
-            if (mainWindow) {
-              mainWindow.webContents.send("bot-message", message);
-              logger.logIPC("send", "bot-message", message.type, { toRenderer: true });
-            }
-            break;
-        }
-      },
-      onError: (error) => {
-        logger.error("Binary message parse error", { error: error.message, code: error.code });
-      },
-    });
-
-    pythonProcess.stdout.on("data", (data) => {
-      logger.trace("Python stdout received", { bytes: data.length });
-      binaryParser.feed(data);
-    });
-
-    // Now safe to send protocol negotiation - listener is ready
-    sendProtocolNegotiation();
-
-    // Start health monitoring
-    startHealthCheck();
-  } catch (error) {
-    logger.error("Failed to start Python process", { error: error.message });
-    if (mainWindow) {
-      mainWindow.webContents.send("bot-error", `Failed to start Python process: ${error.message}`);
-    }
-    return;
-  }
-
-  // stderr now goes directly to terminal for debugging (not captured)
-
-  // Handle Python process exit
-  pythonProcess.on("close", (code) => {
-    logger.warn(`Python process exited with code ${code}`);
-    logger.logPythonProcess("exited", { exitCode: code });
-
-    pythonProcess = null;
-    pythonProcessPID = null;
-    stopHealthCheck();
-
-    // Reject all pending requests on process exit
-    for (const [requestId, pending] of pendingRequests) {
-      clearTimeout(pending.timeoutId);
-      pending.reject(new Error("Backend process exited"));
-      logger.debug("Rejected pending request due to process exit", { requestId, type: pending.type });
-    }
-    pendingRequests.clear();
-
-    if (mainWindow && !isShuttingDown) {
-      mainWindow.webContents.send("bot-disconnected");
-
-      // Auto-restart on unexpected exit (not user-initiated)
-      if (code !== 0 && code !== null) {
-        logger.info("Attempting to auto-restart Python process after unexpected exit");
-        setTimeout(() => {
-          if (!isShuttingDown) {
-            startPythonBot();
-          }
-        }, RESTART_DELAY);
-      }
-    }
-  });
-
-  // Handle process errors
-  pythonProcess.on("error", (error) => {
-    logger.error("Python process error", { error: error.message });
-    if (mainWindow) {
-      mainWindow.webContents.send("bot-error", `Process error: ${error.message}`);
-    }
-  });
+function parseSessionFolder(dirPath) {
+  const match = dirPath?.match(/data\/files\/(chat_[^/]+)\/(sources|output)/);
+  if (!match) return null;
+  return { sessionId: match[1], folder: match[2] };
 }
 
-function sendProtocolNegotiation() {
-  if (!pythonProcess || pythonProcess.killed) {
-    logger.warn("Cannot send protocol negotiation: Python process not running");
-    return;
+function forwardBotMessage(message) {
+  if (mainWindow) {
+    mainWindow.webContents.send("bot-message", message);
+    logger.logIPC("send", "bot-message", message.type, { toRenderer: true });
+  }
+}
+
+function mapWebSocketMessage(message, sessionId) {
+  const base = { session_id: sessionId };
+  switch (message.type) {
+    case "stream_start":
+      return { ...base, type: "assistant_start" };
+    case "delta":
+      return { ...base, type: "assistant_delta", content: message.content || "" };
+    case "stream_end":
+      return { ...base, type: "assistant_end", finish_reason: message.finish_reason || "stop" };
+    case "tool_call":
+      if (message.status === "detected") {
+        return {
+          ...base,
+          type: "function_detected",
+          call_id: message.id,
+          name: message.name,
+          arguments: message.arguments,
+        };
+      }
+      return {
+        ...base,
+        type: "function_completed",
+        call_id: message.id,
+        name: message.name,
+        success: message.success !== false,
+        result: message.result,
+        error: message.error,
+      };
+    case "tool_call_arguments_delta":
+      return {
+        ...base,
+        type: "function_executing",
+        call_id: message.id,
+        arguments: message.delta,
+      };
+    case "error":
+      return { ...base, type: "error", message: message.message || "Unknown error" };
+    default:
+      return { ...base, ...message };
+  }
+}
+
+function ensureWebSocket(sessionId) {
+  // Return existing WebSocket if already connected for this session
+  if (sessionWebSockets.has(sessionId)) {
+    const existing = sessionWebSockets.get(sessionId);
+    if (existing.readyState === 1) {
+      // WebSocket.OPEN
+      return existing;
+    }
+    // Clean up stale connection
+    sessionWebSockets.delete(sessionId);
   }
 
-  const negotiation = {
-    type: "protocol_negotiation",
-    supported_versions: [2], // V2 only
-    client_version: app.getVersion(),
-  };
+  // Create new WebSocket for this session (don't close others!)
+  const ws = connectWebSocket(
+    sessionId,
+    (msg) => {
+      const mapped = mapWebSocketMessage(msg, sessionId);
+      forwardBotMessage(mapped);
+    },
+    () => {
+      // On close/error, remove from map and notify if it was active session
+      sessionWebSockets.delete(sessionId);
+      if (sessionId === activeSessionId && mainWindow) {
+        mainWindow.webContents.send("bot-disconnected");
+      }
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(() => {
+        // Only reconnect if this session is still active
+        if (sessionId === activeSessionId) {
+          ensureWebSocket(sessionId);
+        }
+      }, RESTART_DELAY);
+    }
+  );
 
-  try {
-    const binaryMessage = IPCProtocolV2.encode(negotiation);
-    pythonProcess.stdin.write(binaryMessage);
-    logger.info("Sent protocol negotiation (V2 binary)", {
-      version: 2,
-      size: binaryMessage.length,
-    });
-  } catch (error) {
-    logger.error("Failed to send protocol negotiation", { error: error.message });
-  }
+  sessionWebSockets.set(sessionId, ws);
+  return ws;
 }
 
 app.whenReady().then(() => {
@@ -337,28 +247,30 @@ app.whenReady().then(() => {
     logger.logIPC("receive", "user-input", messageArray, { fromRenderer: true, sessionId: session_id });
     logger.logUserInteraction("chat-input", { messageCount: messageArray.length, sessionId: session_id });
 
-    if (pythonProcess && !pythonProcess.killed) {
-      try {
-        // Convert array of strings to array of message objects for Python backend
-        const messages = messageArray.map((content) => ({ content }));
-        const binaryMessage = IPCProtocolV2.encode({
-          type: "message",
-          messages: messages, // Array format: [{content: "text1"}, {content: "text2"}]
-          session_id: session_id, // Include session_id for routing
-        });
-        pythonProcess.stdin.write(binaryMessage);
-        logger.debug("Sent user messages as V2 binary", {
-          messageCount: messages.length,
-          binarySize: binaryMessage.length,
-          sessionId: session_id,
-        });
-      } catch (error) {
-        logger.error("Failed to encode user message", { error: error.message });
-        event.reply("bot-error", `Failed to send message: ${error.message}`);
-      }
-    } else {
-      logger.error("Python process is not running");
-      event.reply("bot-error", "Python process is not running");
+    const targetSession = session_id || activeSessionId;
+    if (!targetSession) {
+      logger.error("No active session for user input");
+      event.reply("bot-error", "No active session");
+      return;
+    }
+
+    const ws = ensureWebSocket(targetSession);
+    const messages = messageArray.map((content) => ({ content }));
+
+    ws.once("open", () => {
+      sendWebSocketMessage(ws, {
+        type: "message",
+        messages,
+        session_id: targetSession,
+      });
+    });
+
+    if (ws.readyState === ws.OPEN) {
+      sendWebSocketMessage(ws, {
+        type: "message",
+        messages,
+        session_id: targetSession,
+      });
     }
   });
 
@@ -366,40 +278,102 @@ app.whenReady().then(() => {
   ipcMain.handle("session-command", async (_event, { command, data }) => {
     logger.info("Session command received", { command });
 
-    if (!pythonProcess || pythonProcess.killed) {
-      logger.error("Python process not running for session command");
-      return { error: "Backend not available" };
-    }
-
     try {
-      // Generate unique request ID to correlate request/response
-      const requestId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-
-      // Wait for response (with timeout)
-      // Summarization needs longer timeout since it calls LLM (network delays, large conversations)
       const timeoutMs = command === "summarize" ? SUMMARIZE_COMMAND_TIMEOUT : SESSION_COMMAND_TIMEOUT;
-
-      return new Promise((resolve, reject) => {
-        // Set timeout for response
-        const timeoutId = setTimeout(() => {
-          pendingRequests.delete(requestId);
-          logger.warn("Session command timed out", { command, requestId });
-          reject(new Error("Command timed out"));
-        }, timeoutMs);
-
-        // Register in pending requests map BEFORE sending
-        pendingRequests.set(requestId, { resolve, reject, timeoutId, type: "session" });
-
-        // Send command to Python as binary V2
-        const binaryMessage = IPCProtocolV2.encode({
-          type: "session",
-          command: command,
-          params: data || {},
-          request_id: requestId,
-        });
-        pythonProcess.stdin.write(binaryMessage);
-        logger.debug("Sent session command as V2 binary", { command, requestId, binarySize: binaryMessage.length });
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      const doRequest = async () => {
+        switch (command) {
+          case "list": {
+            const offset = data?.offset ?? 0;
+            const limit = data?.limit ?? 50;
+            return apiRequest(`/api/sessions?offset=${offset}&limit=${limit}`, { signal: controller.signal });
+          }
+          case "new": {
+            const response = await apiRequest("/api/sessions", {
+              method: "POST",
+              body: data || {},
+              signal: controller.signal,
+            });
+            activeSessionId = response.session_id || activeSessionId;
+            return response;
+          }
+          case "switch": {
+            const sessionId = data?.session_id;
+            if (!sessionId) return { error: "Missing session_id" };
+            const response = await apiRequest(`/api/sessions/${sessionId}`, { signal: controller.signal });
+            activeSessionId = sessionId;
+            return response;
+          }
+          case "delete": {
+            const sessionId = data?.session_id;
+            if (!sessionId) return { error: "Missing session_id" };
+            const response = await apiRequest(`/api/sessions/${sessionId}`, {
+              method: "DELETE",
+              signal: controller.signal,
+            });
+            if (activeSessionId === sessionId) {
+              activeSessionId = null;
+            }
+            return response;
+          }
+          case "rename": {
+            const sessionId = data?.session_id;
+            if (!sessionId) return { error: "Missing session_id" };
+            return apiRequest(`/api/sessions/${sessionId}`, {
+              method: "PATCH",
+              body: { title: data?.title },
+              signal: controller.signal,
+            });
+          }
+          case "pin": {
+            const sessionId = data?.session_id;
+            if (!sessionId) return { error: "Missing session_id" };
+            return apiRequest(`/api/sessions/${sessionId}`, {
+              method: "PATCH",
+              body: { pinned: data?.pinned },
+              signal: controller.signal,
+            });
+          }
+          case "clear": {
+            const sessionId = data?.session_id || activeSessionId;
+            if (!sessionId) return { error: "Missing session_id" };
+            return apiRequest(`/api/sessions/${sessionId}/clear`, {
+              method: "POST",
+              signal: controller.signal,
+            });
+          }
+          case "summarize":
+            return { success: false, error: "Summarize not implemented in Phase 1" };
+          case "load_more":
+            return { success: true, messages: [] };
+          case "update_config": {
+            const sessionId = data?.session_id;
+            if (!sessionId) return { error: "Missing session_id" };
+            return apiRequest(`/api/sessions/${sessionId}`, {
+              method: "PATCH",
+              body: {
+                model: data?.model,
+                mcp_config: data?.mcp_config,
+                reasoning_effort: data?.reasoning_effort,
+              },
+              signal: controller.signal,
+            });
+          }
+          case "config_metadata": {
+            const config = await apiRequest("/api/config", { signal: controller.signal });
+            return {
+              models: config.models || [],
+              reasoning_levels: config.reasoning_efforts || [],
+            };
+          }
+          default:
+            return { error: `Unknown command: ${command}` };
+        }
+      };
+      const result = await doRequest();
+      clearTimeout(timeoutId);
+      return result;
     } catch (error) {
       logger.error("Session command error", { error: error.message });
       return { error: error.message };
@@ -410,39 +384,26 @@ app.whenReady().then(() => {
   ipcMain.handle("upload-file", async (_event, { filename, data, size, type, encoding }) => {
     logger.info("File upload requested", { filename, size, type, encoding: encoding || "array" });
 
-    if (!pythonProcess || pythonProcess.killed) {
-      logger.error("Python process not running for file upload");
-      return { success: false, error: "Backend not available" };
+    const sessionId = activeSessionId;
+    if (!sessionId) {
+      logger.error("No active session for file upload");
+      return { success: false, error: "No active session" };
     }
 
     try {
-      // Generate unique request ID to correlate request/response
-      const requestId = `upload_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      const formData = new FormData();
+      const buffer = Buffer.from(data, encoding === "base64" ? "base64" : undefined);
+      formData.append("file", new Blob([buffer]), filename);
 
-      // Wait for response with timeout
-      return new Promise((resolve, reject) => {
-        // Set timeout
-        const timeoutId = setTimeout(() => {
-          pendingRequests.delete(requestId);
-          logger.warn("File upload timed out", { filename, requestId });
-          reject(new Error("Upload timed out"));
-        }, FILE_UPLOAD_TIMEOUT);
+      const upload = await Promise.race([
+        apiRequest(`/api/sessions/${sessionId}/files/upload?folder=sources`, {
+          method: "POST",
+          body: formData,
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Upload timed out")), FILE_UPLOAD_TIMEOUT)),
+      ]);
 
-        // Register in pending requests map BEFORE sending
-        pendingRequests.set(requestId, { resolve, reject, timeoutId, type: "upload" });
-
-        // Send upload command to Python as binary V2
-        const binaryMessage = IPCProtocolV2.encode({
-          type: "file_upload",
-          filename: filename,
-          content: data,
-          mime_type: type,
-          encoding: encoding || "array", // "base64" for efficient transfer, "array" for legacy
-          request_id: requestId,
-        });
-        pythonProcess.stdin.write(binaryMessage);
-        logger.debug("Sent file upload as V2 binary", { filename, size, requestId, binarySize: binaryMessage.length });
-      });
+      return { success: true, ...upload };
     } catch (error) {
       logger.error("File upload error", { error: error.message });
       return { success: false, error: error.message };
@@ -454,56 +415,16 @@ app.whenReady().then(() => {
     logger.info("Directory list requested", { dirPath });
 
     try {
-      // Construct absolute path relative to project root
-      const projectRoot = path.join(__dirname, "..");
-      const absolutePath = path.join(projectRoot, dirPath);
-
-      // Get entries at current level (non-recursive for explorer navigation)
-      const entries = await fs.readdir(absolutePath, { withFileTypes: true });
-      const files = [];
-
-      for (const entry of entries) {
-        // Skip hidden files
-        if (entry.name.startsWith(HIDDEN_FILE_PREFIX)) continue;
-
-        const fullPath = path.join(absolutePath, entry.name);
-
-        if (entry.isFile()) {
-          const stats = await fs.stat(fullPath);
-          files.push({
-            name: entry.name,
-            type: "file",
-            size: stats.size,
-            modified: stats.mtime,
-          });
-        } else if (entry.isDirectory()) {
-          // Count items in subdirectory
-          let fileCount = 0;
-          try {
-            const subEntries = await fs.readdir(fullPath);
-            fileCount = subEntries.filter((e) => !e.startsWith(HIDDEN_FILE_PREFIX)).length;
-          } catch {
-            // Ignore errors counting subdirectory
-          }
-          files.push({
-            name: entry.name,
-            type: "folder",
-            size: 0,
-            modified: null,
-            file_count: fileCount,
-          });
-        }
+      const parsed = parseSessionFolder(dirPath);
+      if (!parsed) {
+        return { success: false, error: "Invalid path" };
       }
 
-      // Sort: folders first, then files, alphabetically within each group
-      files.sort((a, b) => {
-        if (a.type === "folder" && b.type !== "folder") return -1;
-        if (a.type !== "folder" && b.type === "folder") return 1;
-        return a.name.localeCompare(b.name);
-      });
+      const { sessionId, folder } = parsed;
+      const response = await apiRequest(`/api/sessions/${sessionId}/files?folder=${encodeURIComponent(folder)}`);
 
-      logger.debug("Directory listed successfully", { dirPath, fileCount: files.length });
-      return { success: true, files };
+      logger.debug("Directory listed successfully", { dirPath, fileCount: response.files?.length || 0 });
+      return { success: true, files: response.files || [] };
     } catch (error) {
       logger.error("Failed to list directory", { dirPath, error: error.message });
       return { success: false, error: error.message };
@@ -515,21 +436,15 @@ app.whenReady().then(() => {
     logger.info("File delete requested", { dirPath, filename });
 
     try {
-      // Construct absolute path relative to project root
-      const projectRoot = path.join(__dirname, "..");
-      const absolutePath = path.join(projectRoot, dirPath, filename);
-
-      // Security check: ensure path is within project directory
-      const normalizedPath = path.normalize(absolutePath);
-      const normalizedRoot = path.normalize(projectRoot);
-      if (!normalizedPath.startsWith(normalizedRoot)) {
-        logger.error("Security: Attempted to delete file outside project", { path: normalizedPath });
-        return { success: false, error: "Invalid file path" };
+      const parsed = parseSessionFolder(dirPath);
+      if (!parsed) {
+        return { success: false, error: "Invalid path" };
       }
-
-      // Delete the file
-      await fs.unlink(absolutePath);
-
+      const { sessionId, folder } = parsed;
+      await apiRequest(
+        `/api/sessions/${sessionId}/files/${encodeURIComponent(filename)}?folder=${encodeURIComponent(folder)}`,
+        { method: "DELETE" }
+      );
       logger.info("File deleted successfully", { dirPath, filename });
       return { success: true };
     } catch (error) {
@@ -559,19 +474,16 @@ app.whenReady().then(() => {
     logger.info("File open requested", { dirPath, filename });
 
     try {
-      // Construct absolute path relative to project root
-      const projectRoot = path.join(__dirname, "..");
-      const absolutePath = path.join(projectRoot, dirPath, filename);
-
-      // Security check: ensure path is within project directory
-      const normalizedPath = path.normalize(absolutePath);
-      const normalizedRoot = path.normalize(projectRoot);
-      if (!normalizedPath.startsWith(normalizedRoot)) {
-        logger.error("Security: Attempted to open file outside project", { path: normalizedPath });
-        return { success: false, error: "Invalid file path" };
+      const parsed = parseSessionFolder(dirPath);
+      if (!parsed) {
+        return { success: false, error: "Invalid path" };
       }
+      const { sessionId, folder } = parsed;
+      const response = await apiRequest(
+        `/api/sessions/${sessionId}/files/${encodeURIComponent(filename)}/path?folder=${encodeURIComponent(folder)}`
+      );
+      const absolutePath = response.path;
 
-      // Check if file exists
       try {
         await fs.access(absolutePath);
       } catch (_e) {
@@ -579,11 +491,8 @@ app.whenReady().then(() => {
         return { success: false, error: "File not found" };
       }
 
-      // Open file with system default application
       const result = await shell.openPath(absolutePath);
-
       if (result) {
-        // If result is a non-empty string, it's an error message
         logger.error("Failed to open file", { path: absolutePath, error: result });
         return { success: false, error: result };
       }
@@ -698,42 +607,36 @@ app.whenReady().then(() => {
   // IPC handler for stream interruption
   ipcMain.handle("interrupt-stream", (_event, payload) => {
     const { session_id } = payload || {};
-    if (pythonProcess?.stdin && !isShuttingDown) {
-      logger.info("Sending interrupt signal to Python", { sessionId: session_id });
-      const msg = { type: "interrupt", session_id: session_id };
-      const binaryMessage = IPCProtocolV2.encode(msg);
-      pythonProcess.stdin.write(binaryMessage);
-      return { success: true };
+    const targetSession = session_id || activeSessionId;
+    if (!targetSession) {
+      return { success: false, reason: "No active session" };
     }
-    return { success: false, reason: "No active process" };
+    const ws = ensureWebSocket(targetSession);
+    sendWebSocketMessage(ws, { type: "interrupt", session_id: targetSession });
+    return { success: true };
   });
 
   // IPC handler for restart request
   ipcMain.on("restart-bot", () => {
     logger.info("Restart requested");
 
-    // Send disconnected status first
     if (mainWindow) {
       mainWindow.webContents.send("bot-disconnected");
     }
 
-    // Graceful shutdown with proper cleanup (non-blocking)
-    stopPythonBot().then(() => {
-      // Wait a bit longer to ensure process is fully terminated
-      setTimeout(() => {
-        startPythonBot();
+    // Close all WebSockets on restart
+    for (const [sid, ws] of sessionWebSockets) {
+      closeWebSocket(ws);
+    }
+    sessionWebSockets.clear();
 
-        // Send restart event after process starts
-        setTimeout(() => {
-          if (mainWindow) {
-            mainWindow.webContents.send("bot-restarted");
-          }
-        }, RESTART_CALLBACK_DELAY);
-      }, RESTART_DELAY);
-    });
+    setTimeout(() => {
+      if (mainWindow) {
+        mainWindow.webContents.send("bot-restarted");
+      }
+    }, RESTART_CALLBACK_DELAY);
   });
   createWindow();
-  startPythonBot();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -744,126 +647,20 @@ app.whenReady().then(() => {
 
 app.on("window-all-closed", () => {
   logger.info("All windows closed");
-  isShuttingDown = true;
-
-  // Graceful shutdown (non-blocking)
-  stopPythonBot().then(() => {
-    if (process.platform !== "darwin") {
-      app.quit();
-    }
-  });
+  // Close all WebSockets
+  for (const [sid, ws] of sessionWebSockets) {
+    closeWebSocket(ws);
+  }
+  sessionWebSockets.clear();
+  if (process.platform !== "darwin") {
+    app.quit();
+  }
 });
 
 app.on("before-quit", (event) => {
-  if (!isShuttingDown) {
-    event.preventDefault();
-    isShuttingDown = true;
-
-    logger.info("App quitting, cleaning up...");
-
-    // Graceful shutdown with timeout (non-blocking)
-    stopPythonBot().then(() => {
-      app.quit();
-    });
+  // Close all WebSockets before quit
+  for (const [sid, ws] of sessionWebSockets) {
+    closeWebSocket(ws);
   }
+  sessionWebSockets.clear();
 });
-
-// Helper functions for process management
-async function stopPythonBot() {
-  if (!pythonProcess) return;
-
-  return new Promise((resolve) => {
-    const timeout = setTimeout(() => {
-      // Force kill if graceful shutdown takes too long
-      if (pythonProcess && !pythonProcess.killed) {
-        logger.warn("Graceful shutdown timed out, force killing Python process");
-
-        if (platformConfig.isWindows()) {
-          // Windows: Kill process tree with /T flag
-          if (pythonProcessPID && typeof pythonProcessPID === "number") {
-            spawn("taskkill", ["/pid", pythonProcessPID.toString(), "/f", "/t"]);
-          } else {
-            logger.error("Invalid PID for taskkill, using fallback method");
-            pythonProcess.kill("SIGKILL");
-          }
-        } else {
-          // Kill entire process group on Unix
-          try {
-            process.kill(-pythonProcess.pid, "SIGKILL");
-          } catch (_e) {
-            pythonProcess.kill("SIGKILL");
-          }
-        }
-      }
-      resolve();
-    }, GRACEFUL_SHUTDOWN_TIMEOUT);
-
-    // Listen for process exit
-    pythonProcess.once("close", () => {
-      clearTimeout(timeout);
-      resolve();
-    });
-
-    // Try graceful shutdown first
-    if (pythonProcess && !pythonProcess.killed) {
-      logger.info("Attempting graceful Python process shutdown");
-
-      // Send SIGTERM to gracefully terminate
-      setTimeout(() => {
-        if (pythonProcess && !pythonProcess.killed) {
-          if (platformConfig.isWindows()) {
-            pythonProcess.kill();
-          } else {
-            // Kill process group on Unix to prevent zombies
-            try {
-              process.kill(-pythonProcess.pid, "SIGTERM");
-            } catch (_e) {
-              pythonProcess.kill("SIGTERM");
-            }
-          }
-        }
-      }, SIGTERM_DELAY);
-    }
-  });
-}
-
-function startHealthCheck() {
-  // Clear any existing interval
-  stopHealthCheck();
-
-  // Check process health every 30 seconds
-  processHealthCheckInterval = setInterval(() => {
-    if (pythonProcess && pythonProcessPID) {
-      try {
-        // Check if process is still alive
-        process.kill(pythonProcessPID, 0);
-        logger.trace("Python process health check passed", { pid: pythonProcessPID });
-      } catch (e) {
-        logger.error("Python process health check failed - process may be zombie", {
-          pid: pythonProcessPID,
-          error: e.message,
-        });
-
-        // Process is dead, clean up
-        pythonProcess = null;
-        pythonProcessPID = null;
-        stopHealthCheck();
-
-        if (mainWindow && !isShuttingDown) {
-          mainWindow.webContents.send("bot-disconnected");
-
-          // Attempt restart
-          logger.info("Restarting Python process after health check failure");
-          startPythonBot();
-        }
-      }
-    }
-  }, HEALTH_CHECK_INTERVAL);
-}
-
-function stopHealthCheck() {
-  if (processHealthCheckInterval) {
-    clearInterval(processHealthCheckInterval);
-    processHealthCheckInterval = null;
-  }
-}

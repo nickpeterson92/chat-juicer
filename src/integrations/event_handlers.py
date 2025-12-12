@@ -188,10 +188,17 @@ def handle_tool_output(item: RunItem, tracker: CallTracker) -> str | None:
     success = True
     tool_name = "unknown"
 
-    # Extract call_id from the output item itself (parallel-safe matching)
-    if hasattr(item, "raw_item"):
+    # Extract call_id - check item directly first, then raw_item, with fallback to id
+    # SDK ToolCallOutputItem should have call_id directly on the item
+    call_id = getattr(item, "call_id", "") or ""
+
+    # Fallback to raw_item if not found on item
+    if not call_id and hasattr(item, "raw_item"):
         raw = item.raw_item
-        call_id = raw.get("call_id", "") if isinstance(raw, dict) else getattr(raw, "call_id", "") or ""
+        if isinstance(raw, dict):
+            call_id = raw.get("call_id", "") or raw.get("id", "") or ""
+        else:
+            call_id = getattr(raw, "call_id", "") or getattr(raw, "id", "") or ""
 
     # Match by call_id (works for both sequential and parallel tool execution)
     if call_id:

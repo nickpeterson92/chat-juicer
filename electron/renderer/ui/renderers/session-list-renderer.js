@@ -6,7 +6,13 @@
  * Output: DOM elements via DOMAdapter
  */
 
+import smokeAnimationData from "../../../../ui/Smoke.json";
+import { CRITICAL_COLORS } from "../../config/colors.js";
+import { initLottieWithColor } from "../../utils/lottie-color.js";
 import { formatTimestamp } from "../../viewmodels/session-viewmodel.js";
+
+// Store Lottie animation instances by session ID for cleanup
+const sessionLottieAnimations = new Map();
 
 /**
  * Render a single session list item
@@ -33,9 +39,18 @@ export function renderSessionItem(session, isActive, domAdapter, streamManager =
     domAdapter.addClass(itemDiv, "active");
   }
 
-  // Add streaming indicator if session is streaming
+  // Add streaming indicator container (always present, visibility controlled by CSS)
+  const streamingIndicator = domAdapter.createElement("div");
+  domAdapter.addClass(streamingIndicator, "session-streaming-indicator");
+  domAdapter.appendChild(itemDiv, streamingIndicator);
+
+  // Add streaming class if session is streaming and init Lottie
   if (streamManager?.isStreaming(session.id)) {
     domAdapter.addClass(itemDiv, "session-streaming");
+    // Initialize Lottie animation after DOM is ready
+    requestAnimationFrame(() => {
+      initSessionStreamingLottie(session.id, streamingIndicator);
+    });
   }
 
   // Main content area (clickable to switch session)
@@ -225,4 +240,68 @@ export function removeSessionItem(sessionElement, domAdapter) {
  */
 export function findSessionElement(container, sessionId, domAdapter) {
   return domAdapter.querySelector(container, `[data-session-id="${sessionId}"]`);
+}
+
+/**
+ * Initialize Lottie animation for session streaming indicator
+ * @param {string} sessionId - Session ID
+ * @param {HTMLElement} container - Container element for the animation
+ */
+function initSessionStreamingLottie(sessionId, container) {
+  // Clean up existing animation if any
+  if (sessionLottieAnimations.has(sessionId)) {
+    sessionLottieAnimations.get(sessionId).destroy();
+    sessionLottieAnimations.delete(sessionId);
+  }
+
+  // Clear container
+  container.innerHTML = "";
+
+  // Initialize new animation with brand color
+  const animation = initLottieWithColor(container, smokeAnimationData, CRITICAL_COLORS.BRAND_PRIMARY);
+  if (animation) {
+    sessionLottieAnimations.set(sessionId, animation);
+  }
+}
+
+/**
+ * Update streaming indicator for a specific session
+ * Called when streaming starts or ends to update UI without full re-render
+ *
+ * @param {string} sessionId - Session ID to update
+ * @param {boolean} isStreaming - Whether the session is streaming
+ */
+export function updateSessionStreamingIndicator(sessionId, isStreaming) {
+  const sessionItem = document.querySelector(`[data-session-id="${sessionId}"]`);
+  if (!sessionItem) return;
+
+  const indicator = sessionItem.querySelector(".session-streaming-indicator");
+  if (!indicator) return;
+
+  if (isStreaming) {
+    sessionItem.classList.add("session-streaming");
+    // Initialize Lottie animation
+    initSessionStreamingLottie(sessionId, indicator);
+  } else {
+    sessionItem.classList.remove("session-streaming");
+    // Clean up Lottie animation
+    if (sessionLottieAnimations.has(sessionId)) {
+      sessionLottieAnimations.get(sessionId).destroy();
+      sessionLottieAnimations.delete(sessionId);
+    }
+    indicator.innerHTML = "";
+  }
+}
+
+/**
+ * Clean up Lottie animation for a session
+ * Called when session item is removed from DOM
+ *
+ * @param {string} sessionId - Session ID to clean up
+ */
+export function cleanupSessionStreamingAnimation(sessionId) {
+  if (sessionLottieAnimations.has(sessionId)) {
+    sessionLottieAnimations.get(sessionId).destroy();
+    sessionLottieAnimations.delete(sessionId);
+  }
 }

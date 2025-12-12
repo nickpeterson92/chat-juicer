@@ -5,13 +5,19 @@ Provides named access to MCP servers and filtering based on user configuration.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, TypedDict, cast
 
 from agents.mcp import MCPServerStdio, MCPServerStdioParams
 
 from core.constants import get_settings
-from integrations.mcp_servers import MCP_SERVER_TIMEOUT_SECONDS
 from utils.logger import logger
+
+# MCP server timeout in seconds (default SDK timeout is 5s which is too short)
+MCP_SERVER_TIMEOUT_SECONDS = 60.0
+
+# Project root for absolute paths
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 
 class MCPServerConfig(TypedDict, total=False):
@@ -35,7 +41,7 @@ MCP_SERVER_CONFIGS: dict[str, MCPServerConfig] = {
     "fetch": {
         "name": "Web Fetch",
         "description": "HTTP/HTTPS web content retrieval with HTML to markdown conversion",
-        "command": ".juicer/bin/python3",
+        "command": str(PROJECT_ROOT / ".juicer/bin/python3"),
         "args": ["-m", "mcp_server_fetch"],
     },
     "tavily": {

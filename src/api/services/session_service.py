@@ -2,14 +2,21 @@ from __future__ import annotations
 
 import json
 import secrets
+import shutil
 
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
 import asyncpg
 
-from core.constants import DEFAULT_MODEL, get_settings
+from core.constants import DEFAULT_MODEL, MODEL_TOKEN_LIMITS, get_settings
+from utils.logger import logger
+
+# Project root for file paths
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+DATA_FILES_PATH = PROJECT_ROOT / "data" / "files"
 
 
 class SessionService:
@@ -78,6 +85,9 @@ class SessionService:
         if not session:
             return None
 
+        # Convert string ID back to UUID for database queries
+        session_uuid = UUID(session["id"])
+
         async with self.pool.acquire() as conn:
             message_rows = await conn.fetch(
                 """
@@ -86,7 +96,7 @@ class SessionService:
                 ORDER BY created_at DESC
                 LIMIT $2
                 """,
-                session["id"],
+                session_uuid,
                 message_limit,
             )
 
@@ -96,12 +106,12 @@ class SessionService:
                 WHERE session_id = $1
                 ORDER BY uploaded_at DESC
                 """,
-                session["id"],
+                session_uuid,
             )
 
             total = await conn.fetchval(
                 "SELECT COUNT(*) FROM messages WHERE session_id = $1",
-                session["id"],
+                session_uuid,
             )
 
         messages = [self._row_to_message(r) for r in reversed(message_rows)]
@@ -189,7 +199,7 @@ class SessionService:
         return self._row_to_session(row)
 
     async def delete_session(self, user_id: UUID, session_id: str) -> bool:
-        """Delete session and all related data."""
+        """Delete session and all related data including files."""
         async with self.pool.acquire() as conn:
             result = await conn.execute(
                 """
@@ -199,7 +209,20 @@ class SessionService:
                 user_id,
                 session_id,
             )
-        return bool(result == "DELETE 1")
+
+        deleted = result == "DELETE 1"
+
+        # Clean up session files from disk
+        if deleted:
+            session_dir = DATA_FILES_PATH / session_id
+            if session_dir.exists():
+                try:
+                    shutil.rmtree(session_dir)
+                    logger.info(f"Deleted session files: {session_dir}")
+                except Exception as e:
+                    logger.warning(f"Failed to delete session files: {e}")
+
+        return deleted
 
     async def clear_session(self, user_id: UUID, session_id: str) -> bool:
         """Clear session history (both layers)."""
@@ -207,14 +230,17 @@ class SessionService:
         if not session:
             return False
 
+        # Convert string ID back to UUID for database queries
+        session_uuid = UUID(session["id"])
+
         async with self.pool.acquire() as conn, conn.transaction():
             await conn.execute(
                 "DELETE FROM messages WHERE session_id = $1",
-                session["id"],
+                session_uuid,
             )
             await conn.execute(
                 "DELETE FROM llm_context WHERE session_id = $1",
-                session["id"],
+                session_uuid,
             )
             await conn.execute(
                 """
@@ -222,41 +248,99 @@ class SessionService:
                 SET message_count = 0, total_tokens = 0
                 WHERE id = $1
                 """,
-                session["id"],
+                session_uuid,
             )
         return True
 
+    def _get_model_limit(self, model: str) -> int:
+        """Get token limit for a model."""
+        if model in MODEL_TOKEN_LIMITS:
+            return MODEL_TOKEN_LIMITS[model]
+        # Try partial match for deployment names
+        for known_model, limit in MODEL_TOKEN_LIMITS.items():
+            if known_model in model.lower():
+                return limit
+        # Conservative default
+        return 15000
+
     def _row_to_session(self, row: asyncpg.Record) -> dict[str, Any]:
         """Convert database row to session dict."""
+        model = row["model"]
+        max_tokens = self._get_model_limit(model)
+        trigger_tokens = int(max_tokens * 0.8)  # 80% threshold
+
         return {
-            "id": row["id"],
+            "id": str(row["id"]),
             "session_id": row["session_id"],
             "title": row["title"],
-            "model": row["model"],
+            "model": model,
             "reasoning_effort": row["reasoning_effort"],
             "mcp_config": json.loads(row["mcp_config"]) if row["mcp_config"] else [],
             "pinned": row["pinned"],
             "is_named": row["is_named"],
             "message_count": row["message_count"],
             "total_tokens": row["total_tokens"],
+            # Token fields for frontend indicator
+            "tokens": row["total_tokens"] or 0,
+            "max_tokens": max_tokens,
+            "trigger_tokens": trigger_tokens,
             "created_at": row["created_at"].isoformat() if row["created_at"] else None,
             "last_used_at": row["last_used_at"].isoformat() if row["last_used_at"] else None,
         }
 
     def _row_to_message(self, row: asyncpg.Record) -> dict[str, Any]:
-        """Convert database row to message dict."""
-        msg = {
+        """Convert database row to message dict.
+
+        For tool_call messages, uses field names expected by frontend:
+        - call_id (not tool_call_id)
+        - name (not tool_name)
+        - arguments (not tool_arguments) - parsed from JSON
+        - result (not tool_result)
+        - success (not tool_success)
+        - status: "completed" for all persisted tool calls
+
+        For partial/interrupted messages:
+        - partial: True if message was interrupted (from metadata JSONB)
+        """
+        # Extract partial flag from metadata JSONB
+        metadata = row.get("metadata") or {}
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except json.JSONDecodeError:
+                metadata = {}
+
+        msg: dict[str, Any] = {
             "id": str(row["id"]),
             "role": row["role"],
             "content": row["content"],
             "created_at": row["created_at"].isoformat() if row["created_at"] else None,
         }
-        if row["tool_call_id"]:
-            msg["tool_call_id"] = row["tool_call_id"]
-            msg["tool_name"] = row["tool_name"]
-            msg["tool_arguments"] = row["tool_arguments"]
-            msg["tool_result"] = row["tool_result"]
-            msg["tool_success"] = row["tool_success"]
+
+        # Add partial flag if present in metadata (for interrupted responses)
+        if metadata.get("partial"):
+            msg["partial"] = True
+            logger.info(f"Message {row['id']} has partial=True flag (interrupted response)")
+
+        # For tool_call messages, use frontend-expected field names
+        if row["role"] == "tool_call":
+            # Parse arguments from JSON string if stored that way
+            args = row["tool_arguments"]
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except json.JSONDecodeError:
+                    pass  # Keep as string if not valid JSON
+            msg.update(
+                {
+                    "call_id": row["tool_call_id"],
+                    "name": row["tool_name"],
+                    "arguments": args,
+                    "result": row["tool_result"],
+                    "status": "completed",  # All persisted tool calls are completed
+                    "success": row["tool_success"],
+                }
+            )
         return msg
 
     def _row_to_file(self, row: asyncpg.Record) -> dict[str, Any]:

@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import platform
+import shutil
+
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Protocol, cast
 from uuid import UUID
 
 import asyncpg
+
+from utils.logger import logger
 
 
 class FileService(Protocol):
@@ -31,6 +36,9 @@ class FileService(Protocol):
         ...
 
     def get_file_path(self, session_id: str, folder: str, filename: str) -> Path:
+        ...
+
+    def init_session_workspace(self, session_id: str, templates_path: Path | None = None) -> None:
         ...
 
 
@@ -182,3 +190,39 @@ class LocalFileService:
                 size_bytes,
                 folder,
             )
+
+    def init_session_workspace(self, session_id: str, templates_path: Path | None = None) -> None:
+        """Initialize session workspace with sources/, output/, and templates/ symlink.
+
+        Creates the directory structure for a new session:
+        - sources/: uploaded files
+        - output/: generated files
+        - templates/: symlink to global templates (read-only)
+        """
+        session_dir = self.base_path / session_id
+
+        # Create sources and output directories
+        (session_dir / "sources").mkdir(parents=True, exist_ok=True)
+        (session_dir / "output").mkdir(parents=True, exist_ok=True)
+
+        # Create templates/ symlink to global templates
+        templates_link = session_dir / "templates"
+
+        if templates_path and templates_path.exists():
+            try:
+                if not templates_link.exists():
+                    if platform.system() == "Windows":
+                        # Windows fallback: copy templates instead of symlink
+                        shutil.copytree(templates_path, templates_link, dirs_exist_ok=True)
+                        logger.info(f"Created templates copy (Windows): {templates_link}")
+                    else:
+                        # Unix-like systems: use symlink
+                        templates_link.symlink_to(templates_path, target_is_directory=True)
+                        logger.info(f"Created templates symlink: {templates_link} -> {templates_path}")
+            except Exception as e:
+                logger.warning(f"Failed to create templates link/copy: {e}")
+        else:
+            # Create empty templates dir if no global templates
+            if not templates_link.exists():
+                templates_link.mkdir(exist_ok=True)
+                logger.info(f"Created empty templates directory: {templates_link}")

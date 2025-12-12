@@ -26,21 +26,24 @@ from models.ipc_models import UploadResult
 from utils.json_utils import json_pretty
 from utils.logger import logger
 
+# Project root - consistent with dependencies.py (file_utils is in src/utils/)
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+DATA_FILES_PATH = PROJECT_ROOT / "data" / "files"
+
 
 def get_relative_path(path: Path) -> Path:
-    """Get path relative to current working directory.
+    """Get path relative to project root.
 
     Helper function to standardize relative path calculation across tools.
-    If path is within cwd, returns relative path. Otherwise returns original path.
+    If path is within project root, returns relative path. Otherwise returns original path.
 
     Args:
         path: Absolute path to convert to relative
 
     Returns:
-        Path object, relative to cwd if possible, otherwise absolute
+        Path object, relative to project root if possible, otherwise absolute
     """
-    cwd = Path.cwd()
-    return path.relative_to(cwd) if cwd in path.parents else path
+    return path.relative_to(PROJECT_ROOT) if PROJECT_ROOT in path.parents else path
 
 
 async def get_session_files(session_id: str, subdir: str = "sources") -> list[str]:
@@ -59,7 +62,7 @@ async def get_session_files(session_id: str, subdir: str = "sources") -> list[st
         return sorted(file.name for file in path.iterdir() if file.is_file() and not file.name.startswith("."))
 
     try:
-        base_path = Path.cwd() / "data" / "files" / session_id / subdir
+        base_path = DATA_FILES_PATH / session_id / subdir
         if not base_path.exists() or not base_path.is_dir():
             return []
 
@@ -116,9 +119,20 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
         if "\0" in file_path:
             return Path(), ERROR_NULL_BYTE_IN_PATH
 
-        # Prevent path traversal attacks (.. components and absolute paths)
-        if ".." in file_path or file_path.startswith("/"):
+        # Prevent path traversal attacks (.. components)
+        if ".." in file_path:
             return Path(), ERROR_PATH_TRAVERSAL
+
+        # Handle absolute paths: if session_id provided, strip leading /
+        # This allows AI to use container-style paths like /sources, /output
+        # which get normalized to relative paths within the session workspace
+        if file_path.startswith("/"):
+            if session_id:
+                # Strip leading / for session-scoped paths (e.g., /sources -> sources)
+                file_path = file_path.lstrip("/")
+            else:
+                # Block absolute paths when no session isolation
+                return Path(), ERROR_PATH_TRAVERSAL
 
         # If session_id provided, enforce workspace boundaries
         if session_id:
@@ -145,8 +159,8 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
                 relative_request = Path("sources") / requested_path
 
             # Build full path within session workspace (DON'T resolve yet)
-            cwd = Path.cwd()
-            session_dir = cwd / "data" / "files" / session_id
+            # Use absolute DATA_FILES_PATH for consistency (not cwd which may vary)
+            session_dir = DATA_FILES_PATH / session_id
             target_path = session_dir / relative_request  # Unresolved path
 
             # Security check: ensure REQUESTED path is within session workspace
@@ -177,11 +191,11 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
             return resolved_path, None
         else:
             # No session restriction - use standard project-scope validation
-            cwd = Path.cwd()
-            target_path = Path(file_path).resolve()
+            # Use absolute PROJECT_ROOT for consistency (not cwd which may vary)
+            target_path = (PROJECT_ROOT / file_path).resolve()
 
             # Security check: ensure path is within project scope
-            if not (cwd in target_path.parents or target_path == cwd):
+            if not (PROJECT_ROOT in target_path.parents or target_path == PROJECT_ROOT):
                 return target_path, ERROR_PATH_OUTSIDE_PROJECT
 
             return target_path, None
@@ -458,9 +472,8 @@ def save_uploaded_file(
             return {"success": False, "error": "Invalid filename: path separators not allowed"}
 
         # Determine target directory based on session_id
-        cwd = Path.cwd()
         # Session-specific storage: data/files/{session_id}/sources/ or general storage: sources/
-        target_path = cwd / "data" / "files" / session_id / "sources" if session_id else cwd / target_dir
+        target_path = DATA_FILES_PATH / session_id / "sources" if session_id else PROJECT_ROOT / target_dir
 
         # Create directory if it doesn't exist
         target_path.mkdir(parents=True, exist_ok=True)
