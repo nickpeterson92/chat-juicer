@@ -724,6 +724,13 @@ export function registerMessageHandlers(context) {
           title: message.title,
         });
       }
+
+      // Dispatch event to trigger UI refresh (session list re-render)
+      window.dispatchEvent(
+        new CustomEvent("session-updated", {
+          detail: { session_id: message.session_id, title: message.title },
+        })
+      );
     }
     // Handle wrapped format from REST API: { data: { success, session } }
     else if (message.data?.success && message.data.session) {

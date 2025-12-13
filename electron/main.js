@@ -98,7 +98,9 @@ function createWindow() {
 }
 
 function parseSessionFolder(dirPath) {
-  const match = dirPath?.match(/data\/files\/(chat_[^/]+)\/(sources|output)/);
+  // Match session ID and full folder path including subdirectories
+  // e.g., "data/files/chat_abc123/output/code/python" -> { sessionId: "chat_abc123", folder: "output/code/python" }
+  const match = dirPath?.match(/data\/files\/(chat_[^/]+)\/((?:sources|output)(?:\/.*)?)/);
   if (!match) return null;
   return { sessionId: match[1], folder: match[2] };
 }
@@ -335,16 +337,14 @@ app.whenReady().then(() => {
               signal: controller.signal,
             });
           }
-          case "clear": {
+          case "summarize": {
             const sessionId = data?.session_id || activeSessionId;
             if (!sessionId) return { error: "Missing session_id" };
-            return apiRequest(`/api/sessions/${sessionId}/clear`, {
+            return apiRequest(`/api/sessions/${sessionId}/summarize`, {
               method: "POST",
               signal: controller.signal,
             });
           }
-          case "summarize":
-            return { success: false, error: "Summarize not implemented in Phase 1" };
           case "load_more":
             return { success: true, messages: [] };
           case "update_config": {

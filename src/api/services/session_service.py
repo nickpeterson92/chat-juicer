@@ -225,34 +225,6 @@ class SessionService:
 
         return deleted
 
-    async def clear_session(self, user_id: UUID, session_id: str) -> bool:
-        """Clear session history (both layers)."""
-        session = await self.get_session(user_id, session_id)
-        if not session:
-            return False
-
-        # Convert string ID back to UUID for database queries
-        session_uuid = UUID(session["id"])
-
-        async with self.pool.acquire() as conn, conn.transaction():
-            await conn.execute(
-                "DELETE FROM messages WHERE session_id = $1",
-                session_uuid,
-            )
-            await conn.execute(
-                "DELETE FROM llm_context WHERE session_id = $1",
-                session_uuid,
-            )
-            await conn.execute(
-                """
-                UPDATE sessions
-                SET message_count = 0, total_tokens = 0
-                WHERE id = $1
-                """,
-                session_uuid,
-            )
-        return True
-
     def _get_model_limit(self, model: str) -> int:
         """Get token limit for a model."""
         if model in MODEL_TOKEN_LIMITS:

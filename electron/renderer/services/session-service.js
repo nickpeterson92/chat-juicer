@@ -229,9 +229,10 @@ export class SessionService {
           hasMore: response.has_more || false,
           loadedCount: response.loaded_count || 0,
           messageCount: response.message_count || 0,
-          tokens: response.tokens,
-          max_tokens: response.max_tokens,
-          trigger_tokens: response.trigger_tokens,
+          // Token fields are nested in session object
+          tokens: response.session?.tokens,
+          max_tokens: response.session?.max_tokens,
+          trigger_tokens: response.session?.trigger_tokens,
         };
       }
 
@@ -384,35 +385,22 @@ export class SessionService {
    *
    * @returns {Promise<Object>} Result
    */
-  async summarizeSession() {
-    try {
-      const response = await this.ipc.sendSessionCommand("summarize", {});
-
-      if (response?.success) {
-        return { success: true, message: response.message || "Session summarized successfully" };
-      } else if (response?.error) {
-        return { success: false, error: response.error };
-      } else {
-        return { success: false, error: "Unexpected response format" };
-      }
-    } catch (error) {
-      return { success: false, error: error.message };
+  async summarizeSession(sessionId) {
+    const targetSessionId = sessionId || this.getCurrentSessionId();
+    if (!targetSessionId) {
+      return { success: false, error: "No session ID provided" };
     }
-  }
 
-  /**
-   * Clear current session (lazy initialization)
-   *
-   * @returns {Promise<Object>} Result
-   */
-  async clearCurrentSession() {
     try {
-      const response = await this.ipc.sendSessionCommand("clear", {});
+      const response = await this.ipc.sendSessionCommand("summarize", { session_id: targetSessionId });
 
       if (response?.success) {
-        this.appState.setState("session.current", null);
-
-        return { success: true };
+        return {
+          success: true,
+          message: response.message || "Session summarized successfully",
+          new_token_count: response.new_token_count,
+          call_id: response.call_id,
+        };
       } else if (response?.error) {
         return { success: false, error: response.error };
       } else {

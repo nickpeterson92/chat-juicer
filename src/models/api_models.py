@@ -223,6 +223,10 @@ class SessionRecord(BaseModel):
     is_named: bool
     message_count: int
     total_tokens: int
+    # Token tracking fields for frontend indicator
+    tokens: int = 0  # Current token usage (alias for total_tokens)
+    max_tokens: int = 128000  # Model's context window limit
+    trigger_tokens: int = 102400  # Auto-summarization threshold (80% of max)
     created_at: str | None = None
     last_used_at: str | None = None
 
