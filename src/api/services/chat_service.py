@@ -408,14 +408,20 @@ class ChatService:
                     success=False,
                 )
 
-        # Persist accumulated text to Layer 2 (UI history) only
-        # NOTE: Do NOT add to Layer 1 (session.add_items) - SDK manages its own persistence
-        # Adding simple {"role": "assistant"} dicts corrupts the SDK's item format
-        # which requires proper id/type fields and reasoning item associations
+        # Persist accumulated text to both layers
         if accumulated_text:
             # Layer 2 (UI): Save for display - CSS handles the [interrupted] indicator
             logger.info(f"Saving to full_history with partial={interrupted} for {session_id}")
             await self._add_to_full_history(session_uuid, "assistant", accumulated_text, partial=interrupted)
+
+            # Layer 1 (LLM context): Add partial response so LLM knows what it was saying
+            # When interrupted, the SDK stream was cancelled before it could persist.
+            # We must add the partial content so the next message has proper context.
+            # Simple {"role": "assistant", "content": ...} dicts work fine (used in summarization).
+            if interrupted:
+                partial_content = f"{accumulated_text}\n\n[Response interrupted by user]"
+                logger.info(f"Adding interrupted response to LLM context for {session_id}")
+                await session.add_items([{"role": "assistant", "content": partial_content}])
         else:
             logger.info(f"No accumulated_text to save for {session_id} (interrupted={interrupted})")
 

@@ -198,6 +198,26 @@ def temp_dir() -> Generator[Path, None, None]:
 
 
 @pytest.fixture
+def isolated_filesystem(temp_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[Path, None, None]:
+    """Isolate file operations to temp directory by patching PROJECT_ROOT and DATA_FILES_PATH.
+
+    This fixture ensures that file utilities use temp directories instead of real project paths.
+    Tests using this fixture will have all file operations isolated to the temp directory.
+    """
+    import utils.file_utils
+
+    # Patch the module-level constants in file_utils
+    monkeypatch.setattr(utils.file_utils, "PROJECT_ROOT", temp_dir)
+    monkeypatch.setattr(utils.file_utils, "DATA_FILES_PATH", temp_dir / "data" / "files")
+
+    # Create necessary directory structure
+    (temp_dir / "data" / "files").mkdir(parents=True, exist_ok=True)
+    (temp_dir / "output").mkdir(parents=True, exist_ok=True)
+
+    yield temp_dir
+
+
+@pytest.fixture
 def temp_file(temp_dir: Path) -> Generator[Path, None, None]:
     """Provide temporary file for testing."""
     file_path = temp_dir / "test_file.txt"
