@@ -15,7 +15,7 @@ from __future__ import annotations
 import asyncio
 
 from collections.abc import Sequence
-from typing import Any, cast
+from typing import Any
 from uuid import UUID
 
 import asyncpg
@@ -86,7 +86,7 @@ def collect_recent_exchanges(items: list[dict[str, Any]], keep_recent: int) -> l
     return result
 
 
-class PostgresTokenAwareSession(PostgresSession):
+class PostgresTokenAwareSession(PostgresSession):  # type: ignore[misc]
     """Token-aware PostgreSQL session with automatic summarization.
 
     Extends PostgresSession with:
@@ -136,10 +136,12 @@ class PostgresTokenAwareSession(PostgresSession):
     def _get_model_limit(self, model: str) -> int:
         """Get token limit for model."""
         if model in MODEL_TOKEN_LIMITS:
-            return MODEL_TOKEN_LIMITS[model]
+            limit: int = MODEL_TOKEN_LIMITS[model]
+            return limit
 
-        for known_model, limit in MODEL_TOKEN_LIMITS.items():
+        for known_model, model_limit in MODEL_TOKEN_LIMITS.items():
             if known_model in model.lower():
+                limit = int(model_limit)
                 return limit
 
         logger.warning(f"Unknown model {model}, using conservative 15k limit")
@@ -152,7 +154,7 @@ class PostgresTokenAwareSession(PostgresSession):
 
     def _count_item_tokens(self, item: dict[str, Any]) -> int:
         """Count tokens for a single conversation item."""
-        item_tokens = 0
+        item_tokens: int = 0
 
         content = item.get("content", "")
 
@@ -171,9 +173,8 @@ class PostgresTokenAwareSession(PostgresSession):
 
         if item.get("tool_calls"):
             for tool_call in item["tool_calls"]:
-                if isinstance(tool_call, dict) and "function" in tool_call:
-                    if "arguments" in tool_call["function"]:
-                        item_tokens += self._count_text_tokens(str(tool_call["function"]["arguments"]))
+                if isinstance(tool_call, dict) and "function" in tool_call and "arguments" in tool_call["function"]:
+                    item_tokens += self._count_text_tokens(str(tool_call["function"]["arguments"]))
 
         item_tokens += MESSAGE_STRUCTURE_TOKEN_OVERHEAD
         return item_tokens
@@ -183,13 +184,12 @@ class PostgresTokenAwareSession(PostgresSession):
         total = 0
 
         for item in items:
-            item_dict = cast(dict[str, Any], item)
-            item_id = item_dict.get("id")
+            item_id = item.get("id")
 
             if item_id and item_id in self._item_token_cache:
                 total += self._item_token_cache[item_id]
             else:
-                item_tokens = self._count_item_tokens(item_dict)
+                item_tokens = self._count_item_tokens(item)
                 total += item_tokens
 
                 if item_id:
@@ -247,7 +247,7 @@ class PostgresTokenAwareSession(PostgresSession):
 
         result = await Runner.run(
             summary_agent,
-            input=items,
+            input=items,  # type: ignore[arg-type]  # SDK accepts dict messages
             session=None,
         )
 
@@ -268,32 +268,32 @@ class PostgresTokenAwareSession(PostgresSession):
             return ""
 
         async with self._summarization_lock:
+            # Check preconditions
             if not force and not await self.should_summarize():
                 logger.info("Tokens below threshold, skipping summarization")
                 return ""
 
             items = await self.get_items()
-
-            if len(items) < MIN_MESSAGES_FOR_SUMMARIZATION:
-                logger.warning(f"Not enough items to summarize (< {MIN_MESSAGES_FOR_SUMMARIZATION})")
-                return ""
-
             recent_items = collect_recent_exchanges(items, keep_recent)
 
-            if len(recent_items) == len(items):
-                logger.warning("All items are recent, nothing to summarize")
+            # Validate we have enough content to summarize
+            skip_reason = None
+            if len(items) < MIN_MESSAGES_FOR_SUMMARIZATION:
+                skip_reason = f"Not enough items to summarize (< {MIN_MESSAGES_FOR_SUMMARIZATION})"
+            elif len(recent_items) == len(items):
+                skip_reason = "All items are recent, nothing to summarize"
+
+            if skip_reason:
+                logger.warning(skip_reason)
                 return ""
 
             try:
                 summary_text = await self._generate_summary(items)
-
                 if not summary_text:
                     logger.error("Summarization failed: empty summary")
                     return ""
 
-                # Repopulate session
                 await self._repopulate_session(summary_text, recent_items)
-
                 logger.info(f"Summarization complete. New token count: {self._total_tokens}")
                 return summary_text
 

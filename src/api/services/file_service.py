@@ -221,8 +221,7 @@ class LocalFileService:
                         logger.info(f"Created templates symlink: {templates_link} -> {templates_path}")
             except Exception as e:
                 logger.warning(f"Failed to create templates link/copy: {e}")
-        else:
+        elif not templates_link.exists():
             # Create empty templates dir if no global templates
-            if not templates_link.exists():
-                templates_link.mkdir(exist_ok=True)
-                logger.info(f"Created empty templates directory: {templates_link}")
+            templates_link.mkdir(exist_ok=True)
+            logger.info(f"Created empty templates directory: {templates_link}")

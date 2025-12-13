@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 
 from typing import Any
 
@@ -62,17 +63,19 @@ async def chat_websocket(
                 msg_type = data.get("type")
 
                 if msg_type == "message":
-                    # Cancel any existing chat task before starting new one
+                    # If there's an existing task, interrupt it and wait for clean exit
                     if active_chat_task and not active_chat_task.done():
                         await chat_service.interrupt(session_id)
-                        active_chat_task.cancel()
+                        # Wait for task to exit cleanly (flag-based, no task.cancel needed)
                         try:
-                            await active_chat_task
-                        except asyncio.CancelledError:
-                            pass
+                            await asyncio.wait_for(active_chat_task, timeout=5.0)
+                        except asyncio.TimeoutError:
+                            logger.warning(f"Previous task didn't exit within timeout for {session_id}")
+                            active_chat_task.cancel()
+                            with contextlib.suppress(asyncio.CancelledError):
+                                await active_chat_task
 
-                    # Defensive: clear any stale interrupt flag before starting new task
-                    # (ensures previous interrupts don't affect new messages)
+                    # Clear interrupt flag before starting new task
                     chat_service.clear_interrupt(session_id)
 
                     # Run chat processing as background task so we can receive interrupts
@@ -80,50 +83,27 @@ async def chat_websocket(
 
                 elif msg_type == "interrupt":
                     logger.info(f"Interrupt message received for session {session_id}")
-                    # Only interrupt if there's an active task to cancel
+                    # Only interrupt if there's an active task
                     if active_chat_task and not active_chat_task.done():
-                        # Set interrupt flag and cancel task
+                        # Set interrupt flag - stream loop will detect and exit cleanly
                         await chat_service.interrupt(session_id)
-                        logger.info(f"Cancelling active chat task for session {session_id}")
-                        active_chat_task.cancel()
+                        logger.info(f"Interrupt flag set for session {session_id}")
 
-                        # IMMEDIATELY send stream_interrupted for instant user feedback
-                        # (legacy pattern - don't wait for task to finish)
+                        # Send stream_interrupted immediately for instant user feedback
                         await ws_manager.send(session_id, {"type": "stream_interrupted", "session_id": session_id})
 
-                        # Wait for task with timeout (don't block forever)
-                        # The task itself sends assistant_end when it completes
-                        task_completed = False
-                        try:
-                            await asyncio.wait_for(active_chat_task, timeout=0.5)
-                            task_completed = True
-                        except asyncio.TimeoutError:
-                            logger.warning(f"Stream task did not complete within timeout after cancel for {session_id}")
-                        except asyncio.CancelledError:
-                            task_completed = True
-                            logger.info(f"Chat task cancelled for session {session_id}")
-
-                        # Only send assistant_end if task didn't complete (timed out)
-                        # The task sends its own assistant_end when it finishes
-                        if not task_completed:
-                            await ws_manager.send(
-                                session_id,
-                                {"type": "assistant_end", "session_id": session_id, "finish_reason": "interrupted"},
-                            )
-                        active_chat_task = None
+                        # Don't wait here - let the stream loop exit on its own
+                        # It will send assistant_end when it finishes
                     else:
-                        # No task to cancel - don't set flag (would block next message)
-                        logger.info(f"No active chat task to cancel for session {session_id}")
+                        logger.info(f"No active chat task to interrupt for session {session_id}")
 
         finally:
             keepalive_task.cancel()
             # Clean up any running chat task
             if active_chat_task and not active_chat_task.done():
                 active_chat_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await active_chat_task
-                except asyncio.CancelledError:
-                    pass
     except WebSocketDisconnect:
         pass  # Normal client disconnect
     except RuntimeError as e:

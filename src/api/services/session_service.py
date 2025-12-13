@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import secrets
 import shutil
@@ -201,7 +202,7 @@ class SessionService:
     async def delete_session(self, user_id: UUID, session_id: str) -> bool:
         """Delete session and all related data including files."""
         async with self.pool.acquire() as conn:
-            result = await conn.execute(
+            result: str = await conn.execute(
                 """
                 DELETE FROM sessions
                 WHERE user_id = $1 AND session_id = $2
@@ -210,7 +211,7 @@ class SessionService:
                 session_id,
             )
 
-        deleted = result == "DELETE 1"
+        deleted: bool = result == "DELETE 1"
 
         # Clean up session files from disk
         if deleted:
@@ -255,10 +256,12 @@ class SessionService:
     def _get_model_limit(self, model: str) -> int:
         """Get token limit for a model."""
         if model in MODEL_TOKEN_LIMITS:
-            return MODEL_TOKEN_LIMITS[model]
+            limit: int = MODEL_TOKEN_LIMITS[model]
+            return limit
         # Try partial match for deployment names
-        for known_model, limit in MODEL_TOKEN_LIMITS.items():
+        for known_model, model_limit in MODEL_TOKEN_LIMITS.items():
             if known_model in model.lower():
+                limit = int(model_limit)
                 return limit
         # Conservative default
         return 15000
@@ -327,10 +330,8 @@ class SessionService:
             # Parse arguments from JSON string if stored that way
             args = row["tool_arguments"]
             if isinstance(args, str):
-                try:
+                with contextlib.suppress(json.JSONDecodeError):
                     args = json.loads(args)
-                except json.JSONDecodeError:
-                    pass  # Keep as string if not valid JSON
             msg.update(
                 {
                     "call_id": row["tool_call_id"],

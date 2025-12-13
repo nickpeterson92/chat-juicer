@@ -362,9 +362,11 @@ app.whenReady().then(() => {
           }
           case "config_metadata": {
             const config = await apiRequest("/api/config", { signal: controller.signal });
+            // API returns { success, models, reasoning_levels } in ModelSelector format
             return {
+              success: config.success ?? true,
               models: config.models || [],
-              reasoning_levels: config.reasoning_efforts || [],
+              reasoning_levels: config.reasoning_levels || [],
             };
           }
           default:

@@ -16,6 +16,29 @@ from typing import Any
 from utils.logger import logger
 
 # Default pool sizes per server type
+# Helper functions for PERF203 compliance (avoid try-except in loops)
+
+
+async def _spawn_mcp_server(server_key: str, index: int) -> Any | None:
+    """Spawn a single MCP server instance with error handling."""
+    from integrations.mcp_registry import initialize_mcp_server
+
+    try:
+        server = await initialize_mcp_server(server_key)
+        return server
+    except Exception as e:
+        logger.error(f"Failed to spawn {server_key}[{index}]: {e}")
+        return None
+
+
+async def _shutdown_mcp_server(server: Any, server_key: str) -> None:
+    """Shutdown a single MCP server with error handling."""
+    try:
+        await server.__aexit__(None, None, None)
+    except Exception as e:
+        logger.warning(f"Error shutting down {server_key}: {e}")
+
+
 DEFAULT_POOL_SIZE = 3
 ACQUIRE_TIMEOUT_SECONDS = 30.0
 
@@ -54,7 +77,7 @@ class MCPServerPool:
             server_keys: List of server keys to initialize (e.g., ["sequential", "fetch"])
             pool_size: Number of instances per server type
         """
-        from integrations.mcp_registry import MCP_SERVER_CONFIGS, initialize_mcp_server
+        from integrations.mcp_registry import MCP_SERVER_CONFIGS
 
         async with self._lock:
             if self._initialized:
@@ -72,18 +95,17 @@ class MCPServerPool:
                 self._pools[server_key] = asyncio.Queue()
                 self._all_servers[server_key] = []
 
-                # Spawn pool_size instances
-                spawned = 0
-                for i in range(pool_size):
-                    try:
-                        server = await initialize_mcp_server(server_key)
-                        if server:
-                            await self._pools[server_key].put(server)
-                            self._all_servers[server_key].append(server)
-                            spawned += 1
-                    except Exception as e:
-                        logger.error(f"Failed to spawn {server_key}[{i}]: {e}")
+                # Spawn pool_size instances concurrently using helper function
+                spawn_tasks = [_spawn_mcp_server(server_key, i) for i in range(pool_size)]
+                servers = await asyncio.gather(*spawn_tasks)
 
+                # Add successfully spawned servers to pool
+                for server in servers:
+                    if server is not None:
+                        await self._pools[server_key].put(server)
+                        self._all_servers[server_key].append(server)
+
+                spawned = sum(1 for s in servers if s is not None)
                 logger.info(f"Spawned {spawned}/{pool_size} instances of {server_key}")
 
             self._initialized = True
@@ -184,12 +206,13 @@ class MCPServerPool:
         async with self._lock:
             logger.info("Shutting down MCP server pool")
 
-            for server_key, servers in self._all_servers.items():
-                for server in servers:
-                    try:
-                        await server.__aexit__(None, None, None)
-                    except Exception as e:
-                        logger.warning(f"Error shutting down {server_key}: {e}")
+            # Shutdown all servers concurrently using helper function
+            shutdown_tasks = [
+                _shutdown_mcp_server(server, server_key)
+                for server_key, servers in self._all_servers.items()
+                for server in servers
+            ]
+            await asyncio.gather(*shutdown_tasks)
 
             self._pools.clear()
             self._all_servers.clear()
@@ -198,16 +221,17 @@ class MCPServerPool:
             logger.info("MCP server pool shutdown complete")
 
 
-# Global pool instance
-_mcp_pool: MCPServerPool | None = None
+# Module-level state holder to avoid global statement (PLW0603)
+_state: dict[str, MCPServerPool | None] = {"pool": None}
 
 
 def get_mcp_pool() -> MCPServerPool:
     """Get the global MCP server pool instance."""
-    global _mcp_pool
-    if _mcp_pool is None:
-        _mcp_pool = MCPServerPool()
-    return _mcp_pool
+    pool = _state["pool"]
+    if pool is None:
+        pool = MCPServerPool()
+        _state["pool"] = pool
+    return pool
 
 
 async def initialize_mcp_pool(
@@ -233,7 +257,6 @@ async def initialize_mcp_pool(
 
 async def shutdown_mcp_pool() -> None:
     """Shutdown the global MCP server pool."""
-    global _mcp_pool
-    if _mcp_pool:
-        await _mcp_pool.shutdown()
-        _mcp_pool = None
+    if _state["pool"] is not None:
+        await _state["pool"].shutdown()
+        _state["pool"] = None

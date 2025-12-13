@@ -623,7 +623,7 @@ class Settings(BaseSettings):
 
     # Database (Phase 1: local PostgreSQL)
     database_url: str = Field(
-        default="postgresql://chatjuicer:localdev@localhost:5432/chatjuicer",
+        default="postgresql://chatjuicer:localdev@localhost:5433/chatjuicer",
         description="PostgreSQL connection string",
     )
 

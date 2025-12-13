@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import os
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any
 
 import asyncpg
 
@@ -25,6 +27,14 @@ env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
 load_dotenv(env_path)
 
 settings = get_settings()
+
+
+async def _cleanup_mcp_server(server: Any) -> None:
+    """Clean up a single MCP server with error handling."""
+    try:
+        await server.__aexit__(None, None, None)
+    except Exception as e:
+        logger.warning(f"Error cleaning up MCP server: {e}")
 
 
 def _setup_openai_client() -> None:
@@ -87,11 +97,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
         # Cleanup any non-pooled MCP servers (legacy/reference)
         if hasattr(app.state, "mcp_servers"):
-            for server in app.state.mcp_servers.values():
-                try:
-                    await server.__aexit__(None, None, None)
-                except Exception as e:
-                    logger.warning(f"Error cleaning up MCP server: {e}")
+            await asyncio.gather(
+                *[_cleanup_mcp_server(server) for server in app.state.mcp_servers.values()],
+                return_exceptions=True,
+            )
 
         await app.state.db_pool.close()
 

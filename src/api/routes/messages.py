@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 
 from typing import Any
@@ -63,10 +64,8 @@ async def list_messages(
             # Parse arguments from JSON string if stored that way
             args = row["tool_arguments"]
             if isinstance(args, str):
-                try:
+                with contextlib.suppress(json.JSONDecodeError):
                     args = json.loads(args)
-                except json.JSONDecodeError:
-                    pass  # Keep as string if not valid JSON
             msg.update(
                 {
                     "call_id": row["tool_call_id"],

@@ -494,8 +494,8 @@ def save_uploaded_file(
         # Get file info
         file_size = target_file.stat().st_size
 
-        # Return relative path from cwd
-        relative_path = target_file.relative_to(cwd)
+        # Return relative path from target directory
+        relative_path = target_file.relative_to(target_path)
 
         return {
             "success": True,

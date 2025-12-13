@@ -407,22 +407,19 @@ class SandboxPool:
             if session_files_path:
                 sources_path = session_files_path / "sources"
                 output_path = session_files_path / "output"
-                if sources_path.exists():
-                    # Non-critical: log warning but continue if this fails
-                    if not await self._container_cp(
-                        f"{sources_path}/.",
-                        f"{self.warm_container_id}:/sources/",
-                        to_container=True,
-                    ):
-                        logger.warning("Failed to copy sources to container")
-                if output_path.exists():
-                    # Non-critical: log warning but continue if this fails
-                    if not await self._container_cp(
-                        f"{output_path}/.",
-                        f"{self.warm_container_id}:/output/",
-                        to_container=True,
-                    ):
-                        logger.warning("Failed to copy output to container")
+                # Non-critical: log warning but continue if copy fails
+                if sources_path.exists() and not await self._container_cp(
+                    f"{sources_path}/.",
+                    f"{self.warm_container_id}:/sources/",
+                    to_container=True,
+                ):
+                    logger.warning("Failed to copy sources to container")
+                if output_path.exists() and not await self._container_cp(
+                    f"{output_path}/.",
+                    f"{self.warm_container_id}:/output/",
+                    to_container=True,
+                ):
+                    logger.warning("Failed to copy output to container")
 
             # Execute script with timeout
             proc = await asyncio.create_subprocess_exec(

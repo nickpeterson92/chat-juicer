@@ -57,16 +57,19 @@ CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id);
 CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(session_id, created_at DESC);
 
 -- LLM Context table (Layer 1: For Agent SDK)
+-- NOTE: seq column preserves insertion order - critical for reasoning model item associations
 CREATE TABLE IF NOT EXISTS llm_context (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     role VARCHAR(20) NOT NULL,
     content TEXT,
     metadata JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    seq SERIAL NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_llm_context_session_id ON llm_context(session_id);
+CREATE INDEX IF NOT EXISTS idx_llm_context_seq ON llm_context(session_id, seq);
 
 -- Files table (metadata - actual files on local disk for Phase 1)
 CREATE TABLE IF NOT EXISTS files (

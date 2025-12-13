@@ -50,6 +50,8 @@ class ChatService:
         self.file_service = file_service
         # Interrupt flags per session (checked during streaming)
         self._interrupt_flags: dict[str, bool] = {}
+        # Background tasks set to prevent garbage collection (RUF006)
+        self._background_tasks: set[asyncio.Task[Any]] = set()
 
     async def process_chat(
         self,
@@ -206,11 +208,13 @@ class ChatService:
 
                     # Generate title in background (non-blocking) - only if completed normally
                     if completed_normally:
-                        asyncio.create_task(self._maybe_generate_title(session_id, session_uuid, model))
+                        # Store task reference to prevent garbage collection (RUF006)
+                        task = asyncio.create_task(self._maybe_generate_title(session_id, session_uuid, model))
+                        self._background_tasks.add(task)
+                        task.add_done_callback(self._background_tasks.discard)
                 except asyncio.CancelledError:
                     logger.info(f"Chat task was cancelled for session {session_id}")
-                    # Clear interrupt flag so next message can proceed
-                    self._interrupt_flags.pop(session_id, None)
+                    # Flag already cleared by finally block above
                     await self.ws_manager.send(
                         session_id,
                         {"type": "assistant_end", "finish_reason": "interrupted"},
@@ -278,7 +282,7 @@ class ChatService:
         logger.info(f"[DIAG:{session_id[:8]}] Calling Runner.run_streamed")
         stream_candidate = Runner.run_streamed(
             agent,
-            input=user_messages,  # Only new messages, not entire history!
+            input=user_messages,  # type: ignore[arg-type]  # SDK accepts dict messages
             session=session,
             run_config=run_config,
             max_turns=MAX_CONVERSATION_TURNS,
@@ -404,17 +408,12 @@ class ChatService:
                     success=False,
                 )
 
-        # Persist accumulated text (with interrupt notice if applicable)
-        # This runs for both flag-based interrupt and CancelledError
+        # Persist accumulated text to Layer 2 (UI history) only
+        # NOTE: Do NOT add to Layer 1 (session.add_items) - SDK manages its own persistence
+        # Adding simple {"role": "assistant"} dicts corrupts the SDK's item format
+        # which requires proper id/type fields and reasoning item associations
         if accumulated_text:
-            # Layer 1 (LLM context): Include interrupt notice for model awareness
-            llm_text = accumulated_text
-            if interrupted:
-                llm_text += "\n\n[User interrupted response. The above text is partial.]"
-                logger.info(f"Saving interrupted response with partial=True for {session_id}")
-            await session.add_items([{"role": "assistant", "content": llm_text}])
-
-            # Layer 2 (UI): Save WITHOUT notice - CSS handles the [interrupted] indicator
+            # Layer 2 (UI): Save for display - CSS handles the [interrupted] indicator
             logger.info(f"Saving to full_history with partial={interrupted} for {session_id}")
             await self._add_to_full_history(session_uuid, "assistant", accumulated_text, partial=interrupted)
         else:
@@ -581,7 +580,7 @@ class ChatService:
                 instructions=SESSION_TITLE_GENERATION_PROMPT,
             )
 
-            result = await Runner.run(title_agent, input=messages)
+            result = await Runner.run(title_agent, input=messages)  # type: ignore[arg-type]
             generated_title = (result.final_output or "").strip().strip('"').strip("'").rstrip(".!?")
 
             if not generated_title or len(generated_title) < 3:
