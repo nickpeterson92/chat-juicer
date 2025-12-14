@@ -334,7 +334,8 @@ export class SessionService {
     try {
       const response = await this.ipc.sendSessionCommand("rename", { session_id: sessionId, title: title.trim() });
 
-      if (response?.success) {
+      // Backend returns SessionRecord directly (not wrapped in { success: true })
+      if (response?.session_id) {
         // Update session in AppState (immutably - create new objects)
         const sessions = this.appState.getState("session.list");
         const updatedSessions = sessions.map((s) => (s.session_id === sessionId ? { ...s, title: title.trim() } : s));
@@ -366,7 +367,8 @@ export class SessionService {
     try {
       const response = await this.ipc.sendSessionCommand("pin", { session_id: sessionId, pinned });
 
-      if (response?.success) {
+      // Backend returns SessionRecord directly (not wrapped in { success: true })
+      if (response?.session_id) {
         const sessions = this.appState.getState("session.list");
         const updatedSessions = sessions.map((s) => (s.session_id === sessionId ? { ...s, pinned } : s));
         this.appState.setState("session.list", this._sortSessionsByPinAndCreated(updatedSessions));
