@@ -65,11 +65,20 @@ class ModelConfig:
 #: Models with is_ui_model=False are backend-only (for token limits, etc.)
 #: model_family groups secondary models into sub-dropdowns (e.g., "gpt-5", "gpt-4.1")
 MODEL_CONFIGS: tuple[ModelConfig, ...] = (
-    # GPT-5.1 series (latest) - Primary models shown at top level
-    ModelConfig("gpt-5.1", "GPT-5.1", "Latest reasoning model", 272000, True, True),
-    ModelConfig("gpt-5.1-codex-max", "GPT-5.1 Codex Max", "Maximum capability code generation", 272000, True, True),
+    # GPT-5.2/5.1 series (latest) - Primary models shown at top level
+    ModelConfig("gpt-5.2", "GPT-5.2", "Latest and most capable model", 272000, True, True),
+    ModelConfig("gpt-5.1", "GPT-5.1", "Advanced reasoning model", 272000, True, True),
     # GPT-5 series - Secondary models in "GPT-5 Models" sub-dropdown
     ModelConfig("gpt-5-pro", "GPT-5 Pro", "Most capable for complex tasks", 272000, True, False, is_ui_model=False),
+    ModelConfig(
+        "gpt-5.1-codex-max",
+        "GPT-5.1 Codex Max",
+        "Maximum capability code generation",
+        272000,
+        True,
+        False,
+        model_family="gpt-5.1",
+    ),
     ModelConfig("gpt-5", "GPT-5", "Deep reasoning for hard problems", 272000, True, False, model_family="gpt-5"),
     ModelConfig(
         "gpt-5-mini", "GPT-5 Mini", "Smart and fast for everyday use", 272000, True, False, model_family="gpt-5"
@@ -483,7 +492,7 @@ SUMMARY_MAX_COMPLETION_TOKENS = 3000
 #: Default model name for fallback scenarios and initial agent setup.
 #: Used when agent model is not specified or during bootstrap.
 #: Sessions will override this with their own per-session model selection.
-DEFAULT_MODEL = "gpt-5.1"
+DEFAULT_MODEL = "gpt-5.2"
 
 #: Models that support reasoning_effort parameter (derived from MODEL_CONFIGS).
 #: Only these models can use the reasoning.effort configuration.

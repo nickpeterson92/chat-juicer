@@ -362,7 +362,7 @@ export function getModelConfig() {
   }
 
   // Fallback to defaults if appState not initialized yet
-  return { model: "gpt-5.1", reasoning_effort: "medium" };
+  return { model: "gpt-5.2", reasoning_effort: "medium" };
 }
 
 /**

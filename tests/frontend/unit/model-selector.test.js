@@ -191,7 +191,7 @@ describe("ModelSelector", () => {
       await selector.initialize([], []);
 
       const selection = selector.getSelection();
-      expect(selection.model).toBe("gpt-5.1"); // Fallback when no models provided
+      expect(selection.model).toBe("gpt-5.2"); // Fallback when no models provided
     });
   });
 

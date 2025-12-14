@@ -82,7 +82,7 @@ export class ModelSelector {
     this.container.innerHTML = `
       <div class="model-config-inline">
         <button id="model-selector-trigger" class="model-selector-trigger">
-          <span id="selected-model-label">GPT-5.1</span>
+          <span id="selected-model-label">GPT-5.2</span>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M4 6L8 10L12 6" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
@@ -578,7 +578,7 @@ export class ModelSelector {
     const selectedCard = this.container.querySelector(".model-card.selected");
     const selectedWrapper = selectedCard?.closest(".model-card-wrapper");
 
-    const model = selectedWrapper?.dataset.model || "gpt-5.1";
+    const model = selectedWrapper?.dataset.model || "gpt-5.2";
     const config = { model };
 
     // Check if model has reasoning panel with selected option
