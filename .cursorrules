@@ -1,560 +1,332 @@
-# Chat Juicer - Cursor AI Rules
+# .cursorrules
 
-**Project**: Chat Juicer - Production-grade Electron + Python desktop application with Azure OpenAI Agent/Runner pattern and native MCP server support.
+This file provides guidance to you (Claude) when working with code in this repository.
 
-## Project Architecture
+## Project Overview
 
-### Core Patterns
-- **Orchestrator Pattern**: `main.py` is pure coordination (174 lines), business logic in modules
-- **Agent/Runner Framework**: OpenAI's Agent/Runner with native MCP server integration
-- **Explicit State Management**: `AppState` dataclass passed to all functions (no globals)
-- **Full Async Architecture**: All Python functions use async/await consistently
-- **Type Safety**: Full mypy strict compliance + Pydantic runtime validation
-- **Dual-Layer History**: Layer 1 (LLM context with auto-summarization) + Layer 2 (full UI display)
+Chat Juicer is a production-grade Electron + FastAPI desktop application that provides a chat interface for Azure OpenAI using the **Agent/Runner pattern** with native **MCP (Model Context Protocol) server support**. The application features advanced reasoning capabilities through Sequential Thinking, sophisticated document generation, enterprise-grade logging, and comprehensive type safety.
 
-### Backend Quick Rules
-- Scope: backend (`src/`) and backend-facing docs; rely on code, not stale docs.
-- Functions: all async with full type annotations (`from __future__ import annotations`, ordered imports).
-- State: no module-level globals; pass `AppState`; keep business logic out of `main.py`.
-- Logging: use `utils.logger.logger`, no prints; include context as needed.
-- Persistence: Layer 1 (SQLiteSession) + Layer 2 (`FullHistoryStore`); do not write Layer 1 without Layer 2 unless `_skip_full_history` during repopulation.
-- Tools: file ops go through session-aware wrappers (`create_session_aware_tools`) to keep paths under `data/files/{session_id}`.
-- Agent/tool surface: native tools are `list_directory`, `read_file`, `search_files`, `edit_file`, `generate_document`; MCP defaults are Sequential Thinking + Fetch, Tavily optional with `TAVILY_API_KEY`.
-- Protocol: binary V2 only; keep negotiation/error shapes in `main.py`.
-- Summarization: TokenAwareSQLiteSession auto-summarizes at 20% model limit, keeps last 2 user exchanges, updates metadata in `finally`.
-- Docs: when updating README/CLAUDE/etc., sync with current bootstrap/runtime/session manager, tool registry, and MCP registry behavior.
+## Current Architecture (FastAPI Backend)
 
-### Directory Structure
+The application uses a **three-tier architecture**:
+
 ```
-src/
-├── main.py              # Pure orchestrator (bootstrap → loop → cleanup)
-├── __init__.py          # Package initialization
-├── .env.example         # Environment variable template
-├── requirements.txt     # Python dependencies (Python 3.13+)
-├── app/                 # Application modules (orchestrator pattern)
-│   ├── __init__.py
-│   ├── state.py        # AppState dataclass (single source of truth)
-│   ├── bootstrap.py    # Application initialization
-│   └── runtime.py      # Core runtime operations (8 functions)
-├── core/               # Business logic
-│   ├── __init__.py
-│   ├── agent.py        # Agent/Runner configuration
-│   ├── session.py      # TokenAwareSQLiteSession (Layer 1)
-│   ├── full_history.py # FullHistoryStore (Layer 2)
-│   ├── session_manager.py  # Multi-session with file handle cleanup
-│   ├── session_commands.py # Session command handlers
-│   ├── prompts.py      # System prompts
-│   └── constants.py    # Pydantic Settings
-├── models/             # Pydantic models
-│   ├── __init__.py
-│   ├── api_models.py
-│   ├── event_models.py
-│   ├── ipc_models.py
-│   ├── sdk_models.py
-│   └── session_models.py
-├── tools/              # Function calling tools (async)
-│   ├── __init__.py
-│   ├── file_operations.py
-│   ├── document_generation.py
-│   ├── text_editing.py
-│   ├── wrappers.py
-│   └── registry.py
-├── integrations/       # External integrations
-│   ├── __init__.py
-│   ├── mcp_servers.py  # MCP server management
-│   ├── mcp_registry.py # MCP server registry
-│   ├── event_handlers.py
-│   └── sdk_token_tracker.py
-└── utils/              # Utilities
-    ├── __init__.py
-    ├── logger.py       # Enterprise JSON logging
-    ├── ipc.py          # IPC manager
-    ├── token_utils.py  # Token management with LRU cache
-    ├── file_utils.py
-    ├── document_processor.py
-    ├── json_utils.py
-    ├── http_logger.py
-    ├── client_factory.py
-    ├── validation.py
-    └── session_integrity.py
+┌─────────────────────────────────────────────────────────────────────┐
+│                     Electron Renderer Process                       │
+│                    (Component-based ES6 modules)                    │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ IPC (context isolation)
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                     Electron Main Process                           │
+│                    (HTTP/WebSocket proxy)                           │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ HTTP REST / WebSocket
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                     FastAPI Backend (Python)                        │
+│              (PostgreSQL, Agent/Runner, MCP servers)                │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Renderer Runtime Highlights
-- 7-phase bootstrap orchestrator (`bootstrap.js`) validates each phase and supports degraded mode + error overlay.
-- `AppState` (`core/state.js`) is SSOT for connection/session/message/file/ui/function namespaces; components subscribe via pub/sub.
-- Global `EventBus` (`core/event-bus.js`) backs message routing; `message-handlers-v2.js` translates `message:*` events to streaming UI, tool cards, and analytics.
-- Services are pure business logic and require `appState` (SessionService, FileService, FunctionCallService, MessageService); no DOM access.
-- ChatContainer/InputArea/FilePanel/ModelSelector/ConnectionStatus are the primary renderer components; FilePanel handles handle cleanup before deletion.
-- View management (`view-manager.js`) controls welcome ↔ chat transitions and seeds ModelSelector with cached or fetched config; `file-manager.js` is migrating to AppState-driven file list rendering (`loadFilesIntoState` + `renderFileList`).
-## Python Code Style & Conventions
+### Project Structure
 
-### Type Annotations (Strict)
-- **ALL functions** must have complete type annotations (args + return)
-- Use `from __future__ import annotations` for forward references
-- Prefer modern union syntax: `str | None` over `Optional[str]`
-- Use Literal types for string constants: `Literal["minimal", "low", "medium", "high"]`
-- Use Protocol for duck typing interfaces
-- Return type must be explicit, including `None` when no value returned
+```
+chat-juicer/
+├── electron/          # Electron main process and utilities
+│   ├── main.js       # Electron main process, IPC handlers, HTTP proxy to FastAPI
+│   ├── api-client.js # HTTP client for FastAPI backend communication
+│   ├── preload.js    # Preload script for secure context-isolated IPC
+│   ├── logger.js     # Centralized structured logging with IPC forwarding
+│   ├── config/
+│   │   └── main-constants.js     # Main process configuration constants
+│   └── renderer/     # Component-based renderer process (ES6 modules)
+│       ├── index.js              # Entry point
+│       ├── bootstrap.js          # 7-phase bootstrap orchestrator
+│       ├── adapters/             # DOM, IPC, Storage adapters
+│       ├── config/               # constants, colors, model-metadata
+│       ├── core/                 # AppState + EventBus
+│       ├── managers/             # DOM + view + file managers
+│       ├── services/             # Business logic (AppState-backed)
+│       ├── handlers/             # Event handlers
+│       ├── plugins/              # Plugin registry
+│       ├── ui/                   # UI components and renderers
+│       ├── viewmodels/           # Data transformation
+│       └── utils/                # Utility modules
+├── ui/               # Frontend static assets
+│   ├── index.html    # Main chat UI
+│   └── input.css     # Tailwind CSS source
+├── src/              # Python FastAPI backend
+│   ├── api/          # FastAPI application
+│   │   ├── main.py           # FastAPI app with lifespan, routes, CORS
+│   │   ├── dependencies.py   # Dependency injection (DB, services, managers)
+│   │   ├── routes/           # API endpoints
+│   │   │   ├── auth.py       # Authentication routes
+│   │   │   ├── chat.py       # WebSocket chat endpoint
+│   │   │   ├── config.py     # Configuration endpoint
+│   │   │   ├── files.py      # File management routes
+│   │   │   ├── health.py     # Health check endpoint
+│   │   │   ├── messages.py   # Message pagination endpoint
+│   │   │   └── sessions.py   # Session CRUD routes
+│   │   ├── services/         # Business logic
+│   │   │   ├── chat_service.py       # Chat streaming with Agent/Runner
+│   │   │   ├── session_service.py    # Session management
+│   │   │   ├── file_service.py       # File operations
+│   │   │   ├── auth_service.py       # Authentication
+│   │   │   └── token_aware_session.py # Token-aware context management
+│   │   ├── middleware/       # FastAPI middleware
+│   │   │   └── auth.py       # Authentication middleware
+│   │   └── websocket/        # WebSocket management
+│   │       └── manager.py    # WebSocket connection tracking
+│   ├── core/         # Core business logic
+│   │   ├── agent.py          # Agent/Runner implementation with MCP
+│   │   ├── prompts.py        # System instruction prompts
+│   │   └── constants.py      # Configuration with Pydantic Settings
+│   ├── models/       # Pydantic data models
+│   │   ├── api_models.py     # API request/response models
+│   │   ├── event_models.py   # WebSocket event models
+│   │   └── session_models.py # Session metadata models
+│   ├── tools/        # Function calling tools (async)
+│   │   ├── file_operations.py    # File reading, directory listing
+│   │   ├── document_generation.py # Document generation
+│   │   ├── text_editing.py       # Text editing operations
+│   │   ├── code_interpreter.py   # Sandboxed code execution
+│   │   ├── wrappers.py           # Session-aware tool wrappers
+│   │   └── registry.py           # Tool registration
+│   ├── integrations/ # External integrations
+│   │   ├── mcp_servers.py       # MCP server setup
+│   │   ├── mcp_pool.py          # MCP server connection pool
+│   │   ├── mcp_registry.py      # MCP server registry
+│   │   ├── event_handlers.py    # Streaming event handlers
+│   │   └── sdk_token_tracker.py # Token tracking
+│   └── utils/        # Utility modules
+│       ├── logger.py           # Enterprise JSON logging
+│       ├── token_utils.py      # Token counting with LRU cache
+│       ├── file_utils.py       # File system utilities
+│       ├── client_factory.py   # OpenAI client factory
+│       └── validation.py       # Input validation
+├── data/             # Persistent data storage
+│   └── files/        # Session-scoped file storage
+├── logs/             # Log files (gitignored)
+├── scripts/          # Utility scripts
+└── tests/            # Test suites
+    ├── backend/      # Python tests (pytest)
+    └── frontend/     # JavaScript tests (vitest)
+```
+
+## Key Architectural Concepts
+
+### FastAPI Backend
+
+The backend is a FastAPI application with:
+
+- **RESTful API**: Standard HTTP endpoints for session/file CRUD
+- **WebSocket**: Real-time chat streaming via `/ws/chat/{session_id}`
+- **PostgreSQL**: Persistent storage for sessions and messages
+- **Dependency Injection**: Clean service injection via FastAPI's `Depends`
+- **MCP Server Pool**: Pre-spawned MCP server instances for concurrent requests
+
+**Key files:**
+- `src/api/main.py` - FastAPI app initialization, lifespan management, route registration
+- `src/api/dependencies.py` - Dependency injection for DB pool, services, managers
+- `src/api/routes/chat.py` - WebSocket endpoint for chat streaming
+- `src/api/services/chat_service.py` - Agent/Runner orchestration, interrupt handling
+
+### Communication Flow
+
+```
+Frontend                 Main Process              FastAPI Backend
+────────                 ────────────              ───────────────
+User types message
+        │
+        ▼
+IPC: sendMessage() ──────► HTTP proxy
+                                │
+                                ▼
+                          POST /api/sessions
+                          GET /api/sessions/{id}
+                          WS /ws/chat/{session_id}
+                                │
+                                ▼
+                          ChatService.process_chat()
+                                │
+                                ▼
+                          Agent/Runner streaming
+                                │
+                                ▼
+                          WebSocket events ◄────────
+                                │
+        ◄───────────────────────┘
+        │
+        ▼
+EventBus dispatches
+to message handlers
+```
+
+### Renderer Runtime
+
+- 7-phase bootstrap (`bootstrap.js`) wiring adapters → AppState/DOM → services → components → handlers → plugins → data
+- `AppState` (`core/state.js`) is the single source of truth
+- Global `EventBus` for decoupled message routing
+- Services communicate with backend via IPC adapter which proxies to FastAPI
+
+### Agent/Runner Pattern with MCP
+
+The application uses OpenAI's Agent/Runner pattern:
+
+- **Native MCP Integration**: Sequential Thinking + Fetch by default, optional Tavily
+- **Automatic Tool Orchestration**: Framework handles function calling
+- **Full Async Architecture**: Consistent async/await throughout
+- **Streaming Events**: Real-time responses via WebSocket
+- **Token-Aware Sessions**: PostgreSQL-based with automatic summarization
+
+### MCP Server Pool
+
+For concurrent request handling, MCP servers are pooled:
 
 ```python
-# ✅ Correct
-from __future__ import annotations
-
-def process_message(content: str, session_id: str | None = None) -> dict[str, Any]:
-    """Process incoming message."""
-    return {"status": "ok"}
-
-async def handle_tool_call(tool_name: str, args: dict[str, Any]) -> str | None:
-    """Handle tool execution."""
-    if tool_name == "unknown":
-        return None
-    return "result"
-
-# ❌ Wrong - missing annotations
-def process_message(content, session_id=None):
-    return {"status": "ok"}
+# In api/main.py lifespan
+app.state.mcp_pool = await initialize_mcp_pool(pool_size=3)
 ```
 
-### Async/Await (Mandatory)
-- ALL backend functions are async (no sync functions in src/)
-- Use `asyncio.run()` only in `__main__` entry point
-- Use `await` for all I/O operations (file, network, database)
-- Use `asyncio.gather()` for concurrent operations
+This pre-spawns server instances to avoid per-request overhead.
 
-```python
-# ✅ Correct
-async def read_session(session_id: str) -> Session | None:
-    """Read session from database."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("SELECT * FROM sessions WHERE id = ?", (session_id,))
-        row = await cursor.fetchone()
-        return Session.from_row(row) if row else None
+## Logging Guidelines
 
-# ❌ Wrong - sync I/O
-def read_session(session_id: str) -> Session | None:
-    with sqlite3.connect(DB_PATH) as db:
-        cursor = db.execute("SELECT * FROM sessions WHERE id = ?", (session_id,))
-        return Session.from_row(cursor.fetchone())
+1. **Only log actionable information** - Errors, warnings, critical state changes
+2. **No progress/status logs** - No "starting...", "done", phase completions
+3. **No verbose debug in production** - Guard with environment checks
+4. **Never use emojis** - Keep logs professional and grep-friendly
+5. **Use consistent prefixes** - Format: `[ModuleName] Description`
+
+| Level | Use For | Don't Use For |
+|-------|---------|---------------|
+| ERROR | Unrecoverable failures | Expected errors handled gracefully |
+| WARN | Recoverable issues, degraded state | Routine retries |
+| INFO | Significant state changes | "Starting...", "Done", routine ops |
+| DEBUG | Dev-only (guarded) | Production code |
+
+## Essential Commands
+
+### Running the Application
+
+```bash
+make run                # Production mode
+make dev                # Development mode with DevTools
+```
+
+### Development & Quality
+
+```bash
+make test               # Run all tests
+make test-backend       # Python tests only
+make test-frontend      # JavaScript tests only
+make lint               # Run ruff linter
+make format             # Format with black
+make typecheck          # Run mypy
+make quality            # All quality checks
+```
+
+### Database (PostgreSQL)
+
+The application uses PostgreSQL for persistence. Key tables:
+- `users` - User accounts
+- `sessions` - Chat sessions with metadata
+- `messages` - Full message history (Layer 2)
+- `llm_context` - LLM context for token management (Layer 1)
+
+## Critical Implementation Details
+
+### Environment Requirements
+
+Required:
+- `AZURE_OPENAI_API_KEY`: Your Azure OpenAI API key
+- `AZURE_OPENAI_ENDPOINT`: Format `https://resource.openai.azure.com/`
+- `AZURE_OPENAI_DEPLOYMENT`: Model deployment name
+- `DATABASE_URL`: PostgreSQL connection string
+
+Optional:
+- `REASONING_EFFORT`: Control reasoning effort (`none`, `low`, `medium`, `high`)
+- `TAVILY_API_KEY`: Enable Tavily search MCP server
+
+### Dependencies
+
+#### Python (src/requirements.txt)
+- `fastapi` - Web framework
+- `asyncpg` - Async PostgreSQL driver
+- `uvicorn` - ASGI server
+- `openai>=1.0.0` - Azure OpenAI client
+- `openai-agents>=0.3.3` - Agent/Runner framework
+- `pydantic>=2.5.0` - Data validation
+
+#### Node (package.json)
+- `electron` - Desktop framework
+- `marked` - Markdown parser
+- `highlight.js` - Syntax highlighting
+- `katex` - Math rendering
+- `mermaid` - Diagram rendering
+
+### WebSocket Protocol
+
+Chat streaming uses WebSocket at `/ws/chat/{session_id}`:
+
+```javascript
+// Client sends
+{ type: "message", messages: [...], model: "gpt-5.1", reasoning_effort: "medium" }
+{ type: "interrupt" }
+
+// Server sends
+{ type: "assistant_start" }
+{ type: "text_delta", content: "..." }
+{ type: "tool_start", call_id: "...", name: "..." }
+{ type: "tool_done", call_id: "...", output: "..." }
+{ type: "assistant_end", usage: {...} }
+{ type: "stream_interrupted" }
 ```
 
 ### State Management
-- Pass `AppState` explicitly to functions (no module-level globals)
-- Use dataclasses for state containers with default_factory for mutable defaults
-- Initialize state in `bootstrap.py`, use in `runtime.py`, orchestrate in `main.py`
+
+All application state flows through `app.state`:
+- `app.state.db_pool` - PostgreSQL connection pool
+- `app.state.ws_manager` - WebSocket connection tracking
+- `app.state.mcp_pool` - MCP server pool
+
+Services are injected via FastAPI dependencies:
+```python
+@router.get("/{session_id}")
+async def get_session(session_id: str, sessions: Sessions):
+    return await sessions.get_session(session_id)
+```
+
+## Common Development Tasks
+
+### Adding New API Endpoints
+
+1. Create route in `src/api/routes/`
+2. Add service logic in `src/api/services/`
+3. Register route in `src/api/main.py`
+
+### Adding New Functions/Tools
+
+1. Implement in `src/tools/*.py`
+2. Register in `tools/registry.py`
+3. Add session-aware wrapper if needed in `tools/wrappers.py`
+
+### Adding New MCP Servers
 
 ```python
-# ✅ Correct - explicit state passing
-from app.state import AppState
-
-async def process_input(app_state: AppState, message: str) -> None:
-    """Process user input with explicit state."""
-    session = app_state.current_session
-    agent = app_state.agent
-    # ... process
-
-# ❌ Wrong - module-level global
-_current_session: Session | None = None
-
-async def process_input(message: str) -> None:
-    global _current_session
-    # ... process
-```
-
-### Pydantic Models
-- Use Pydantic BaseModel for all data validation (IPC, API, configuration)
-- Use `Field()` for constraints and descriptions
-- Implement `@field_validator` for complex validation
-- Use `model_dump()` and `model_dump_json()` for serialization
-
-```python
-# ✅ Correct
-from pydantic import BaseModel, Field, field_validator
-
-class ToolCallNotification(BaseModel):
-    """Tool call notification."""
-    type: str = Field(default="function_detected")
-    name: str
-    arguments: str | dict[str, Any]
-    call_id: str | None = None
-
-    @field_validator("arguments")
-    @classmethod
-    def validate_args(cls, v: Any) -> str | dict[str, Any]:
-        if isinstance(v, str):
-            return json.loads(v)
-        return v
-```
-
-### Error Handling
-- Use specific exception types (ValueError, TypeError, RuntimeError)
-- Include context in error messages
-- Use try/except at boundaries (IPC, file I/O, network)
-- Log errors with `logger.error()` including `exc_info=True`
-
-```python
-# ✅ Correct
-try:
-    result = await process_tool_call(tool_name, args)
-except ValueError as e:
-    logger.error(f"Invalid tool arguments: {e}", exc_info=True)
-    IPCManager.send_error(f"Tool validation failed: {e}")
-except Exception as e:
-    logger.error(f"Unexpected error in tool processing: {e}", exc_info=True)
-    IPCManager.send_error("An unexpected error occurred")
-```
-
-### Logging
-- Use `from utils.logger import logger` (ChatLogger singleton)
-- Include session context in all logs (automatically injected)
-- Log at appropriate levels: DEBUG (verbose), INFO (normal flow), ERROR (failures)
-- Use structured extra data for JSON logs
-
-```python
-# ✅ Correct
-from utils.logger import logger
-
-logger.info(f"Processing message", extra={"user_id": user_id, "tokens": token_count})
-logger.error(f"Failed to process: {e}", exc_info=True)
-
-# ❌ Wrong - print statements
-print(f"Processing message")
-```
-
-### Imports
-- Use `from __future__ import annotations` at top of every file
-- Group imports: future → stdlib → third-party → first-party → local
-- Use explicit imports: `from agents import Agent` not `import agents`
-- Known first-party: `app`, `core`, `integrations`, `models`, `tools`, `utils`
-
-```python
-# ✅ Correct order
-from __future__ import annotations
-
-import asyncio
-import json
-from typing import Any, Literal
-
-from pydantic import BaseModel, Field
-
-from app.state import AppState
-from core.session import TokenAwareSQLiteSession
-from utils.logger import logger
-```
-
-### Docstrings
-- Use Google-style docstrings for all public functions/classes
-- Include Args, Returns, Raises sections when applicable
-- First line: brief description (imperative mood: "Process...", "Create...")
-- Detailed description in second paragraph if needed
-
-```python
-# ✅ Correct
-async def create_session(app_state: AppState, title: str | None = None) -> str:
-    """Create new session and initialize workspace.
-
-    Creates a new session with optional custom title and sets up the session
-    workspace for file operations and tool executions.
-
-    Args:
-        app_state: Application state container
-        title: Optional custom session title (default: auto-generated timestamp)
-
-    Returns:
-        New session ID
-
-    Raises:
-        RuntimeError: If session creation fails
-    """
-```
-
-### Code Organization
-- Keep functions focused (single responsibility)
-- Extract complex logic into helper functions
-- Use descriptive names: `create_agent_with_mcp_servers()` not `setup()`
-- Prefer explicit over implicit: `send_error_to_frontend()` not `handle_error()`
-- Module size: ~200-400 lines ideal, split if exceeding 500
-
-### Constants
-- Define in `core/constants.py` using Pydantic Settings
-- Use SCREAMING_SNAKE_CASE for module-level constants
-- Group related constants together
-- Document units and constraints in comments
-
-```python
-# ✅ Correct
-from pydantic_settings import BaseSettings
-
-class Settings(BaseSettings):
-    """Application settings with environment variable support."""
-    azure_openai_api_key: str
-    azure_openai_endpoint: str
-    azure_openai_deployment: str
-    reasoning_effort: Literal["minimal", "low", "medium", "high"] = "medium"
-
-# Module-level constants
-MAX_TOKEN_LIMIT: int = 272_000  # GPT-5 context limit
-SUMMARIZATION_THRESHOLD: float = 0.2  # Trigger at 20% of limit
-SESSION_ID_LENGTH: int = 8
-```
-
-## Frontend Architecture (Electron)
-
-### Component-Based ES6 Structure
-```
-electron/renderer/
-├── index.js                    # Entry point (imports CSS + bootstrapSimple)
-├── bootstrap.js                # 7-phase bootstrap orchestrator
-├── bootstrap/                  # Error recovery + validators + phases 1-7
-│   └── phases/phase[1-7]-*.js  # Adapters → State/DOM → Services → Components → Handlers → Plugins → Data
-├── adapters/                   # DOM, IPC, Storage adapters + barrel
-├── config/                     # constants, colors, model-metadata
-├── core/                       # AppState + EventBus + lifecycle helpers
-│   ├── component-lifecycle.js
-│   ├── event-bus.js
-│   ├── lifecycle-manager.js
-│   └── state.js
-├── managers/                   # View + DOM + file rendering helpers
-│   ├── dom-manager.js
-│   ├── file-manager.js
-│   └── view-manager.js
-├── services/                   # Business logic (AppState-backed)
-│   ├── message-service.js
-│   ├── file-service.js
-│   ├── function-call-service.js
-│   └── session-service.js
-├── handlers/                   # Event wiring
-│   ├── message-handlers-v2.js  # EventBus-driven streaming + tool cards
-│   ├── session-list-handlers.js
-│   ├── chat-events.js, file-events.js, session-events.js
-├── plugins/                    # Plugin registry + core plugins
-│   ├── core-plugins.js, index.js, plugin-interface.js
-├── ui/                         # UI layer
-│   ├── components/             # ChatContainer, ConnectionStatus, FilePanel, InputArea, ModelSelector
-│   ├── renderers/              # session-list-renderer.js + index.js
-│   ├── chat-ui.js, function-card-ui.js, welcome-page.js, titlebar.js
-│   └── utils/welcome-animations.js
-├── viewmodels/                 # message-viewmodel.js, session-viewmodel.js
-└── utils/                      # css-variables, markdown-renderer, scroll-utils, toast, chat-model-updater, etc.
-```
-
-### JavaScript/TypeScript Conventions
-- Use ES6 modules with explicit imports/exports
-- Prefer `const` over `let`, never use `var`
-- Use arrow functions for callbacks: `() => {}`
-- Use template literals for strings: `` `Message: ${msg}` ``
-- Use optional chaining: `obj?.prop?.method?.()`
-- Use nullish coalescing: `value ?? defaultValue`
-
-### Component Guidelines
-- **Reusability**: Extract shared UI logic into components (e.g., ModelSelector)
-- **Lifecycle Management**: Components must clean up resources (event listeners, file handles)
-- **State Management**: Pass `onChange` callbacks for state updates, avoid internal mutations
-- **Modes**: Support different operational modes (e.g., local-only vs auto-sync)
-
-```javascript
-// ✅ Component with cleanup
-class FilePanel {
-  closeAllHandles() {
-    // Remove file previews
-    const previews = this.container.querySelectorAll("[data-file-handle]");
-    previews.forEach(preview => preview.remove());
-
-    // Clone container to remove event listeners
-    const cloned = this.container.cloneNode(false);
-    this.container.parentNode?.replaceChild(cloned, this.container);
-    this.container = cloned;
-  }
-}
-```
-
-### Resource Management
-- **File Handles**: Always close file handles before deletion operations
-- **Event Listeners**: Clean up listeners when destroying components
-- **DOM References**: Use cloning technique to force garbage collection
-- **Backend Coordination**: Frontend cleanup before backend operations (e.g., session deletion)
-
-## Testing Guidelines
-
-### Test Structure
-```
-tests/
-├── __init__.py
-├── conftest.py              # Pytest fixtures
-├── app/
-│   ├── test_state.py
-│   └── __init__.py
-├── core/
-│   ├── test_agent.py
-│   ├── test_session.py
-│   ├── test_full_history.py
-│   └── __init__.py
-├── models/
-│   ├── test_event_models.py
-│   ├── test_api_models.py
-│   └── __init__.py
-└── utils/
-    ├── test_validation.py
-    ├── test_token_utils.py
-    └── __init__.py
-```
-
-### Test Conventions
-- Use pytest for all tests
-- Use descriptive test names: `test_create_session_with_custom_title`
-- Use fixtures for common setup (defined in conftest.py)
-- Mock external dependencies (Azure OpenAI, MCP servers)
-- Test edge cases and error conditions
-
-## Tool Configuration
-
-### Ruff (Linter & Formatter)
-- Line length: 120 characters
-- Target: Python 3.10+
-- Quote style: double quotes
-- Enabled rules: E, W, F, I, B, C4, UP, SIM, RUF, G, PLC, PLE, PLR, PLW, PERF, FA
-- See pyproject.toml for complete configuration
-
-### Mypy (Type Checker)
-- Strict mode enabled
-- Python version: 3.13
-- All functions require complete type annotations
-- No implicit optionals
-- See pyproject.toml for overrides
-
-### Black (Formatter)
-- Line length: 120
-- Target: Python 3.10+
-- Quote style: double (via Ruff)
-
-## Development Workflow
-
-### Before Committing
-```bash
-make quality    # Run format + lint + typecheck
-make test       # Validate syntax
-make precommit  # Comprehensive pre-commit checks
-```
-
-### Key Commands
-```bash
-make run        # Production mode
-make dev        # Development with DevTools
-make logs       # View conversation logs
-make db-explore # Database inspection
-make health     # System health check
-```
-
-## Critical Rules
-
-1. **No Module Globals**: Pass AppState explicitly to all functions
-2. **All Functions Async**: Use async/await consistently in backend
-3. **Complete Type Annotations**: Every function must have full types
-4. **Pydantic Validation**: Use BaseModel for all data validation
-5. **Explicit State**: No hidden global state or singletons (except logger)
-6. **Error Boundaries**: Try/except at IPC, I/O, and network boundaries
-7. **Structured Logging**: Use logger with extra data for JSON logs
-8. **Import Order**: future → stdlib → third-party → first-party → local
-9. **Docstrings Required**: All public functions need Google-style docs
-10. **MCP Integration**: Use Agent/Runner pattern for tool orchestration
-11. **Component Lifecycle**: Always implement cleanup methods (closeAllHandles, destroy, etc.)
-12. **Resource Management**: Close file handles before deletion, force GC when needed
-
-## Frontend Critical Rules
-
-1. `AppState` is the renderer source of truth; use `EventBus` only for cross-component events, not as primary state.
-2. Update UI via `AppState` subscriptions instead of direct DOM mutations; keep DOM writes centralized per state change.
-3. Mount components with `ComponentLifecycle` + `globalLifecycleManager`; avoid manual DOM cloning/cleanup hacks.
-4. Renderer logging stays error-focused and emoji-free; prefer `window.electronAPI.log` for persistent logs and `console.error` for errors.
-5. When editing styles, use semantic tokens from `ui/input.css`; avoid adding new hardcoded Tailwind/inline colors.
-
-## Anti-Patterns to Avoid
-
-❌ **Don't**: Use module-level globals for state
-✅ **Do**: Pass AppState explicitly
-
-❌ **Don't**: Mix sync and async code (use `asyncio.run()` only in main)
-✅ **Do**: Make all backend functions async
-
-❌ **Don't**: Use bare except clauses
-✅ **Do**: Catch specific exceptions with context
-
-❌ **Don't**: Print to stdout/stderr directly
-✅ **Do**: Use structured logger
-
-❌ **Don't**: Use implicit type annotations (rely on inference)
-✅ **Do**: Explicitly annotate all function signatures
-
-❌ **Don't**: Mutate default arguments (`def func(items=[]): ...`)
-✅ **Do**: Use None and initialize: `def func(items: list[str] | None = None): items = items or []`
-
-## Project-Specific Patterns
-
-### Agent/Runner Pattern
-```python
-# Create agent with MCP servers
-agent = Agent(
-    name="Chat Juicer",
-    model=deployment,
-    instructions=system_instructions,
-    tools=native_tools,
-    mcp_servers=[seq_thinking_server, fetch_server],
-    model_settings=ModelSettings(reasoning=Reasoning(effort="medium")),
+# In integrations/mcp_servers.py
+new_server = MCPServerStdio(
+    params={"command": "npx", "args": ["-y", "@mcp/server-name"]}
 )
-
-# Run agent with streaming
-async with agent.run_stream(user_input) as stream:
-    async for event in stream:
-        # Handle streaming events
-        pass
 ```
 
-### Session Management
-```python
-# Layer 1: Token-aware context (LLM sees this)
-session = TokenAwareSQLiteSession(session_id=session_id, db_path=DB_PATH)
-await session.add_item(user_message)
+## Testing
 
-# Layer 2: Full history (UI sees this)
-full_history_store = FullHistoryStore(db_path=DB_PATH)
-await full_history_store.add_item(session_id, user_message)
-```
+- **Backend**: `make test-backend` (pytest)
+- **Frontend**: `make test-frontend` (vitest)
+- **All**: `make test`
 
-### IPC Communication
-```python
-# Backend → Frontend
-IPCManager.send_message(content)
-IPCManager.send_error(message)
-IPCManager.send_function_call(name, args, call_id)
-IPCManager.send_tool_result(name, result, call_id)
-
-# Frontend → Backend (JSON protocol)
-{"type": "session_command", "command": "create", "data": {...}}
-{"type": "upload", "data": {...}}
-```
-
-## Environment Variables
-
-Required in `src/.env`:
-```env
-AZURE_OPENAI_API_KEY=your-key
-AZURE_OPENAI_ENDPOINT=https://resource.openai.azure.com/
-AZURE_OPENAI_DEPLOYMENT=gpt-5-mini
-
-# Optional
-REASONING_EFFORT=medium  # minimal, low, medium, high
-DEBUG=false
-```
-
-## Documentation References
-
-- Agent/Runner: OpenAI Agents SDK docs
-- MCP Servers: Model Context Protocol specification
-- Electron IPC: Electron documentation
-- Pydantic: Pydantic v2 documentation
-- Type Hints: Python typing documentation
-
----
-
-**When making changes**: Always run `make quality` and `make test` before committing.
-**When adding features**: Follow the orchestrator pattern (bootstrap → runtime → main orchestration).
-**When debugging**: Check `make logs` and `make logs-errors` for structured JSON logs.
+Test files live in `tests/backend/` and `tests/frontend/`.

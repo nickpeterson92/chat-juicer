@@ -18,10 +18,17 @@ from tools.document_generation import generate_document
 class TestGenerateDocument:
     """Tests for generate_document function."""
 
+    @pytest.fixture(autouse=True)
+    def setup_project_root(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Patch PROJECT_ROOT for all tests in this class."""
+        import utils.file_utils
+
+        monkeypatch.setattr(utils.file_utils, "PROJECT_ROOT", tmp_path)
+        monkeypatch.setattr(utils.file_utils, "DATA_FILES_PATH", tmp_path / "data" / "files")
+
     @pytest.mark.asyncio
-    async def test_generate_document_success(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_generate_document_success(self, tmp_path: Path) -> None:
         """Test successful document generation."""
-        monkeypatch.chdir(tmp_path)
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
@@ -37,9 +44,8 @@ class TestGenerateDocument:
         assert (output_dir / "test.md").exists()
 
     @pytest.mark.asyncio
-    async def test_generate_document_with_subdirectory(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_generate_document_with_subdirectory(self, tmp_path: Path) -> None:
         """Test generating document in subdirectory."""
-        monkeypatch.chdir(tmp_path)
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
@@ -53,9 +59,8 @@ class TestGenerateDocument:
         assert (output_dir / "reports" / "test.md").exists()
 
     @pytest.mark.asyncio
-    async def test_generate_document_with_backup(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_generate_document_with_backup(self, tmp_path: Path) -> None:
         """Test generating document with backup of existing file."""
-        monkeypatch.chdir(tmp_path)
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
@@ -80,9 +85,8 @@ class TestGenerateDocument:
         assert existing_file.read_text() == new_content
 
     @pytest.mark.asyncio
-    async def test_generate_document_multiple_backups(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_generate_document_multiple_backups(self, tmp_path: Path) -> None:
         """Test generating multiple backup versions."""
-        monkeypatch.chdir(tmp_path)
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
@@ -101,9 +105,8 @@ class TestGenerateDocument:
         assert (output_dir / "test.md.backup1").exists()
 
     @pytest.mark.asyncio
-    async def test_generate_document_no_backup(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_generate_document_no_backup(self, tmp_path: Path) -> None:
         """Test generating document without backup (overwrite)."""
-        monkeypatch.chdir(tmp_path)
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
@@ -123,10 +126,8 @@ class TestGenerateDocument:
         assert not backup_file.exists()
 
     @pytest.mark.asyncio
-    async def test_generate_document_with_session(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_generate_document_with_session(self, tmp_path: Path) -> None:
         """Test generating document with session workspace."""
-        monkeypatch.chdir(tmp_path)
-
         # Create session workspace
         session_workspace = tmp_path / "data" / "files" / "chat_test" / "output"
         session_workspace.mkdir(parents=True)
@@ -141,10 +142,8 @@ class TestGenerateDocument:
         assert (session_workspace / "session_doc.md").exists()
 
     @pytest.mark.asyncio
-    async def test_generate_document_invalid_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_generate_document_invalid_path(self) -> None:
         """Test generating document with invalid path."""
-        monkeypatch.chdir(tmp_path)
-
         # Try to use path traversal
         result = await generate_document("content", "../../../etc/passwd")
 
@@ -153,9 +152,8 @@ class TestGenerateDocument:
         assert "error" in data
 
     @pytest.mark.asyncio
-    async def test_generate_document_write_error(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_generate_document_write_error(self, tmp_path: Path) -> None:
         """Test error handling when write fails."""
-        monkeypatch.chdir(tmp_path)
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
@@ -169,10 +167,8 @@ class TestGenerateDocument:
             assert "error" in data
 
     @pytest.mark.asyncio
-    async def test_generate_document_exception(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_generate_document_exception(self) -> None:
         """Test error handling when exception occurs."""
-        monkeypatch.chdir(tmp_path)
-
         with patch("tools.document_generation.validate_file_path") as mock_validate:
             mock_validate.side_effect = Exception("Unexpected error")
 
@@ -183,9 +179,8 @@ class TestGenerateDocument:
             assert "Failed to generate document" in data["error"]
 
     @pytest.mark.asyncio
-    async def test_generate_document_stats(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_generate_document_stats(self, tmp_path: Path) -> None:
         """Test that document stats are calculated correctly."""
-        monkeypatch.chdir(tmp_path)
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 

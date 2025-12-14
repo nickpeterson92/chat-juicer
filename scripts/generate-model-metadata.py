@@ -66,6 +66,7 @@ def generate_model_metadata_js() -> str:
 
     # Build MODEL_FAMILY_LABELS mapping
     family_labels = {
+        "gpt-5.1": "GPT-5.1 Models",
         "gpt-5": "GPT-5 Models",
         "gpt-4.1": "GPT-4.1 Models",
     }

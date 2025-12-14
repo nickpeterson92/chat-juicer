@@ -6,6 +6,7 @@ export default defineConfig({
     // Environment setup
     environment: "happy-dom",
     globals: true,
+    setupFiles: ["./tests/frontend/setup.js"],
 
     // Coverage configuration
     coverage: {

@@ -8,10 +8,24 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from pydantic import Field, HttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# ============================================================================
+# Project Paths
+# ============================================================================
+
+#: Project root directory (parent of src/)
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+
+#: Data files directory for session workspaces
+DATA_FILES_PATH = PROJECT_ROOT / "data" / "files"
+
+#: Global templates directory
+TEMPLATES_PATH = PROJECT_ROOT / "templates"
 
 # ============================================================================
 # Model Configuration - Single Source of Truth
@@ -51,11 +65,20 @@ class ModelConfig:
 #: Models with is_ui_model=False are backend-only (for token limits, etc.)
 #: model_family groups secondary models into sub-dropdowns (e.g., "gpt-5", "gpt-4.1")
 MODEL_CONFIGS: tuple[ModelConfig, ...] = (
-    # GPT-5.1 series (latest) - Primary models shown at top level
-    ModelConfig("gpt-5.1", "GPT-5.1", "Latest reasoning model", 272000, True, True),
-    ModelConfig("gpt-5.1-codex-max", "GPT-5.1 Codex Max", "Maximum capability code generation", 272000, True, True),
+    # GPT-5.2/5.1 series (latest) - Primary models shown at top level
+    ModelConfig("gpt-5.2", "GPT-5.2", "Latest and most capable model", 272000, True, True),
+    ModelConfig("gpt-5.1", "GPT-5.1", "Advanced reasoning model", 272000, True, True),
     # GPT-5 series - Secondary models in "GPT-5 Models" sub-dropdown
     ModelConfig("gpt-5-pro", "GPT-5 Pro", "Most capable for complex tasks", 272000, True, False, is_ui_model=False),
+    ModelConfig(
+        "gpt-5.1-codex-max",
+        "GPT-5.1 Codex Max",
+        "Maximum capability code generation",
+        272000,
+        True,
+        False,
+        model_family="gpt-5.1",
+    ),
     ModelConfig("gpt-5", "GPT-5", "Deep reasoning for hard problems", 272000, True, False, model_family="gpt-5"),
     ModelConfig(
         "gpt-5-mini", "GPT-5 Mini", "Smart and fast for everyday use", 272000, True, False, model_family="gpt-5"
@@ -469,7 +492,7 @@ SUMMARY_MAX_COMPLETION_TOKENS = 3000
 #: Default model name for fallback scenarios and initial agent setup.
 #: Used when agent model is not specified or during bootstrap.
 #: Sessions will override this with their own per-session model selection.
-DEFAULT_MODEL = "gpt-5.1"
+DEFAULT_MODEL = "gpt-5.2"
 
 #: Models that support reasoning_effort parameter (derived from MODEL_CONFIGS).
 #: Only these models can use the reasoning.effort configuration.
@@ -621,6 +644,31 @@ class Settings(BaseSettings):
     # Tavily MCP server API key (optional - enables web search via Tavily)
     tavily_api_key: str | None = Field(default=None, description="Tavily API key for web search MCP server")
 
+    # Database (Phase 1: local PostgreSQL)
+    database_url: str = Field(
+        default="postgresql://chatjuicer:localdev@localhost:5433/chatjuicer",
+        description="PostgreSQL connection string",
+    )
+
+    # File storage
+    file_storage: str = Field(default="local", description="File storage backend: 'local' or 's3'")
+    file_storage_path: str = Field(default="data/files", description="Base path for local file storage")
+
+    # API server
+    api_port: int = Field(default=8000, description="FastAPI port")
+    api_host: str = Field(default="0.0.0.0", description="FastAPI host")
+
+    # Auth (Phase 1 convenience)
+    default_user_email: str = Field(default="local@chatjuicer.dev", description="Seeded default user email")
+    allow_localhost_noauth: bool = Field(
+        default=True,
+        description="Allow auth bypass on localhost during local development",
+    )
+    jwt_secret: str = Field(default="change-me-in-prod", description="JWT signing secret")
+    jwt_algorithm: str = Field(default="HS256", description="JWT signing algorithm")
+    access_token_expires_minutes: int = Field(default=15, description="Access token lifetime (minutes)")
+    refresh_token_expires_days: int = Field(default=7, description="Refresh token lifetime (days)")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -661,6 +709,24 @@ class Settings(BaseSettings):
         """Basic validation of OpenAI API key format."""
         if v is not None and (not v or len(v) < 10):
             raise ValueError("Invalid OpenAI API key format")
+        return v
+
+    @field_validator("file_storage")
+    @classmethod
+    def validate_file_storage(cls, v: str) -> str:
+        """Validate file storage backend selection."""
+        allowed = {"local", "s3"}
+        value = v.lower()
+        if value not in allowed:
+            raise ValueError(f"file_storage must be one of {sorted(allowed)}")
+        return value
+
+    @field_validator("jwt_secret")
+    @classmethod
+    def validate_jwt_secret(cls, v: str) -> str:
+        """Validate JWT secret is provided."""
+        if not v or len(v) < 8:
+            raise ValueError("jwt_secret must be at least 8 characters")
         return v
 
     def model_post_init(self, __context: Any) -> None:

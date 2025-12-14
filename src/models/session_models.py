@@ -7,75 +7,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict
+from typing import Any, Literal, TypedDict
 
 from pydantic import BaseModel, Field, field_validator
-
-if TYPE_CHECKING:
-    from agents import Agent
-
-    from core.full_history import FullHistoryStore
-    from core.session import TokenAwareSQLiteSession
-    from core.session_manager import SessionManager
-
-# Protocol for Layer 2 persistence (full history storage)
-
-
-class FullHistoryProtocol(Protocol):
-    """Protocol for full history storage implementations (Layer 2 persistence).
-
-    Layer 2 stores complete user-visible conversation history that is never
-    trimmed or summarized, separate from the token-optimized LLM context.
-    """
-
-    def save_message(self, session_id: str, message: dict[str, Any]) -> bool:
-        """Save a message to full history storage.
-
-        Args:
-            session_id: Session identifier
-            message: Message dict with 'role' and 'content' keys
-
-        Returns:
-            True if saved successfully, False otherwise
-        """
-        ...
-
-    def get_messages(self, session_id: str, limit: int | None = None, offset: int = 0) -> list[dict[str, Any]]:
-        """Retrieve messages from full history storage.
-
-        Args:
-            session_id: Session identifier
-            limit: Maximum number of messages to return (None for all)
-            offset: Number of messages to skip (for pagination)
-
-        Returns:
-            List of message dicts
-        """
-        ...
-
-    def clear_session(self, session_id: str) -> bool:
-        """Clear all messages for a session.
-
-        Args:
-            session_id: Session identifier
-
-        Returns:
-            True if cleared successfully, False otherwise
-        """
-        ...
-
-
-class AppStateProtocol(Protocol):
-    """Protocol defining required AppState interface for session commands.
-
-    Used for structural typing - any class with these attributes satisfies this protocol.
-    """
-
-    session_manager: SessionManager | None
-    current_session: TokenAwareSQLiteSession | None
-    agent: Agent | None
-    deployment: str
-    full_history_store: FullHistoryStore | None
 
 
 class SessionMetadataParams(TypedDict, total=False):
@@ -111,7 +45,7 @@ class SessionMetadata(BaseModel):
         description="List of enabled MCP server names (sequential, fetch, tavily)",
     )
     model: str = Field(
-        default="gpt-5",
+        default="gpt-5.2",
         description="Model deployment name for this session",
     )
     reasoning_effort: str = Field(
@@ -511,7 +445,6 @@ ContentItem = (
 
 
 __all__ = [
-    "AppStateProtocol",
     "AudioContent",
     "ClearSessionCommand",
     "ConfigMetadataCommand",
@@ -519,7 +452,6 @@ __all__ = [
     "CreateSessionCommand",
     "DeleteSessionCommand",
     "FileContent",
-    "FullHistoryProtocol",
     "ImageContent",
     "ListSessionsCommand",
     "LoadMoreMessagesCommand",

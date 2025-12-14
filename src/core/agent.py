@@ -79,6 +79,10 @@ def create_agent(
 
     Returns:
         Configured Agent instance
+
+    Note:
+        For concurrent request isolation, pass a custom model_provider via RunConfig
+        to Runner.run_streamed() rather than trying to set client on Agent.
     """
     # Use session-specific reasoning_effort if provided, otherwise use default
     effort_level = reasoning_effort if reasoning_effort is not None else "medium"
@@ -96,30 +100,25 @@ def create_agent(
     # Check if this is a reasoning model that supports reasoning_effort
     is_reasoning_model = any(deployment.startswith(model) for model in REASONING_MODELS)
 
+    # Build common agent kwargs
+    agent_kwargs: dict[str, Any] = {
+        "name": "Chat Juicer",
+        "model": deployment,
+        "instructions": instructions,
+        "tools": tools,
+        "mcp_servers": mcp_servers,
+    }
+
     # Configure model settings with reasoning effort only for reasoning models
     if is_reasoning_model:
         model_settings = ModelSettings(reasoning=Reasoning(effort=normalized_effort))  # type: ignore[arg-type]
         logger.info(f"Reasoning model detected - reasoning_effort set to '{normalized_effort}'")
-        # Create agent with reasoning configuration
-        agent = Agent(
-            name="Chat Juicer",
-            model=deployment,
-            instructions=instructions,
-            tools=tools,
-            mcp_servers=mcp_servers,
-            model_settings=model_settings,
-        )
+        agent_kwargs["model_settings"] = model_settings
     else:
         logger.info("Non-reasoning model detected - reasoning_effort not applied")
 
-        # Create agent without model_settings
-        agent = Agent(
-            name="Chat Juicer",
-            model=deployment,
-            instructions=instructions,
-            tools=tools,
-            mcp_servers=mcp_servers,
-        )
+    # Create agent
+    agent = Agent(**agent_kwargs)
 
     # Log agent configuration
     logger.info(f"Chat Juicer Agent created - Deployment: {deployment}")

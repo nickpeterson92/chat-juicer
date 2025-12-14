@@ -17,6 +17,7 @@ import {
   createStreamingAssistantMessage,
   updateAssistantMessage,
 } from "../ui/chat-ui.js";
+import { updateSessionStreamingIndicator } from "../ui/renderers/session-list-renderer.js";
 
 /**
  * Check if a message is for the active session (Phase 1: Concurrent Sessions)
@@ -118,6 +119,12 @@ export function registerMessageHandlers(context) {
 
     // Start stream tracking for this session
     streamManager.startStream(sessionId);
+
+    // Update session list streaming indicator (only shows for background sessions)
+    // Active session uses the main chat streaming UI, not the sidebar indicator
+    if (!isActive) {
+      updateSessionStreamingIndicator(sessionId, true);
+    }
 
     // Only update UI for active session
     if (isActive) {
@@ -231,6 +238,9 @@ export function registerMessageHandlers(context) {
 
     // End stream tracking for this session
     streamManager.endStream(sessionId);
+
+    // Always update session list streaming indicator (remove indicator when stream ends)
+    updateSessionStreamingIndicator(sessionId, false);
 
     if (isActiveSessionMessage(message, appState)) {
       const currentAssistantId = appState.message.currentAssistantId;
@@ -706,8 +716,24 @@ export function registerMessageHandlers(context) {
   });
 
   createHandler("session_updated", (message) => {
-    if (message.data?.success && message.data.session) {
-      // Use SessionService instead of sessionState
+    // Handle direct WebSocket format from auto-titling: { session_id, title }
+    if (message.session_id && message.title) {
+      if (services?.sessionService) {
+        services.sessionService.updateSession({
+          session_id: message.session_id,
+          title: message.title,
+        });
+      }
+
+      // Dispatch event to trigger UI refresh (session list re-render)
+      window.dispatchEvent(
+        new CustomEvent("session-updated", {
+          detail: { session_id: message.session_id, title: message.title },
+        })
+      );
+    }
+    // Handle wrapped format from REST API: { data: { success, session } }
+    else if (message.data?.success && message.data.session) {
       if (services?.sessionService) {
         services.sessionService.updateSession(message.data.session);
       }
