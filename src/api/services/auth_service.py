@@ -21,7 +21,7 @@ class AuthService:
 
     async def login(self, email: str, password: str) -> dict[str, Any]:
         """Validate credentials and return access/refresh tokens."""
-        user = await self._get_user_by_email(email)
+        user = await self.get_user_by_email(email)
         if not user or not bcrypt.verify(password, user["password_hash"]):
             raise ValueError("Invalid credentials")
 
@@ -29,13 +29,13 @@ class AuthService:
         return {
             "access_token": tokens["access"],
             "refresh_token": tokens["refresh"],
-            "user": self._user_payload(user),
+            "user": self.user_payload(user),
         }
 
     async def refresh(self, refresh_token: str) -> str:
         """Validate refresh token and return new access token."""
         payload = self._decode_token(refresh_token, "refresh")
-        user = await self._get_user_by_id(UUID(payload["sub"]))
+        user = await self.get_user_by_id(UUID(payload["sub"]))
         if not user:
             raise ValueError("Invalid refresh token")
         tokens = self._issue_tokens(user, include_refresh=False)
@@ -44,32 +44,20 @@ class AuthService:
     async def get_default_user(self) -> dict[str, Any] | None:
         """Retrieve the default seeded user for Phase 1."""
         settings = get_settings()
-        return await self._get_user_by_email(settings.default_user_email)
-
-    async def get_user_by_id(self, user_id: UUID) -> asyncpg.Record | None:
-        """Fetch user by UUID."""
-        return await self._get_user_by_id(user_id)
+        return await self.get_user_by_email(settings.default_user_email)
 
     def decode_access_token(self, token: str) -> dict[str, Any]:
         """Decode and validate an access token."""
         return self._decode_token(token, "access")
 
-    def decode_refresh_token(self, token: str) -> dict[str, Any]:
-        """Decode and validate a refresh token."""
-        return self._decode_token(token, "refresh")
-
-    def user_payload(self, user: asyncpg.Record) -> dict[str, Any]:
-        """Serialize user record for API responses."""
-        return self._user_payload(user)
-
-    async def _get_user_by_email(self, email: str) -> asyncpg.Record | None:
+    async def get_user_by_email(self, email: str) -> asyncpg.Record | None:
         async with self.pool.acquire() as conn:
             return await conn.fetchrow(
                 "SELECT * FROM users WHERE email = $1",
                 email,
             )
 
-    async def _get_user_by_id(self, user_id: UUID) -> asyncpg.Record | None:
+    async def get_user_by_id(self, user_id: UUID) -> asyncpg.Record | None:
         async with self.pool.acquire() as conn:
             return await conn.fetchrow(
                 "SELECT * FROM users WHERE id = $1",
@@ -113,7 +101,7 @@ class AuthService:
             raise ValueError("Invalid token type")
         return payload
 
-    def _user_payload(self, user: asyncpg.Record) -> dict[str, Any]:
+    def user_payload(self, user: asyncpg.Record) -> dict[str, Any]:
         return {
             "id": str(user["id"]),
             "email": user["email"],

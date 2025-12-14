@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 import json
 import secrets
 import shutil
@@ -11,6 +10,7 @@ from uuid import UUID
 
 import asyncpg
 
+from api.services.message_utils import row_to_message
 from core.constants import DATA_FILES_PATH, DEFAULT_MODEL, MODEL_TOKEN_LIMITS, get_settings
 from utils.logger import logger
 
@@ -110,7 +110,7 @@ class SessionService:
                 session_uuid,
             )
 
-        messages = [self._row_to_message(r) for r in reversed(message_rows)]
+        messages = [row_to_message(r) for r in reversed(message_rows)]
         files = [self._row_to_file(r) for r in file_rows]
 
         return {
@@ -258,59 +258,6 @@ class SessionService:
             "created_at": row["created_at"].isoformat() if row["created_at"] else None,
             "last_used_at": row["last_used_at"].isoformat() if row["last_used_at"] else None,
         }
-
-    def _row_to_message(self, row: asyncpg.Record) -> dict[str, Any]:
-        """Convert database row to message dict.
-
-        For tool_call messages, uses field names expected by frontend:
-        - call_id (not tool_call_id)
-        - name (not tool_name)
-        - arguments (not tool_arguments) - parsed from JSON
-        - result (not tool_result)
-        - success (not tool_success)
-        - status: "completed" for all persisted tool calls
-
-        For partial/interrupted messages:
-        - partial: True if message was interrupted (from metadata JSONB)
-        """
-        # Extract partial flag from metadata JSONB
-        metadata = row.get("metadata") or {}
-        if isinstance(metadata, str):
-            try:
-                metadata = json.loads(metadata)
-            except json.JSONDecodeError:
-                metadata = {}
-
-        msg: dict[str, Any] = {
-            "id": str(row["id"]),
-            "role": row["role"],
-            "content": row["content"],
-            "created_at": row["created_at"].isoformat() if row["created_at"] else None,
-        }
-
-        # Add partial flag if present in metadata (for interrupted responses)
-        if metadata.get("partial"):
-            msg["partial"] = True
-            logger.info(f"Message {row['id']} has partial=True flag (interrupted response)")
-
-        # For tool_call messages, use frontend-expected field names
-        if row["role"] == "tool_call":
-            # Parse arguments from JSON string if stored that way
-            args = row["tool_arguments"]
-            if isinstance(args, str):
-                with contextlib.suppress(json.JSONDecodeError):
-                    args = json.loads(args)
-            msg.update(
-                {
-                    "call_id": row["tool_call_id"],
-                    "name": row["tool_name"],
-                    "arguments": args,
-                    "result": row["tool_result"],
-                    "status": "completed",  # All persisted tool calls are completed
-                    "success": row["tool_success"],
-                }
-            )
-        return msg
 
     def _row_to_file(self, row: asyncpg.Record) -> dict[str, Any]:
         """Convert database row to file dict."""

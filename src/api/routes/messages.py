@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import contextlib
-import json
-
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
 from api.dependencies import DB
+from api.services.message_utils import row_to_message
 
 router = APIRouter()
 
@@ -37,45 +35,5 @@ async def list_messages(
             offset,
         )
 
-    messages = []
-    for row in rows:
-        # Extract partial flag from metadata JSONB
-        metadata = row.get("metadata") or {}
-        if isinstance(metadata, str):
-            try:
-                metadata = json.loads(metadata)
-            except json.JSONDecodeError:
-                metadata = {}
-
-        msg: dict[str, Any] = {
-            "id": str(row["id"]),
-            "role": row["role"],
-            "content": row["content"],
-            "created_at": row["created_at"].isoformat() if row["created_at"] else None,
-        }
-
-        # Add partial flag if present in metadata (for interrupted responses)
-        if metadata.get("partial"):
-            msg["partial"] = True
-
-        # For tool_call messages, include tool-specific fields matching legacy format
-        # Legacy shape: role, content (tool name), call_id, name, arguments, result, status
-        if row["role"] == "tool_call":
-            # Parse arguments from JSON string if stored that way
-            args = row["tool_arguments"]
-            if isinstance(args, str):
-                with contextlib.suppress(json.JSONDecodeError):
-                    args = json.loads(args)
-            msg.update(
-                {
-                    "call_id": row["tool_call_id"],
-                    "name": row["tool_name"],
-                    "arguments": args,
-                    "result": row["tool_result"],
-                    "status": "completed",  # All persisted tool calls are completed
-                    "success": row["tool_success"],
-                }
-            )
-        messages.append(msg)
-
+    messages = [row_to_message(row) for row in rows]
     return {"messages": list(reversed(messages))}

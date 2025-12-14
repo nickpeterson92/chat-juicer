@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import asyncio
 import os
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any
 
 import asyncpg
 
@@ -15,9 +13,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes import auth, chat, config, files, health, messages, sessions
+from api.websocket.manager import WebSocketManager
 from core.constants import get_settings
-from integrations.mcp_pool import initialize_mcp_pool, shutdown_mcp_pool
-from integrations.mcp_registry import initialize_all_mcp_servers
+from integrations.mcp_pool import initialize_mcp_pool
 from integrations.sdk_token_tracker import patch_sdk_for_auto_tracking
 from utils.client_factory import create_http_client, create_openai_client
 from utils.logger import logger
@@ -27,14 +25,6 @@ env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
 load_dotenv(env_path)
 
 settings = get_settings()
-
-
-async def _cleanup_mcp_server(server: Any) -> None:
-    """Clean up a single MCP server with error handling."""
-    try:
-        await server.__aexit__(None, None, None)
-    except Exception as e:
-        logger.warning(f"Error cleaning up MCP server: {e}")
 
 
 def _setup_openai_client() -> None:
@@ -79,28 +69,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         max_size=10,
     )
 
-    # Initialize MCP servers as dict for per-session filtering (kept for reference/config)
-    app.state.mcp_servers = await initialize_all_mcp_servers()
+    # Initialize WebSocket manager on app.state for centralized connection tracking
+    app.state.ws_manager = WebSocketManager()
 
-    # Initialize MCP server pool for concurrent request handling
+    # Initialize MCP server pool on app.state for concurrent request handling
     # Pool pre-spawns server instances to avoid per-request overhead
     pool_size = 3  # Number of instances per server type
-    await initialize_mcp_pool(pool_size=pool_size)
+    app.state.mcp_pool = await initialize_mcp_pool(pool_size=pool_size)
     logger.info(f"MCP server pool initialized with {pool_size} instances per server type")
 
     try:
         yield
     finally:
-        # Shutdown MCP pool first (gracefully closes all pooled servers)
-        await shutdown_mcp_pool()
-        logger.info("MCP server pool shutdown complete")
-
-        # Cleanup any non-pooled MCP servers (legacy/reference)
-        if hasattr(app.state, "mcp_servers"):
-            await asyncio.gather(
-                *[_cleanup_mcp_server(server) for server in app.state.mcp_servers.values()],
-                return_exceptions=True,
-            )
+        # Shutdown MCP pool (gracefully closes all pooled servers)
+        if app.state.mcp_pool:
+            await app.state.mcp_pool.shutdown()
+            logger.info("MCP server pool shutdown complete")
 
         await app.state.db_pool.close()
 

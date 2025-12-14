@@ -40,4 +40,5 @@ class WebSocketManager:
                 await self.disconnect(ws, session_id)
 
 
-ws_manager = WebSocketManager()
+# WebSocketManager instance created in app.state during lifespan
+# Access via dependency injection or request.app.state.ws_manager

@@ -13,7 +13,7 @@ from api.dependencies import DATA_FILES_PATH
 from api.middleware.auth import get_current_user_from_token
 from api.services.chat_service import ChatService
 from api.services.file_service import LocalFileService
-from api.websocket.manager import ws_manager
+from api.websocket.manager import WebSocketManager
 from core.constants import get_settings
 from utils.logger import logger
 
@@ -39,7 +39,8 @@ async def chat_websocket(
 ) -> None:
     """WebSocket endpoint for chat streaming."""
     db = websocket.app.state.db_pool
-    mcp_servers = getattr(websocket.app.state, "mcp_servers", {})
+    ws_manager: WebSocketManager = websocket.app.state.ws_manager
+    mcp_pool = websocket.app.state.mcp_pool
 
     try:
         await _get_user_for_websocket(token, db)
@@ -50,7 +51,10 @@ async def chat_websocket(
     await ws_manager.connect(websocket, session_id)
 
     chat_service = ChatService(
-        db, mcp_servers, ws_manager, file_service=LocalFileService(base_path=DATA_FILES_PATH, pool=db)
+        db,
+        ws_manager,
+        file_service=LocalFileService(base_path=DATA_FILES_PATH, pool=db),
+        mcp_pool=mcp_pool,
     )
 
     # Track active chat task for this session
