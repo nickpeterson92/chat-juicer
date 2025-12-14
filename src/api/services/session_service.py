@@ -6,18 +6,13 @@ import secrets
 import shutil
 
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 from uuid import UUID
 
 import asyncpg
 
-from core.constants import DEFAULT_MODEL, MODEL_TOKEN_LIMITS, get_settings
+from core.constants import DATA_FILES_PATH, DEFAULT_MODEL, MODEL_TOKEN_LIMITS, get_settings
 from utils.logger import logger
-
-# Project root for file paths
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
-DATA_FILES_PATH = PROJECT_ROOT / "data" / "files"
 
 
 class SessionService:

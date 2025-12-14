@@ -15,20 +15,18 @@ from typing import Any, cast
 import aiofiles
 
 from core.constants import (
+    DATA_FILES_PATH,
     ERROR_NULL_BYTE_IN_PATH,
     ERROR_PATH_OUTSIDE_PROJECT,
     ERROR_PATH_OUTSIDE_WORKSPACE,
     ERROR_PATH_TRAVERSAL,
     ERROR_SYMLINK_ESCAPE,
+    PROJECT_ROOT,
 )
 from models.api_models import TextEditResponse
 from models.ipc_models import UploadResult
 from utils.json_utils import json_pretty
 from utils.logger import logger
-
-# Project root - file_utils.py is at src/utils/file_utils.py
-PROJECT_ROOT = Path(__file__).parent.parent.parent
-DATA_FILES_PATH = PROJECT_ROOT / "data" / "files"
 
 
 def get_relative_path(path: Path) -> Path:

@@ -25,11 +25,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from core.constants import DATA_FILES_PATH
 
-# Project root is two levels up from this file (src/tools/code_interpreter.py -> project root)
-PROJECT_ROOT = Path(__file__).parent.parent.parent
-DATA_FILES_PATH = PROJECT_ROOT / "data" / "files"
+logger = logging.getLogger(__name__)
 
 # ============================================
 # CONFIGURATION

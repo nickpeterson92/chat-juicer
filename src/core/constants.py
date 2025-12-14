@@ -8,10 +8,24 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from pydantic import Field, HttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# ============================================================================
+# Project Paths
+# ============================================================================
+
+#: Project root directory (parent of src/)
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+
+#: Data files directory for session workspaces
+DATA_FILES_PATH = PROJECT_ROOT / "data" / "files"
+
+#: Global templates directory
+TEMPLATES_PATH = PROJECT_ROOT / "templates"
 
 # ============================================================================
 # Model Configuration - Single Source of Truth

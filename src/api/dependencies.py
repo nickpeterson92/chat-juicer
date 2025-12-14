@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Annotated, Any
 
 import asyncpg
@@ -9,10 +8,7 @@ from fastapi import Depends, Request
 
 from api.services.file_service import FileService, LocalFileService
 from api.services.session_service import SessionService
-
-# Project root is parent of src/
-PROJECT_ROOT = Path(__file__).parent.parent.parent
-DATA_FILES_PATH = PROJECT_ROOT / "data" / "files"
+from core.constants import DATA_FILES_PATH
 
 
 async def get_db(request: Request) -> asyncpg.Pool:

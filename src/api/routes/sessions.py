@@ -6,12 +6,9 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from api.dependencies import DB, PROJECT_ROOT, Files, Sessions
-from core.constants import get_settings
+from api.dependencies import DB, Files, Sessions
+from core.constants import TEMPLATES_PATH, get_settings
 from models.api_models import SessionListResponse, SessionRecord, SessionWithHistoryResponse
-
-# Global templates path
-TEMPLATES_PATH = PROJECT_ROOT / "templates"
 
 router = APIRouter()
 
