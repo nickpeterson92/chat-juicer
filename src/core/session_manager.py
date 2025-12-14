@@ -15,6 +15,7 @@ from agents import Agent, Runner, TResponseInputItem
 
 from core.constants import DEFAULT_SESSION_METADATA_PATH, SESSION_ID_LENGTH
 from models.session_models import SessionMetadata, SessionMetadataParams, SessionUpdate
+from utils import file_utils
 from utils.logger import logger
 
 
@@ -124,7 +125,7 @@ class SessionManager:
         session = SessionMetadata(**session_params)
 
         # Create secure session directory structure
-        session_dir = Path(f"data/files/{session_id}")
+        session_dir = file_utils.DATA_FILES_PATH / session_id
         session_dir.mkdir(parents=True, exist_ok=True)
 
         # Create sources/ subdirectory for uploaded files
@@ -223,9 +224,7 @@ class SessionManager:
         # Delete session files directory
         import shutil
 
-        from pathlib import Path
-
-        session_files_dir = Path(f"data/files/{session_id}")
+        session_files_dir = file_utils.DATA_FILES_PATH / session_id
         if session_files_dir.exists():
             try:
                 shutil.rmtree(session_files_dir)
@@ -302,7 +301,6 @@ class SessionManager:
         import shutil
 
         from datetime import datetime
-        from pathlib import Path
 
         from core.constants import CHAT_HISTORY_DB_PATH
         from core.full_history import FullHistoryStore
@@ -345,7 +343,7 @@ class SessionManager:
                     return (False, True)
 
                 # Check if session has uploaded files before deletion
-                sources_dir = Path(f"data/files/{sid}/sources")
+                sources_dir = file_utils.DATA_FILES_PATH / sid / "sources"
                 if sources_dir.exists():
                     files = list(sources_dir.iterdir())
                     if files:
@@ -365,7 +363,7 @@ class SessionManager:
 
         # Helper to delete session files (avoids nested try-except)
         def delete_session_files(sid: str) -> None:
-            session_files_dir = Path(f"data/files/{sid}")
+            session_files_dir = file_utils.DATA_FILES_PATH / sid
             if session_files_dir.exists():
                 try:
                     shutil.rmtree(session_files_dir)

@@ -7,11 +7,9 @@ from __future__ import annotations
 
 import shutil
 
-from pathlib import Path
-
 from core.constants import MAX_BACKUP_VERSIONS
 from models.api_models import DocumentGenerateResponse
-from utils.file_utils import validate_file_path, write_file_content
+from utils.file_utils import PROJECT_ROOT, validate_file_path, write_file_content
 from utils.logger import logger
 from utils.token_utils import count_tokens
 
@@ -60,8 +58,10 @@ async def generate_document(
                 counter += 1
 
             shutil.copy2(output_path, backup_path)
-            cwd = Path.cwd()
-            backup_created = str(backup_path.relative_to(cwd))
+            try:
+                backup_created = str(backup_path.relative_to(PROJECT_ROOT))
+            except ValueError:
+                backup_created = str(backup_path)
             logger.info(f"Created backup: {backup_created}")
 
         # Write the content using helper
@@ -85,14 +85,18 @@ async def generate_document(
         )
 
         # Build result with Pydantic model
-        cwd = Path.cwd()
         message = f"Document saved: {byte_count:,} bytes, {line_count} lines"
         if backup_created:
             message += f" (backup: {backup_created})"
 
+        try:
+            output_file_str = str(output_path.relative_to(PROJECT_ROOT))
+        except ValueError:
+            output_file_str = str(output_path)
+
         return DocumentGenerateResponse(  # type: ignore[no-any-return]
             success=True,
-            output_file=str(output_path.relative_to(cwd) if cwd in output_path.parents else output_path),
+            output_file=output_file_str,
             size=byte_count,
             message=message,
         ).to_json()

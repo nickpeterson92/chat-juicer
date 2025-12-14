@@ -158,13 +158,17 @@ class TestEditFile:
     @pytest.mark.asyncio
     async def test_edit_file_single_replacement(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test editing file with single replacement."""
+        import utils.file_utils
+
+        # Patch PROJECT_ROOT to tmp_path
+        monkeypatch.setattr(utils.file_utils, "PROJECT_ROOT", tmp_path)
+        monkeypatch.setattr(utils.file_utils, "DATA_FILES_PATH", tmp_path / "data" / "files")
+
         # Create test file with output directory
         output_dir = tmp_path / "output"
         output_dir.mkdir()
         test_file = output_dir / "test.txt"
         test_file.write_text("Hello world\nThis is a test")
-
-        monkeypatch.chdir(tmp_path)
 
         edits = [EditOperation(oldText="world", newText="universe")]
         result = await edit_file(
@@ -180,12 +184,16 @@ class TestEditFile:
     @pytest.mark.asyncio
     async def test_edit_file_multiple_replacements(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test editing file with multiple replacements."""
+        import utils.file_utils
+
+        # Patch PROJECT_ROOT to tmp_path
+        monkeypatch.setattr(utils.file_utils, "PROJECT_ROOT", tmp_path)
+        monkeypatch.setattr(utils.file_utils, "DATA_FILES_PATH", tmp_path / "data" / "files")
+
         output_dir = tmp_path / "output"
         output_dir.mkdir()
         test_file = output_dir / "test.txt"
         test_file.write_text("Hello world\nVersion 1.0\nGoodbye")
-
-        monkeypatch.chdir(tmp_path)
 
         edits = [EditOperation(oldText="world", newText="universe"), EditOperation(oldText="1.0", newText="2.0")]
         result = await edit_file(file_path="test.txt", edits=edits, session_id=None)
@@ -200,12 +208,16 @@ class TestEditFile:
     @pytest.mark.asyncio
     async def test_edit_file_text_not_found(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test editing when old text is not found."""
+        import utils.file_utils
+
+        # Patch PROJECT_ROOT to tmp_path
+        monkeypatch.setattr(utils.file_utils, "PROJECT_ROOT", tmp_path)
+        monkeypatch.setattr(utils.file_utils, "DATA_FILES_PATH", tmp_path / "data" / "files")
+
         output_dir = tmp_path / "output"
         output_dir.mkdir()
         test_file = output_dir / "test.txt"
         test_file.write_text("Hello world")
-
-        monkeypatch.chdir(tmp_path)
 
         edits = [EditOperation(oldText="missing text", newText="replacement")]
         result = await edit_file(file_path="test.txt", edits=edits, session_id=None)
@@ -217,12 +229,16 @@ class TestEditFile:
     @pytest.mark.asyncio
     async def test_edit_file_empty_edits(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test editing with no edits provided."""
+        import utils.file_utils
+
+        # Patch PROJECT_ROOT to tmp_path
+        monkeypatch.setattr(utils.file_utils, "PROJECT_ROOT", tmp_path)
+        monkeypatch.setattr(utils.file_utils, "DATA_FILES_PATH", tmp_path / "data" / "files")
+
         output_dir = tmp_path / "output"
         output_dir.mkdir()
         test_file = output_dir / "test.txt"
         test_file.write_text("Hello world")
-
-        monkeypatch.chdir(tmp_path)
 
         result = await edit_file(file_path="test.txt", edits=[], session_id=None)
 
@@ -233,12 +249,16 @@ class TestEditFile:
     @pytest.mark.asyncio
     async def test_edit_file_with_flexible_whitespace(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test editing with flexible whitespace matching."""
+        import utils.file_utils
+
+        # Patch PROJECT_ROOT to tmp_path
+        monkeypatch.setattr(utils.file_utils, "PROJECT_ROOT", tmp_path)
+        monkeypatch.setattr(utils.file_utils, "DATA_FILES_PATH", tmp_path / "data" / "files")
+
         output_dir = tmp_path / "output"
         output_dir.mkdir()
         test_file = output_dir / "test.txt"
         test_file.write_text("Hello    world")  # Multiple spaces
-
-        monkeypatch.chdir(tmp_path)
 
         edits = [EditOperation(oldText="Hello world", newText="Hello universe")]  # Single space
         result = await edit_file(file_path="test.txt", edits=edits, session_id=None)
@@ -249,13 +269,17 @@ class TestEditFile:
     @pytest.mark.asyncio
     async def test_edit_file_with_session(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test editing with session workspace."""
+        import utils.file_utils
+
+        # Patch PROJECT_ROOT to tmp_path
+        monkeypatch.setattr(utils.file_utils, "PROJECT_ROOT", tmp_path)
+        monkeypatch.setattr(utils.file_utils, "DATA_FILES_PATH", tmp_path / "data" / "files")
+
         # Create session workspace
         session_workspace = tmp_path / "data" / "files" / "chat_test" / "output"
         session_workspace.mkdir(parents=True)
         test_file = session_workspace / "test.txt"
         test_file.write_text("Original text")
-
-        monkeypatch.chdir(tmp_path)
 
         edits = [EditOperation(oldText="Original", newText="Modified")]
         result = await edit_file(file_path="test.txt", edits=edits, session_id="chat_test")

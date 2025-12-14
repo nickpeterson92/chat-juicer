@@ -130,11 +130,15 @@ def mock_settings(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None
 @pytest.fixture
 def integration_test_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Set up complete integration test environment with proper paths."""
-    # Change to temp directory so Path.cwd() works correctly
-    monkeypatch.chdir(tmp_path)
+    import utils.file_utils
+
+    # Patch PROJECT_ROOT and DATA_FILES_PATH to use temp directory
+    monkeypatch.setattr(utils.file_utils, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(utils.file_utils, "DATA_FILES_PATH", tmp_path / "data" / "files")
 
     # Create necessary directories
     (tmp_path / "data" / "files").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "output").mkdir(parents=True, exist_ok=True)
     (tmp_path / "logs").mkdir(parents=True, exist_ok=True)
 
     return tmp_path

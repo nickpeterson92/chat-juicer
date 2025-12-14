@@ -123,11 +123,14 @@ class TestValidateSessionPath:
         assert error is not None
         assert "traversal" in error.lower()
 
-    def test_absolute_path_blocked(self) -> None:
-        """Test that absolute paths are blocked."""
-        _resolved, error = validate_session_path("/etc/passwd", "chat_test123")
-        assert error is not None
-        assert "traversal" in error.lower()
+    def test_absolute_path_sandboxed(self) -> None:
+        """Test that absolute-looking paths get sandboxed to session workspace."""
+        # /etc/passwd becomes sources/etc/passwd within session sandbox
+        # Security is enforced by sandbox, not by blocking the path format
+        resolved, error = validate_session_path("/etc/passwd", "chat_test123")
+        assert error is None  # No error - path is sandboxed
+        assert "chat_test123" in str(resolved)  # Confined to session
+        assert "sources" in str(resolved)  # Defaulted to sources/
 
     def test_null_byte_blocked(self) -> None:
         """Test that null bytes are blocked."""
@@ -233,13 +236,12 @@ class TestValidateSessionPath:
         except OSError:
             pytest.skip("Symlink creation not supported on this system")
 
-    def test_no_session_id_project_scope(self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_no_session_id_project_scope(self, isolated_filesystem: Path) -> None:
         """Test validation without session_id (project scope)."""
-        monkeypatch.chdir(temp_dir)
-        test_file = temp_dir / "test.txt"
+        test_file = isolated_filesystem / "test.txt"
         test_file.touch()
 
-        # Use relative path since we're in temp_dir
+        # Use relative path - resolves against PROJECT_ROOT (patched to isolated_filesystem)
         resolved, error = validate_session_path("test.txt", session_id=None)
         assert error is None
         assert resolved.exists()
@@ -299,12 +301,11 @@ class TestValidateFilePath:
             # Should pass validation even if doesn't exist
             assert error is None or "not found" not in error.lower()
 
-    def test_directory_not_file(self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_directory_not_file(self, isolated_filesystem: Path) -> None:
         """Test that directory is rejected when expecting file."""
         # Create a subdirectory to test
-        test_subdir = temp_dir / "testdir"
+        test_subdir = isolated_filesystem / "testdir"
         test_subdir.mkdir()
-        monkeypatch.chdir(temp_dir)
 
         _resolved, error = validate_file_path("testdir", check_exists=True)
         assert error is not None

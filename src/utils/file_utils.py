@@ -26,24 +26,30 @@ from models.ipc_models import UploadResult
 from utils.json_utils import json_pretty
 from utils.logger import logger
 
-# Project root - consistent with dependencies.py (file_utils is in src/utils/)
+# Project root - file_utils.py is at src/utils/file_utils.py
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 DATA_FILES_PATH = PROJECT_ROOT / "data" / "files"
 
 
 def get_relative_path(path: Path) -> Path:
-    """Get path relative to project root.
+    """Get path relative to current working directory.
 
     Helper function to standardize relative path calculation across tools.
-    If path is within project root, returns relative path. Otherwise returns original path.
+    If path is within cwd, returns relative path. Otherwise returns original path.
 
     Args:
         path: Absolute path to convert to relative
 
     Returns:
-        Path object, relative to project root if possible, otherwise absolute
+        Path object, relative to cwd if possible, otherwise absolute
     """
-    return path.relative_to(PROJECT_ROOT) if PROJECT_ROOT in path.parents else path
+    cwd = Path.cwd()
+    if path == cwd:
+        return path  # Don't return '.' for cwd itself
+    try:
+        return path.relative_to(cwd)
+    except ValueError:
+        return path
 
 
 async def get_session_files(session_id: str, subdir: str = "sources") -> list[str]:
@@ -123,21 +129,11 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
         if ".." in file_path:
             return Path(), ERROR_PATH_TRAVERSAL
 
-        # Handle absolute paths: if session_id provided, strip leading /
-        # This allows AI to use container-style paths like /sources, /output
-        # which get normalized to relative paths within the session workspace
-        if file_path.startswith("/"):
-            if session_id:
-                # Strip leading / for session-scoped paths (e.g., /sources -> sources)
-                file_path = file_path.lstrip("/")
-            else:
-                # Block absolute paths when no session isolation
-                return Path(), ERROR_PATH_TRAVERSAL
-
         # If session_id provided, enforce workspace boundaries
+        # The sandbox is the security boundary - paths are confined to session dir
         if session_id:
-            # Normalize path separators and strip any session prefix
-            sanitized_path = file_path.replace("\\", "/")
+            # Normalize and strip leading / (agent may use /sources/ as convention)
+            sanitized_path = file_path.replace("\\", "/").lstrip("/")
             session_prefix = f"data/files/{session_id}/"
             if sanitized_path.startswith(session_prefix):
                 sanitized_path = sanitized_path[len(session_prefix) :]
@@ -159,7 +155,6 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
                 relative_request = Path("sources") / requested_path
 
             # Build full path within session workspace (DON'T resolve yet)
-            # Use absolute DATA_FILES_PATH for consistency (not cwd which may vary)
             session_dir = DATA_FILES_PATH / session_id
             target_path = session_dir / relative_request  # Unresolved path
 
@@ -182,20 +177,23 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
 
             # Security check: ensure resolved path is still within session workspace
             # UNLESS it's one of our allowed symlinks (templates/, output/)
+            # Note: Must resolve session_dir too for macOS where /var -> /private/var
             if first_component not in allowed_symlinks:
                 try:
-                    resolved_path.relative_to(session_dir)
+                    resolved_path.relative_to(session_dir.resolve())
                 except ValueError:
                     return Path(), ERROR_SYMLINK_ESCAPE
 
             return resolved_path, None
         else:
             # No session restriction - use standard project-scope validation
-            # Use absolute PROJECT_ROOT for consistency (not cwd which may vary)
             target_path = (PROJECT_ROOT / file_path).resolve()
 
             # Security check: ensure path is within project scope
-            if not (PROJECT_ROOT in target_path.parents or target_path == PROJECT_ROOT):
+            # Note: Must resolve PROJECT_ROOT too for macOS where /var -> /private/var
+            try:
+                target_path.relative_to(PROJECT_ROOT.resolve())
+            except ValueError:
                 return target_path, ERROR_PATH_OUTSIDE_PROJECT
 
             return target_path, None
@@ -494,8 +492,8 @@ def save_uploaded_file(
         # Get file info
         file_size = target_file.stat().st_size
 
-        # Return relative path from target directory
-        relative_path = target_file.relative_to(target_path)
+        # Return relative path from project root
+        relative_path = target_file.relative_to(PROJECT_ROOT)
 
         return {
             "success": True,
