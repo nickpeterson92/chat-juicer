@@ -658,6 +658,12 @@ class Settings(BaseSettings):
     api_port: int = Field(default=8000, description="FastAPI port")
     api_host: str = Field(default="0.0.0.0", description="FastAPI host")
 
+    # Connection pool configuration
+    db_pool_min_size: int = Field(default=2, description="Minimum PostgreSQL connections")
+    db_pool_max_size: int = Field(default=10, description="Maximum PostgreSQL connections")
+    mcp_pool_size: int = Field(default=3, description="MCP server instances per server type")
+    mcp_acquire_timeout: float = Field(default=30.0, description="MCP server acquire timeout (seconds)")
+
     # Auth (Phase 1 convenience)
     default_user_email: str = Field(default="local@chatjuicer.dev", description="Seeded default user email")
     allow_localhost_noauth: bool = Field(

@@ -65,8 +65,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     app.state.db_pool = await asyncpg.create_pool(
         dsn=settings.database_url,
-        min_size=2,
-        max_size=10,
+        min_size=settings.db_pool_min_size,
+        max_size=settings.db_pool_max_size,
     )
 
     # Initialize WebSocket manager on app.state for centralized connection tracking
@@ -74,9 +74,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Initialize MCP server pool on app.state for concurrent request handling
     # Pool pre-spawns server instances to avoid per-request overhead
-    pool_size = 3  # Number of instances per server type
-    app.state.mcp_pool = await initialize_mcp_pool(pool_size=pool_size)
-    logger.info(f"MCP server pool initialized with {pool_size} instances per server type")
+    app.state.mcp_pool = await initialize_mcp_pool(
+        pool_size=settings.mcp_pool_size,
+        acquire_timeout=settings.mcp_acquire_timeout,
+    )
+    logger.info(f"MCP server pool initialized with {settings.mcp_pool_size} instances per server type")
 
     try:
         yield
