@@ -281,6 +281,7 @@ class TestHandleToolOutput:
         tracker.add_call("call_123", "test_tool")
 
         mock_item = Mock()
+        mock_item.call_id = None  # Ensure fallback to raw_item
         mock_item.output = {"result": "success"}
         # raw_item must include call_id for parallel-safe matching
         mock_item.raw_item = {"call_id": "call_123"}
@@ -300,8 +301,9 @@ class TestHandleToolOutput:
         tracker.add_call("call_456", "failing_tool")
 
         mock_item = Mock()
+        mock_item.call_id = None  # Ensure fallback to raw_item
         mock_item.output = None
-        mock_item.raw_item = {"error": "Something went wrong"}
+        mock_item.raw_item = {"call_id": "call_456", "error": "Something went wrong"}
 
         result = handle_tool_output(mock_item, tracker)
 
@@ -316,8 +318,9 @@ class TestHandleToolOutput:
         tracker = CallTracker()
 
         mock_item = Mock()
+        mock_item.call_id = None  # Ensure fallback to raw_item
         mock_item.output = "result"
-        mock_item.raw_item = {}
+        mock_item.raw_item = {"call_id": "unknown_call"}
 
         result = handle_tool_output(mock_item, tracker)
 

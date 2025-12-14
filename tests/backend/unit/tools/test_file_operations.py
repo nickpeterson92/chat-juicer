@@ -95,16 +95,18 @@ class TestReadFile:
     @pytest.mark.asyncio
     async def test_read_file_text(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test reading text file - integration test with real file."""
-        # Create real file
-        monkeypatch.chdir(tmp_path)
+        import utils.file_utils
+
+        # Patch PROJECT_ROOT to tmp_path
+        monkeypatch.setattr(utils.file_utils, "PROJECT_ROOT", tmp_path)
+        monkeypatch.setattr(utils.file_utils, "DATA_FILES_PATH", tmp_path / "data" / "files")
+
         test_file = tmp_path / "test.txt"
         test_file.write_text("File content here")
 
-        # Use relative path since we changed to tmp_path
         result = await read_file("test.txt")
         data = json.loads(result)
 
-        # If it fails, print the error for debugging
         if not data["success"]:
             print(f"Error: {data.get('error', 'Unknown')}")
 
@@ -126,30 +128,35 @@ class TestReadFile:
     @pytest.mark.asyncio
     async def test_read_file_with_summarization(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test reading file with real content - integration test."""
-        # Create real large-ish file
-        monkeypatch.chdir(tmp_path)
+        import utils.file_utils
+
+        # Patch PROJECT_ROOT to tmp_path
+        monkeypatch.setattr(utils.file_utils, "PROJECT_ROOT", tmp_path)
+        monkeypatch.setattr(utils.file_utils, "DATA_FILES_PATH", tmp_path / "data" / "files")
+
         test_file = tmp_path / "large.txt"
-        # Create moderate-sized file (not huge to keep test fast)
         large_content = "This is test content.\n" * 1000  # ~22KB
         test_file.write_text(large_content)
 
-        # Use relative path since we changed to tmp_path
         result = await read_file("large.txt")
         data = json.loads(result)
 
-        # If it fails, print the error for debugging
         if not data["success"]:
             print(f"Error: {data.get('error', 'Unknown')}")
 
         assert data["success"] is True
-        # Should have content (whether full or summarized)
         assert "content" in data
         assert len(data["content"]) > 0
 
     @pytest.mark.asyncio
     async def test_read_file_with_head(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test reading first N lines of file."""
-        monkeypatch.chdir(tmp_path)
+        import utils.file_utils
+
+        # Patch PROJECT_ROOT to tmp_path
+        monkeypatch.setattr(utils.file_utils, "PROJECT_ROOT", tmp_path)
+        monkeypatch.setattr(utils.file_utils, "DATA_FILES_PATH", tmp_path / "data" / "files")
+
         test_file = tmp_path / "multiline.txt"
         test_file.write_text("Line 1\nLine 2\nLine 3\nLine 4\nLine 5")
 
@@ -160,13 +167,17 @@ class TestReadFile:
         assert "Line 1" in data["content"]
         assert "Line 2" in data["content"]
         assert "Line 3" in data["content"]
-        # Should not have lines beyond head
         assert data["content"].count("\n") <= 3
 
     @pytest.mark.asyncio
     async def test_read_file_with_tail(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test reading last N lines of file."""
-        monkeypatch.chdir(tmp_path)
+        import utils.file_utils
+
+        # Patch PROJECT_ROOT to tmp_path
+        monkeypatch.setattr(utils.file_utils, "PROJECT_ROOT", tmp_path)
+        monkeypatch.setattr(utils.file_utils, "DATA_FILES_PATH", tmp_path / "data" / "files")
+
         test_file = tmp_path / "multiline.txt"
         test_file.write_text("Line 1\nLine 2\nLine 3\nLine 4\nLine 5")
 
@@ -176,7 +187,6 @@ class TestReadFile:
         assert data["success"] is True
         assert "Line 4" in data["content"]
         assert "Line 5" in data["content"]
-        # Should not have lines before tail
         assert "Line 1" not in data["content"]
 
     @pytest.mark.asyncio

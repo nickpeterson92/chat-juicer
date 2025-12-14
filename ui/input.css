@@ -225,28 +225,36 @@
     color: var(--color-text-user);
   }
 
-  /* Streaming indicator for background sessions */
-  .session-item.session-streaming {
-    position: relative;
-    padding-left: 2rem; /* Make room for indicator */
-  }
-
-  .session-item.session-streaming::before {
-    content: '';
+  /* Streaming indicator container (Lottie animation) */
+  .session-streaming-indicator {
+    display: none; /* Hidden by default */
     position: absolute;
-    left: 0.75rem;
+    left: 0.25rem;
     top: 50%;
     transform: translateY(-50%);
-    width: 8px;
-    height: 8px;
-    background: var(--color-brand-primary);
-    border-radius: 50%;
-    animation: streaming-pulse 1.5s ease-in-out infinite;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
   }
 
-  /* Active streaming session uses different color */
-  .session-item.session-streaming.active::before {
-    background: var(--color-text-user);
+  /* Show indicator for streaming background sessions */
+  .session-item.session-streaming {
+    position: relative;
+    padding-left: 1.5rem; /* Make room for indicator */
+  }
+
+  .session-item.session-streaming .session-streaming-indicator {
+    display: block;
+  }
+
+  /* Hide indicator for active sessions (they use main chat streaming UI) */
+  .session-item.session-streaming.active .session-streaming-indicator {
+    display: none;
+  }
+
+  /* Active streaming session doesn't need extra padding */
+  .session-item.session-streaming.active {
+    padding-left: 0.75rem;
   }
 
   .session-title {

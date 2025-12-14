@@ -18,7 +18,7 @@
 
 # Chat Juicer
 
-An Electron + Python desktop application for Azure OpenAI chat interactions using the **Agent/Runner pattern** with native **MCP (Model Context Protocol) server support**, advanced **token-aware session management** with automatic summarization, and sophisticated document generation capabilities.
+An Electron + FastAPI desktop application for Azure OpenAI chat interactions using the **Agent/Runner pattern** with native **MCP (Model Context Protocol) server support**, **PostgreSQL persistence**, real-time **WebSocket streaming**, and sophisticated document generation capabilities.
 
 ## Quick Start
 
@@ -54,53 +54,65 @@ make health             # Check system configuration
 
 ## Features
 
-- 🖥️ **Desktop Application**: Production-grade Electron app with health monitoring and auto-recovery
-- 🤖 **Agent/Runner Pattern**: Native OpenAI Agents SDK with automatic tool orchestration
-- 🧠 **MCP Servers**: Sequential Thinking and Fetch servers by default, plus optional Tavily search when configured
-- 💾 **Two-Layer Session Persistence**: Token-aware Layer 1 (LLM context) and full-history Layer 2 for UI
-- 🔄 **Multi-Session Support**: Lazy session creation, switch, delete, and auto-title after the first user message
-- 📊 **Smart Session Management**: TokenAwareSQLiteSession auto-summarizes at 20% of model limits while keeping the last 2 user turns
-- ⚡ **Streaming Responses**: Real-time AI response streaming with structured event handling and function argument deltas
-- 🛠️ **Function Calling**: Async native tools and MCP integration with session-aware wrappers
-- 📝 **Structured Logging**: Enterprise-grade JSON logging with rotation and session correlation
-- 🔐 **Azure/OpenAI Integration**: Azure by default with optional base OpenAI provider
-- 📊 **Token Management**: SDK-level universal token tracking that counts tool calls and reasoning tokens automatically
-- ⚡ **Full Async Architecture**: Consistent async/await throughout backend
-- 📄 **Document Generation**: Save generated content to session-scoped output/ with optional backups
-- 🔧 **Editing Tools**: Batch text edits with git-style diffs and whitespace-flexible matching
-- 🎯 **Type Safety**: Full mypy strict compliance with Pydantic runtime validation
-- 🧩 **Component Architecture**: Reusable frontend components with proper state management
-- 🏗️ **Production Features**: Memory management, error recovery, performance optimization, file handle cleanup
+- **Desktop Application**: Production-grade Electron app with health monitoring and auto-recovery
+- **FastAPI Backend**: RESTful API with WebSocket streaming and PostgreSQL persistence
+- **Agent/Runner Pattern**: Native OpenAI Agents SDK with automatic tool orchestration
+- **MCP Servers**: Sequential Thinking and Fetch servers by default, plus optional Tavily search when configured
+- **MCP Server Pool**: Pre-spawned server instances for concurrent request handling
+- **PostgreSQL Persistence**: Sessions and messages stored in PostgreSQL with connection pooling
+- **Multi-Session Support**: Create, switch, delete sessions with auto-title after first message
+- **WebSocket Streaming**: Real-time AI response streaming via `/ws/chat/{session_id}`
+- **Function Calling**: Async native tools and MCP integration with session-aware wrappers
+- **Structured Logging**: Enterprise-grade JSON logging with rotation and session correlation
+- **Azure/OpenAI Integration**: Azure by default with optional base OpenAI provider
+- **Token Management**: SDK-level universal token tracking for tool calls and reasoning tokens
+- **Full Async Architecture**: Consistent async/await throughout backend
+- **Document Generation**: Save generated content to session-scoped output/ with optional backups
+- **Editing Tools**: Batch text edits with git-style diffs and whitespace-flexible matching
+- **Type Safety**: Full mypy strict compliance with Pydantic runtime validation
+- **Component Architecture**: Reusable frontend components with proper state management
 
 ## Architecture
 
-Chat Juicer uses OpenAI's **Agent/Runner pattern** with a **two-layer persistence architecture**:
-- **Native MCP Server Integration**: Direct support for Model Context Protocol servers
-- **Automatic Tool Orchestration**: Framework handles function calling automatically
-- **Layered Persistence**: Separates LLM context (Layer 1) from UI display (Layer 2)
-- **Multi-Session Management**: Create, switch, and manage multiple conversation sessions
-- **Token-Aware Sessions**: SQLite-based session management with automatic summarization
-- **Full Async Architecture**: Consistent async/await for Agent/Runner, MCP servers, and all functions
-- **Streaming Events**: Structured event handling for real-time responses
-- **Smart State Management**: Session handles conversation context with token tracking
-- **SDK-Level Token Tracking**: Universal token tracking via elegant monkey-patching
+Chat Juicer uses a **three-tier architecture** with OpenAI's **Agent/Runner pattern**:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     Electron Renderer Process                        │
+│                    (Component-based ES6 modules)                     │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ IPC (context isolation)
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                     Electron Main Process                            │
+│                    (HTTP/WebSocket proxy)                            │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ HTTP REST / WebSocket
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                     FastAPI Backend (Python)                         │
+│              (PostgreSQL, Agent/Runner, MCP servers)                 │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
 ### Key Architectural Components:
-- **Backend**: Python with async functions, Pydantic models, type safety (mypy strict=true)
-- **Frontend**: Electron renderer built around a 7-phase bootstrap (`bootstrap.js`) that wires adapters → AppState/DOM → services → UI components → event handlers → plugins → initial data
-- **State & Events (Frontend)**: `AppState` pub/sub in `core/state.js` (connection/session/message/ui/file/function namespaces) + global `EventBus` with error boundaries for message routing
-- **UI Components**: ChatContainer (streaming-safe), InputArea (model selector integration), FilePanel (tabbed sources/output with handle cleanup), ModelSelector (shared welcome/chat), ConnectionStatus
-- **Persistence**: Two-layer SQLite architecture (LLM context + UI display)
-- **Session**: TokenAwareSQLiteSession with 20% threshold auto-summarization
-- **Session Manager**: Multi-session lifecycle management with metadata persistence and file handle cleanup
+- **FastAPI Backend**: RESTful API with WebSocket streaming at `/ws/chat/{session_id}`
+- **PostgreSQL**: Persistent storage for sessions and messages with connection pooling (asyncpg)
+- **MCP Server Pool**: Pre-spawned server instances for concurrent request handling
+- **Agent/Runner Pattern**: Native MCP server integration with automatic tool orchestration
+- **Electron Main Process**: HTTP/WebSocket proxy connecting renderer to FastAPI
+- **Frontend**: 7-phase bootstrap, AppState pub/sub, EventBus for message routing
+- **UI Components**: ChatContainer, InputArea, FilePanel, ModelSelector, ConnectionStatus
 - **Logging**: Enterprise JSON logging with rotation and session correlation
-- **Type System**: Protocols for SDK integration, Pydantic for validation, TypedDict for data
-- **Resource Management**: Garbage collection, file handle cleanup, and increased descriptor limits (256→4096)
+- **Type System**: Full mypy strict compliance, Pydantic validation
 
 ## Prerequisites
 
 - Node.js 16+ and npm
 - **Python 3.13+** (strictly required for all dependencies)
+- **PostgreSQL 14+** with a database created for the application
 - Azure OpenAI resource with deployment (e.g., gpt-5-mini, gpt-4o, gpt-4)
 - Azure OpenAI API credentials
 - Internet connection for MCP server downloads
@@ -231,7 +243,7 @@ make precommit-install  # Install pre-commit git hooks
 ```bash
 make run                # Start the application (production mode)
 make dev                # Start in development mode (with DevTools)
-make backend-only       # Run Python backend only (for testing)
+make backend-only       # Run FastAPI backend only (for testing)
 ```
 
 **Equivalent npm commands:**
@@ -240,9 +252,9 @@ npm start               # Same as: make run
 npm run dev             # Same as: make dev
 ```
 
-**Direct Python backend:**
+**Direct FastAPI backend:**
 ```bash
-python src/main.py      # Same as: make backend-only
+uvicorn api.main:app --host 127.0.0.1 --port 8000  # Run FastAPI server
 ```
 
 #### Development & Quality
@@ -293,17 +305,11 @@ make logs-errors        # Show error logs (tail -f, requires jq)
 make logs-all           # Show recent logs from both files
 ```
 
-#### Database Exploration
+#### Database Management
 
 ```bash
-make db-explore         # Show database exploration help
+make db-shell           # Start interactive PostgreSQL shell (psql)
 make db-sessions        # List all sessions in database
-make db-compare         # Compare Layer 1 vs Layer 2 for current session
-make db-layer1          # Show Layer 1 (LLM context) for current session
-make db-layer2          # Show Layer 2 (UI display) for current session
-make db-tools           # Show all tool calls for current session
-make db-types           # Show SDK item type distribution
-make db-shell           # Start interactive SQLite shell
 make db-reset           # Clear all session data (WARNING: destructive)
 make db-backup          # Backup database to timestamped archive
 make db-restore BACKUP=name  # Restore from backup
@@ -348,248 +354,156 @@ make help               # Show all available commands
 ```
 chat-juicer/
 ├── electron/          # Electron main process and renderer
-│   ├── main.js       # Main process, IPC handlers, health monitoring
+│   ├── main.js       # Main process, HTTP proxy to FastAPI
+│   ├── api-client.js # HTTP client for FastAPI backend
 │   ├── preload.js    # Secure context-isolated bridge
 │   ├── logger.js     # Structured logging with IPC forwarding
 │   ├── config/
 │   │   └── main-constants.js
-│   └── renderer/     # Renderer (ES modules)
-│       ├── index.js              # Entry point (imports CSS + bootstrapSimple)
+│   └── renderer/     # Component-based renderer (ES modules)
+│       ├── index.js              # Entry point
 │       ├── bootstrap.js          # 7-phase bootstrap orchestrator
-│       ├── bootstrap/            # Phase orchestration + validation
-│       │   ├── error-recovery.js
-│       │   ├── validators.js
-│       │   └── phases/
-│       │       ├── index.js
-│       │       ├── phase1-adapters.js      # DOM/IPС/Storage adapters + global EventBus
-│       │       ├── phase2-state-dom.js     # AppState + DOM element registry
-│       │       ├── phase3-services.js      # Message/File/FunctionCall/Session services (AppState-backed)
-│       │       ├── phase4-components.js    # ChatContainer, InputArea, FilePanel wiring
-│       │       ├── phase5-event-handlers.js# DOM listeners, AppState bindings, IPC wiring
-│       │       ├── phase5a-subscriptions.js# AppState subscriptions for reactive UI
-│       │       ├── phase6-plugins.js       # Plugin registry + core plugins
-│       │       └── phase7-data-loading.js  # Renderer-ready signal, model metadata, sessions
-│       │   ├── types.js
-│       ├── adapters/             # Platform abstraction
-│       │   ├── DOMAdapter.js
-│       │   ├── IPCAdapter.js
-│       │   ├── StorageAdapter.js
-│       │   └── index.js
-│       ├── config/
-│       │   ├── constants.js
-│       │   ├── colors.js
-│       │   └── model-metadata.js
-│       ├── core/
-│       │   ├── component-lifecycle.js
-│       │   ├── event-bus.js      # Global EventBus (pub/sub with error boundaries)
-│       │   ├── lifecycle-manager.js
-│       │   └── state.js          # AppState + BoundedMap (connection/session/message/file/ui)
-│       ├── managers/
-│       │   ├── dom-manager.js    # Element registry
-│       │   ├── file-manager.js   # File list rendering + AppState migration helpers
-│       │   └── view-manager.js   # Welcome/chat view transitions + model config sync
-│       ├── services/
-│       │   ├── file-service.js
-│       │   ├── function-call-service.js
-│       │   ├── message-queue-service.js
-│       │   ├── message-service.js
-│       │   ├── stream-manager.js
-│       │   └── session-service.js
-│       ├── handlers/
-│       │   ├── message-handlers-v2.js      # EventBus-driven streaming + tool cards
-│       │   ├── session-list-handlers.js    # Session list delegation
-│       │   ├── chat-events.js
-│       │   ├── file-events.js
-│       │   └── session-events.js
-│       ├── plugins/
-│       │   ├── core-plugins.js
-│       │   ├── index.js
-│       │   └── plugin-interface.js
-│       ├── ui/
-│       │   ├── components/
-│       │   │   ├── chat-container.js
-│       │   │   ├── connection-status.js
-│       │   │   ├── file-panel.js
-│       │   │   ├── input-area.js
-│       │   │   └── model-selector.js
-│       │   ├── renderers/
-│       │   │   ├── index.js
-│       │   │   └── session-list-renderer.js
-│       │   ├── chat-ui.js
-│       │   ├── function-card-ui.js
-│       │   ├── titlebar.js
-│       │   ├── welcome-page.js
-│       │   └── utils/welcome-animations.js
-│       ├── viewmodels/
-│       │   ├── message-viewmodel.js
-│       │   └── session-viewmodel.js
-│       └── utils/
-│           ├── analytics/
-│           ├── chat-model-updater.js
-│           ├── css-variables.js
-│           ├── file-icon-colors.js
-│           ├── file-utils.js
-│           ├── json-cache.js
-│           ├── lottie-color.js
-│           ├── markdown-renderer.js
-│           ├── scroll-utils.js
-│           ├── state-migration.js
-│           ├── upload-progress.js
-│           └── toast.js
+│       ├── adapters/             # DOM, IPC, Storage adapters
+│       ├── config/               # constants, colors, model-metadata
+│       ├── core/                 # AppState + EventBus
+│       ├── managers/             # DOM, file, view managers
+│       ├── services/             # Business logic (AppState-backed)
+│       ├── handlers/             # Event handlers
+│       ├── plugins/              # Plugin registry
+│       ├── ui/                   # UI components and renderers
+│       ├── viewmodels/           # Data transformation
+│       └── utils/                # Utility modules
 ├── ui/               # Frontend static assets
-│   ├── index.html    # Main chat UI (loads renderer/index.js as ES6 module)
-│   ├── input.css     # Tailwind CSS source
-│   ├── chat-juicer-logo-real.svg  # Application logo
-│   └── smoke-loading.svg       # Loading animation
-├── src/              # Python backend (modular architecture)
-│   ├── main.py       # Application entry point (pure orchestrator - 174 lines)
-│   ├── __init__.py   # Package initialization
-│   ├── .env.example  # Environment variable template
-│   ├── requirements.txt  # Python dependencies
-│   ├── app/          # Application modules (orchestrator pattern)
-│   │   ├── __init__.py
-│   │   ├── state.py          # AppState dataclass (single source of truth)
-│   │   ├── bootstrap.py      # Application initialization and configuration
-│   │   └── runtime.py        # Core runtime operations (session, message handling)
+│   ├── index.html    # Main chat UI
+│   └── input.css     # Tailwind CSS source
+├── src/              # Python FastAPI backend
+│   ├── api/          # FastAPI application
+│   │   ├── main.py           # FastAPI app with lifespan, routes, CORS
+│   │   ├── dependencies.py   # Dependency injection (DB, services)
+│   │   ├── routes/           # API endpoints
+│   │   │   ├── auth.py       # Authentication routes
+│   │   │   ├── chat.py       # WebSocket chat endpoint
+│   │   │   ├── config.py     # Configuration endpoint
+│   │   │   ├── files.py      # File management routes
+│   │   │   ├── health.py     # Health check endpoint
+│   │   │   ├── messages.py   # Message pagination endpoint
+│   │   │   └── sessions.py   # Session CRUD routes
+│   │   ├── services/         # Business logic
+│   │   │   ├── chat_service.py       # Chat streaming with Agent/Runner
+│   │   │   ├── session_service.py    # Session management
+│   │   │   ├── file_service.py       # File operations
+│   │   │   ├── auth_service.py       # Authentication
+│   │   │   ├── token_aware_session.py # Token-aware context
+│   │   │   └── postgres_session.py   # PostgreSQL session storage
+│   │   ├── middleware/       # FastAPI middleware
+│   │   │   └── auth.py       # Authentication middleware
+│   │   └── websocket/        # WebSocket management
+│   │       └── manager.py    # Connection tracking
 │   ├── core/         # Core business logic
-│   │   ├── __init__.py
-│   │   ├── agent.py            # Agent/Runner implementation with MCP support
-│   │   ├── session.py          # TokenAwareSQLiteSession with auto-summarization (Layer 1)
-│   │   ├── full_history.py     # FullHistoryStore for UI display (Layer 2)
-│   │   ├── session_manager.py  # Multi-session lifecycle management
-│   │   ├── session_commands.py # Session command handlers
-│   │   ├── session_builder.py  # Session restoration/pagination helpers
-│   │   ├── prompts.py          # System instruction prompts
-│   │   └── constants.py        # Configuration with Pydantic Settings validation
-│   ├── models/       # Data models and type definitions
-│   │   ├── __init__.py
-│   │   ├── api_models.py      # Pydantic models for API responses
-│   │   ├── event_models.py    # Event and message models for IPC
-│   │   ├── ipc_models.py      # IPC message models
-│   │   ├── sdk_models.py      # Protocol typing for SDK integration
-│   │   └── session_models.py  # Session metadata and persistence models
-│   ├── tools/        # Function calling tools
-│   │   ├── __init__.py
-│   │   ├── document_generation.py # Document generation from templates
-│   │   ├── file_operations.py     # File reading and directory listing (session-scoped)
-│   │   ├── text_editing.py        # Text, regex, and insert editing operations
-│   │   ├── code_interpreter.py    # Code execution wrapper with safety rails
-│   │   ├── wrappers.py            # Session-aware wrappers (sandboxed to data/files/{session_id})
-│   │   └── registry.py            # Tool registration and discovery
+│   │   ├── agent.py          # Agent/Runner with MCP support
+│   │   ├── prompts.py        # System instruction prompts
+│   │   └── constants.py      # Pydantic Settings configuration
+│   ├── models/       # Pydantic data models
+│   │   ├── api_models.py     # API request/response models
+│   │   ├── event_models.py   # WebSocket event models
+│   │   └── session_models.py # Session metadata models
+│   ├── tools/        # Function calling tools (async)
+│   │   ├── file_operations.py    # File reading, directory listing
+│   │   ├── document_generation.py # Document generation
+│   │   ├── text_editing.py       # Text editing operations
+│   │   ├── code_interpreter.py   # Sandboxed code execution
+│   │   ├── wrappers.py           # Session-aware tool wrappers
+│   │   └── registry.py           # Tool registration
 │   ├── integrations/ # External integrations
-│   │   ├── __init__.py
-│   │   ├── mcp_servers.py        # MCP server setup and management
-│   │   ├── mcp_registry.py       # MCP server registry and discovery
-│   │   ├── event_handlers.py     # Streaming event handlers
-│   │   └── sdk_token_tracker.py  # SDK-level universal token tracking via monkey-patching
+│   │   ├── mcp_servers.py       # MCP server setup
+│   │   ├── mcp_pool.py          # MCP server connection pool
+│   │   ├── mcp_registry.py      # MCP server registry
+│   │   ├── event_handlers.py    # Streaming event handlers
+│   │   └── sdk_token_tracker.py # Token tracking
 │   └── utils/        # Utility modules
-│       ├── __init__.py
-│       ├── logger.py            # Enterprise JSON logging with rotation and session correlation
-│       ├── ipc.py               # IPC manager with pre-cached templates
-│       ├── token_utils.py       # Token management with LRU caching
-│       ├── file_utils.py        # File system utility functions
-│       ├── binary_io.py         # Binary file helpers
-│       ├── document_processor.py # Document processing and optimization utilities
-│       ├── json_utils.py        # JSON parsing and formatting utilities
-│       ├── http_logger.py       # HTTP request logging middleware
-│       ├── client_factory.py    # Azure OpenAI client factory and configuration
-│       ├── validation.py        # Input validation and sanitization
-│       └── session_integrity.py # Session integrity validation
-├── templates/        # Document templates with {{placeholders}}
+│       ├── logger.py           # Enterprise JSON logging
+│       ├── token_utils.py      # Token counting with LRU cache
+│       ├── file_utils.py       # File system utilities
+│       ├── client_factory.py   # OpenAI client factory
+│       └── validation.py       # Input validation
 ├── data/             # Persistent data storage
-│   ├── chat_history.db       # SQLite database (Layer 1 & Layer 2)
-│   └── sessions.json         # Session metadata (title, timestamps, counts)
+│   └── files/        # Session-scoped file storage
 ├── logs/             # Log files (gitignored)
-│   ├── conversations.jsonl  # Structured conversation logs with token metadata
-│   └── errors.jsonl  # Error and debugging logs
 ├── scripts/          # Utility scripts
-│   ├── explore-db.sh         # Database exploration tool
-│   ├── setup.js              # Automated setup script
-│   ├── launch.js             # Application launcher
-│   ├── validate.js           # Validation utilities
-│   ├── python-manager.js     # Python environment management
-│   └── platform-config.js    # Platform detection and configuration
-├── claudedocs/       # Claude-specific documentation
-└── docs/             # Documentation (Sphinx)
-    ├── _build/       # Generated HTML documentation
-    ├── modules/      # Module documentation
-    ├── conf.py       # Sphinx configuration
-    └── index.rst     # Documentation index
+└── tests/            # Test suites
+    ├── backend/      # Python tests (pytest)
+    └── frontend/     # JavaScript tests (vitest)
 ```
 
 ### Renderer Runtime Highlights
-- 7-phase bootstrap orchestrator (`bootstrap.js`) with validation and degraded-mode recovery (adapters → AppState/DOM → services → components → event handlers → plugins → initial data).
-- `AppState` (`core/state.js`) is the single state source (connection/session/message/ui/file/function); components subscribe for reactive DOM updates.
-- Global `EventBus` (`core/event-bus.js`) powers decoupled message routing; `message-handlers-v2.js` maps backend events to chat streaming, function cards, and analytics.
-- Services (`session-service.js`, `file-service.js`, `function-call-service.js`, `message-service.js`) are pure business logic and require `appState` (no DOM access).
-- Primary UI components: ChatContainer (streaming-aware), InputArea (model selector integration), FilePanel (sources/output tabs + handle cleanup), ModelSelector (shared welcome/chat), ConnectionStatus.
-- View management: `view-manager.js` controls welcome ↔ chat transitions and seeds ModelSelector; `file-manager.js` is migrating to AppState-driven rendering via `loadFilesIntoState` + `renderFileList`.
+- 7-phase bootstrap orchestrator (`bootstrap.js`) with validation and degraded-mode recovery
+- `AppState` (`core/state.js`) is the single state source for reactive DOM updates
+- Global `EventBus` (`core/event-bus.js`) powers decoupled message routing
+- Services communicate with backend via IPC adapter which proxies to FastAPI
+- Primary UI components: ChatContainer, InputArea, FilePanel, ModelSelector, ConnectionStatus
 
 ## Key Components
 
-### Python Backend (`src/`)
+### Python FastAPI Backend (`src/`)
 
-**Entry Point**
-- **main.py**: Pure orchestrator (174 lines) - bootstrap → loop → cleanup pattern
-- **__init__.py**: Package initialization
+**FastAPI Application** (`api/`)
+- **main.py**: FastAPI app initialization with lifespan management, route registration, CORS
+- **dependencies.py**: Dependency injection for DB pool, services, managers
 
-**Application Modules** (`app/`)
-- **state.py**: AppState dataclass - single source of truth for application state
-- **bootstrap.py**: Application initialization, environment loading, MCP server setup
-- **runtime.py**: Core runtime operations (8 functions for message processing, session management)
+**API Routes** (`api/routes/`)
+- **chat.py**: WebSocket endpoint for real-time chat streaming (`/ws/chat/{session_id}`)
+- **sessions.py**: Session CRUD operations (create, list, get, update, delete, pin, rename)
+- **messages.py**: Message pagination and history retrieval
+- **files.py**: File upload and management
+- **config.py**: Model and configuration endpoint
+- **health.py**: Health check endpoint
+- **auth.py**: Authentication routes
+
+**Services** (`api/services/`)
+- **chat_service.py**: Chat streaming with Agent/Runner orchestration and interrupt handling
+- **session_service.py**: Session management with PostgreSQL persistence
+- **file_service.py**: File operations with session-scoped storage
+- **auth_service.py**: Authentication service
+- **token_aware_session.py**: Token-aware context management for summarization
+- **postgres_session.py**: PostgreSQL session storage adapter
 
 **Core Business Logic** (`core/`)
-- **agent.py**: Agent/Runner implementation with MCP server integration and streaming event handling
-- **session.py**: TokenAwareSQLiteSession with automatic summarization and layered persistence (Layer 1)
-- **full_history.py**: FullHistoryStore for complete UI-facing conversation history (Layer 2)
-- **session_manager.py**: Session lifecycle management with metadata persistence, file handle cleanup
-- **session_commands.py**: Session command handlers (create, switch, delete, list)
-- **session_builder.py**: Session restoration/pagination helpers used during session switches
+- **agent.py**: Agent/Runner implementation with MCP server integration
 - **prompts.py**: System instruction prompts and templates
-- **constants.py**: Centralized configuration with Pydantic Settings validation
+- **constants.py**: Pydantic Settings configuration
 
 **Data Models** (`models/`)
-- **api_models.py**: Pydantic models for API responses and function returns
-- **event_models.py**: Event and message models for IPC communication
-- **ipc_models.py**: IPC message structure models
-- **sdk_models.py**: Protocol definitions for type-safe SDK integration
-- **session_models.py**: Session metadata and persistence models
+- **api_models.py**: Pydantic models for API requests/responses
+- **event_models.py**: WebSocket event models
+- **session_models.py**: Session metadata models
 
 **Tools** (`tools/`)
-- **document_generation.py**: Template-based document generation with placeholder replacement
-- **file_operations.py**: Directory listing and file reading with markitdown support (session-scoped)
+- **file_operations.py**: Directory listing and file reading with markitdown support
+- **document_generation.py**: Document generation with session-scoped output
 - **text_editing.py**: Text, regex, and insert editing operations
-- **code_interpreter.py**: Code execution wrapper with safety rails
+- **code_interpreter.py**: Sandboxed code execution
 - **wrappers.py**: Session-aware wrappers enforcing sandbox `data/files/{session_id}`
-- **registry.py**: Tool registration and discovery system
+- **registry.py**: Tool registration and discovery
 
 **Integrations** (`integrations/`)
-- **mcp_servers.py**: MCP server setup and management (Sequential Thinking, Fetch)
+- **mcp_servers.py**: MCP server setup (Sequential Thinking, Fetch, optional Tavily)
+- **mcp_pool.py**: MCP server connection pool for concurrent requests
 - **mcp_registry.py**: MCP server registry and discovery
 - **event_handlers.py**: Streaming event handlers for Agent/Runner pattern
 - **sdk_token_tracker.py**: Universal token tracking via SDK monkey-patching
 
 **Utilities** (`utils/`)
 - **logger.py**: Enterprise JSON logging with rotation and session correlation
-- **ipc.py**: IPC manager with pre-cached templates for performance
-- **token_utils.py**: Token management utilities with LRU caching
-- **file_utils.py**: File system utility functions
-- **binary_io.py**: Binary file helpers
-- **document_processor.py**: Document processing and optimization utilities
-- **json_utils.py**: JSON parsing and formatting utilities
-- **http_logger.py**: HTTP request logging middleware
-- **client_factory.py**: Azure OpenAI client factory and configuration
+- **token_utils.py**: Token counting with LRU caching
+- **file_utils.py**: File system utilities
+- **client_factory.py**: Azure OpenAI client factory
 - **validation.py**: Input validation and sanitization
-- **session_integrity.py**: Session integrity validation
-
-**Configuration**
-- **.env.example**: Environment variable template
-- **requirements.txt**: Python dependencies (Python 3.13+ required)
 
 ### Electron Frontend (`electron/`)
 
 **Main Process**
-- **main.js**: Main process with health monitoring (5-min intervals), auto-recovery, graceful shutdown
+- **main.js**: Main process with HTTP/WebSocket proxy to FastAPI, health monitoring
+- **api-client.js**: HTTP client for FastAPI backend communication
 - **preload.js**: Secure context-isolated bridge between main and renderer processes
 - **logger.js**: Centralized logging with IPC forwarding from renderer to main process
 
@@ -777,7 +691,7 @@ Using Makefile (recommended):
 # Syntax validation and compilation
 make test
 
-# Run backend only
+# Run FastAPI backend only
 make backend-only
 
 # Full app with DevTools
@@ -787,10 +701,10 @@ make dev
 Manual testing workflow:
 ```bash
 # Syntax validation
-python -m py_compile src/main.py
+python -m py_compile src/api/main.py
 
-# Run backend tests
-python src/main.py
+# Run FastAPI backend
+cd src && uvicorn api.main:app --reload
 
 # Test Electron app
 npm start
@@ -820,125 +734,54 @@ make health             # Verify all dependencies and config
 
 ### Session Management & Persistence
 
-The application features advanced session management with **two-layer persistence architecture**:
+The application uses **PostgreSQL** for session and message persistence with connection pooling (asyncpg).
 
-#### Layered Persistence Architecture
+#### PostgreSQL Architecture
 
-**Layer 1 (LLM Context - SQLiteSession)**
-- Complete SDK state including tool calls, reasoning items, and internal structures
-- Stored in `data/chat_history.db` (agent_sessions / agent_messages tables)
-- Token-aware auto-summarization triggers at 20% of the model limit (per MODEL_TOKEN_LIMITS)
-- Keeps the last 2 user exchanges unsummarized and repopulates context after summarization
-- Metadata is always updated in a `finally` block to prevent desync
+**Sessions Table**
+- Session metadata including title, model configuration, timestamps
+- Tracks message counts, token usage, and MCP server configuration
+- Supports pinning sessions for quick access
 
-**Layer 2 (UI Display - FullHistoryStore)**
-- User-facing conversation history (user/assistant/system messages only)
-- Filtered to exclude SDK internal items (tool_call_item, reasoning_item, etc.)
-- Stored in a single shared `full_history` table keyed by session_id
-- Best-effort writes (Layer 1 is source of truth); never summarized
-- Optimized for UI rendering and paginated session switching
+**Messages Table**
+- Complete conversation history with role, content, and metadata
+- Supports pagination for efficient session switching
+- Indexed by session_id and created_at for fast queries
 
 #### Session Features
 
-- **Lazy Init**: Sessions are created on first message or upload; welcome view uses `clear` to reset
-- **Multi-Session Support**: Create, switch, update, and delete conversation sessions
-- **Persistent Storage**: Both layers survive application restarts
-- **Token-Aware Summarization**: Automatically summarizes Layer 1 at 20% of model limit; also checked post-run to account for tool tokens
-- **Model-Aware Limits**: GPT-5 family (272k), GPT-4.1/4o (128k), GPT-3.5 (15.3k)
-- **Context Preservation**: Keeps last 2 user-assistant exchanges unsummarized
-- **Seamless Switching**: SessionBuilder restores context and paginates Layer 2
-- **Tool Token Tracking**: SDK-level tracker counts tool/reasoning/handoff tokens separately
-- **Metadata Hygiene**: Startup sync fixes stale message counts; cleanup removes empty sessions >24h while protecting sessions with DB messages or files
-- **Auto Titles**: Generates a title after the first user message (non-blocking)
+- **Multi-Session Support**: Create, switch, update, delete, pin sessions
+- **Persistent Storage**: All data stored in PostgreSQL
+- **Token-Aware Management**: Tracks token usage for context management
+- **Auto Titles**: Generates titles after first user message (non-blocking)
+- **Pagination**: Efficient message loading with offset/limit
 
-#### Session Commands
+#### API Endpoints
 
-The application includes IPC-based session management:
-- **Create**: Start new conversation sessions with automatic titles
-- **Switch**: Change active session and restore full conversation history
-- **List**: View all available sessions with metadata
-- **Delete**: Remove sessions and clean up both persistence layers (with automatic file handle cleanup to prevent "too many open files" errors)
-- **Summarize**: Manually trigger conversation summarization
-- **Load More**: Paginate Layer 2 history
-- **Clear**: Clear current session to return to lazy-init welcome state
-- **Update Config**: Change per-session model, MCP servers, or reasoning effort and recreate the agent
+**Session Management** (`/api/sessions/`)
+- `POST /` - Create new session
+- `GET /` - List sessions with pagination
+- `GET /{id}` - Get session details
+- `PATCH /{id}` - Update session (rename, pin, config)
+- `DELETE /{id}` - Delete session
 
-#### Session Deletion Reliability
+**Chat** (`/ws/chat/{session_id}`)
+- WebSocket endpoint for real-time chat streaming
+- Supports interruption via WebSocket messages
+- Streams agent responses, tool calls, and reasoning
 
-The application includes robust session deletion with a 3-layer defense against file handle exhaustion:
-1. **Frontend Cleanup**: FilePanel closes all file handles before deletion request
-2. **Backend Garbage Collection**: Forces Python GC with 50ms delay before directory removal
-3. **Increased Limits**: File descriptor limit increased from 256→4096 at startup (macOS/Linux)
+**Messages** (`/api/messages/`)
+- `GET /{session_id}` - Get messages with pagination
 
-This ensures sessions are completely removed from both metadata and filesystem without orphaned directories.
+#### Connection Pooling
 
-#### Database Exploration
-
-Explore your session data with the built-in database tools:
-```bash
-make db-compare         # Compare Layer 1 vs Layer 2 item counts
-make db-layer1          # View complete LLM context (includes SDK internals)
-make db-layer2          # View user-facing conversation history
-make db-tools           # Inspect all tool calls in session
-make db-types           # Analyze SDK item type distribution
-```
-
-The layered architecture ensures:
-- ✅ Model has complete context including tool execution details
-- ✅ UI displays clean, user-focused conversation history
-- ✅ Session switching remains fast without buffer overflow
-- ✅ Conversation history preserved even after summarization
-
-#### Database Schema
-
-**Layer 1 Tables (SDK Managed)**
-```sql
--- Session metadata
-agent_sessions (session_id TEXT PRIMARY KEY, created_at TIMESTAMP)
-
--- All SDK items (JSON blob with role, type, content, etc.)
-agent_messages (
-    id INTEGER PRIMARY KEY,
-    session_id TEXT,
-    message_data TEXT,  -- JSON: {role, type, content, tool_calls, reasoning, etc.}
-    created_at TIMESTAMP
+The application uses asyncpg connection pooling for efficient database access:
+```python
+app.state.db_pool = await asyncpg.create_pool(
+    dsn=settings.database_url,
+    min_size=2,
+    max_size=10,
 )
-```
-
-**Layer 2 Table (Application Managed)**
-```sql
--- Shared table across all sessions
-CREATE TABLE full_history (
-    id INTEGER PRIMARY KEY,
-    session_id TEXT NOT NULL,
-    role TEXT NOT NULL,        -- user, assistant, system, tool_call
-    content TEXT NOT NULL,     -- Clean message content
-    metadata TEXT,             -- Optional JSON metadata
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-CREATE INDEX IF NOT EXISTS idx_full_history_session_id ON full_history(session_id);
-CREATE INDEX IF NOT EXISTS idx_full_history_session_created ON full_history(session_id, created_at);
-```
-
-**Metadata File**
-```json
-// data/sessions.json
-{
-  "current_session_id": "chat_abc123",
-  "sessions": {
-    "chat_abc123": {
-      "session_id": "chat_abc123",
-      "title": "Conversation 2025-10-12 07:32 AM",
-      "created_at": "2025-10-12T07:32:51.738400",
-      "last_used": "2025-10-12T07:41:08.806529",
-      "message_count": 24,
-      "accumulated_tool_tokens": 0,
-      "mcp_config": ["sequential", "fetch", "tavily"],
-      "model": "gpt-5.1",
-      "reasoning_effort": "medium"
-    }
-  }
-}
 ```
 
 ### Rate Limiting & Error Handling
@@ -969,12 +812,16 @@ Recent improvements for better maintainability:
 - `AZURE_OPENAI_ENDPOINT`: Azure OpenAI endpoint URL (required)
 - `AZURE_OPENAI_DEPLOYMENT`: Deployment name (defaults to "gpt-5-mini" if not set)
 - `AZURE_OPENAI_API_VERSION`: API version (optional, defaults to "2024-10-01-preview")
+- `DATABASE_URL`: PostgreSQL connection string (required, e.g., `postgresql://user:pass@localhost:5432/chatjuicer`)
 
 ### Python Dependencies
 
 **Required** (Python 3.13+, from `src/requirements.txt`):
+- `fastapi>=0.109.0`: Modern async web framework
+- `uvicorn>=0.27.0`: ASGI server for FastAPI
+- `asyncpg>=0.29.0`: Async PostgreSQL driver with connection pooling
 - `openai>=1.0.0`: Azure OpenAI client library (AsyncOpenAI)
-- `openai-agents>=0.3.3`: Agent/Runner framework with MCP support and SQLiteSession
+- `openai-agents>=0.3.3`: Agent/Runner framework with MCP support
 - `markitdown[all]>=0.1.0`: Document conversion to markdown (PDF, Word, Excel, HTML, CSV, JSON, images)
 - `tiktoken>=0.5.0`: OpenAI's official token counting library for exact token counts
 - `python-json-logger>=2.0.0`: Structured JSON logging with rotation and session correlation
@@ -1027,27 +874,33 @@ make test               # Validate Python syntax
    - Verify network connectivity to Azure
    - View errors: `make logs-errors`
 
-3. **Python not found or wrong version**
+3. **PostgreSQL connection errors**
+   - Ensure PostgreSQL is running: `pg_isready`
+   - Verify `DATABASE_URL` in `.env` is correct
+   - Check database exists: `psql -d chatjuicer -c '\dt'`
+   - Ensure user has proper permissions
+
+4. **Python not found or wrong version**
    - Ensure Python 3.13+ is installed and in PATH
    - Check: `python3 --version` (must show 3.13 or higher)
    - Install Python 3.13+ from https://www.python.org/downloads/
    - Use virtual environment: `make install-python`
 
-4. **Electron window doesn't open**
+5. **Electron window doesn't open**
    - Check Node.js version (requires 16+): `node --version`
    - Reinstall dependencies: `make install-node` or `npm install`
    - Try development mode: `make dev`
 
-5. **MCP server not working**
+6. **MCP server not working**
    - Verify installation: `which server-sequential-thinking`
    - Reinstall: `make install-mcp` or `sudo make install-mcp`
    - Check global npm packages: `npm list -g --depth=0`
 
-6. **Virtual environment issues**
+7. **Virtual environment issues**
    - Remove and recreate: `make clean-venv && make install-python`
    - Verify `.juicer/` directory exists after install
 
-7. **Build/syntax errors**
+8. **Build/syntax errors**
    - Run validation: `make test`
    - Check Python files: `make validate`
    - View full error output
@@ -1065,6 +918,7 @@ make run                # Test the application
 
 ## Acknowledgments
 
-- Built with [Electron](https://www.electronjs.org/)
+- Built with [Electron](https://www.electronjs.org/) and [FastAPI](https://fastapi.tiangolo.com/)
 - Powered by [Azure OpenAI](https://azure.microsoft.com/en-us/products/ai-services/openai-service)
-- Uses the OpenAI Agents library for streaming support
+- Uses the [OpenAI Agents SDK](https://github.com/openai/openai-agents-python) for Agent/Runner pattern
+- Database persistence with [PostgreSQL](https://www.postgresql.org/) and [asyncpg](https://github.com/MagicStack/asyncpg)

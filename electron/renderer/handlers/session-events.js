@@ -10,6 +10,7 @@ import {
   updateSessionActive,
   updateSessionTitle,
 } from "../ui/renderers/session-list-renderer.js";
+import { updateChatModelSelector } from "../utils/chat-model-updater.js";
 
 /**
  * Setup session event handlers
@@ -131,6 +132,11 @@ export function setupSessionEventHandlers({
       if (filePanel?.setSession) {
         filePanel.setSession(sessionId);
         filePanel.loadSessionFiles();
+      }
+
+      // Update model selector with session's model configuration
+      if (sessionData?.session) {
+        updateChatModelSelector(sessionData.session);
       }
 
       // Load messages and files from Layer 2 (full_history)

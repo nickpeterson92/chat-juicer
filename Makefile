@@ -1,4 +1,4 @@
-.PHONY: help setup setup-dev install install-node install-python install-mcp install-dev run dev clean clean-cache test lint format typecheck precommit precommit-install quality validate fix check docs docs-clean docs-serve logs logs-errors logs-all db-explore db-sessions db-compare db-layer1 db-layer2 db-tools db-types db-shell db-reset db-backup db-restore health status backend-only clean-venv clean-all reset kill restart update-deps generate-model-metadata build-sandbox sandbox-status sandbox-test
+.PHONY: help setup setup-dev install install-node install-python install-mcp install-dev run dev api clean clean-cache test lint format typecheck precommit precommit-install quality validate fix check docs docs-clean docs-serve logs logs-errors logs-all db-explore db-sessions db-compare db-layer1 db-layer2 db-tools db-types db-shell db-reset db-backup db-restore health status backend-only clean-venv clean-all reset kill restart update-deps generate-model-metadata build-sandbox sandbox-status sandbox-test
 
 # Default target
 .DEFAULT_GOAL := help
@@ -58,6 +58,16 @@ backend-only: ## Run Python backend only (for testing)
 	@echo "$(BLUE)Starting Python backend...$(NC)"
 	@if [ -f ".juicer/bin/python3" ]; then \
 		cd src && ../.juicer/bin/python3 main.py; \
+	else \
+		echo "$(YELLOW)⚠ Virtual environment not found$(NC)"; \
+		echo "$(BLUE)Run: make install-python$(NC)"; \
+		exit 1; \
+	fi
+
+api: ## Run FastAPI backend with hot reload (excludes data/ from watch)
+	@echo "$(BLUE)Starting FastAPI backend...$(NC)"
+	@if [ -f ".juicer/bin/python3" ]; then \
+		cd src && ../.juicer/bin/python3 -m api.main; \
 	else \
 		echo "$(YELLOW)⚠ Virtual environment not found$(NC)"; \
 		echo "$(BLUE)Run: make install-python$(NC)"; \

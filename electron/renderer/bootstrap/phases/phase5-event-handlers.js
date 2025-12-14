@@ -366,7 +366,20 @@ export async function initializeEventHandlers({
       // If no session, create one first
       if (!sessionService.getCurrentSessionId()) {
         try {
-          const result = await sessionService.createSession({});
+          // Get model config from welcome page selector (if on welcome page)
+          let sessionOptions = {};
+          if (isOnWelcomePage) {
+            const { getMcpConfig, getModelConfig } = await import("../../ui/welcome-page.js");
+            const mcpConfig = getMcpConfig();
+            const modelConfig = getModelConfig();
+            sessionOptions = {
+              mcpConfig,
+              model: modelConfig.model,
+              reasoningEffort: modelConfig.reasoning_effort,
+            };
+          }
+
+          const result = await sessionService.createSession(sessionOptions);
 
           if (result.success) {
             if (components.filePanel) {
@@ -513,7 +526,9 @@ export async function initializeEventHandlers({
             components.filePanel.clear();
           }
 
-          await sessionService.clearCurrentSession();
+          // Clear UI state but do NOT delete database data
+          // clearCurrentSession() was incorrectly deleting all messages
+          appState.setState("session.current", null);
 
           if (previousSessionId) {
             const sessionsList = document.getElementById("sessions-list");

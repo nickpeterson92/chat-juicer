@@ -15,11 +15,13 @@ from typing import Any, cast
 import aiofiles
 
 from core.constants import (
+    DATA_FILES_PATH,
     ERROR_NULL_BYTE_IN_PATH,
     ERROR_PATH_OUTSIDE_PROJECT,
     ERROR_PATH_OUTSIDE_WORKSPACE,
     ERROR_PATH_TRAVERSAL,
     ERROR_SYMLINK_ESCAPE,
+    PROJECT_ROOT,
 )
 from models.api_models import TextEditResponse
 from models.ipc_models import UploadResult
@@ -40,7 +42,12 @@ def get_relative_path(path: Path) -> Path:
         Path object, relative to cwd if possible, otherwise absolute
     """
     cwd = Path.cwd()
-    return path.relative_to(cwd) if cwd in path.parents else path
+    if path == cwd:
+        return path  # Don't return '.' for cwd itself
+    try:
+        return path.relative_to(cwd)
+    except ValueError:
+        return path
 
 
 async def get_session_files(session_id: str, subdir: str = "sources") -> list[str]:
@@ -59,7 +66,7 @@ async def get_session_files(session_id: str, subdir: str = "sources") -> list[st
         return sorted(file.name for file in path.iterdir() if file.is_file() and not file.name.startswith("."))
 
     try:
-        base_path = Path.cwd() / "data" / "files" / session_id / subdir
+        base_path = DATA_FILES_PATH / session_id / subdir
         if not base_path.exists() or not base_path.is_dir():
             return []
 
@@ -116,14 +123,15 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
         if "\0" in file_path:
             return Path(), ERROR_NULL_BYTE_IN_PATH
 
-        # Prevent path traversal attacks (.. components and absolute paths)
-        if ".." in file_path or file_path.startswith("/"):
+        # Prevent path traversal attacks (.. components)
+        if ".." in file_path:
             return Path(), ERROR_PATH_TRAVERSAL
 
         # If session_id provided, enforce workspace boundaries
+        # The sandbox is the security boundary - paths are confined to session dir
         if session_id:
-            # Normalize path separators and strip any session prefix
-            sanitized_path = file_path.replace("\\", "/")
+            # Normalize and strip leading / (agent may use /sources/ as convention)
+            sanitized_path = file_path.replace("\\", "/").lstrip("/")
             session_prefix = f"data/files/{session_id}/"
             if sanitized_path.startswith(session_prefix):
                 sanitized_path = sanitized_path[len(session_prefix) :]
@@ -145,8 +153,7 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
                 relative_request = Path("sources") / requested_path
 
             # Build full path within session workspace (DON'T resolve yet)
-            cwd = Path.cwd()
-            session_dir = cwd / "data" / "files" / session_id
+            session_dir = DATA_FILES_PATH / session_id
             target_path = session_dir / relative_request  # Unresolved path
 
             # Security check: ensure REQUESTED path is within session workspace
@@ -168,20 +175,23 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
 
             # Security check: ensure resolved path is still within session workspace
             # UNLESS it's one of our allowed symlinks (templates/, output/)
+            # Note: Must resolve session_dir too for macOS where /var -> /private/var
             if first_component not in allowed_symlinks:
                 try:
-                    resolved_path.relative_to(session_dir)
+                    resolved_path.relative_to(session_dir.resolve())
                 except ValueError:
                     return Path(), ERROR_SYMLINK_ESCAPE
 
             return resolved_path, None
         else:
             # No session restriction - use standard project-scope validation
-            cwd = Path.cwd()
-            target_path = Path(file_path).resolve()
+            target_path = (PROJECT_ROOT / file_path).resolve()
 
             # Security check: ensure path is within project scope
-            if not (cwd in target_path.parents or target_path == cwd):
+            # Note: Must resolve PROJECT_ROOT too for macOS where /var -> /private/var
+            try:
+                target_path.relative_to(PROJECT_ROOT.resolve())
+            except ValueError:
                 return target_path, ERROR_PATH_OUTSIDE_PROJECT
 
             return target_path, None
@@ -458,9 +468,8 @@ def save_uploaded_file(
             return {"success": False, "error": "Invalid filename: path separators not allowed"}
 
         # Determine target directory based on session_id
-        cwd = Path.cwd()
         # Session-specific storage: data/files/{session_id}/sources/ or general storage: sources/
-        target_path = cwd / "data" / "files" / session_id / "sources" if session_id else cwd / target_dir
+        target_path = DATA_FILES_PATH / session_id / "sources" if session_id else PROJECT_ROOT / target_dir
 
         # Create directory if it doesn't exist
         target_path.mkdir(parents=True, exist_ok=True)
@@ -481,8 +490,8 @@ def save_uploaded_file(
         # Get file info
         file_size = target_file.stat().st_size
 
-        # Return relative path from cwd
-        relative_path = target_file.relative_to(cwd)
+        # Return relative path from project root
+        relative_path = target_file.relative_to(PROJECT_ROOT)
 
         return {
             "success": True,

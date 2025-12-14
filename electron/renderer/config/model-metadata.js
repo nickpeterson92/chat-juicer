@@ -12,17 +12,23 @@
  * Model metadata with display names, descriptions, and family grouping
  */
 export const MODEL_METADATA = {
+  "gpt-5.2": {
+    displayName: "GPT-5.2",
+    description: "Latest and most capable model",
+    isPrimary: true,
+    modelFamily: null,
+  },
   "gpt-5.1": {
     displayName: "GPT-5.1",
-    description: "Latest reasoning model",
+    description: "Advanced reasoning model",
     isPrimary: true,
     modelFamily: null,
   },
   "gpt-5.1-codex-max": {
     displayName: "GPT-5.1 Codex Max",
     description: "Maximum capability code generation",
-    isPrimary: true,
-    modelFamily: null,
+    isPrimary: false,
+    modelFamily: "gpt-5.1",
   },
   "gpt-5": {
     displayName: "GPT-5",
@@ -60,6 +66,7 @@ export const MODEL_METADATA = {
  * Model family display names for sub-dropdown headers
  */
 export const MODEL_FAMILY_LABELS = {
+  "gpt-5.1": "GPT-5.1 Models",
   "gpt-5": "GPT-5 Models",
   "gpt-4.1": "GPT-4.1 Models",
 };
