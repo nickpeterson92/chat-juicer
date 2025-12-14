@@ -501,7 +501,7 @@ REASONING_MODELS: set[str] = {m.id for m in MODEL_CONFIGS if m.supports_reasonin
 
 #: Maximum number of conversation turns (user+assistant exchanges) per run.
 #: Prevents infinite loops and controls maximum conversation length per execution.
-MAX_CONVERSATION_TURNS = 50
+MAX_CONVERSATION_TURNS = 100
 
 # ============================================================================
 # Token Counting Configuration
@@ -663,6 +663,10 @@ class Settings(BaseSettings):
     db_pool_max_size: int = Field(default=10, description="Maximum PostgreSQL connections")
     mcp_pool_size: int = Field(default=3, description="MCP server instances per server type")
     mcp_acquire_timeout: float = Field(default=30.0, description="MCP server acquire timeout (seconds)")
+
+    # HTTP client timeouts (for Azure OpenAI streaming)
+    # Reasoning models (GPT-5, O1, O3) can pause 30+ seconds while "thinking"
+    http_read_timeout: float = Field(default=600.0, description="HTTP read timeout for streaming (seconds)")
 
     # Auth (Phase 1 convenience)
     default_user_email: str = Field(default="local@chatjuicer.dev", description="Seeded default user email")

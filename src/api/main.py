@@ -37,12 +37,18 @@ def _setup_openai_client() -> None:
         api_key = settings.azure_openai_api_key
         endpoint = settings.azure_endpoint_str
         logger.info(f"Configuring Azure OpenAI client (endpoint: {endpoint})")
-        http_client = create_http_client(enable_logging=settings.http_request_logging)
+        http_client = create_http_client(
+            enable_logging=settings.http_request_logging,
+            read_timeout=settings.http_read_timeout,
+        )
         client = create_openai_client(api_key, base_url=endpoint, http_client=http_client)
     else:
         api_key = settings.openai_api_key
         logger.info("Configuring OpenAI client")
-        http_client = create_http_client(enable_logging=settings.http_request_logging)
+        http_client = create_http_client(
+            enable_logging=settings.http_request_logging,
+            read_timeout=settings.http_read_timeout,
+        )
         client = create_openai_client(api_key, http_client=http_client)
 
     # Register as default client for agents SDK
