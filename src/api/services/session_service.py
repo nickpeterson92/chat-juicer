@@ -254,6 +254,7 @@ class SessionService:
             "pinned": row["pinned"],
             "is_named": row["is_named"],
             "message_count": row["message_count"],
+            "turn_count": row["turn_count"],
             "total_tokens": row["total_tokens"],
             # Token fields for frontend indicator
             "tokens": row["total_tokens"] or 0,

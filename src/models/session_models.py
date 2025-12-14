@@ -111,7 +111,7 @@ class SessionMetadata(BaseModel):
         description="List of enabled MCP server names (sequential, fetch, tavily)",
     )
     model: str = Field(
-        default="gpt-5",
+        default="gpt-5.1",
         description="Model deployment name for this session",
     )
     reasoning_effort: str = Field(

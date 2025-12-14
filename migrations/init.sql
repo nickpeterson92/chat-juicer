@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     pinned BOOLEAN DEFAULT FALSE,
     is_named BOOLEAN DEFAULT FALSE,
     message_count INTEGER DEFAULT 0,
+    turn_count INTEGER DEFAULT 0,
     total_tokens INTEGER DEFAULT 0,
     accumulated_tool_tokens INTEGER DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW(),

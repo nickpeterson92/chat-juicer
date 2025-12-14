@@ -461,13 +461,17 @@ class ChatService:
                 content,
                 metadata,
             )
+            # Increment message_count for all messages, turn_count only for user messages
             await conn.execute(
                 """
                 UPDATE sessions
-                SET message_count = message_count + 1, last_used_at = NOW()
+                SET message_count = message_count + 1,
+                    turn_count = turn_count + CASE WHEN $2 = 'user' THEN 1 ELSE 0 END,
+                    last_used_at = NOW()
                 WHERE id = $1
                 """,
                 session_uuid,
+                role,
             )
 
     async def _add_tool_call_to_history(
@@ -551,23 +555,24 @@ class ChatService:
         session_uuid: UUID,
         model: str,
     ) -> None:
-        """Generate title after first exchange if session not yet named."""
+        """Generate title after first turn (user message + response) if session not yet named."""
         try:
-            # Check if already named
+            # Check if already named - use turn_count (incremented once per user message)
+            # Title triggers after turn 1 completes (turn_count >= 1)
             async with self.pool.acquire() as conn:
                 row = await conn.fetchrow(
-                    "SELECT is_named, message_count FROM sessions WHERE id = $1",
+                    "SELECT is_named, turn_count FROM sessions WHERE id = $1",
                     session_uuid,
                 )
-            if not row or row["is_named"] or row["message_count"] < 2:
+            if not row or row["is_named"] or row["turn_count"] < 1:
                 return
 
-            # Get recent messages for context
+            # Get recent messages for context (exclude tool_call - API only accepts user/assistant/system)
             async with self.pool.acquire() as conn:
                 message_rows = await conn.fetch(
                     """
                     SELECT role, content FROM messages
-                    WHERE session_id = $1
+                    WHERE session_id = $1 AND role IN ('user', 'assistant')
                     ORDER BY created_at ASC
                     LIMIT 4
                     """,
