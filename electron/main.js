@@ -15,7 +15,6 @@ const {
   WINDOW_DEFAULT_HEIGHT,
   WINDOW_MIN_WIDTH,
   WINDOW_MIN_HEIGHT,
-  HIDDEN_FILE_PREFIX,
 } = require("./config/main-constants");
 
 const logger = new Logger("main");
@@ -345,8 +344,16 @@ app.whenReady().then(() => {
               signal: controller.signal,
             });
           }
-          case "load_more":
-            return { success: true, messages: [] };
+          case "load_more": {
+            const sessionId = data?.session_id;
+            if (!sessionId) return { error: "Missing session_id", messages: [] };
+            const offset = data?.offset ?? 0;
+            const limit = data?.limit ?? 50;
+            const result = await apiRequest(`/api/sessions/${sessionId}/messages?limit=${limit}&offset=${offset}`, {
+              signal: controller.signal,
+            });
+            return { success: true, messages: result.messages || [] };
+          }
           case "update_config": {
             const sessionId = data?.session_id;
             if (!sessionId) return { error: "Missing session_id" };
