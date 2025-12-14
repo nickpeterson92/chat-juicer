@@ -182,7 +182,7 @@ describe("ModelSelector", () => {
       await selector.initialize(models, reasoningLevels);
 
       const selection = selector.getSelection();
-      expect(selection.model).toBe("gpt-5");
+      expect(selection.model).toBe("gpt-5"); // Uses provided default model
       expect(selection.reasoning_effort).toBe("medium");
     });
 
@@ -191,7 +191,7 @@ describe("ModelSelector", () => {
       await selector.initialize([], []);
 
       const selection = selector.getSelection();
-      expect(selection.model).toBe("gpt-5"); // fallback
+      expect(selection.model).toBe("gpt-5.1"); // Fallback when no models provided
     });
   });
 
