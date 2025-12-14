@@ -525,12 +525,18 @@ class ChatService:
         logger.info(f"Persisted tool call {name} (call_id={call_id}, success={success})")
 
     async def interrupt(self, session_id: str) -> None:
-        """Interrupt active chat processing via flag-based mechanism."""
+        """Interrupt active chat processing via flag-based mechanism.
+
+        Sets the interrupt flag and sends immediate feedback to frontend.
+        The streaming loop will detect the flag and exit cleanly.
+        """
         self._interrupt_flags[session_id] = True
         logger.info(
             f"Interrupt flag SET for session {session_id}, ChatService id={id(self)}, "
             f"dict_id={id(self._interrupt_flags)}, flags={self._interrupt_flags}"
         )
+        # Send immediate feedback to frontend (stream loop will send assistant_end when done)
+        await self.ws_manager.send(session_id, {"type": "stream_interrupted", "session_id": session_id})
 
     def clear_interrupt(self, session_id: str) -> None:
         """Clear interrupt flag (used before starting new message processing)."""

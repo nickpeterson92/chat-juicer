@@ -89,15 +89,10 @@ async def chat_websocket(
                     logger.info(f"Interrupt message received for session {session_id}")
                     # Only interrupt if there's an active task
                     if active_chat_task and not active_chat_task.done():
-                        # Set interrupt flag - stream loop will detect and exit cleanly
+                        # Set interrupt flag and send immediate feedback to frontend
+                        # Stream loop will detect flag and exit cleanly, sending assistant_end
                         await chat_service.interrupt(session_id)
                         logger.info(f"Interrupt flag set for session {session_id}")
-
-                        # Send stream_interrupted immediately for instant user feedback
-                        await ws_manager.send(session_id, {"type": "stream_interrupted", "session_id": session_id})
-
-                        # Don't wait here - let the stream loop exit on its own
-                        # It will send assistant_end when it finishes
                     else:
                         logger.info(f"No active chat task to interrupt for session {session_id}")
 
