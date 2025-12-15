@@ -85,6 +85,7 @@ class TextEditResponse(BaseModel):
     message: str | None = None
     original_text: str | None = None
     new_text: str | None = None
+    diff: str | None = None
     error: str | None = None
 
     def to_json(self, indent: int = 2) -> str:

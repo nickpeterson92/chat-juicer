@@ -132,11 +132,3 @@ class PostgresSession:
             return result
         except json.JSONDecodeError:
             return None
-
-    async def clear_session(self) -> None:
-        """Clear all items for this session."""
-        async with self.pool.acquire() as conn:
-            await conn.execute(
-                "DELETE FROM llm_context WHERE session_id = $1",
-                self.session_uuid,
-            )

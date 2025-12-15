@@ -117,8 +117,8 @@ def generate_diff(original_content: str, new_content: str, file_path: str) -> st
     Returns:
         Unified diff string
     """
-    original_lines = original_content.splitlines(keepends=True)
-    new_lines = new_content.splitlines(keepends=True)
+    original_lines = original_content.splitlines()
+    new_lines = new_content.splitlines()
 
     diff = difflib.unified_diff(
         original_lines,
@@ -128,7 +128,7 @@ def generate_diff(original_content: str, new_content: str, file_path: str) -> st
         lineterm="",
     )
 
-    return "".join(diff)
+    return "\n".join(diff)
 
 
 async def edit_file(

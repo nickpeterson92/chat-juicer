@@ -428,6 +428,7 @@ async def file_operation(
                             message=f"{result_data.get('operation', 'edit')} operation completed",
                             original_text=result_data.get("text_found", result_data.get("anchor")),
                             new_text=result_data.get("text_inserted", result_data.get("replacement")),
+                            diff=result_data.get("diff"),
                         ).to_json()
             except (ValueError, TypeError) as e:
                 # ValueError: invalid operation arguments

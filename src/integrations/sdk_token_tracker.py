@@ -37,7 +37,7 @@ except ImportError:
     Runner = None  # type: ignore[assignment,misc]
 
 if TYPE_CHECKING:
-    from session import TokenAwareSQLiteSession  # pyright: ignore[reportMissingImports]
+    from api.services.token_aware_session import PostgresTokenAwareSession
 
 
 class SDKTokenTracker:
@@ -51,11 +51,11 @@ class SDKTokenTracker:
     """
 
     def __init__(self) -> None:
-        self.session: TokenAwareSQLiteSession | None = None
+        self.session: PostgresTokenAwareSession | None = None
         self.enabled: bool = True
         self._total_tracked: int = 0  # For debugging/logging
 
-    def set_session(self, session: TokenAwareSQLiteSession) -> None:
+    def set_session(self, session: PostgresTokenAwareSession) -> None:
         """Connect a session for automatic token updates."""
         self.session = session
         self._total_tracked = 0
@@ -232,7 +232,7 @@ def patch_sdk_for_auto_tracking() -> bool:
     return False
 
 
-def connect_session(session: TokenAwareSQLiteSession) -> None:
+def connect_session(session: PostgresTokenAwareSession) -> None:
     """Connect a session to the SDK token tracker.
 
     Call this after creating a session to enable automatic token tracking.

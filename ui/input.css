@@ -662,6 +662,799 @@
   }
 
   /* ==========================================
+   * WEB SEARCH RESULTS: Tavily search rendering
+   * ========================================== */
+  .web-search-results {
+    @apply flex flex-col gap-1;
+  }
+
+  .web-search-header {
+    @apply flex items-center justify-between py-2 px-3 rounded-t-lg;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border-secondary);
+    border-bottom: none;
+  }
+
+  .web-search-query-container {
+    @apply flex items-center gap-2;
+  }
+
+  .web-search-globe {
+    @apply flex items-center justify-center;
+    color: var(--color-text-secondary);
+  }
+
+  .web-search-globe svg {
+    @apply w-4 h-4;
+  }
+
+  .web-search-query {
+    @apply text-sm font-medium italic;
+    color: var(--color-text-primary);
+  }
+
+  .web-search-count {
+    @apply text-xs;
+    color: var(--color-text-secondary);
+  }
+
+  .web-search-list {
+    @apply flex flex-col rounded-b-lg overflow-hidden;
+    border: 1px solid var(--color-border-secondary);
+    border-top: none;
+  }
+
+  .web-search-item {
+    @apply flex items-center gap-3 py-2.5 px-3 no-underline transition-colors;
+    background: var(--color-surface-3);
+    border-bottom: 1px solid var(--color-border-secondary);
+  }
+
+  .web-search-item:last-child {
+    border-bottom: none;
+  }
+
+  .web-search-item:hover {
+    background: var(--color-surface-hover);
+  }
+
+  .web-search-favicon {
+    @apply w-4 h-4 flex-shrink-0 rounded-sm;
+  }
+
+  .web-search-favicon-fallback {
+    @apply w-4 h-4 flex-shrink-0 flex items-center justify-center;
+    color: var(--color-text-secondary);
+  }
+
+  .web-search-favicon-fallback svg {
+    @apply w-4 h-4;
+  }
+
+  .web-search-text {
+    @apply flex-1 min-w-0;
+  }
+
+  .web-search-title {
+    @apply text-sm truncate block;
+    color: var(--color-text-primary);
+  }
+
+  .web-search-domain {
+    @apply text-xs flex-shrink-0;
+    color: var(--color-text-secondary);
+  }
+
+  /* ==========================================
+   * WEB CONTENT RESULT: Fetch/Extract rendering
+   * ========================================== */
+  .web-content-result {
+    @apply flex flex-col gap-2;
+  }
+
+  .web-content-title {
+    @apply text-sm font-medium truncate;
+    color: var(--color-text-primary);
+  }
+
+  .web-content-header {
+    @apply flex items-center justify-between py-2 px-3 rounded-lg;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border-secondary);
+  }
+
+  .web-content-url {
+    @apply flex items-center gap-2 no-underline min-w-0 flex-1;
+  }
+
+  .web-content-url:hover .web-content-url-text {
+    color: var(--color-brand-primary);
+  }
+
+  .web-content-favicon {
+    @apply w-4 h-4 flex-shrink-0 rounded-sm;
+  }
+
+  .web-content-url-text {
+    @apply text-sm truncate transition-colors;
+    color: var(--color-text-primary);
+  }
+
+  .web-content-stats {
+    @apply flex items-center gap-1.5 flex-shrink-0 ml-3;
+  }
+
+  .web-content-stat {
+    @apply text-xs;
+    color: var(--color-text-secondary);
+  }
+
+  .web-content-stat-divider {
+    @apply text-xs;
+    color: var(--color-text-tertiary);
+  }
+
+  .web-content-preview {
+    @apply rounded-lg overflow-hidden;
+    background: var(--color-surface-3);
+    border: 1px solid var(--color-border-secondary);
+  }
+
+  .web-content-preview-text {
+    @apply text-sm p-3 max-h-[400px] overflow-y-auto whitespace-pre-wrap font-mono;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+  }
+
+  .web-content-markdown {
+    @apply text-sm p-3 max-h-[400px] overflow-y-auto;
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+  }
+
+  .web-content-markdown p {
+    @apply mb-3;
+  }
+
+  .web-content-markdown p:last-child {
+    @apply mb-0;
+  }
+
+  .web-content-markdown a {
+    color: var(--color-brand-primary);
+    text-decoration: underline;
+  }
+
+  .web-content-markdown a:hover {
+    opacity: 0.8;
+  }
+
+  .web-content-markdown ul,
+  .web-content-markdown ol {
+    @apply pl-5 mb-3;
+  }
+
+  .web-content-markdown li {
+    @apply mb-1;
+  }
+
+  .web-content-markdown code {
+    @apply px-1 py-0.5 rounded text-xs font-mono;
+    background: var(--color-surface-2);
+  }
+
+  .web-content-markdown pre {
+    @apply p-3 rounded mb-3 overflow-x-auto;
+    background: var(--color-surface-2);
+  }
+
+  .web-content-markdown pre code {
+    @apply p-0 bg-transparent;
+  }
+
+  .web-content-markdown h1,
+  .web-content-markdown h2,
+  .web-content-markdown h3 {
+    @apply font-semibold mb-2 mt-4;
+    color: var(--color-text-primary);
+  }
+
+  .web-content-markdown h1:first-child,
+  .web-content-markdown h2:first-child,
+  .web-content-markdown h3:first-child {
+    @apply mt-0;
+  }
+
+  .web-content-empty {
+    @apply flex items-center justify-center gap-2 py-6 text-sm;
+    color: var(--color-text-secondary);
+    opacity: 0.7;
+  }
+
+  .web-content-empty svg {
+    @apply opacity-70;
+  }
+
+  /* ==========================================
+   * CRAWL RESULTS: tavily-crawl rendering
+   * ========================================== */
+  .crawl-results {
+    @apply flex flex-col gap-3;
+  }
+
+  .crawl-header {
+    @apply flex items-center gap-3 py-2 px-3 rounded-lg;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border-secondary);
+  }
+
+  .crawl-header-favicon {
+    @apply w-5 h-5 flex-shrink-0 rounded-sm;
+  }
+
+  .crawl-header-text {
+    @apply flex flex-col gap-0.5;
+  }
+
+  .crawl-domain {
+    @apply text-sm font-medium;
+    color: var(--color-text-primary);
+  }
+
+  .crawl-count {
+    @apply text-xs;
+    color: var(--color-text-secondary);
+  }
+
+  .crawl-pages {
+    @apply flex flex-col gap-2;
+  }
+
+  .crawl-page {
+    @apply flex flex-col gap-2 p-3 rounded-lg;
+    background: var(--color-surface-3);
+    border: 1px solid var(--color-border-secondary);
+  }
+
+  .crawl-page-header {
+    @apply flex items-center gap-2 flex-wrap;
+  }
+
+  .crawl-page-favicon {
+    @apply w-4 h-4 flex-shrink-0 rounded-sm;
+  }
+
+  .crawl-page-url {
+    @apply text-sm truncate flex-1 min-w-0 no-underline transition-colors;
+    color: var(--color-text-primary);
+  }
+
+  .crawl-page-url:hover {
+    color: var(--color-brand-primary);
+  }
+
+  .crawl-page-stats {
+    @apply text-xs flex-shrink-0 ml-auto;
+    color: var(--color-text-tertiary);
+  }
+
+  .crawl-content-toggle {
+    @apply text-xs py-1 px-2 rounded cursor-pointer self-start transition-colors;
+    background: transparent;
+    border: 1px solid var(--color-border-secondary);
+    color: var(--color-text-secondary);
+  }
+
+  .crawl-content-toggle:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-text-primary);
+  }
+
+  .crawl-content-wrapper {
+    @apply hidden overflow-hidden;
+  }
+
+  .crawl-content-wrapper.expanded {
+    @apply block;
+  }
+
+  .crawl-page-content {
+    @apply text-xs p-3 rounded max-h-[300px] overflow-y-auto whitespace-pre-wrap font-mono;
+    background: var(--color-surface-1);
+    border: 1px solid var(--color-border-secondary);
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+  }
+
+  .crawl-empty {
+    @apply flex items-center justify-center gap-2 py-6 text-sm;
+    color: var(--color-text-secondary);
+    opacity: 0.7;
+  }
+
+  /* ==========================================
+   * MAP RESULTS: tavily-map rendering
+   * ========================================== */
+  .map-results {
+    @apply flex flex-col gap-3;
+  }
+
+  .map-header {
+    @apply flex items-center gap-3 py-2 px-3 rounded-lg;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border-secondary);
+  }
+
+  .map-header-favicon {
+    @apply w-5 h-5 flex-shrink-0 rounded-sm;
+  }
+
+  .map-header-text {
+    @apply flex flex-col gap-0.5;
+  }
+
+  .map-domain {
+    @apply text-sm font-medium;
+    color: var(--color-text-primary);
+  }
+
+  .map-count {
+    @apply text-xs;
+    color: var(--color-text-secondary);
+  }
+
+  .map-groups {
+    @apply flex flex-col gap-2;
+  }
+
+  .map-group {
+    @apply rounded-lg overflow-hidden;
+    background: var(--color-surface-3);
+    border: 1px solid var(--color-border-secondary);
+  }
+
+  .map-group-header {
+    @apply flex items-center justify-between py-2 px-3 cursor-pointer transition-colors;
+  }
+
+  .map-group-header:hover {
+    background: var(--color-surface-hover);
+  }
+
+  .map-group-name {
+    @apply text-sm font-medium font-mono;
+    color: var(--color-text-primary);
+  }
+
+  .map-group-count {
+    @apply text-xs py-0.5 px-2 rounded-full;
+    background: var(--color-surface-2);
+    color: var(--color-text-secondary);
+  }
+
+  .map-group-urls {
+    @apply flex flex-col gap-1 py-2 px-3 border-t;
+    border-color: var(--color-border-secondary);
+    background: var(--color-surface-1);
+  }
+
+  .map-group.collapsed .map-group-urls {
+    @apply hidden;
+  }
+
+  .map-url {
+    @apply text-xs py-1 px-2 rounded no-underline truncate transition-colors font-mono;
+    color: var(--color-text-secondary);
+  }
+
+  .map-url:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-brand-primary);
+  }
+
+  .map-more-count {
+    @apply text-xs py-1 px-2 italic;
+    color: var(--color-text-tertiary);
+  }
+
+  .map-empty {
+    @apply flex items-center justify-center gap-2 py-6 text-sm;
+    color: var(--color-text-secondary);
+    opacity: 0.7;
+  }
+
+  /* ==========================================
+   * GENERATE DOCUMENT: Pretty file preview
+   * ========================================== */
+  .generate-doc-args {
+    @apply flex flex-col gap-3;
+  }
+
+  .generate-doc-header {
+    @apply flex items-center gap-2 py-2 px-3 rounded-lg;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border-secondary);
+  }
+
+  .generate-doc-icon {
+    @apply flex-shrink-0 w-4 h-4;
+    color: var(--color-text-secondary);
+  }
+
+  .generate-doc-icon svg {
+    @apply w-full h-full;
+  }
+
+  .generate-doc-filename {
+    @apply text-sm font-medium font-mono flex-1;
+    color: var(--color-text-primary);
+  }
+
+  .generate-doc-type {
+    @apply text-xs py-0.5 px-2 rounded;
+    background: var(--color-surface-3);
+    color: var(--color-text-secondary);
+  }
+
+  .generate-doc-content {
+    @apply rounded-lg overflow-hidden;
+    border: 1px solid var(--color-border-secondary);
+  }
+
+  .generate-doc-markdown {
+    @apply p-4 text-sm max-h-[400px] overflow-y-auto;
+    background: var(--color-surface-1);
+    color: var(--color-text-primary);
+    line-height: 1.6;
+  }
+
+  .generate-doc-markdown h1,
+  .generate-doc-markdown h2,
+  .generate-doc-markdown h3 {
+    @apply font-semibold mt-4 mb-2;
+    color: var(--color-text-primary);
+  }
+
+  .generate-doc-markdown h1 { @apply text-lg; }
+  .generate-doc-markdown h2 { @apply text-base; }
+  .generate-doc-markdown h3 { @apply text-sm; }
+
+  .generate-doc-markdown p {
+    @apply mb-3;
+  }
+
+  .generate-doc-markdown ul,
+  .generate-doc-markdown ol {
+    @apply pl-5 mb-3;
+  }
+
+  .generate-doc-markdown li {
+    @apply mb-1;
+  }
+
+  .generate-doc-markdown code {
+    @apply px-1 py-0.5 rounded text-xs font-mono;
+    background: var(--color-surface-3);
+  }
+
+  .generate-doc-markdown pre {
+    @apply p-3 rounded mb-3 overflow-x-auto;
+    background: var(--color-surface-3);
+  }
+
+  .generate-doc-markdown pre code {
+    @apply p-0 bg-transparent;
+  }
+
+  .generate-doc-code {
+    @apply p-3 text-xs max-h-[400px] overflow-auto font-mono m-0;
+    background: var(--color-surface-1);
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+  }
+
+  /* ==========================================
+   * READ FILE: Pretty file content display
+   * ========================================== */
+  .read-file-result {
+    @apply flex flex-col gap-3;
+  }
+
+  .read-file-header {
+    @apply flex items-center gap-2 py-2 px-3 rounded-lg flex-wrap;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border-secondary);
+  }
+
+  .read-file-icon {
+    @apply flex-shrink-0 w-4 h-4;
+    color: var(--color-text-secondary);
+  }
+
+  .read-file-icon svg {
+    @apply w-full h-full;
+  }
+
+  .read-file-filename {
+    @apply text-sm font-medium font-mono;
+    color: var(--color-text-primary);
+  }
+
+  .read-file-size {
+    @apply text-xs py-0.5 px-2 rounded ml-auto;
+    background: var(--color-surface-3);
+    color: var(--color-text-secondary);
+  }
+
+  .read-file-format {
+    @apply text-xs py-0.5 px-2 rounded;
+    background: var(--color-surface-3);
+    color: var(--color-text-tertiary);
+  }
+
+  .read-file-content {
+    @apply rounded-lg overflow-hidden;
+    border: 1px solid var(--color-border-secondary);
+  }
+
+  .read-file-markdown {
+    @apply p-4 text-sm overflow-y-auto;
+    background: var(--color-surface-1);
+    color: var(--color-text-primary);
+    line-height: 1.6;
+  }
+
+  .read-file-markdown h1,
+  .read-file-markdown h2,
+  .read-file-markdown h3 {
+    @apply font-semibold mt-4 mb-2;
+    color: var(--color-text-primary);
+  }
+
+  .read-file-markdown h1:first-child,
+  .read-file-markdown h2:first-child,
+  .read-file-markdown h3:first-child {
+    @apply mt-0;
+  }
+
+  .read-file-markdown h1 { @apply text-lg; }
+  .read-file-markdown h2 { @apply text-base; }
+  .read-file-markdown h3 { @apply text-sm; }
+
+  .read-file-markdown p {
+    @apply mb-3;
+  }
+
+  .read-file-markdown ul,
+  .read-file-markdown ol {
+    @apply pl-5 mb-3;
+  }
+
+  .read-file-markdown li {
+    @apply mb-1;
+  }
+
+  .read-file-markdown code {
+    @apply px-1 py-0.5 rounded text-xs font-mono;
+    background: var(--color-surface-3);
+  }
+
+  .read-file-markdown pre {
+    @apply p-3 rounded mb-3 overflow-x-auto;
+    background: var(--color-surface-3);
+  }
+
+  .read-file-markdown pre code {
+    @apply p-0 bg-transparent;
+  }
+
+  .read-file-markdown table {
+    @apply w-full border-collapse mb-3;
+  }
+
+  .read-file-markdown th,
+  .read-file-markdown td {
+    @apply border p-2 text-left text-sm;
+    border-color: var(--color-border-secondary);
+  }
+
+  .read-file-markdown th {
+    background: var(--color-surface-2);
+  }
+
+  /* Edit file result / diff view styles */
+  .edit-file-result {
+    @apply rounded-lg overflow-hidden;
+    border: 1px solid var(--color-border-secondary);
+  }
+
+  .edit-file-header {
+    @apply flex items-center gap-2 py-2 px-3;
+    background: var(--color-surface-2);
+  }
+
+  .edit-file-icon {
+    @apply flex-shrink-0 w-4 h-4;
+    color: var(--color-text-secondary);
+  }
+
+  .edit-file-icon svg {
+    @apply w-full h-full;
+  }
+
+  .edit-file-filename {
+    @apply font-medium text-sm flex-1 truncate;
+    color: var(--color-text-primary);
+  }
+
+  .edit-file-changes {
+    @apply px-2 py-0.5 rounded text-xs font-medium;
+    background: var(--color-brand-primary);
+    color: white;
+  }
+
+  .edit-file-diff {
+    @apply font-mono text-xs overflow-x-auto;
+    background: var(--color-surface-1);
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .diff-line {
+    @apply px-3 py-0.5 whitespace-pre;
+    min-height: 1.4em;
+  }
+
+  .diff-file-header {
+    color: var(--color-text-secondary);
+    font-weight: 600;
+  }
+
+  .diff-chunk-header {
+    color: #6b7280;
+    background: var(--color-surface-2);
+  }
+
+  .diff-addition {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+  }
+
+  .diff-deletion {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+  }
+
+  .diff-context {
+    color: var(--color-text-secondary);
+  }
+
+  .edit-file-empty {
+    @apply p-4 text-center text-sm;
+    color: var(--color-text-tertiary);
+  }
+
+  /* Sequential Thinking content */
+  .sequential-thinking-content {
+    @apply text-sm leading-relaxed;
+    color: var(--color-text-secondary);
+  }
+
+  /* List directory result styles */
+  .list-directory-result {
+    @apply rounded-lg overflow-hidden;
+    border: 1px solid var(--color-border-secondary);
+  }
+
+  .list-dir-header {
+    @apply py-2 px-3 font-mono text-xs font-medium truncate;
+    background: var(--color-surface-2);
+    color: var(--color-text-secondary);
+  }
+
+  .list-dir-items {
+    @apply divide-y;
+    background: var(--color-surface-1);
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  .list-dir-items > * + * {
+    border-top: 1px solid var(--color-border-secondary);
+  }
+
+  .list-dir-item {
+    @apply flex items-center gap-2 py-1.5 px-3;
+  }
+
+  .list-dir-icon {
+    @apply flex-shrink-0 w-4 h-4;
+    color: var(--color-text-secondary);
+  }
+
+  .list-dir-icon svg {
+    @apply w-full h-full;
+  }
+
+  .list-dir-name {
+    @apply text-sm flex-1 truncate;
+    color: var(--color-text-primary);
+  }
+
+  .list-dir-name.is-folder {
+    font-weight: 500;
+  }
+
+  .list-dir-meta {
+    @apply text-xs flex-shrink-0;
+    color: var(--color-text-tertiary);
+  }
+
+  .list-dir-empty {
+    @apply p-4 text-center text-sm;
+    color: var(--color-text-tertiary);
+  }
+
+  /* Search files result styles */
+  .search-files-result {
+    @apply rounded-lg overflow-hidden;
+    border: 1px solid var(--color-border-secondary);
+  }
+
+  .search-files-header {
+    @apply flex items-center justify-between py-2 px-3;
+    background: var(--color-surface-2);
+  }
+
+  .search-files-pattern {
+    @apply font-mono text-xs font-medium;
+    color: var(--color-brand-primary);
+  }
+
+  .search-files-count {
+    @apply text-xs;
+    color: var(--color-text-tertiary);
+  }
+
+  .search-files-items {
+    background: var(--color-surface-1);
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  .search-files-items > * + * {
+    border-top: 1px solid var(--color-border-secondary);
+  }
+
+  .search-files-item {
+    @apply flex items-center gap-2 py-1.5 px-3;
+  }
+
+  .search-files-icon {
+    @apply flex-shrink-0 w-4 h-4;
+    color: var(--color-text-secondary);
+  }
+
+  .search-files-icon svg {
+    @apply w-full h-full;
+  }
+
+  .search-files-name {
+    @apply text-sm flex-1 truncate;
+    color: var(--color-text-primary);
+  }
+
+  .search-files-size {
+    @apply text-xs flex-shrink-0;
+    color: var(--color-text-tertiary);
+  }
+
+  .search-files-empty {
+    @apply p-4 text-center text-sm;
+    color: var(--color-text-tertiary);
+  }
+
+  /* ==========================================
    * BREADCRUMB NAVIGATION (Phase 2)
    * ========================================== */
   .breadcrumb-nav {

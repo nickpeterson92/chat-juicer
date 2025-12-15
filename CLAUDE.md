@@ -231,11 +231,30 @@ make quality            # All quality checks
 
 ### Database (PostgreSQL)
 
-The application uses PostgreSQL for persistence. Key tables:
+The application uses PostgreSQL for persistence, running in a Docker/Podman container.
+
+**Connection Details:**
+```bash
+# Container name: chatjuicer-postgres
+# Port: 5433 (mapped to container's 5432)
+# User: chatjuicer
+# Password: localdev
+# Database: chatjuicer
+
+# Connect via psql:
+PGPASSWORD=localdev psql -h localhost -p 5433 -U chatjuicer -d chatjuicer
+
+# Example queries:
+PGPASSWORD=localdev psql -h localhost -p 5433 -U chatjuicer -d chatjuicer -c "\dt"
+PGPASSWORD=localdev psql -h localhost -p 5433 -U chatjuicer -d chatjuicer -c "SELECT * FROM sessions LIMIT 5;"
+```
+
+**Key tables:**
 - `users` - User accounts
 - `sessions` - Chat sessions with metadata
-- `messages` - Full message history (Layer 2)
+- `messages` - Full message history with tool calls (tool_name, tool_arguments, tool_result, tool_success)
 - `llm_context` - LLM context for token management (Layer 1)
+- `files` - File metadata
 
 ## Critical Implementation Details
 
