@@ -619,9 +619,9 @@ export class ChatContainer {
    * @private
    */
   _createToolCardElement(toolData) {
-    // Deduplicate: if a card with this call_id already exists, replace it to ensure fresh args/result
-    if (toolData?.call_id) {
-      const existing = document.getElementById(`function-${toolData.call_id}`);
+    // Deduplicate: if a card with this tool_call_id already exists, replace it to ensure fresh args/result
+    if (toolData?.tool_call_id) {
+      const existing = document.getElementById(`function-${toolData.tool_call_id}`);
       if (existing) {
         existing.remove();
       }
@@ -637,16 +637,20 @@ export class ChatContainer {
     const mergedToolCalls = new Map();
 
     for (const msg of sortedMessages) {
-      if (msg?.role !== "tool_call" || !msg.call_id) continue;
-      const existing = mergedToolCalls.get(msg.call_id) || {};
-      mergedToolCalls.set(msg.call_id, {
+      if (msg?.role !== "tool_call" || !msg.tool_call_id) continue;
+      const existing = mergedToolCalls.get(msg.tool_call_id) || {};
+      mergedToolCalls.set(msg.tool_call_id, {
         ...existing,
         ...msg,
-        arguments: msg.arguments || existing.arguments,
-        result: msg.result || existing.result || msg.output || existing.output,
+        tool_arguments: msg.tool_arguments || existing.tool_arguments,
+        tool_result: msg.tool_result || existing.tool_result || msg.output || existing.output,
         status: msg.status || existing.status,
-        success:
-          msg.success !== undefined ? msg.success : existing.success !== undefined ? existing.success : undefined,
+        tool_success:
+          msg.tool_success !== undefined
+            ? msg.tool_success
+            : existing.tool_success !== undefined
+              ? existing.tool_success
+              : undefined,
       });
     }
 
@@ -654,10 +658,10 @@ export class ChatContainer {
   }
 
   _renderToolCallMerged(msg, mergedToolCalls) {
-    if (!msg.call_id) return null;
-    const merged = mergedToolCalls.get(msg.call_id);
+    if (!msg.tool_call_id) return null;
+    const merged = mergedToolCalls.get(msg.tool_call_id);
     if (!merged) return null;
-    mergedToolCalls.delete(msg.call_id);
+    mergedToolCalls.delete(msg.tool_call_id);
     return this._createToolCardElement(merged);
   }
 
@@ -709,7 +713,7 @@ export class ChatContainer {
     let cursorY = 0;
 
     for (const msg of messages) {
-      const messageId = msg.id || msg.call_id || `anon-${this.idOrder.length}`;
+      const messageId = msg.id || msg.tool_call_id || `anon-${this.idOrder.length}`;
       this.idOrder.push(messageId);
 
       const estimatedHeight = this.itemHeights.get(messageId) || 120; // fallback estimate
@@ -946,7 +950,7 @@ export class ChatContainer {
           try {
             indicator._lottieAnimation.destroy();
             indicator._lottieAnimation = null;
-          } catch (e) {
+          } catch (_e) {
             // Ignore cleanup errors
           }
           indicator.innerHTML = "";

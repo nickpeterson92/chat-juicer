@@ -335,24 +335,24 @@ class ChatService:
                             # Track tool calls for persistence
                             msg_type = msg_data.get("type")
                             if msg_type == MSG_TYPE_FUNCTION_EXECUTING:
-                                call_id = msg_data.get("call_id")
+                                call_id = msg_data.get("tool_call_id")
                                 if call_id:
                                     pending_tool_calls[call_id] = {
-                                        "name": msg_data.get("name", ""),
-                                        "arguments": msg_data.get("arguments"),
+                                        "tool_name": msg_data.get("tool_name", ""),
+                                        "tool_arguments": msg_data.get("tool_arguments"),
                                     }
 
                             elif msg_type == MSG_TYPE_FUNCTION_COMPLETED:
-                                call_id = msg_data.get("call_id")
+                                call_id = msg_data.get("tool_call_id")
                                 if call_id:
                                     pending = pending_tool_calls.pop(call_id, {})
                                     await self._add_tool_call_to_history(
                                         session_uuid=session_uuid,
                                         call_id=call_id,
-                                        name=pending.get("name") or msg_data.get("name", ""),
-                                        arguments=pending.get("arguments"),
-                                        result=msg_data.get("result"),
-                                        success=msg_data.get("success", True),
+                                        name=pending.get("tool_name") or msg_data.get("tool_name", ""),
+                                        arguments=pending.get("tool_arguments"),
+                                        result=msg_data.get("tool_result"),
+                                        success=msg_data.get("tool_success", True),
                                     )
 
                         except json.JSONDecodeError:
@@ -400,10 +400,10 @@ class ChatService:
                     session_id,
                     {
                         "type": MSG_TYPE_FUNCTION_COMPLETED,
-                        "call_id": call_id,
-                        "name": tool_info.get("name", ""),
-                        "result": "[User interrupted execution. Tool was cancelled before returning results.]",
-                        "success": False,
+                        "tool_call_id": call_id,
+                        "tool_name": tool_info.get("tool_name", ""),
+                        "tool_result": "[User interrupted execution. Tool was cancelled before returning results.]",
+                        "tool_success": False,
                         "interrupted": True,  # Frontend uses this for styling
                     },
                 )
@@ -411,8 +411,8 @@ class ChatService:
                 await self._add_tool_call_to_history(
                     session_uuid=session_uuid,
                     call_id=call_id,
-                    name=tool_info.get("name", ""),
-                    arguments=tool_info.get("arguments"),
+                    name=tool_info.get("tool_name", ""),
+                    arguments=tool_info.get("tool_arguments"),
                     result="[User interrupted execution. Tool was cancelled before returning results.]",
                     success=False,
                 )

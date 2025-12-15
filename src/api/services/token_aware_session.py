@@ -301,6 +301,18 @@ class PostgresTokenAwareSession(PostgresSession):  # type: ignore[misc]
                 logger.error(f"Summarization failed: {e}", exc_info=True)
                 return ""
 
+    async def _clear_llm_context(self) -> None:
+        """Clear all items from LLM context (Layer 1) for this session.
+
+        ONLY used during summarization repopulation - not for general use.
+        """
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                "DELETE FROM llm_context WHERE session_id = $1",
+                self.session_uuid,
+            )
+        logger.debug(f"Cleared LLM context for session {self.session_id}")
+
     async def _repopulate_session(
         self,
         summary_text: str,
@@ -310,8 +322,8 @@ class PostgresTokenAwareSession(PostgresSession):  # type: ignore[misc]
         summary_tokens = self._count_text_tokens(summary_text)
         recent_tokens = self._calculate_total_tokens(recent_items)
 
-        # Clear current session
-        await self.clear_session()
+        # Clear current LLM context (Layer 1 only)
+        await self._clear_llm_context()
         self._item_token_cache.clear()
 
         # Add summary as system message

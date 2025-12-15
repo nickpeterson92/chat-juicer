@@ -5,7 +5,6 @@
 
 // Import CSS for Vite bundling
 import "../../ui/input.css";
-import "highlight.js/styles/github-dark.css";
 import "katex/dist/katex.min.css";
 
 import { bootstrapSimple } from "./bootstrap.js";

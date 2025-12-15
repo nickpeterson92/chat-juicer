@@ -446,7 +446,7 @@ SUMMARY_CALL_ID_PREFIX = "sum_"
 
 #: Trigger conversation summarization at this fraction of model's token limit.
 #: Example: 0.8 × GPT-5's 272k tokens = 217,600 token trigger point.
-#: When total_tokens exceeds this threshold, TokenAwareSQLiteSession automatically
+#: When total_tokens exceeds this threshold, PostgresTokenAwareSession automatically
 #: summarizes the conversation and resets the context.
 CONVERSATION_SUMMARIZATION_THRESHOLD = 0.8
 
@@ -454,7 +454,7 @@ CONVERSATION_SUMMARIZATION_THRESHOLD = 0.8
 #: Keeps the last N complete user-assistant exchanges unsummarized.
 #: Value of 2 = last 2 user messages + their assistant responses preserved.
 #: Tool calls between exchanges are included in the summary, not kept.
-#: Used as default parameter in TokenAwareSQLiteSession.summarize_with_agent()
+#: Used as default parameter in PostgresTokenAwareSession.summarize_with_agent()
 KEEP_LAST_N_MESSAGES = 2
 
 #: Token count threshold for document summarization during read_file().
@@ -501,7 +501,7 @@ REASONING_MODELS: set[str] = {m.id for m in MODEL_CONFIGS if m.supports_reasonin
 
 #: Maximum number of conversation turns (user+assistant exchanges) per run.
 #: Prevents infinite loops and controls maximum conversation length per execution.
-MAX_CONVERSATION_TURNS = 50
+MAX_CONVERSATION_TURNS = 100
 
 # ============================================================================
 # Token Counting Configuration
@@ -514,29 +514,6 @@ MAX_CONVERSATION_TURNS = 50
 #: cache hit rate. Typical conversations reuse ~20-40 unique text chunks
 #: (messages, function args, results), so 128 provides 3-6x headroom.
 TOKEN_CACHE_SIZE = 128
-
-# ============================================================================
-# Storage Configuration
-# ============================================================================
-
-#: Default path for session metadata storage (sessions.json).
-#: Used by SessionManager to persist session information across app restarts.
-DEFAULT_SESSION_METADATA_PATH = "data/sessions.json"
-
-#: Database file path for session storage and full history.
-#: Both TokenAwareSQLiteSession (Layer 1) and FullHistoryStore (Layer 2)
-#: use this shared database with separate table structures.
-CHAT_HISTORY_DB_PATH = "data/chat_history.db"
-
-#: Shared table name for full conversation history storage (Layer 2).
-#: Used by FullHistoryStore to maintain complete user-visible history.
-#: All sessions share a single table with session_id column for filtering.
-FULL_HISTORY_TABLE_NAME = "full_history"
-
-#: Table prefix for LLM context storage (Layer 1).
-#: Used by TokenAwareSQLiteSession for token-optimized AI context.
-#: Table naming: {SESSION_TABLE_PREFIX}{session_id}
-SESSION_TABLE_PREFIX = "session_"
 
 # ============================================================================
 # Session Loading Pagination Configuration
@@ -603,7 +580,7 @@ MODELS_WITH_REASONING: list[str] = [m.id for m in MODEL_CONFIGS if m.supports_re
 
 #: Model-specific input token limits for conversation tracking (derived from MODEL_CONFIGS).
 #: These are INPUT limits (not output) since we track conversation context,
-#: not generation tokens. Used by TokenAwareSQLiteSession for auto-summarization.
+#: not generation tokens. Used by PostgresTokenAwareSession for auto-summarization.
 #:
 #: Notes:
 #: - Values are approximate and may change with model updates
@@ -657,6 +634,16 @@ class Settings(BaseSettings):
     # API server
     api_port: int = Field(default=8000, description="FastAPI port")
     api_host: str = Field(default="0.0.0.0", description="FastAPI host")
+
+    # Connection pool configuration
+    db_pool_min_size: int = Field(default=2, description="Minimum PostgreSQL connections")
+    db_pool_max_size: int = Field(default=10, description="Maximum PostgreSQL connections")
+    mcp_pool_size: int = Field(default=3, description="MCP server instances per server type")
+    mcp_acquire_timeout: float = Field(default=30.0, description="MCP server acquire timeout (seconds)")
+
+    # HTTP client timeouts (for Azure OpenAI streaming)
+    # Reasoning models (GPT-5, O1, O3) can pause 30+ seconds while "thinking"
+    http_read_timeout: float = Field(default=600.0, description="HTTP read timeout for streaming (seconds)")
 
     # Auth (Phase 1 convenience)
     default_user_email: str = Field(default="local@chatjuicer.dev", description="Seeded default user email")

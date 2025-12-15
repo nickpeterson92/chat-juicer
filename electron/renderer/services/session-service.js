@@ -401,7 +401,7 @@ export class SessionService {
           success: true,
           message: response.message || "Session summarized successfully",
           new_token_count: response.new_token_count,
-          call_id: response.call_id,
+          tool_call_id: response.tool_call_id,
         };
       } else if (response?.error) {
         return { success: false, error: response.error };

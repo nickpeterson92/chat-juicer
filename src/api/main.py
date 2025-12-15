@@ -37,12 +37,18 @@ def _setup_openai_client() -> None:
         api_key = settings.azure_openai_api_key
         endpoint = settings.azure_endpoint_str
         logger.info(f"Configuring Azure OpenAI client (endpoint: {endpoint})")
-        http_client = create_http_client(enable_logging=settings.http_request_logging)
+        http_client = create_http_client(
+            enable_logging=settings.http_request_logging,
+            read_timeout=settings.http_read_timeout,
+        )
         client = create_openai_client(api_key, base_url=endpoint, http_client=http_client)
     else:
         api_key = settings.openai_api_key
         logger.info("Configuring OpenAI client")
-        http_client = create_http_client(enable_logging=settings.http_request_logging)
+        http_client = create_http_client(
+            enable_logging=settings.http_request_logging,
+            read_timeout=settings.http_read_timeout,
+        )
         client = create_openai_client(api_key, http_client=http_client)
 
     # Register as default client for agents SDK
@@ -65,8 +71,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     app.state.db_pool = await asyncpg.create_pool(
         dsn=settings.database_url,
-        min_size=2,
-        max_size=10,
+        min_size=settings.db_pool_min_size,
+        max_size=settings.db_pool_max_size,
     )
 
     # Initialize WebSocket manager on app.state for centralized connection tracking
@@ -74,9 +80,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Initialize MCP server pool on app.state for concurrent request handling
     # Pool pre-spawns server instances to avoid per-request overhead
-    pool_size = 3  # Number of instances per server type
-    app.state.mcp_pool = await initialize_mcp_pool(pool_size=pool_size)
-    logger.info(f"MCP server pool initialized with {pool_size} instances per server type")
+    app.state.mcp_pool = await initialize_mcp_pool(
+        pool_size=settings.mcp_pool_size,
+        acquire_timeout=settings.mcp_acquire_timeout,
+    )
+    logger.info(f"MCP server pool initialized with {settings.mcp_pool_size} instances per server type")
 
     try:
         yield

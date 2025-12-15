@@ -138,11 +138,15 @@ class HTTPLogger:
         return sanitized
 
 
-def create_logging_client(enabled: bool = True) -> httpx.AsyncClient:
+def create_logging_client(
+    enabled: bool = True,
+    timeout: httpx.Timeout | None = None,
+) -> httpx.AsyncClient:
     """Create an httpx client with request/response logging.
 
     Args:
         enabled: Whether to enable HTTP logging
+        timeout: Optional timeout configuration
 
     Returns:
         Configured httpx.AsyncClient with event hooks
@@ -156,4 +160,4 @@ def create_logging_client(enabled: bool = True) -> httpx.AsyncClient:
     }
 
     # Create and return httpx client with hooks
-    return httpx.AsyncClient(event_hooks=event_hooks)
+    return httpx.AsyncClient(event_hooks=event_hooks, timeout=timeout)

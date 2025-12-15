@@ -388,22 +388,22 @@ export function registerMessageHandlers(context) {
       // Active session - render tool card
       // Use service if available
       if (services?.functionCallService) {
-        services.functionCallService.createCall(message.call_id, message.name, message.arguments || {});
+        services.functionCallService.createCall(message.tool_call_id, message.tool_name, message.tool_arguments || {});
       }
 
       createFunctionCallCard(
         elements.chatContainer,
         appState.functions.activeCalls,
         appState,
-        message.call_id,
-        message.name,
+        message.tool_call_id,
+        message.tool_name,
         "preparing..."
       );
 
       // Only update to "ready" if we have real arguments (not empty "{}" from early detection)
-      if (message.arguments && message.arguments !== "{}") {
-        updateFunctionCallStatus(appState.functions.activeCalls, message.call_id, "ready", {
-          arguments: message.arguments,
+      if (message.tool_arguments && message.tool_arguments !== "{}") {
+        updateFunctionCallStatus(appState.functions.activeCalls, message.tool_call_id, "ready", {
+          tool_arguments: message.tool_arguments,
         });
       }
     } else {
@@ -412,14 +412,14 @@ export function registerMessageHandlers(context) {
         console.warn("[MessageHandlersV2] function_detected without session_id and no active session");
         return;
       }
-      streamManager.bufferToolEvent(sessionId, message.call_id, "start", { name: message.name });
+      streamManager.bufferToolEvent(sessionId, message.tool_call_id, "start", { name: message.tool_name });
     }
 
     // Track function call
     globalEventBus.emit("analytics:event", {
       category: "function",
       action: "detected",
-      label: message.name,
+      label: message.tool_name,
     });
   });
 
@@ -429,24 +429,27 @@ export function registerMessageHandlers(context) {
     if (isActiveSessionMessage(message, appState)) {
       // Active session - update UI
       if (services?.functionCallService) {
-        services.functionCallService.updateCallStatus(message.call_id, "streaming");
-        if (message.arguments) {
-          services.functionCallService.appendArgumentsDelta(message.call_id, JSON.stringify(message.arguments));
+        services.functionCallService.updateCallStatus(message.tool_call_id, "streaming");
+        if (message.tool_arguments) {
+          services.functionCallService.appendArgumentsDelta(
+            message.tool_call_id,
+            JSON.stringify(message.tool_arguments)
+          );
         }
       }
 
-      updateFunctionCallStatus(appState.functions.activeCalls, message.call_id, "executing...", {
-        arguments: message.arguments,
+      updateFunctionCallStatus(appState.functions.activeCalls, message.tool_call_id, "executing...", {
+        tool_arguments: message.tool_arguments,
       });
     } else {
       // Background session - buffer arguments
-      if (message.arguments) {
+      if (message.tool_arguments) {
         if (!sessionId) {
           console.warn("[MessageHandlersV2] function_executing without session_id and no active session");
           return;
         }
-        streamManager.bufferToolEvent(sessionId, message.call_id, "arguments_delta", {
-          delta: JSON.stringify(message.arguments),
+        streamManager.bufferToolEvent(sessionId, message.tool_call_id, "arguments_delta", {
+          delta: JSON.stringify(message.tool_arguments),
         });
       }
     }
@@ -464,24 +467,30 @@ export function registerMessageHandlers(context) {
       if (message.interrupted) {
         updateFunctionCallStatus(
           appState.functions.activeCalls,
-          message.call_id,
+          message.tool_call_id,
           "interrupted",
           {
-            result: message.result || "[Interrupted before completion]",
+            tool_result: message.tool_result || "[Interrupted before completion]",
             interrupted: true,
           },
           true
         );
-      } else if (message.success) {
-        const result = message.result || message.output || "Success";
-        updateFunctionCallStatus(appState.functions.activeCalls, message.call_id, "completed", { result }, true);
+      } else if (message.tool_success) {
+        const result = message.tool_result || message.output || "Success";
+        updateFunctionCallStatus(
+          appState.functions.activeCalls,
+          message.tool_call_id,
+          "completed",
+          { tool_result: result },
+          true
+        );
       } else {
         updateFunctionCallStatus(
           appState.functions.activeCalls,
-          message.call_id,
+          message.tool_call_id,
           "error",
           {
-            error: message.error || message.result || message.output || "Unknown error",
+            error: message.error || message.tool_result || message.output || "Unknown error",
           },
           true
         );
@@ -491,27 +500,31 @@ export function registerMessageHandlers(context) {
       if (services?.functionCallService) {
         if (message.interrupted) {
           // Treat interrupted as error for service state
-          services.functionCallService.setCallError(message.call_id, message.result || "[Interrupted]");
-        } else if (message.success) {
-          const result = message.result || message.output || "Success";
-          services.functionCallService.setCallResult(message.call_id, result);
+          services.functionCallService.setCallError(message.tool_call_id, message.tool_result || "[Interrupted]");
+        } else if (message.tool_success) {
+          const result = message.tool_result || message.output || "Success";
+          services.functionCallService.setCallResult(message.tool_call_id, result);
         } else {
-          const error = message.error || message.result || message.output || "Unknown error";
-          services.functionCallService.setCallError(message.call_id, error);
+          const error = message.error || message.tool_result || message.output || "Unknown error";
+          services.functionCallService.setCallError(message.tool_call_id, error);
         }
       }
 
-      scheduleFunctionCardCleanup(appState.functions.activeCalls, appState.functions.activeTimers, message.call_id);
+      scheduleFunctionCardCleanup(
+        appState.functions.activeCalls,
+        appState.functions.activeTimers,
+        message.tool_call_id
+      );
     } else {
       // Background session - update buffer state so reconstruction shows correct status
       if (!sessionId) {
         console.warn("[MessageHandlersV2] function_completed without session_id and no active session");
         return;
       }
-      const result = message.result || message.output || message.error;
-      const error = !message.success && !message.interrupted ? result : null;
-      streamManager.bufferToolEvent(sessionId, message.call_id, "end", {
-        result: message.success ? result : null,
+      const result = message.tool_result || message.output || message.error;
+      const error = !message.tool_success && !message.interrupted ? result : null;
+      streamManager.bufferToolEvent(sessionId, message.tool_call_id, "end", {
+        result: message.tool_success ? result : null,
         error: error,
       });
     }
@@ -519,8 +532,8 @@ export function registerMessageHandlers(context) {
     // Track function completion
     globalEventBus.emit("analytics:event", {
       category: "function",
-      action: message.interrupted ? "interrupted" : message.success ? "completed" : "failed",
-      label: message.name || "unknown",
+      action: message.interrupted ? "interrupted" : message.tool_success ? "completed" : "failed",
+      label: message.tool_name || "unknown",
     });
   });
 
@@ -530,20 +543,20 @@ export function registerMessageHandlers(context) {
     if (isActiveSessionMessage(message, appState)) {
       // Active session - update UI
       // IMPORTANT: Update UI status FIRST, before FunctionCallService moves call to completedCalls
-      if (message.success) {
+      if (message.tool_success) {
         updateFunctionCallStatus(
           appState.functions.activeCalls,
-          message.call_id,
+          message.tool_call_id,
           "completed",
           {
-            result: message.result_preview || "Success",
+            tool_result: message.tool_result_preview || "Success",
           },
           true
         );
       } else {
         updateFunctionCallStatus(
           appState.functions.activeCalls,
-          message.call_id,
+          message.tool_call_id,
           "error",
           { error: message.error },
           true
@@ -552,24 +565,28 @@ export function registerMessageHandlers(context) {
 
       // Now update the FunctionCallService state (this moves call from activeCalls to completedCalls)
       if (services?.functionCallService) {
-        if (message.success) {
-          services.functionCallService.setCallResult(message.call_id, message.result_preview || "Success");
+        if (message.tool_success) {
+          services.functionCallService.setCallResult(message.tool_call_id, message.tool_result_preview || "Success");
         } else {
-          services.functionCallService.setCallError(message.call_id, message.error || "Unknown error");
+          services.functionCallService.setCallError(message.tool_call_id, message.error || "Unknown error");
         }
       }
 
-      scheduleFunctionCardCleanup(appState.functions.activeCalls, appState.functions.activeTimers, message.call_id);
+      scheduleFunctionCardCleanup(
+        appState.functions.activeCalls,
+        appState.functions.activeTimers,
+        message.tool_call_id
+      );
     } else {
       // Background session - update buffer state so reconstruction shows correct status
       if (!sessionId) {
         console.warn("[MessageHandlersV2] function_executed without session_id and no active session");
         return;
       }
-      const result = message.result_preview || message.error;
-      const error = !message.success ? result : null;
-      streamManager.bufferToolEvent(sessionId, message.call_id, "end", {
-        result: message.success ? result : null,
+      const result = message.tool_result_preview || message.error;
+      const error = !message.tool_success ? result : null;
+      streamManager.bufferToolEvent(sessionId, message.tool_call_id, "end", {
+        result: message.tool_success ? result : null,
         error: error,
       });
     }
@@ -578,8 +595,8 @@ export function registerMessageHandlers(context) {
   createHandler("function_call_arguments_delta", (message) => {
     const sessionId = resolveSessionId(message, appState);
 
-    if (message.item_id || message.call_id) {
-      const callId = message.call_id || message.item_id;
+    if (message.item_id || message.tool_call_id) {
+      const callId = message.tool_call_id || message.item_id;
 
       if (isActiveSessionMessage(message, appState)) {
         // Active session - update UI
@@ -609,8 +626,8 @@ export function registerMessageHandlers(context) {
       return;
     }
 
-    if (message.item_id || message.call_id) {
-      const callId = message.call_id || message.item_id;
+    if (message.item_id || message.tool_call_id) {
+      const callId = message.tool_call_id || message.item_id;
       updateFunctionArguments(appState.functions.activeCalls, appState.functions.argumentsBuffer, callId, null, true);
     }
   });
@@ -621,7 +638,7 @@ export function registerMessageHandlers(context) {
       return;
     }
 
-    updateFunctionCallStatus(appState.functions.activeCalls, message.call_id, "ready to execute");
+    updateFunctionCallStatus(appState.functions.activeCalls, message.tool_call_id, "ready to execute");
   });
 
   // ===== Token Usage Handler =====
@@ -856,8 +873,8 @@ export function registerMessageHandlers(context) {
         // If there are arguments, update the card
         if (toolState.arguments) {
           updateFunctionCallStatus(appState.functions.activeCalls, callId, toolState.status, {
-            arguments: toolState.arguments,
-            result: toolState.result,
+            tool_arguments: toolState.arguments,
+            tool_result: toolState.result,
           });
         }
       }

@@ -299,9 +299,9 @@ export class InputArea {
       // NOTE: Don't wrap in { data: ... } - EventBus already wraps it
       globalEventBus.emit("message:function_detected", {
         session_id: sessionId,
-        call_id: callId,
-        name: "summarize_conversation",
-        arguments: null, // No args display for summarize
+        tool_call_id: callId,
+        tool_name: "summarize_conversation",
+        tool_arguments: null, // No args display for summarize
       });
 
       const result = await this.sessionService.summarizeSession(sessionId);
@@ -310,10 +310,10 @@ export class InputArea {
         // Emit function_completed with error
         globalEventBus.emit("message:function_completed", {
           session_id: sessionId,
-          call_id: callId,
-          name: "summarize_conversation",
-          success: false,
-          result: result?.error || "Summarization failed",
+          tool_call_id: callId,
+          tool_name: "summarize_conversation",
+          tool_success: false,
+          tool_result: result?.error || "Summarization failed",
         });
         throw new Error(result?.error || "Summarization failed");
       }
@@ -321,10 +321,10 @@ export class InputArea {
       // Emit function_completed with success
       globalEventBus.emit("message:function_completed", {
         session_id: sessionId,
-        call_id: callId,
-        name: "summarize_conversation",
-        success: true,
-        result: result.message || "Session summarized successfully",
+        tool_call_id: callId,
+        tool_name: "summarize_conversation",
+        tool_success: true,
+        tool_result: result.message || "Session summarized successfully",
       });
 
       // Update token indicator with new count from backend

@@ -15,7 +15,9 @@ from typing import Any
 
 from utils.logger import logger
 
-# Default pool sizes per server type
+# Pool configuration is now in Settings (core/constants.py):
+# - mcp_pool_size: instances per server type (default: 3)
+# - mcp_acquire_timeout: acquire timeout in seconds (default: 30.0)
 # Helper functions for PERF203 compliance (avoid try-except in loops)
 
 
@@ -39,8 +41,8 @@ async def _shutdown_mcp_server(server: Any, server_key: str) -> None:
         logger.warning(f"Error shutting down {server_key}: {e}")
 
 
-DEFAULT_POOL_SIZE = 3
-ACQUIRE_TIMEOUT_SECONDS = 30.0
+DEFAULT_POOL_SIZE = 3  # Fallback; prefer settings.mcp_pool_size
+ACQUIRE_TIMEOUT_SECONDS = 30.0  # Fallback; prefer settings.mcp_acquire_timeout
 
 
 class MCPServerPool:
@@ -49,8 +51,12 @@ class MCPServerPool:
     Pre-spawns MCP server instances and manages checkout/checkin for concurrent
     requests. Each server type has its own pool of instances.
 
+    Configuration via environment variables (see Settings in core/constants.py):
+        - MCP_POOL_SIZE: Number of instances per server type (default: 3)
+        - MCP_ACQUIRE_TIMEOUT: Timeout in seconds for acquiring a server (default: 30.0)
+
     Usage:
-        pool = MCPServerPool()
+        pool = MCPServerPool(acquire_timeout=30.0)
         await pool.initialize(["sequential", "fetch", "tavily"], pool_size=3)
 
         # Acquire servers for a request
@@ -60,11 +66,12 @@ class MCPServerPool:
         # Servers automatically returned to pool
     """
 
-    def __init__(self) -> None:
+    def __init__(self, acquire_timeout: float = ACQUIRE_TIMEOUT_SECONDS) -> None:
         self._pools: dict[str, asyncio.Queue[Any]] = {}
         self._all_servers: dict[str, list[Any]] = {}  # Track all servers for cleanup
         self._initialized = False
         self._lock = asyncio.Lock()
+        self._acquire_timeout = acquire_timeout
 
     async def initialize(
         self,
@@ -112,7 +119,7 @@ class MCPServerPool:
             total = sum(len(servers) for servers in self._all_servers.values())
             logger.info(f"MCP pool initialized with {total} total server instances")
 
-    async def acquire(self, server_key: str, timeout: float = ACQUIRE_TIMEOUT_SECONDS) -> Any:
+    async def acquire(self, server_key: str, timeout: float | None = None) -> Any:
         """Acquire a server from the pool.
 
         Blocks until a server is available or timeout is reached.
@@ -131,15 +138,16 @@ class MCPServerPool:
         if server_key not in self._pools:
             raise KeyError(f"Server type '{server_key}' not in pool")
 
+        effective_timeout = timeout if timeout is not None else self._acquire_timeout
         try:
             server = await asyncio.wait_for(
                 self._pools[server_key].get(),
-                timeout=timeout,
+                timeout=effective_timeout,
             )
             logger.debug(f"Acquired {server_key} from pool (remaining: {self._pools[server_key].qsize()})")
             return server
         except asyncio.TimeoutError:
-            logger.error(f"Timeout acquiring {server_key} from pool after {timeout}s")
+            logger.error(f"Timeout acquiring {server_key} from pool after {effective_timeout}s")
             raise
 
     async def release(self, server_key: str, server: Any) -> None:
@@ -160,7 +168,7 @@ class MCPServerPool:
     async def acquire_servers(
         self,
         server_keys: list[str],
-        timeout: float = ACQUIRE_TIMEOUT_SECONDS,
+        timeout: float | None = None,
     ) -> AsyncGenerator[list[Any], None]:
         """Context manager to acquire multiple servers and release them on exit.
 
@@ -225,11 +233,11 @@ class MCPServerPool:
 _state: dict[str, MCPServerPool | None] = {"pool": None}
 
 
-def get_mcp_pool() -> MCPServerPool:
+def get_mcp_pool(acquire_timeout: float = ACQUIRE_TIMEOUT_SECONDS) -> MCPServerPool:
     """Get the global MCP server pool instance."""
     pool = _state["pool"]
     if pool is None:
-        pool = MCPServerPool()
+        pool = MCPServerPool(acquire_timeout=acquire_timeout)
         _state["pool"] = pool
     return pool
 
@@ -237,19 +245,21 @@ def get_mcp_pool() -> MCPServerPool:
 async def initialize_mcp_pool(
     server_keys: list[str] | None = None,
     pool_size: int = DEFAULT_POOL_SIZE,
+    acquire_timeout: float = ACQUIRE_TIMEOUT_SECONDS,
 ) -> MCPServerPool:
     """Initialize the global MCP server pool.
 
     Args:
         server_keys: Server types to pool (defaults to all configured)
         pool_size: Number of instances per server type
+        acquire_timeout: Timeout in seconds for acquiring a server from pool
 
     Returns:
         The initialized pool
     """
     from integrations.mcp_registry import DEFAULT_MCP_SERVERS
 
-    pool = get_mcp_pool()
+    pool = get_mcp_pool(acquire_timeout=acquire_timeout)
     keys = server_keys if server_keys is not None else DEFAULT_MCP_SERVERS
     await pool.initialize(keys, pool_size)
     return pool

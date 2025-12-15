@@ -1,24 +1,29 @@
-# Core Module (Business Logic)
+# Core Module
 
-Purpose: houses agent/session logic, history persistence, prompts, and settings—everything the orchestrator calls but does not implement itself.
+Core business logic for agent configuration, prompts, and application constants.
 
-## Key files
+## Key Files
+
 - `agent.py` – Agent/Runner construction with MCP servers + model settings.
-- `session.py` – `TokenAwareSQLiteSession` (Layer 1 context store with auto-summarization).
-- `full_history.py` – `FullHistoryStore` (Layer 2 full UI history).
-- `session_manager.py` – multi-session lifecycle, handle cleanup, session switching.
-- `session_commands.py` – IPC command handlers (create/load/delete/etc.).
-- `session_builder.py` – helpers to assemble session state.
-- `prompts.py` – system instructions and prompt templates.
-- `constants.py` – Pydantic settings/feature flags.
+- `prompts.py` – System instructions and prompt templates.
+- `constants.py` – Pydantic settings, feature flags, and configuration constants.
+
+## Related Modules
+
+Session and history management have moved to `api/services/`:
+
+- `api/services/token_aware_session.py` – `PostgresTokenAwareSession` (Layer 1: LLM context with auto-summarization)
+- `api/services/postgres_session.py` – Low-level PostgreSQL session storage
+- `api/services/session_service.py` – Session lifecycle management (create/load/delete)
+- `api/services/chat_service.py` – Chat orchestration with Agent/Runner streaming
 
 ## Patterns
-- Dual-layer history: always write Layer 1 and Layer 2 together unless explicitly repopulating.
-- Agent/Runner: configure tools + MCP servers here; runtime only invokes.
-- Explicit state: functions receive `AppState`; no module-level state.
-- Async everywhere: DB/file/network ops are awaited with error-boundary logging.
+
+- **Dual-layer history**: Layer 1 (LLM context, token-managed) + Layer 2 (UI history, complete)
+- **Agent/Runner**: Configure tools + MCP servers here; runtime invokes via `api/services/chat_service.py`
+- **Async everywhere**: DB/file/network ops are awaited with error-boundary logging
 
 ## Extending
-- New session command: add handler in `session_commands.py`, register routing in runtime, keep state mutations centralized.
-- New history behavior: extend `session.py`/`full_history.py` with tests covering summarization + metadata.
-- New prompt/settings: adjust `prompts.py` or `constants.py`; ensure defaults flow through bootstrap.
+
+- **New prompt/settings**: Adjust `prompts.py` or `constants.py`; ensure defaults flow through bootstrap
+- **New agent tools**: Register in `tools/registry.py`, wrap with session context in `tools/wrappers.py`

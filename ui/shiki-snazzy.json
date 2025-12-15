@@ -1,0 +1,234 @@
+{
+  "name": "Snazzy",
+  "type": "dark",
+  "colors": {
+    "editor.background": "#00000000",
+    "editor.foreground": "#eff0eb"
+  },
+  "tokenColors": [
+    {
+      "name": "Default text",
+      "scope": ["source", "text"],
+      "settings": {
+        "foreground": "#eff0eb"
+      }
+    },
+    {
+      "name": "Comments",
+      "scope": ["comment", "punctuation.definition.comment"],
+      "settings": {
+        "foreground": "#78787e",
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "Strings",
+      "scope": ["string", "string.quoted", "string.template"],
+      "settings": {
+        "foreground": "#5af78e"
+      }
+    },
+    {
+      "name": "String interpolation",
+      "scope": ["punctuation.section.embedded", "punctuation.definition.template-expression"],
+      "settings": {
+        "foreground": "#eff0eb"
+      }
+    },
+    {
+      "name": "Keywords",
+      "scope": ["keyword", "keyword.control", "keyword.operator.logical", "keyword.operator.new", "storage.type", "storage.modifier"],
+      "settings": {
+        "foreground": "#ff6ac1"
+      }
+    },
+    {
+      "name": "Operators",
+      "scope": ["keyword.operator", "keyword.operator.assignment", "keyword.operator.arithmetic", "keyword.operator.comparison"],
+      "settings": {
+        "foreground": "#ff6ac1"
+      }
+    },
+    {
+      "name": "Function definitions",
+      "scope": ["entity.name.function"],
+      "settings": {
+        "foreground": "#57c7ff"
+      }
+    },
+    {
+      "name": "Function calls and methods - BLUE",
+      "scope": [
+        "variable.function",
+        "support.function",
+        "support.function.builtin",
+        "meta.function-call.generic.python",
+        "meta.function-call.object",
+        "meta.function-call.static",
+        "meta.method-call",
+        "meta.function-call entity.name.function"
+      ],
+      "settings": {
+        "foreground": "#57c7ff"
+      }
+    },
+    {
+      "name": "Decorators - RED",
+      "scope": ["entity.name.function.decorator", "meta.decorator", "punctuation.definition.decorator"],
+      "settings": {
+        "foreground": "#ff5c57"
+      }
+    },
+    {
+      "name": "Classes and Types - YELLOW",
+      "scope": ["entity.name.class", "entity.name.type", "entity.other.inherited-class", "support.class", "support.type"],
+      "settings": {
+        "foreground": "#f3f99d"
+      }
+    },
+    {
+      "name": "Built-in types (dict, str, int, list)",
+      "scope": ["support.type.python", "support.class.builtin"],
+      "settings": {
+        "foreground": "#f3f99d"
+      }
+    },
+    {
+      "name": "Variables - white (default)",
+      "scope": ["variable", "variable.other", "variable.parameter", "variable.other.readwrite"],
+      "settings": {
+        "foreground": "#eff0eb"
+      }
+    },
+    {
+      "name": "Constants and Literals",
+      "scope": ["constant", "constant.language", "constant.numeric", "constant.character", "variable.other.constant"],
+      "settings": {
+        "foreground": "#ff9f43"
+      }
+    },
+    {
+      "name": "Built-in constants (True, False, None)",
+      "scope": ["constant.language.python", "constant.language.boolean"],
+      "settings": {
+        "foreground": "#ff9f43"
+      }
+    },
+    {
+      "name": "Import/Module keywords",
+      "scope": ["keyword.control.import", "keyword.other.import"],
+      "settings": {
+        "foreground": "#ff6ac1"
+      }
+    },
+    {
+      "name": "Punctuation",
+      "scope": ["punctuation", "meta.brace"],
+      "settings": {
+        "foreground": "#eff0eb"
+      }
+    },
+    {
+      "name": "Self/This",
+      "scope": ["variable.language.self", "variable.language.this", "variable.language.special.self"],
+      "settings": {
+        "foreground": "#ff6ac1",
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "Regex",
+      "scope": ["string.regexp"],
+      "settings": {
+        "foreground": "#5af78e"
+      }
+    },
+    {
+      "name": "HTML/XML Tags",
+      "scope": ["entity.name.tag", "punctuation.definition.tag"],
+      "settings": {
+        "foreground": "#ff6ac1"
+      }
+    },
+    {
+      "name": "HTML/XML Attributes",
+      "scope": ["entity.other.attribute-name"],
+      "settings": {
+        "foreground": "#f3f99d"
+      }
+    },
+    {
+      "name": "CSS Selectors",
+      "scope": ["entity.other.attribute-name.class.css", "entity.other.attribute-name.id.css"],
+      "settings": {
+        "foreground": "#f3f99d"
+      }
+    },
+    {
+      "name": "CSS Properties",
+      "scope": ["support.type.property-name.css"],
+      "settings": {
+        "foreground": "#9aedfe"
+      }
+    },
+    {
+      "name": "CSS Values",
+      "scope": ["support.constant.property-value.css"],
+      "settings": {
+        "foreground": "#ff9f43"
+      }
+    },
+    {
+      "name": "JSON Keys",
+      "scope": ["support.type.property-name.json"],
+      "settings": {
+        "foreground": "#9aedfe"
+      }
+    },
+    {
+      "name": "Markdown Headers",
+      "scope": ["markup.heading", "entity.name.section"],
+      "settings": {
+        "foreground": "#57c7ff",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Markdown Bold",
+      "scope": ["markup.bold"],
+      "settings": {
+        "foreground": "#ff9f43",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Markdown Italic",
+      "scope": ["markup.italic"],
+      "settings": {
+        "foreground": "#ff6ac1",
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "Markdown Code",
+      "scope": ["markup.inline.raw", "markup.fenced_code"],
+      "settings": {
+        "foreground": "#5af78e"
+      }
+    },
+    {
+      "name": "Markdown Links",
+      "scope": ["markup.underline.link"],
+      "settings": {
+        "foreground": "#57c7ff"
+      }
+    },
+    {
+      "name": "Invalid/Deprecated",
+      "scope": ["invalid", "invalid.deprecated"],
+      "settings": {
+        "foreground": "#ff5c57"
+      }
+    }
+  ]
+}

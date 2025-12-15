@@ -13,20 +13,41 @@ from openai import AsyncOpenAI
 
 from utils.http_logger import create_logging_client
 
+# Timeout configuration for streaming with reasoning models
+# Reasoning models (GPT-5, O1, O3) can pause 30+ seconds while "thinking"
+# before producing output, so we need generous read timeouts
+DEFAULT_CONNECT_TIMEOUT = 30.0  # Time to establish connection
+DEFAULT_READ_TIMEOUT = 600.0  # 10 minutes - reasoning models need this
+DEFAULT_WRITE_TIMEOUT = 30.0  # Time to send request
+DEFAULT_POOL_TIMEOUT = 30.0  # Time to acquire connection from pool
 
-def create_http_client(enable_logging: bool = False) -> httpx.AsyncClient | None:
-    """Create HTTP client with optional request/response logging.
+
+def create_http_client(
+    enable_logging: bool = False,
+    read_timeout: float | None = None,
+) -> httpx.AsyncClient:
+    """Create HTTP client with proper timeouts for streaming.
 
     Args:
         enable_logging: Enable HTTP request/response logging
+        read_timeout: Read timeout in seconds (default: 600s for reasoning models)
 
     Returns:
-        httpx.AsyncClient if logging enabled, None otherwise
+        Configured httpx.AsyncClient
     """
+    effective_read_timeout = read_timeout if read_timeout is not None else DEFAULT_READ_TIMEOUT
+    timeout = httpx.Timeout(
+        connect=DEFAULT_CONNECT_TIMEOUT,
+        read=effective_read_timeout,
+        write=DEFAULT_WRITE_TIMEOUT,
+        pool=DEFAULT_POOL_TIMEOUT,
+    )
+
     if enable_logging:
-        client: httpx.AsyncClient = create_logging_client(enabled=True)
+        client: httpx.AsyncClient = create_logging_client(enabled=True, timeout=timeout)
         return client
-    return None
+
+    return httpx.AsyncClient(timeout=timeout)
 
 
 def create_openai_client(
