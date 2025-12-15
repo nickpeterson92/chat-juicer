@@ -1752,12 +1752,12 @@ function flushStatusUpdates(activeCalls) {
       "tavilymap",
     ].includes(card.rawName);
 
-    if (data.arguments && !isSummarization) {
+    if (data.tool_arguments && !isSummarization) {
       // Store arguments on card for later access (e.g., for web search query extraction)
-      card.arguments = data.arguments;
+      card.arguments = data.tool_arguments;
 
       if (argsPreview) {
-        const primaryArg = extractPrimaryArg(data.arguments, card.rawName || card.name);
+        const primaryArg = extractPrimaryArg(data.tool_arguments, card.rawName || card.name);
         argsPreview.textContent = primaryArg;
 
         // Fade in args and chevron when we have content
@@ -1771,7 +1771,7 @@ function flushStatusUpdates(activeCalls) {
       if (contentDiv && !contentDiv.querySelector(".disclosure-arguments")) {
         // For code interpreter, show code with syntax highlighting
         if (isCodeInterpreter) {
-          const parsedArgs = safeParse(data.arguments, {});
+          const parsedArgs = safeParse(data.tool_arguments, {});
           const code = parsedArgs.code || "";
 
           if (code) {
@@ -1796,7 +1796,7 @@ function flushStatusUpdates(activeCalls) {
           }
         } else if (isGenerateDocument) {
           // For generate_document, show pretty formatted file preview
-          const parsedArgs = safeParse(data.arguments, {});
+          const parsedArgs = safeParse(data.tool_arguments, {});
           const argsSection = document.createElement("div");
           argsSection.className = "disclosure-arguments";
 
@@ -1809,7 +1809,7 @@ function flushStatusUpdates(activeCalls) {
           if (chevron) chevron.classList.add("visible");
         } else if (isSequentialThinking) {
           // For sequential thinking, show thought content
-          const parsedArgs = safeParse(data.arguments, {});
+          const parsedArgs = safeParse(data.tool_arguments, {});
           const argsSection = document.createElement("div");
           argsSection.className = "disclosure-arguments";
 
@@ -1822,7 +1822,7 @@ function flushStatusUpdates(activeCalls) {
           if (chevron) chevron.classList.add("visible");
         } else if (!hasCustomResultRenderer) {
           // Regular tool without custom renderer: show JSON arguments
-          const { html, isJson } = prettyPrintJson(data.arguments);
+          const { html, isJson } = prettyPrintJson(data.tool_arguments);
 
           const argsSection = document.createElement("div");
           argsSection.className = "disclosure-arguments";
@@ -1886,7 +1886,7 @@ function flushStatusUpdates(activeCalls) {
       card.rawName
     );
 
-    if (data.result && contentDiv && !contentDiv.querySelector(".disclosure-result") && !hasCustomArgsRenderer) {
+    if (data.tool_result && contentDiv && !contentDiv.querySelector(".disclosure-result") && !hasCustomArgsRenderer) {
       const isSummarizationResult = card.rawName === "summarize_conversation";
       const isCodeInterpreterResult =
         card.rawName === "execute_python_code" || card.rawName === "wrapped_execute_python_code";
@@ -1899,7 +1899,7 @@ function flushStatusUpdates(activeCalls) {
         const summaryContent = document.createElement("div");
         summaryContent.className = "disclosure-reasoning-content";
         // Strip the metadata suffix [Tokens before: X, ...] from display
-        const cleanResult = data.result.replace(/\n?\n?\[Tokens before:.*\]$/, "");
+        const cleanResult = data.tool_result.replace(/\n?\n?\[Tokens before:.*\]$/, "");
         summaryContent.textContent = cleanResult;
         summarySection.appendChild(summaryContent);
 
@@ -1909,7 +1909,7 @@ function flushStatusUpdates(activeCalls) {
         if (chevron) chevron.classList.add("visible");
       } else if (isCodeInterpreterResult) {
         // Code interpreter: Special rendering with syntax highlighting, images, file downloads
-        const parsedResult = safeParse(data.result, null);
+        const parsedResult = safeParse(data.tool_result, null);
         if (parsedResult && typeof parsedResult === "object") {
           const codeOutputElement = renderCodeInterpreterOutput(parsedResult);
           contentDiv.appendChild(codeOutputElement);
@@ -1925,7 +1925,7 @@ function flushStatusUpdates(activeCalls) {
 
           const resultContent = document.createElement("pre");
           resultContent.className = "disclosure-section-content";
-          resultContent.textContent = data.result;
+          resultContent.textContent = data.tool_result;
           resultSection.appendChild(resultContent);
 
           contentDiv.appendChild(resultSection);
@@ -1937,8 +1937,8 @@ function flushStatusUpdates(activeCalls) {
       ) {
         // Web search: Special rendering with search results cards
         // Try JSON first, fall back to text parsing (Tavily MCP returns text format)
-        const parsedResult = safeParse(data.result, null);
-        const resultData = parsedResult || data.result; // Use original string if JSON fails
+        const parsedResult = safeParse(data.tool_result, null);
+        const resultData = parsedResult || data.tool_result; // Use original string if JSON fails
         // Get query from cached arguments
         const cachedArgs = safeParse(card.arguments || "{}", {});
         const query = cachedArgs.query || "";
@@ -1957,7 +1957,7 @@ function flushStatusUpdates(activeCalls) {
         card.rawName === "tavilyextract"
       ) {
         // Web content fetch/extract: Show URL with content preview
-        const resultData = safeParse(data.result, null) || data.result;
+        const resultData = safeParse(data.tool_result, null) || data.tool_result;
         const cachedArgs = safeParse(card.arguments || "{}", {});
         const url = cachedArgs.url || cachedArgs.urls?.[0] || "";
 
@@ -1970,7 +1970,7 @@ function flushStatusUpdates(activeCalls) {
         contentDiv.appendChild(resultSection);
       } else if (card.rawName === "tavily-crawl" || card.rawName === "tavily_crawl" || card.rawName === "tavilycrawl") {
         // Crawl results: Show pages with collapsible content
-        const resultData = safeParse(data.result, null) || data.result;
+        const resultData = safeParse(data.tool_result, null) || data.tool_result;
 
         const resultSection = document.createElement("div");
         resultSection.className = "disclosure-result";
@@ -1981,7 +1981,7 @@ function flushStatusUpdates(activeCalls) {
         contentDiv.appendChild(resultSection);
       } else if (card.rawName === "tavily-map" || card.rawName === "tavily_map" || card.rawName === "tavilymap") {
         // Map results: Show grouped URL sitemap
-        const resultData = safeParse(data.result, null) || data.result;
+        const resultData = safeParse(data.tool_result, null) || data.tool_result;
 
         const resultSection = document.createElement("div");
         resultSection.className = "disclosure-result";
@@ -1992,7 +1992,7 @@ function flushStatusUpdates(activeCalls) {
         contentDiv.appendChild(resultSection);
       } else if (card.rawName === "read_file" || card.rawName === "wrapped_read_file") {
         // Read file: Show filename header with rendered content
-        const parsedResult = safeParse(data.result, null);
+        const parsedResult = safeParse(data.tool_result, null);
         if (parsedResult?.content) {
           const resultSection = document.createElement("div");
           resultSection.className = "disclosure-result";
@@ -2013,14 +2013,14 @@ function flushStatusUpdates(activeCalls) {
 
           const resultContent = document.createElement("pre");
           resultContent.className = "disclosure-section-content";
-          resultContent.textContent = data.result;
+          resultContent.textContent = data.tool_result;
           resultSection.appendChild(resultContent);
 
           contentDiv.appendChild(resultSection);
         }
       } else if (card.rawName === "edit_file" || card.rawName === "wrapped_edit_file") {
         // Edit file: Show git-style diff
-        const parsedResult = safeParse(data.result, null);
+        const parsedResult = safeParse(data.tool_result, null);
         if (parsedResult?.diff) {
           const resultSection = document.createElement("div");
           resultSection.className = "disclosure-result";
@@ -2041,14 +2041,14 @@ function flushStatusUpdates(activeCalls) {
 
           const resultContent = document.createElement("pre");
           resultContent.className = "disclosure-section-content";
-          resultContent.textContent = data.result;
+          resultContent.textContent = data.tool_result;
           resultSection.appendChild(resultContent);
 
           contentDiv.appendChild(resultSection);
         }
       } else if (card.rawName === "list_directory" || card.rawName === "wrapped_list_directory") {
         // List directory: Show file tree
-        const parsedResult = safeParse(data.result, null);
+        const parsedResult = safeParse(data.tool_result, null);
         if (parsedResult?.items) {
           const resultSection = document.createElement("div");
           resultSection.className = "disclosure-result";
@@ -2069,14 +2069,14 @@ function flushStatusUpdates(activeCalls) {
 
           const resultContent = document.createElement("pre");
           resultContent.className = "disclosure-section-content";
-          resultContent.textContent = data.result;
+          resultContent.textContent = data.tool_result;
           resultSection.appendChild(resultContent);
 
           contentDiv.appendChild(resultSection);
         }
       } else if (card.rawName === "search_files" || card.rawName === "wrapped_search_files") {
         // Search files: Show matching files
-        const parsedResult = safeParse(data.result, null);
+        const parsedResult = safeParse(data.tool_result, null);
         if (parsedResult?.items) {
           const resultSection = document.createElement("div");
           resultSection.className = "disclosure-result";
@@ -2097,7 +2097,7 @@ function flushStatusUpdates(activeCalls) {
 
           const resultContent = document.createElement("pre");
           resultContent.className = "disclosure-section-content";
-          resultContent.textContent = data.result;
+          resultContent.textContent = data.tool_result;
           resultSection.appendChild(resultContent);
 
           contentDiv.appendChild(resultSection);
@@ -2114,10 +2114,10 @@ function flushStatusUpdates(activeCalls) {
 
         const resultContent = document.createElement("pre");
         // Try to pretty-print as JSON, fall back to plain text
-        const { html, isJson } = prettyPrintJson(data.result);
+        const { html, isJson } = prettyPrintJson(data.tool_result);
         // Truncate very long results (check original length)
-        const isTruncated = data.result.length > 4000;
-        const displayContent = isTruncated ? data.result.substring(0, 4000) : data.result;
+        const isTruncated = data.tool_result.length > 4000;
+        const displayContent = isTruncated ? data.tool_result.substring(0, 4000) : data.tool_result;
 
         if (isJson && !isTruncated) {
           resultContent.className = "disclosure-section-content shiki";
@@ -2344,24 +2344,31 @@ export function clearFunctionCards(chatContainer) {
  *
  * @param {HTMLElement} chatContainer - The chat container element
  * @param {Object} toolData - Persisted tool call data
- * @param {string} toolData.call_id - Unique call identifier
- * @param {string} toolData.name - Tool/function name
- * @param {string|Object} toolData.arguments - Tool arguments
- * @param {string} toolData.result - Tool result
- * @param {boolean} toolData.success - Whether the call succeeded
+ * @param {string} toolData.tool_call_id - Unique call identifier
+ * @param {string} toolData.tool_name - Tool/function name
+ * @param {string|Object} toolData.tool_arguments - Tool arguments
+ * @param {string} toolData.tool_result - Tool result
+ * @param {boolean} toolData.tool_success - Whether the call succeeded
  * @param {boolean} [toolData.interrupted=false] - Whether the call was interrupted by user
  * @returns {HTMLElement} The created card element
  */
 export function createCompletedToolCard(chatContainer, toolData) {
-  const { call_id, name, arguments: args, result, success = true, interrupted = false } = toolData;
+  const {
+    tool_call_id,
+    tool_name,
+    tool_arguments: args,
+    tool_result: result,
+    tool_success: success = true,
+    interrupted = false,
+  } = toolData;
 
   // Summarization cards have special styling (like Thought cards)
-  const isSummarization = name === "summarize_conversation";
+  const isSummarization = tool_name === "summarize_conversation";
 
   // Create disclosure card (collapsed by default)
   const cardDiv = document.createElement("div");
   cardDiv.className = "function-disclosure";
-  cardDiv.id = `function-${call_id}`;
+  cardDiv.id = `function-${tool_call_id}`;
   cardDiv.dataset.expanded = "false";
   // Interrupted takes priority over error for correct strikethrough styling
   cardDiv.dataset.status = interrupted ? "interrupted" : success ? "completed" : "error";
@@ -2373,15 +2380,15 @@ export function createCompletedToolCard(chatContainer, toolData) {
 
   const iconSpan = document.createElement("span");
   iconSpan.className = "disclosure-icon";
-  iconSpan.innerHTML = getFunctionIcon(name);
+  iconSpan.innerHTML = getFunctionIcon(tool_name);
 
   const toolNameSpan = document.createElement("span");
   toolNameSpan.className = "disclosure-tool-name";
-  toolNameSpan.textContent = formatToolName(name);
+  toolNameSpan.textContent = formatToolName(tool_name);
 
   const argsSpan = document.createElement("span");
   // Skip args display for summarization (cleaner card like Thought)
-  const primaryArg = isSummarization ? "" : extractPrimaryArg(args, name);
+  const primaryArg = isSummarization ? "" : extractPrimaryArg(args, tool_name);
   argsSpan.className = `disclosure-args-preview${primaryArg ? " visible" : ""}`;
   argsSpan.textContent = primaryArg;
 
@@ -2425,12 +2432,12 @@ export function createCompletedToolCard(chatContainer, toolData) {
     "tavily-map",
     "tavily_map",
     "tavilymap",
-  ].includes(name);
+  ].includes(tool_name);
 
   if (args && !isSummarization && !hasCustomResultRenderer) {
-    const isCodeInterpreter = name === "execute_python_code" || name === "wrapped_execute_python_code";
-    const isGenerateDocument = name === "generate_document" || name === "wrapped_generate_document";
-    const isSequentialThinking = name === "sequentialthinking";
+    const isCodeInterpreter = tool_name === "execute_python_code" || tool_name === "wrapped_execute_python_code";
+    const isGenerateDocument = tool_name === "generate_document" || tool_name === "wrapped_generate_document";
+    const isSequentialThinking = tool_name === "sequentialthinking";
 
     // For code interpreter, show code with syntax highlighting
     if (isCodeInterpreter) {
@@ -2501,10 +2508,12 @@ export function createCompletedToolCard(chatContainer, toolData) {
 
   // Add result section
   // Tools with custom args renderers skip result (their rendered args are the content)
-  const hasCustomArgsRenderer = ["sequentialthinking", "generate_document", "wrapped_generate_document"].includes(name);
+  const hasCustomArgsRenderer = ["sequentialthinking", "generate_document", "wrapped_generate_document"].includes(
+    tool_name
+  );
 
   if (result && !hasCustomArgsRenderer) {
-    const isCodeInterpreterResult = name === "execute_python_code" || name === "wrapped_execute_python_code";
+    const isCodeInterpreterResult = tool_name === "execute_python_code" || tool_name === "wrapped_execute_python_code";
 
     if (isSummarization) {
       // Summarization: Clean thought-like display (no label, just text)
@@ -2542,7 +2551,10 @@ export function createCompletedToolCard(chatContainer, toolData) {
 
         contentDiv.appendChild(resultSection);
       }
-    } else if ((name === "tavily-search" || name === "tavily_search" || name === "tavilysearch") && success) {
+    } else if (
+      (tool_name === "tavily-search" || tool_name === "tavily_search" || tool_name === "tavilysearch") &&
+      success
+    ) {
       // Web search: Special rendering with search results cards
       // Try JSON first, fall back to text parsing (Tavily MCP returns text format)
       const parsedResult = safeParse(result, null);
@@ -2558,7 +2570,10 @@ export function createCompletedToolCard(chatContainer, toolData) {
 
       contentDiv.appendChild(resultSection);
     } else if (
-      (name === "fetch" || name === "tavily-extract" || name === "tavily_extract" || name === "tavilyextract") &&
+      (tool_name === "fetch" ||
+        tool_name === "tavily-extract" ||
+        tool_name === "tavily_extract" ||
+        tool_name === "tavilyextract") &&
       success
     ) {
       // Web content fetch/extract: Show URL with content preview
@@ -2570,11 +2585,14 @@ export function createCompletedToolCard(chatContainer, toolData) {
       const resultSection = document.createElement("div");
       resultSection.className = "disclosure-result";
 
-      const contentElement = renderWebContentResult(resultData, url, name);
+      const contentElement = renderWebContentResult(resultData, url, tool_name);
       resultSection.appendChild(contentElement);
 
       contentDiv.appendChild(resultSection);
-    } else if ((name === "tavily-crawl" || name === "tavily_crawl" || name === "tavilycrawl") && success) {
+    } else if (
+      (tool_name === "tavily-crawl" || tool_name === "tavily_crawl" || tool_name === "tavilycrawl") &&
+      success
+    ) {
       // Crawl results: Show pages with collapsible content
       const parsedResult = safeParse(result, null);
       const resultData = parsedResult || result;
@@ -2586,7 +2604,7 @@ export function createCompletedToolCard(chatContainer, toolData) {
       resultSection.appendChild(contentElement);
 
       contentDiv.appendChild(resultSection);
-    } else if ((name === "tavily-map" || name === "tavily_map" || name === "tavilymap") && success) {
+    } else if ((tool_name === "tavily-map" || tool_name === "tavily_map" || tool_name === "tavilymap") && success) {
       // Map results: Show grouped URL sitemap
       const parsedResult = safeParse(result, null);
       const resultData = parsedResult || result;
@@ -2598,7 +2616,7 @@ export function createCompletedToolCard(chatContainer, toolData) {
       resultSection.appendChild(contentElement);
 
       contentDiv.appendChild(resultSection);
-    } else if ((name === "read_file" || name === "wrapped_read_file") && success) {
+    } else if ((tool_name === "read_file" || tool_name === "wrapped_read_file") && success) {
       // Read file: Show filename header with rendered content
       const parsedResult = safeParse(result, null);
       if (parsedResult?.content) {
@@ -2626,7 +2644,7 @@ export function createCompletedToolCard(chatContainer, toolData) {
 
         contentDiv.appendChild(resultSection);
       }
-    } else if ((name === "edit_file" || name === "wrapped_edit_file") && success) {
+    } else if ((tool_name === "edit_file" || tool_name === "wrapped_edit_file") && success) {
       // Edit file: Show git-style diff
       const parsedResult = safeParse(result, null);
       if (parsedResult?.diff) {
@@ -2654,7 +2672,7 @@ export function createCompletedToolCard(chatContainer, toolData) {
 
         contentDiv.appendChild(resultSection);
       }
-    } else if ((name === "list_directory" || name === "wrapped_list_directory") && success) {
+    } else if ((tool_name === "list_directory" || tool_name === "wrapped_list_directory") && success) {
       // List directory: Show file tree
       const parsedResult = safeParse(result, null);
       if (parsedResult?.items) {
@@ -2682,7 +2700,7 @@ export function createCompletedToolCard(chatContainer, toolData) {
 
         contentDiv.appendChild(resultSection);
       }
-    } else if ((name === "search_files" || name === "wrapped_search_files") && success) {
+    } else if ((tool_name === "search_files" || tool_name === "wrapped_search_files") && success) {
       // Search files: Show matching files
       const parsedResult = safeParse(result, null);
       if (parsedResult?.items) {

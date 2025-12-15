@@ -24,12 +24,9 @@ class MessageRow(Protocol):
 def row_to_message(row: MessageRow) -> dict[str, Any]:
     """Convert database row to message dict.
 
-    For tool_call messages, uses field names expected by frontend:
-    - call_id (not tool_call_id)
-    - name (not tool_name)
-    - arguments (not tool_arguments) - parsed from JSON
-    - result (not tool_result)
-    - success (not tool_success)
+    For tool_call messages, passes through DB field names directly:
+    - tool_call_id, tool_name, tool_arguments (parsed from JSON),
+      tool_result, tool_success
     - status: "completed" for all persisted tool calls
 
     For partial/interrupted messages:
@@ -60,7 +57,7 @@ def row_to_message(row: MessageRow) -> dict[str, Any]:
     if metadata.get("partial"):
         msg["partial"] = True
 
-    # For tool_call messages, use frontend-expected field names
+    # For tool_call messages, pass through DB field names directly (no renaming)
     if row["role"] == "tool_call":
         # Parse arguments from JSON string if stored that way
         args = row["tool_arguments"]
@@ -69,12 +66,12 @@ def row_to_message(row: MessageRow) -> dict[str, Any]:
                 args = json.loads(args)
         msg.update(
             {
-                "call_id": row["tool_call_id"],
-                "name": row["tool_name"],
-                "arguments": args,
-                "result": row["tool_result"],
+                "tool_call_id": row["tool_call_id"],
+                "tool_name": row["tool_name"],
+                "tool_arguments": args,
+                "tool_result": row["tool_result"],
                 "status": "completed",  # All persisted tool calls are completed
-                "success": row["tool_success"],
+                "tool_success": row["tool_success"],
             }
         )
 

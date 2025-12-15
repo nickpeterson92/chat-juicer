@@ -218,5 +218,5 @@ async def summarize_session(
         "success": True,
         "message": summary,
         "new_token_count": session.total_tokens,
-        "call_id": call_id,
+        "tool_call_id": call_id,
     }

@@ -154,9 +154,9 @@ def handle_tool_call(item: RunItem, tracker: CallTracker) -> str | None:
     # (function_detected was already emitted via output_item.added early detection)
     tool_msg = ToolCallNotification(
         type=MSG_TYPE_FUNCTION_EXECUTING,
-        name=tool_name,
-        arguments=arguments,
-        call_id=call_id if call_id else None,
+        tool_name=tool_name,
+        tool_arguments=arguments,
+        tool_call_id=call_id if call_id else None,
     )
     logger.info(f"Function executing: {tool_name} (call_id: {call_id or 'none'})")
     return cast(str, _json_builder(tool_msg.model_dump(exclude_none=True)))
@@ -226,10 +226,10 @@ def handle_tool_output(item: RunItem, tracker: CallTracker) -> str | None:
     # Use Pydantic model for validation
     result_msg = ToolResultNotification(
         type=MSG_TYPE_FUNCTION_COMPLETED,
-        name=tool_name,
-        result=output_str,
-        call_id=call_id if call_id else None,
-        success=success,
+        tool_name=tool_name,
+        tool_result=output_str,
+        tool_call_id=call_id if call_id else None,
+        tool_success=success,
     )
 
     logger.info(f"Function completed: {tool_name} (call_id: {call_id or 'none'}, success: {success})")
@@ -284,7 +284,7 @@ def handle_function_arguments_delta_event(data: Any) -> str | None:
 
     msg = FunctionArgumentsDeltaMessage(
         type=MSG_TYPE_FUNCTION_ARGUMENTS_DELTA,
-        call_id=call_id,
+        tool_call_id=call_id,
         delta=delta,
         output_index=getattr(data, "output_index", None),
     )
@@ -299,7 +299,7 @@ def handle_function_arguments_done_event(data: Any) -> str | None:
 
     msg = FunctionArgumentsDoneMessage(
         type=MSG_TYPE_FUNCTION_ARGUMENTS_DONE,
-        call_id=call_id,
+        tool_call_id=call_id,
         output_index=getattr(data, "output_index", None),
     )
     return msg.to_json()  # type: ignore[no-any-return]
@@ -443,9 +443,9 @@ def build_event_handlers(tracker: CallTracker) -> dict[str, EventHandler]:
 
                 tool_msg = ToolCallNotification(
                     type=MSG_TYPE_FUNCTION_DETECTED,
-                    name=tool_name,
-                    arguments="{}",  # Empty - args will stream via delta events
-                    call_id=call_id if call_id else None,
+                    tool_name=tool_name,
+                    tool_arguments="{}",  # Empty - args will stream via delta events
+                    tool_call_id=call_id if call_id else None,
                 )
                 logger.info(f"Early function detected: {tool_name} (call_id: {call_id or 'none'})")
                 return cast(str, _json_builder(tool_msg.model_dump(exclude_none=True)))
@@ -462,9 +462,9 @@ def build_event_handlers(tracker: CallTracker) -> dict[str, EventHandler]:
                 # Send complete arguments as safety net (in case streaming deltas were missed)
                 tool_msg = ToolCallNotification(
                     type=MSG_TYPE_FUNCTION_EXECUTING,
-                    name=tool_name,
-                    arguments=arguments,
-                    call_id=call_id if call_id else None,
+                    tool_name=tool_name,
+                    tool_arguments=arguments,
+                    tool_call_id=call_id if call_id else None,
                 )
                 logger.info(f"Function args complete (safety net): {tool_name} (call_id: {call_id or 'none'})")
                 return cast(str, _json_builder(tool_msg.model_dump(exclude_none=True)))
