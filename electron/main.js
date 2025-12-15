@@ -309,6 +309,12 @@ app.whenReady().then(() => {
           case "delete": {
             const sessionId = data?.session_id;
             if (!sessionId) return { error: "Missing session_id" };
+            // Close WebSocket for deleted session (cleanup server-side file context)
+            const ws = sessionWebSockets.get(sessionId);
+            if (ws) {
+              closeWebSocket(ws);
+              sessionWebSockets.delete(sessionId);
+            }
             const response = await apiRequest(`/api/sessions/${sessionId}`, {
               method: "DELETE",
               signal: controller.signal,

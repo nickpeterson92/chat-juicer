@@ -131,11 +131,6 @@ MAX_FILE_SIZE = 100 * 1024 * 1024
 #: enough results for typical search scenarios. Can be overridden per-call.
 DEFAULT_SEARCH_MAX_RESULTS = 100
 
-#: Maximum number of backup versions to keep for generated files.
-#: When create_backup=True in generate_document(), old versions are saved as
-#: .backup, .backup1, .backup2, etc. up to this limit.
-MAX_BACKUP_VERSIONS = 10
-
 # ============================================================================
 # Logging Configuration
 # ============================================================================
@@ -640,6 +635,12 @@ class Settings(BaseSettings):
     db_pool_max_size: int = Field(default=10, description="Maximum PostgreSQL connections")
     mcp_pool_size: int = Field(default=3, description="MCP server instances per server type")
     mcp_acquire_timeout: float = Field(default=30.0, description="MCP server acquire timeout (seconds)")
+
+    # WebSocket connection management
+    ws_idle_timeout: float = Field(
+        default=600.0,
+        description="Close WebSocket connections idle longer than this (seconds, default 10 min)",
+    )
 
     # HTTP client timeouts (for Azure OpenAI streaming)
     # Reasoning models (GPT-5, O1, O3) can pause 30+ seconds while "thinking"

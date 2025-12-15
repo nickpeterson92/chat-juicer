@@ -125,9 +125,9 @@ Use **execute_python_code** to run Python in a secure sandbox:
 **Available packages**: numpy, pandas, matplotlib, scipy, seaborn, scikit-learn, pillow, sympy, plotly, openpyxl, python-docx, pypdf, python-pptx, tabulate, faker, dateutil, humanize, pyyaml, lxml, pypandoc
 
 **File Access**:
-- `/workspace` (read/write): Working directory for code outputs - files saved here are returned
-- `/sources` (read-only): Uploaded source files from the session (PDFs, docs, images, etc.)
-- `/output` (read-only): Previously generated output files from this session
+- `sources/` (read-only): Uploaded source files from the session (PDFs, docs, images, etc.)
+- `output/` (read/write): Session output directory - save persistent results here
+- `workspace/` (read/write): Temporary working directory - files here are returned but not persisted
 
 **Limitations**:
 - No internet access (network isolated)

@@ -51,10 +51,8 @@ async def test_session_wrappers_inject_session_id(monkeypatch: pytest.MonkeyPatc
         calls["edit_file"] = (file_path, tuple(edits), session_id)
         return "edited"
 
-    async def fake_generate_document(
-        content: str, filename: str, create_backup: bool = False, session_id: str | None = None
-    ) -> str:
-        calls["generate_document"] = (content, filename, create_backup, session_id)
+    async def fake_generate_document(content: str, filename: str, session_id: str | None = None) -> str:
+        calls["generate_document"] = (content, filename, session_id)
         return "generated"
 
     async def fake_execute_python_code(code: str, session_id: str | None = None) -> str:
@@ -91,8 +89,8 @@ async def test_session_wrappers_inject_session_id(monkeypatch: pytest.MonkeyPatc
     assert await tools[3]("file.txt", edits=edits) == "edited"
     assert calls["edit_file"] == ("file.txt", tuple(edits), session_id)
 
-    assert await tools[4]("content", "out.md", create_backup=True) == "generated"
-    assert calls["generate_document"] == ("content", "out.md", True, session_id)
+    assert await tools[4]("content", "out.md") == "generated"
+    assert calls["generate_document"] == ("content", "out.md", session_id)
 
     assert await tools[5]("print('hello')") == "executed"
     assert calls["execute_python_code"] == ("print('hello')", session_id)

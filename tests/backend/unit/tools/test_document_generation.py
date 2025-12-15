@@ -59,54 +59,8 @@ class TestGenerateDocument:
         assert (output_dir / "reports" / "test.md").exists()
 
     @pytest.mark.asyncio
-    async def test_generate_document_with_backup(self, tmp_path: Path) -> None:
-        """Test generating document with backup of existing file."""
-        output_dir = tmp_path / "output"
-        output_dir.mkdir()
-
-        # Create existing file
-        existing_file = output_dir / "test.md"
-        existing_file.write_text("Old content")
-
-        # Generate new document with backup
-        new_content = "New content"
-        result = await generate_document(new_content, "test.md", create_backup=True)
-
-        data = json.loads(result)
-        assert data["success"] is True
-        assert "backup" in data["message"]
-
-        # Verify backup was created
-        backup_file = output_dir / "test.md.backup"
-        assert backup_file.exists()
-        assert backup_file.read_text() == "Old content"
-
-        # Verify new content is in main file
-        assert existing_file.read_text() == new_content
-
-    @pytest.mark.asyncio
-    async def test_generate_document_multiple_backups(self, tmp_path: Path) -> None:
-        """Test generating multiple backup versions."""
-        output_dir = tmp_path / "output"
-        output_dir.mkdir()
-
-        test_file = output_dir / "test.md"
-
-        # Create initial file
-        test_file.write_text("Version 1")
-
-        # Create first backup
-        await generate_document("Version 2", "test.md", create_backup=True)
-        assert (output_dir / "test.md.backup").exists()
-
-        # Create second backup
-        await generate_document("Version 3", "test.md", create_backup=True)
-        # Should create .backup1 since .backup already exists
-        assert (output_dir / "test.md.backup1").exists()
-
-    @pytest.mark.asyncio
-    async def test_generate_document_no_backup(self, tmp_path: Path) -> None:
-        """Test generating document without backup (overwrite)."""
+    async def test_generate_document_overwrites_existing(self, tmp_path: Path) -> None:
+        """Test generating document overwrites existing file."""
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
@@ -114,16 +68,14 @@ class TestGenerateDocument:
         test_file = output_dir / "test.md"
         test_file.write_text("Old content")
 
-        # Generate new document without backup
-        result = await generate_document("New content", "test.md", create_backup=False)
+        # Generate new document (overwrites existing)
+        result = await generate_document("New content", "test.md")
 
         data = json.loads(result)
         assert data["success"] is True
-        assert "backup" not in data["message"]
 
-        # Verify no backup was created
-        backup_file = output_dir / "test.md.backup"
-        assert not backup_file.exists()
+        # Verify new content replaced old
+        assert test_file.read_text() == "New content"
 
     @pytest.mark.asyncio
     async def test_generate_document_with_session(self, tmp_path: Path) -> None:

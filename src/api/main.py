@@ -76,7 +76,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
 
     # Initialize WebSocket manager on app.state for centralized connection tracking
-    app.state.ws_manager = WebSocketManager()
+    # Includes idle timeout to cleanup connections and release server-side file contexts
+    app.state.ws_manager = WebSocketManager(idle_timeout_seconds=settings.ws_idle_timeout)
+    await app.state.ws_manager.start_idle_checker()
 
     # Initialize MCP server pool on app.state for concurrent request handling
     # Pool pre-spawns server instances to avoid per-request overhead
@@ -89,6 +91,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     try:
         yield
     finally:
+        # Stop WebSocket idle checker
+        if app.state.ws_manager:
+            await app.state.ws_manager.stop_idle_checker()
+
         # Shutdown MCP pool (gracefully closes all pooled servers)
         if app.state.mcp_pool:
             await app.state.mcp_pool.shutdown()

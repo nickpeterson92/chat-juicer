@@ -17,7 +17,7 @@ from core.constants import (
 )
 from models.api_models import DirectoryListResponse, FileInfo, FileReadResponse
 from utils.document_processor import get_markitdown_converter, summarize_content
-from utils.file_utils import get_relative_path, read_file_content, validate_directory_path, validate_file_path
+from utils.file_utils import get_jail_relative_path, read_file_content, validate_directory_path, validate_file_path
 from utils.logger import logger
 from utils.token_utils import count_tokens
 
@@ -87,8 +87,8 @@ def list_directory(path: str = ".", session_id: str | None = None, show_hidden: 
             functions="list_directory",
         )
 
-        # Return validated response
-        return DirectoryListResponse(success=True, path=str(target_path), items=items).to_json()  # type: ignore[no-any-return]
+        # Return validated response with jail-relative path
+        return DirectoryListResponse(success=True, path=get_jail_relative_path(target_path, session_id), items=items).to_json()  # type: ignore[no-any-return]
 
     except Exception as e:
         return DirectoryListResponse(  # type: ignore[no-any-return]
@@ -151,13 +151,13 @@ async def search_files(
             functions="search_files",
         )
 
-        # Get relative path for response
-        relative_base = get_relative_path(base_dir)
+        # Get jail-relative path for response (model sees paths relative to its sandbox)
+        jail_relative_base = get_jail_relative_path(base_dir, session_id)
 
         return SearchFilesResponse(  # type: ignore[no-any-return]
             success=True,
             pattern=pattern,
-            base_path=str(relative_base),
+            base_path=jail_relative_base,
             items=matches,
             count=count,
             truncated=truncated,
@@ -231,7 +231,7 @@ async def read_file(  # noqa: PLR0911
                 return FileReadResponse(  # type: ignore[no-any-return]
                     success=True,
                     content=content,
-                    file_path=str(get_relative_path(target_file)),
+                    file_path=get_jail_relative_path(target_file, session_id),
                     size=file_size,
                     format="text (partial)",
                 ).to_json()
@@ -332,7 +332,7 @@ async def read_file(  # noqa: PLR0911
         return FileReadResponse(  # type: ignore[no-any-return]
             success=True,
             content=content,
-            file_path=str(get_relative_path(target_file)),
+            file_path=get_jail_relative_path(target_file, session_id),
             size=file_size,
             format=extension if extension else "text",
         ).to_json()

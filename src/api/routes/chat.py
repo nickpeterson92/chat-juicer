@@ -64,6 +64,8 @@ async def chat_websocket(
         keepalive_task = asyncio.create_task(_keepalive(websocket))
         try:
             async for data in websocket.iter_json():
+                # Update activity timestamp on any message
+                await ws_manager.touch(websocket)
                 msg_type = data.get("type")
 
                 if msg_type == "message":

@@ -128,14 +128,12 @@ def create_session_aware_tools(session_id: str) -> list[Any]:
     async def wrapped_generate_document(
         content: str,
         filename: str,
-        create_backup: bool = False,
     ) -> str:
         """Save generated content to the output directory.
 
         Args:
             content: Complete document content to save
             filename: Filename and optional subdirectories within output/
-            create_backup: Create .backup backup of existing file (default: False)
 
         Returns:
             JSON with success status
@@ -143,7 +141,6 @@ def create_session_aware_tools(session_id: str) -> list[Any]:
         return await generate_document(  # type: ignore[no-any-return]
             content=content,
             filename=filename,
-            create_backup=create_backup,
             session_id=session_id,
         )
 

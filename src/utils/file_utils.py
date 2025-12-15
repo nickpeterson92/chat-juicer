@@ -50,6 +50,47 @@ def get_relative_path(path: Path) -> Path:
         return path
 
 
+def get_jail_relative_path(path: Path, session_id: str | None = None) -> str:
+    """Get path relative to session jail root for model-facing responses.
+
+    When session_id is provided, returns path relative to the session's jail root
+    (data/files/{session_id}/). This ensures the model sees paths consistent with
+    its sandboxed view of the filesystem.
+
+    Args:
+        path: Absolute or relative path to convert
+        session_id: Session ID for jail root calculation (None = use cwd-relative)
+
+    Returns:
+        String path relative to jail root, or cwd-relative if no session_id
+
+    Examples:
+        # With session_id, paths are relative to jail root:
+        >>> get_jail_relative_path(Path("/project/data/files/abc123/sources/doc.pdf"), "abc123")
+        "sources/doc.pdf"
+
+        # Without session_id, falls back to cwd-relative:
+        >>> get_jail_relative_path(Path("/project/some/file.txt"), None)
+        "some/file.txt"
+    """
+    if session_id:
+        # Calculate jail root for this session
+        jail_root = DATA_FILES_PATH / session_id
+
+        # Try to make path relative to jail root
+        try:
+            resolved_path = path.resolve() if not path.is_absolute() else path
+            jail_root_resolved = jail_root.resolve()
+            relative = resolved_path.relative_to(jail_root_resolved)
+            return str(relative) if str(relative) != "." else "."
+        except ValueError:
+            # Path is outside jail - return as-is (shouldn't happen with proper validation)
+            return str(path)
+    else:
+        # No session - use cwd-relative path
+        return str(get_relative_path(path))
+
+
 async def get_session_files(session_id: str, subdir: str = "sources") -> list[str]:
     """List filenames in a session subdirectory, excluding hidden files.
 
@@ -417,13 +458,13 @@ async def file_operation(
                     _, write_error = await write_file_content(target_path, new_content)
                     if write_error:
                         response = TextEditResponse(
-                            success=False, file_path=str(target_path), error=write_error
+                            success=False, file_path=get_jail_relative_path(target_path, session_id), error=write_error
                         ).to_json()
                     else:
-                        # Build success response with operation details
+                        # Build success response with operation details (jail-relative path)
                         response = TextEditResponse(
                             success=True,
-                            file_path=str(target_path),
+                            file_path=get_jail_relative_path(target_path, session_id),
                             changes_made=result_data.get("replacements", result_data.get("changes_made", 1)),
                             message=f"{result_data.get('operation', 'edit')} operation completed",
                             original_text=result_data.get("text_found", result_data.get("anchor")),
@@ -491,12 +532,12 @@ def save_uploaded_file(
         # Get file info
         file_size = target_file.stat().st_size
 
-        # Return relative path from project root
-        relative_path = target_file.relative_to(PROJECT_ROOT)
+        # Return jail-relative path for model-facing response
+        jail_relative = get_jail_relative_path(target_file, session_id)
 
         return {
             "success": True,
-            "file_path": str(relative_path),
+            "file_path": jail_relative,
             "size": file_size,
             "message": f"Saved {filename} ({file_size:,} bytes)",
         }

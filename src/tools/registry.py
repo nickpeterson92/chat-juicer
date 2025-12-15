@@ -155,10 +155,6 @@ TOOLS: list[dict[str, Any]] = [
                     "type": "string",
                     "description": "Filename and optional subdirectories within output/. Examples: 'report.md', 'reports/quarterly.md', 'drafts/working.md'",
                 },
-                "create_backup": {
-                    "type": "boolean",
-                    "description": "Create a backup (.backup) of existing file before overwriting - default is false",
-                },
             },
             "required": ["content", "filename"],
         },
