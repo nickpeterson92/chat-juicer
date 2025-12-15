@@ -505,7 +505,7 @@
   }
 
   /* Syntax highlighted content */
-  .disclosure-section-content.hljs {
+  .disclosure-section-content.shiki {
     background: var(--color-surface-3);
   }
 
@@ -550,7 +550,7 @@
     line-height: 1.5;
   }
 
-  .code-input-display code.hljs {
+  .code-input-display code.shiki {
     background: transparent;
     padding: 0;
   }

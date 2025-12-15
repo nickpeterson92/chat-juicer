@@ -45,6 +45,6 @@ export default defineConfig({
 
   // Optimize dependencies
   optimizeDeps: {
-    include: ["marked", "marked-footnote", "dompurify", "highlight.js", "katex", "mermaid"],
+    include: ["marked", "marked-footnote", "dompurify", "shiki", "katex", "mermaid"],
   },
 });

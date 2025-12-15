@@ -3,9 +3,9 @@
  * Uses Claude Code-style disclosure pattern: "ToolName args..." expandable
  */
 
-import hljs from "highlight.js";
 import { FUNCTION_CARD_CLEANUP_DELAY } from "../config/constants.js";
 import { safeParse } from "../utils/json-cache.js";
+import { highlightCode } from "../utils/markdown-renderer.js";
 
 /**
  * Pretty-print and syntax highlight JSON content
@@ -30,9 +30,9 @@ function prettyPrintJson(content) {
     return { html: String(content), isJson: false };
   }
 
-  // Apply syntax highlighting
-  const highlighted = hljs.highlight(jsonString, { language: "json" });
-  return { html: highlighted.value, isJson: true };
+  // Apply syntax highlighting using Shiki
+  const highlighted = highlightCode(jsonString, "json");
+  return { html: highlighted, isJson: true };
 }
 
 // Throttled status update queue for batched DOM updates
@@ -671,10 +671,10 @@ function flushStatusUpdates(activeCalls) {
             codePre.className = "code-input-display";
 
             // Apply Python syntax highlighting
-            const highlighted = hljs.highlight(code, { language: "python" });
+            const highlighted = highlightCode(code, "python");
             const codeElement = document.createElement("code");
-            codeElement.className = "hljs language-python";
-            codeElement.innerHTML = highlighted.value;
+            codeElement.className = "shiki language-python";
+            codeElement.innerHTML = highlighted;
             codePre.appendChild(codeElement);
 
             codeSection.appendChild(codePre);
@@ -696,7 +696,7 @@ function flushStatusUpdates(activeCalls) {
           argsSection.appendChild(argsLabel);
 
           const argsContent = document.createElement("pre");
-          argsContent.className = `disclosure-section-content${isJson ? " hljs" : ""}`;
+          argsContent.className = `disclosure-section-content${isJson ? " shiki" : ""}`;
           if (isJson) {
             argsContent.innerHTML = html;
           } else {
@@ -805,13 +805,13 @@ function flushStatusUpdates(activeCalls) {
         const displayContent = isTruncated ? data.result.substring(0, 4000) : data.result;
 
         if (isJson && !isTruncated) {
-          resultContent.className = "disclosure-section-content hljs";
+          resultContent.className = "disclosure-section-content shiki";
           resultContent.innerHTML = html;
         } else if (isJson && isTruncated) {
           // Re-prettify truncated content
           const truncatedResult = prettyPrintJson(displayContent);
-          resultContent.className = "disclosure-section-content hljs";
-          resultContent.innerHTML = `${truncatedResult.html}\n<span class="hljs-comment">... (truncated)</span>`;
+          resultContent.className = "disclosure-section-content shiki";
+          resultContent.innerHTML = `${truncatedResult.html}\n<span style="color:#78787e;font-style:italic">... (truncated)</span>`;
         } else {
           resultContent.className = "disclosure-section-content";
           resultContent.textContent = isTruncated ? `${displayContent}\n... (truncated)` : displayContent;
@@ -1108,10 +1108,10 @@ export function createCompletedToolCard(chatContainer, toolData) {
         codePre.className = "code-input-display";
 
         // Apply Python syntax highlighting
-        const highlighted = hljs.highlight(code, { language: "python" });
+        const highlighted = highlightCode(code, "python");
         const codeElement = document.createElement("code");
-        codeElement.className = "hljs language-python";
-        codeElement.innerHTML = highlighted.value;
+        codeElement.className = "shiki language-python";
+        codeElement.innerHTML = highlighted;
         codePre.appendChild(codeElement);
 
         codeSection.appendChild(codePre);
@@ -1130,7 +1130,7 @@ export function createCompletedToolCard(chatContainer, toolData) {
       argsSection.appendChild(argsLabel);
 
       const argsContent = document.createElement("pre");
-      argsContent.className = `disclosure-section-content${isJson ? " hljs" : ""}`;
+      argsContent.className = `disclosure-section-content${isJson ? " shiki" : ""}`;
       if (isJson) {
         argsContent.innerHTML = html;
       } else {
@@ -1200,12 +1200,12 @@ export function createCompletedToolCard(chatContainer, toolData) {
       const displayContent = isTruncated ? result.substring(0, 4000) : result;
 
       if (isJson && !isTruncated) {
-        resultContent.className = `${isError ? "disclosure-section-content error-text" : "disclosure-section-content"} hljs`;
+        resultContent.className = `${isError ? "disclosure-section-content error-text" : "disclosure-section-content"} shiki`;
         resultContent.innerHTML = html;
       } else if (isJson && isTruncated) {
         const truncatedResult = prettyPrintJson(displayContent);
-        resultContent.className = `${isError ? "disclosure-section-content error-text" : "disclosure-section-content"} hljs`;
-        resultContent.innerHTML = `${truncatedResult.html}\n<span class="hljs-comment">... (truncated)</span>`;
+        resultContent.className = `${isError ? "disclosure-section-content error-text" : "disclosure-section-content"} shiki`;
+        resultContent.innerHTML = `${truncatedResult.html}\n<span style="color: #78787e; font-style: italic;">... (truncated)</span>`;
       } else {
         resultContent.className = isError ? "disclosure-section-content error-text" : "disclosure-section-content";
         resultContent.textContent = isTruncated ? `${displayContent}\n... (truncated)` : displayContent;
