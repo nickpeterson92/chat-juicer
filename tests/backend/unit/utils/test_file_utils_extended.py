@@ -374,23 +374,29 @@ class TestSaveUploadedFileExtended:
         assert result["success"] is True
         assert result["size"] == 1024 * 1024
 
-    def test_save_file_returns_relative_path(self, temp_dir: Path) -> None:
+    def test_save_file_returns_relative_path(self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that save_uploaded_file returns relative path from cwd."""
-        with patch("pathlib.Path.cwd", return_value=temp_dir):
-            session_id = "chat_test123"
-            session_workspace = temp_dir / "data" / "files" / session_id / "sources"
-            session_workspace.mkdir(parents=True, exist_ok=True)
+        import utils.file_utils
 
-            result = save_uploaded_file(
-                filename="test.txt",
-                data=list(b"Test"),
-                session_id=session_id,
-            )
+        # Patch PROJECT_ROOT and DATA_FILES_PATH
+        monkeypatch.setattr(utils.file_utils, "PROJECT_ROOT", temp_dir)
+        monkeypatch.setattr(utils.file_utils, "DATA_FILES_PATH", temp_dir / "data" / "files")
 
-            assert result["success"] is True
-            # Path should be relative
-            assert not result["file_path"].startswith("/")
-            assert "data/files" in result["file_path"]
+        session_id = "chat_test123"
+        session_workspace = temp_dir / "data" / "files" / session_id / "sources"
+        session_workspace.mkdir(parents=True, exist_ok=True)
+
+        result = save_uploaded_file(
+            filename="test.txt",
+            data=list(b"Test"),
+            session_id=session_id,
+        )
+
+        assert result["success"] is True
+        # Path should be relative to jail root (data/files/{session_id}/)
+        # So result should be sources/test.txt, not absolute and not containing data/files
+        assert not result["file_path"].startswith("/")
+        assert result["file_path"] == "sources/test.txt"
 
     def test_save_file_with_special_characters_in_name(self, temp_dir: Path) -> None:
         """Test saving file with special characters in filename."""

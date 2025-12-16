@@ -79,7 +79,8 @@ def get_jail_relative_path(path: Path, session_id: str | None = None) -> str:
 
         # Try to make path relative to jail root
         try:
-            resolved_path = path.resolve() if not path.is_absolute() else path
+            # Always resolve both paths to handle symlinks (macOS /var -> /private/var)
+            resolved_path = path.resolve()
             jail_root_resolved = jail_root.resolve()
             relative = resolved_path.relative_to(jail_root_resolved)
             return str(relative) if str(relative) != "." else "."
