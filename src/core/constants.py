@@ -455,10 +455,10 @@ KEEP_LAST_N_MESSAGES = 2
 #: Token count threshold for document summarization during read_file().
 #: Documents exceeding this token count are automatically summarized to
 #: fit within context windows while preserving technical accuracy.
-#: Set to 7000 to allow ~3k tokens for summary + metadata.
+#: Set to 10000 to allow ~3k tokens for summary + metadata.
 #: Rationale: Based on typical document sizes and the need to preserve
-#: technical detail while keeping summaries under 3k tokens for efficiency.
-DOCUMENT_SUMMARIZATION_THRESHOLD = 7000
+#: technical detail while keeping room for multiple sources
+DOCUMENT_SUMMARIZATION_THRESHOLD = 10000
 
 #: Per-message token overhead for message structure (role, metadata, formatting).
 #: Added to each message token count during conversation token calculation.

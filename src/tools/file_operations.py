@@ -174,6 +174,7 @@ async def read_file(  # noqa: PLR0911
     session_id: str | None = None,
     head: int | None = None,
     tail: int | None = None,
+    model: str | None = None,
 ) -> str:
     """
     Read a file's contents for documentation processing.
@@ -188,6 +189,7 @@ async def read_file(  # noqa: PLR0911
         session_id: Session ID for workspace isolation (enforces chroot jail)
         head: Read only first N lines (raw text only, skips conversion)
         tail: Read only last N lines (raw text only, skips conversion)
+        model: Model to use for document summarization (uses conversation's model)
 
     Returns:
         JSON string with file contents and metadata
@@ -297,8 +299,8 @@ async def read_file(  # noqa: PLR0911
         # Check if content needs summarization
         if exact_tokens > DOCUMENT_SUMMARIZATION_THRESHOLD:
             logger.info(f"Document {target_file.name} has {exact_tokens:,} tokens, summarizing for efficiency...")
-            # Summarize the content
-            content = await summarize_content(content, target_file.name)
+            # Summarize the content using conversation's model
+            content = await summarize_content(content, target_file.name, model=model)
 
             # Add note about summarization to the beginning of content
             content = f"[Note: This document was automatically summarized from {exact_tokens:,} tokens to improve processing efficiency]\n\n{content}"

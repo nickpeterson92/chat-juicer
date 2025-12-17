@@ -4,7 +4,7 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const { fileURLToPath } = require("node:url");
 const Logger = require("./logger");
-const { apiRequest, connectWebSocket, sendWebSocketMessage, closeWebSocket, API_BASE } = require("./api-client");
+const { apiRequest, connectWebSocket, sendWebSocketMessage, closeWebSocket } = require("./api-client");
 const {
   RESTART_DELAY,
   RESTART_CALLBACK_DELAY,
@@ -640,7 +640,7 @@ app.whenReady().then(() => {
     }
 
     // Close all WebSockets on restart
-    for (const [sid, ws] of sessionWebSockets) {
+    for (const [_sid, ws] of sessionWebSockets) {
       closeWebSocket(ws);
     }
     sessionWebSockets.clear();
@@ -663,7 +663,7 @@ app.whenReady().then(() => {
 app.on("window-all-closed", () => {
   logger.info("All windows closed");
   // Close all WebSockets
-  for (const [sid, ws] of sessionWebSockets) {
+  for (const [_sid, ws] of sessionWebSockets) {
     closeWebSocket(ws);
   }
   sessionWebSockets.clear();
@@ -672,9 +672,9 @@ app.on("window-all-closed", () => {
   }
 });
 
-app.on("before-quit", (event) => {
+app.on("before-quit", (_event) => {
   // Close all WebSockets before quit
-  for (const [sid, ws] of sessionWebSockets) {
+  for (const [_sid, ws] of sessionWebSockets) {
     closeWebSocket(ws);
   }
   sessionWebSockets.clear();

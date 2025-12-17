@@ -29,7 +29,7 @@ except ImportError:  # pragma: no cover - optional dependency
 _converter_cache: dict[str, _MarkItDown | None] = {}
 
 
-async def summarize_content(content: str, file_name: str = "document", model: str = "gpt-5-mini") -> str:
+async def summarize_content(content: str, file_name: str = "document", model: str | None = None) -> str:
     """
     Summarize large document content using Agent/Runner pattern.
 
@@ -39,7 +39,7 @@ async def summarize_content(content: str, file_name: str = "document", model: st
     Args:
         content: The document content to summarize
         file_name: Name of the file being summarized (for logging)
-        model: Model to use for token counting
+        model: Model to use for summarization (defaults to DEFAULT_MODEL if not provided)
 
     Returns:
         Summarized content or original if summarization fails
@@ -47,7 +47,8 @@ async def summarize_content(content: str, file_name: str = "document", model: st
     try:
         from core.prompts import DOCUMENT_SUMMARIZATION_INSTRUCTIONS
 
-        deployment = DEFAULT_MODEL
+        # Use conversation's model if provided, otherwise fall back to default
+        deployment = model or DEFAULT_MODEL
 
         # Create document summarization agent with full instructions
         summary_agent = Agent(
@@ -74,14 +75,14 @@ async def summarize_content(content: str, file_name: str = "document", model: st
             return content
 
         # Log summarization stats
-        original_tokens = count_tokens(content, model)
-        summary_tokens = count_tokens(summarized, model)
+        original_tokens = count_tokens(content, deployment)
+        summary_tokens = count_tokens(summarized, deployment)
 
         orig_count = original_tokens["exact_tokens"]
         summ_count = summary_tokens["exact_tokens"]
 
         logger.info(
-            f"Summarized {file_name}: {orig_count:,} tokens → {summ_count:,} tokens "
+            f"Summarized {file_name} using {deployment}: {orig_count:,} tokens → {summ_count:,} tokens "
             f"({int((1 - summ_count / orig_count) * 100)}% reduction)"
         )
 

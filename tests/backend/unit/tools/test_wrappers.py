@@ -32,9 +32,13 @@ async def test_session_wrappers_inject_session_id(monkeypatch: pytest.MonkeyPatc
         return "listed"
 
     async def fake_read_file(
-        file_path: str, session_id: str | None = None, head: int | None = None, tail: int | None = None
+        file_path: str,
+        session_id: str | None = None,
+        head: int | None = None,
+        tail: int | None = None,
+        model: str | None = None,
     ) -> str:
-        calls["read_file"] = (file_path, session_id, head, tail)
+        calls["read_file"] = (file_path, session_id, head, tail, model)
         return "read"
 
     async def fake_search_files(
@@ -80,7 +84,7 @@ async def test_session_wrappers_inject_session_id(monkeypatch: pytest.MonkeyPatc
     assert calls["list_directory"] == ("docs", session_id, True)
 
     assert await tools[1]("notes.txt", head=5) == "read"
-    assert calls["read_file"] == ("notes.txt", session_id, 5, None)
+    assert calls["read_file"] == ("notes.txt", session_id, 5, None, None)  # model is None by default
 
     assert await tools[2]("*.md", base_path=".", recursive=False, max_results=10) == "searched"
     assert calls["search_files"] == ("*.md", ".", session_id, False, 10)

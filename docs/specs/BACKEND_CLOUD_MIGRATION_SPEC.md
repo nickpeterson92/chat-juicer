@@ -127,7 +127,7 @@ This specification outlines migrating **only the Python backend** to a cloud-hos
 | System prompts | **UNCHANGED** - Still references `sources/`, `output/` |
 | Pydantic models | **REUSED** - `src/models/*.py` extended for API |
 
-> **Key insight**: Tools and prompts don't know about S3. A thin wrapper layer downloads files to a temp directory at request start, tools operate on local paths, and writes are synced back to S3. See [Section 7.2](#72-session-file-context-s3-abstraction-layer) for details.
+> **Key insight**: Tools and prompts don't know about S3. A thin wrapper layer downloads files to a temp directory upon opening a WS connection for a session, tools operate on local paths, and writes are synced back to S3. See [Section 7.2](#72-session-file-context-s3-abstraction-layer) for details.
 
 ---
 
@@ -233,9 +233,9 @@ function connectWebSocket(sessionId) {
 
   ws.onerror = (error) => {
     logger.error(`WebSocket error for session ${sessionId}:`, error);
-    mainWindow?.webContents.send('connection-error', { 
+    mainWindow?.webContents.send('connection-error', {
       session_id: sessionId,
-      error: error.message 
+      error: error.message
     });
   };
 
@@ -448,7 +448,7 @@ ipcMain.handle('delete-file', async (_event, { dirPath, filename }) => {
 ipcMain.on('user-input', async (event, payload) => {
   // Get or create WebSocket for this session
   const ws = connectWebSocket(payload.session_id);
-  
+
   // Wait for connection if not yet open
   if (ws.readyState !== WebSocket.OPEN) {
     await new Promise((resolve, reject) => {
@@ -2068,36 +2068,36 @@ async def websocket_chat(
     file_service: FileService = Depends(get_file_service),
 ):
     """WebSocket endpoint for chat streaming.
-    
+
     File context lifecycle is tied to the WebSocket connection:
     - Files downloaded once when connection opens
     - All messages use the same local cache
     - Cleanup happens when connection closes
     """
     await websocket.accept()
-    
+
     # Create file context ONCE for the entire connection
     async with session_file_context(session_id, user["id"], file_service) as file_ctx:
-        
+
         # Create tools with file context (reused across messages)
         tools = create_session_aware_tools(file_ctx)
         agent = create_agent_with_tools(tools, session_id)
-        
+
         try:
             while True:
                 data = await websocket.receive_json()
-                
+
                 if data["type"] == "message":
                     # Process message - files already local, no re-download
                     async for event in run_agent_stream(agent, data, session_id):
                         await websocket.send_json(event)
-                        
+
                 elif data["type"] == "interrupt":
                     await handle_interrupt(session_id)
-                    
+
                 elif data["type"] == "ping":
                     await websocket.send_json({"type": "pong"})
-                    
+
         except WebSocketDisconnect:
             pass  # Connection closed, file_ctx cleanup happens automatically
 ```
@@ -2240,17 +2240,17 @@ volumes:
 │                      t3.xlarge (16GB RAM)                       │
 │                                                                 │
 │  ┌────────────────────────────────────────────────────────────┐ │
-│  │                       nginx                                 │ │
-│  │            (SSL termination, WebSocket proxy)               │ │
+│  │                       nginx                                │ │
+│  │            (SSL termination, WebSocket proxy)              │ │
 │  └─────────────────────────────┬──────────────────────────────┘ │
 │                                │                                │
 │  ┌─────────────────────────────▼──────────────────────────────┐ │
-│  │                    FastAPI (uvicorn x4)                     │ │
-│  │                                                             │ │
-│  │  • REST endpoints (/api/*)                                  │ │
-│  │  • WebSocket streaming (/ws/*)                              │ │
-│  │  • Agent/Runner (existing logic)                            │ │
-│  │  • MCP Servers (Sequential Thinking, Fetch)                 │ │
+│  │                    FastAPI (uvicorn x4)                    │ │
+│  │                                                            │ │
+│  │  • REST endpoints (/api/*)                                 │ │
+│  │  • WebSocket streaming (/ws/*)                             │ │
+│  │  • Agent/Runner (existing logic)                           │ │
+│  │  • MCP Servers (Sequential Thinking, Fetch)                │ │
 │  └─────────────────────────────┬──────────────────────────────┘ │
 │                                │                                │
 │  ┌────────────────┐  ┌─────────▼─────────┐                      │

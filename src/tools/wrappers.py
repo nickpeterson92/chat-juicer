@@ -1,16 +1,17 @@
 """
-Session-aware tool wrappers for automatic session_id injection.
+Session-aware tool wrappers for automatic session_id and model injection.
 
 This module provides wrapper functions that inject the current session_id
-into tool calls, enabling per-session workspace isolation (chroot jail).
+and model into tool calls, enabling per-session workspace isolation (chroot jail)
+and ensuring document summarization uses the conversation's model.
 
 The Agent/Runner framework doesn't have a built-in mechanism to pass context
-to tools, so we create wrapped versions that capture the session_id at agent
-creation time and inject it into every tool call.
+to tools, so we create wrapped versions that capture session_id and model at agent
+creation time and inject them into every tool call.
 
 Architecture:
 - Agent works with relative paths (e.g., "sources/file.pdf")
-- Wrapper injects session_id before calling the actual tool
+- Wrapper injects session_id and model before calling the actual tool
 - Tool validates path is within session workspace (data/files/{session_id}/)
 - Security: Path traversal attacks blocked, workspace boundaries enforced
 """
@@ -26,32 +27,33 @@ from tools.text_editing import EditOperation, edit_file
 from utils.logger import logger
 
 
-def create_session_aware_tools(session_id: str) -> list[Any]:
-    """Create tool wrappers that automatically inject session_id for workspace isolation.
+def create_session_aware_tools(session_id: str, model: str | None = None) -> list[Any]:
+    """Create tool wrappers that automatically inject session_id and model for workspace isolation.
 
     This function creates wrapped versions of all file operation tools that capture
-    the session_id at agent creation time and inject it into every tool call.
+    the session_id and model at agent creation time and inject them into every tool call.
 
     Args:
         session_id: Session identifier for workspace isolation
+        model: Model to use for document summarization (uses conversation's model)
 
     Returns:
-        List of Agent-compatible tool wrappers with session_id injection
+        List of Agent-compatible tool wrappers with session_id and model injection
 
     Example:
         ```python
         # Create session-specific agent with isolated workspace
-        session_tools = create_session_aware_tools("chat_abc123")
+        session_tools = create_session_aware_tools("chat_abc123", model="gpt-5")
         agent = Agent(model="gpt-5", tools=session_tools)
 
         # Agent calls: read_file("sources/doc.pdf")
-        # Wrapper injects: read_file("sources/doc.pdf", session_id="chat_abc123")
+        # Wrapper injects: read_file("sources/doc.pdf", session_id="chat_abc123", model="gpt-5")
         # Tool resolves to: data/files/chat_abc123/sources/doc.pdf
         ```
     """
     from agents import function_tool
 
-    logger.info(f"Creating session-aware tools for session: {session_id}")
+    logger.info(f"Creating session-aware tools for session: {session_id}, model: {model}")
 
     # File Operations - Read-only tools with session_id injection
     def wrapped_list_directory(path: str = ".", show_hidden: bool = False) -> str:
@@ -77,7 +79,7 @@ def create_session_aware_tools(session_id: str) -> list[Any]:
         Returns:
             JSON with file contents and metadata
         """
-        return await read_file(file_path=file_path, session_id=session_id, head=head, tail=tail)  # type: ignore[no-any-return]
+        return await read_file(file_path=file_path, session_id=session_id, head=head, tail=tail, model=model)  # type: ignore[no-any-return]
 
     async def wrapped_search_files(
         pattern: str,
