@@ -260,6 +260,7 @@ class TestExecutePythonCode:
     async def test_creates_workspace_directory(self, tmp_path: Path) -> None:
         """Should create session workspace directory."""
         with (
+            patch("tools.code_interpreter.check_sandbox_ready", return_value=(True, "Sandbox ready")),
             patch("tools.code_interpreter.get_sandbox_pool") as mock_get_pool,
             patch("tools.code_interpreter.Path") as mock_path,
         ):
@@ -287,7 +288,10 @@ class TestExecutePythonCode:
     @pytest.mark.asyncio
     async def test_returns_json_response(self) -> None:
         """Should return valid JSON response."""
-        with patch("tools.code_interpreter.get_sandbox_pool") as mock_get_pool:
+        with (
+            patch("tools.code_interpreter.check_sandbox_ready", return_value=(True, "Sandbox ready")),
+            patch("tools.code_interpreter.get_sandbox_pool") as mock_get_pool,
+        ):
             mock_pool = MagicMock()
             mock_pool.execute = AsyncMock(
                 return_value=ExecutionResult(
@@ -315,7 +319,10 @@ class TestExecutePythonCode:
     @pytest.mark.asyncio
     async def test_includes_error_in_response(self) -> None:
         """Should include error message in response."""
-        with patch("tools.code_interpreter.get_sandbox_pool") as mock_get_pool:
+        with (
+            patch("tools.code_interpreter.check_sandbox_ready", return_value=(True, "Sandbox ready")),
+            patch("tools.code_interpreter.get_sandbox_pool") as mock_get_pool,
+        ):
             mock_pool = MagicMock()
             mock_pool.execute = AsyncMock(
                 return_value=ExecutionResult(
@@ -638,7 +645,10 @@ class TestPhase2Integration:
     @pytest.mark.asyncio
     async def test_execute_python_code_returns_base64_images(self) -> None:
         """Integration test: execute_python_code returns images with base64."""
-        with patch("tools.code_interpreter.get_sandbox_pool") as mock_get_pool:
+        with (
+            patch("tools.code_interpreter.check_sandbox_ready", return_value=(True, "Sandbox ready")),
+            patch("tools.code_interpreter.get_sandbox_pool") as mock_get_pool,
+        ):
             mock_pool = MagicMock()
 
             # Simulate execution result with image file

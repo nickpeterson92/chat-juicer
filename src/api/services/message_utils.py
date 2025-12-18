@@ -14,11 +14,9 @@ from typing import Any, Protocol
 class MessageRow(Protocol):
     """Protocol for message database row access."""
 
-    def get(self, key: str) -> Any:
-        ...
+    def get(self, key: str) -> Any: ...
 
-    def __getitem__(self, key: str) -> Any:
-        ...
+    def __getitem__(self, key: str) -> Any: ...
 
 
 def row_to_message(row: MessageRow) -> dict[str, Any]:
