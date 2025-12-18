@@ -1,24 +1,34 @@
 # Chat Juicer Backend
 
-Backend entry lives in `main.py` and follows an orchestrator pattern: `main.py` only wires bootstrap → runtime → cleanup while business logic resides in the module directories below. All backend code is async, type-annotated, AppState-driven, and uses the shared JSON logger (no prints).
+FastAPI backend with PostgreSQL persistence, Agent/Runner pattern, and MCP server support. Entry point is `api/main.py` which configures routes, middleware, and lifespan management.
 
 ## Layout
-- `app/` – lifecycle shell: bootstrap, runtime loop, and `AppState` (SSOT passed everywhere).
-- `core/` – business logic: agent/runner config, dual-layer history, session manager/commands, prompts, settings.
-- `models/` – Pydantic schemas for API/IPCs/SDK/events/sessions; single source for validation + serialization.
-- `tools/` – function-calling tool surface and registry; session-aware file/document/text utilities.
-- `integrations/` – external/MCP glue: registries, server wiring, event handlers, SDK token tracking.
-- `utils/` – shared helpers: logging, IPC, token LRU, file/document helpers, validation.
 
-## Runtime flow (high level)
-1) Bootstrap: build `AppState`, load settings, assemble agent + MCP servers, open sessions.
-2) Runtime: handle IPC events, stream agent responses, coordinate tool calls, persist dual-layer history.
-3) Cleanup: close sessions/handles, flush logs, release integrations.
+- `api/` - FastAPI application: routes, services, middleware, WebSocket management, dependency injection.
+- `core/` - Business logic: agent/runner config, prompts, settings/constants.
+- `models/` - Pydantic schemas for API/IPC/SDK/events/sessions; single source for validation + serialization.
+- `tools/` - Function-calling tool surface and registry; session-aware file/document/text utilities.
+- `integrations/` - External/MCP glue: registries, server pool, event handlers, SDK token tracking.
+- `utils/` - Shared helpers: logging, token LRU, file/document helpers, client factories, validation.
 
-## Conventions
-- No module globals; always pass `AppState`.
-- Async/await everywhere; handle I/O with awaits and boundary try/except + structured logging.
-- Keep orchestration in `main.py`/`app/`; keep logic in `core/`/`tools/`/`integrations/`.
+## Runtime Flow
+
+1. **Startup (lifespan)**: Initialize PostgreSQL pool, MCP server pool, OpenAI client, WebSocket manager.
+2. **Request handling**: FastAPI routes + WebSocket endpoints; dependency injection provides services.
+3. **Chat streaming**: `ChatService` orchestrates Agent/Runner with MCP servers, streams via WebSocket.
+4. **Shutdown**: Close pools, cleanup MCP servers, flush logs.
+
+## Key Patterns
+
+- **Dependency Injection**: Services injected via FastAPI's `Depends()` - no global state.
+- **Async everywhere**: All I/O uses async/await with structured error handling.
+- **Dual-layer history**: Layer 1 (LLM context, token-managed) + Layer 2 (UI history, complete).
+- **MCP Server Pool**: Pre-spawned servers for concurrent request handling.
 
 ## Extending
-Add features by placing orchestration hooks in `app/` and business logic in `core/` or `tools/`, using `models/` for validation. Each module directory includes its own README for deeper guidance.
+
+Add features by:
+- Routes in `api/routes/`, services in `api/services/`
+- Business logic in `core/` or `tools/`
+- Schemas in `models/` for validation
+- Each module directory includes its own README for deeper guidance.
