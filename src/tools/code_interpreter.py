@@ -451,7 +451,17 @@ class SandboxPool:
                 f"{workspace_path}/",
                 to_container=False,
             ):
-                logger.warning("Failed to copy outputs from container, files may be missing")
+                logger.warning("Failed to copy workspace from container, files may be missing")
+
+            # Copy output directory back (code can write to /output/)
+            if session_files_path:
+                output_path = session_files_path / "output"
+                if output_path.exists() and not await self._container_cp(
+                    f"{self.warm_container_id}:/output/.",
+                    f"{output_path}/",
+                    to_container=False,
+                ):
+                    logger.warning("Failed to copy output from container")
 
             # Clean workspace in container for next execution (security)
             # Use timeout to prevent hanging
@@ -521,14 +531,14 @@ class SandboxPool:
             f"{workspace_path}:/workspace:rw",  # Mount workspace
         ]
 
-        # Add session file mounts (read-only) if available
+        # Add session file mounts if available
         if session_files_path:
             sources_path = session_files_path / "sources"
             output_path = session_files_path / "output"
             if sources_path.exists():
-                cmd_args.extend(["-v", f"{sources_path}:/sources:ro"])
+                cmd_args.extend(["-v", f"{sources_path}:/sources:ro"])  # Read-only for uploads
             if output_path.exists():
-                cmd_args.extend(["-v", f"{output_path}:/output:ro"])
+                cmd_args.extend(["-v", f"{output_path}:/output:rw"])  # Read/write for outputs
 
         # Add working directory and command
         cmd_args.extend(
@@ -721,7 +731,7 @@ async def execute_python_code(code: str, session_id: str) -> str:
     File Access:
     - /workspace: Read/write for code outputs (default working directory)
     - /sources: Read-only access to uploaded source files (session files)
-    - /output: Read-only access to previously generated output files
+    - /output: Read/write access to session output files (persistent)
 
     Limitations:
     - No internet access

@@ -6,6 +6,8 @@ This replaces the legacy IPC tests with FastAPI WebSocket patterns.
 
 from __future__ import annotations
 
+import asyncio
+
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -288,3 +290,152 @@ class TestWebSocketManagerIsolation:
         await manager.send(session_id, large_message)
 
         mock_ws.send_json.assert_called_once_with(large_message)
+
+
+class TestWebSocketManagerIdleTimeout:
+    """Tests for WebSocket idle timeout functionality."""
+
+    @pytest.mark.asyncio
+    async def test_connect_tracks_activity(self) -> None:
+        """Test that connecting a WebSocket records last activity time."""
+        manager = WebSocketManager()
+        mock_ws = Mock()
+        mock_ws.accept = AsyncMock()
+        session_id = "chat_test123"
+
+        await manager.connect(mock_ws, session_id)
+
+        assert mock_ws in manager.last_activity
+        assert isinstance(manager.last_activity[mock_ws], float)
+
+    @pytest.mark.asyncio
+    async def test_disconnect_clears_activity(self) -> None:
+        """Test that disconnecting removes activity tracking."""
+        manager = WebSocketManager()
+        mock_ws = Mock()
+        mock_ws.accept = AsyncMock()
+        session_id = "chat_test123"
+
+        await manager.connect(mock_ws, session_id)
+        await manager.disconnect(mock_ws, session_id)
+
+        assert mock_ws not in manager.last_activity
+
+    @pytest.mark.asyncio
+    async def test_touch_updates_activity(self) -> None:
+        """Test that touch updates the last activity time."""
+        manager = WebSocketManager()
+        mock_ws = Mock()
+        mock_ws.accept = AsyncMock()
+        session_id = "chat_test123"
+
+        await manager.connect(mock_ws, session_id)
+        initial_time = manager.last_activity[mock_ws]
+
+        # Small delay to ensure time difference
+        await asyncio.sleep(0.01)
+        await manager.touch(mock_ws)
+
+        assert manager.last_activity[mock_ws] > initial_time
+
+    @pytest.mark.asyncio
+    async def test_touch_nonexistent_websocket(self) -> None:
+        """Test that touch does nothing for unknown WebSocket."""
+        manager = WebSocketManager()
+        mock_ws = Mock()
+
+        # Should not raise
+        await manager.touch(mock_ws)
+
+        assert mock_ws not in manager.last_activity
+
+    @pytest.mark.asyncio
+    async def test_idle_timeout_closes_connection(self) -> None:
+        """Test that idle connections are closed after timeout."""
+        manager = WebSocketManager(idle_timeout_seconds=0.1)
+        mock_ws = Mock()
+        mock_ws.accept = AsyncMock()
+        mock_ws.close = AsyncMock()
+        session_id = "chat_test123"
+
+        await manager.connect(mock_ws, session_id)
+
+        # Wait for connection to become idle
+        await asyncio.sleep(0.15)
+
+        # Manually trigger idle check
+        await manager._close_idle_connections()
+
+        mock_ws.close.assert_called_once()
+        assert session_id not in manager.connections
+
+    @pytest.mark.asyncio
+    async def test_active_connection_not_closed(self) -> None:
+        """Test that active connections are not closed."""
+        manager = WebSocketManager(idle_timeout_seconds=0.5)
+        mock_ws = Mock()
+        mock_ws.accept = AsyncMock()
+        mock_ws.close = AsyncMock()
+        session_id = "chat_test123"
+
+        await manager.connect(mock_ws, session_id)
+
+        # Touch to keep active
+        await manager.touch(mock_ws)
+
+        # Trigger idle check (should not close)
+        await manager._close_idle_connections()
+
+        mock_ws.close.assert_not_called()
+        assert session_id in manager.connections
+
+    @pytest.mark.asyncio
+    async def test_start_stop_idle_checker(self) -> None:
+        """Test starting and stopping the idle checker task."""
+        manager = WebSocketManager(idle_timeout_seconds=60.0)
+
+        await manager.start_idle_checker()
+        assert manager._idle_checker_task is not None
+        assert not manager._idle_checker_task.done()
+
+        await manager.stop_idle_checker()
+        assert manager._idle_checker_task is None
+
+    @pytest.mark.asyncio
+    async def test_connection_count_property(self) -> None:
+        """Test connection_count property."""
+        manager = WebSocketManager()
+        mock_ws1 = Mock()
+        mock_ws1.accept = AsyncMock()
+        mock_ws2 = Mock()
+        mock_ws2.accept = AsyncMock()
+
+        assert manager.connection_count == 0
+
+        await manager.connect(mock_ws1, "session1")
+        assert manager.connection_count == 1
+
+        await manager.connect(mock_ws2, "session2")
+        assert manager.connection_count == 2
+
+    @pytest.mark.asyncio
+    async def test_session_count_property(self) -> None:
+        """Test session_count property."""
+        manager = WebSocketManager()
+        mock_ws1 = Mock()
+        mock_ws1.accept = AsyncMock()
+        mock_ws2 = Mock()
+        mock_ws2.accept = AsyncMock()
+
+        assert manager.session_count == 0
+
+        await manager.connect(mock_ws1, "session1")
+        assert manager.session_count == 1
+
+        await manager.connect(mock_ws2, "session1")  # Same session
+        assert manager.session_count == 1
+
+        mock_ws3 = Mock()
+        mock_ws3.accept = AsyncMock()
+        await manager.connect(mock_ws3, "session2")  # Different session
+        assert manager.session_count == 2

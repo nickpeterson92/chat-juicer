@@ -3006,6 +3006,7 @@ body.view-chat {
      * ======================================== */
     --color-text-primary: #f5f5f5;
     --color-text-secondary: #a0a0a0;
+    --color-text-tertiary: #787878;
     --color-text-assistant: #f1f5f9;
     --color-text-user: #ffffff;
     --color-text-on-surface: #d1d5db;

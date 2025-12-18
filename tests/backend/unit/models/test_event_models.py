@@ -100,10 +100,10 @@ class TestFunctionEventMessage:
 
     def test_function_started(self) -> None:
         """Test function started event."""
-        event = FunctionEventMessage(type="function_started", call_id="call_123")
+        event = FunctionEventMessage(type="function_started", tool_call_id="call_123")
         assert event.type == "function_started"
-        assert event.call_id == "call_123"
-        assert event.success is True
+        assert event.tool_call_id == "call_123"
+        assert event.tool_success is True
         assert event.error is None
         assert event.output is None
 
@@ -111,12 +111,12 @@ class TestFunctionEventMessage:
         """Test successful function completion."""
         event = FunctionEventMessage(
             type="function_completed",
-            call_id="call_123",
-            success=True,
+            tool_call_id="call_123",
+            tool_success=True,
             output="Result data",
         )
         assert event.type == "function_completed"
-        assert event.success is True
+        assert event.tool_success is True
         assert event.output == "Result data"
         assert event.error is None
 
@@ -124,21 +124,21 @@ class TestFunctionEventMessage:
         """Test failed function completion."""
         event = FunctionEventMessage(
             type="function_completed",
-            call_id="call_123",
-            success=False,
+            tool_call_id="call_123",
+            tool_success=False,
             error="Function failed",
         )
         assert event.type == "function_completed"
-        assert event.success is False
+        assert event.tool_success is False
         assert event.error == "Function failed"
 
     def test_to_json(self) -> None:
         """Test JSON serialization."""
-        event = FunctionEventMessage(type="function_started", call_id="test_id")
+        event = FunctionEventMessage(type="function_started", tool_call_id="test_id")
         json_str = event.to_json()
         data = json.loads(json_str)
         assert data["type"] == "function_started"
-        assert data["call_id"] == "test_id"
+        assert data["tool_call_id"] == "test_id"
 
 
 class TestUserInput:
@@ -231,26 +231,26 @@ class TestToolCallNotification:
     def test_tool_call_with_dict_args(self) -> None:
         """Test tool call with dict arguments."""
         notification = ToolCallNotification(
-            name="read_file",
-            arguments={"path": "/test/file.txt"},
-            call_id="call_123",
+            tool_name="read_file",
+            tool_arguments={"path": "/test/file.txt"},
+            tool_call_id="call_123",
         )
-        assert notification.name == "read_file"
-        assert notification.arguments == {"path": "/test/file.txt"}
-        assert notification.call_id == "call_123"
+        assert notification.tool_name == "read_file"
+        assert notification.tool_arguments == {"path": "/test/file.txt"}
+        assert notification.tool_call_id == "call_123"
 
     def test_tool_call_with_string_args(self) -> None:
         """Test tool call with string arguments."""
         notification = ToolCallNotification(
-            name="search_files",
-            arguments='{"pattern": "*.py"}',
+            tool_name="search_files",
+            tool_arguments='{"pattern": "*.py"}',
         )
-        assert notification.name == "search_files"
-        assert notification.arguments == '{"pattern": "*.py"}'
+        assert notification.tool_name == "search_files"
+        assert notification.tool_arguments == '{"pattern": "*.py"}'
 
     def test_default_type(self) -> None:
         """Test that type defaults to function_detected."""
-        notification = ToolCallNotification(name="test_tool", arguments={})
+        notification = ToolCallNotification(tool_name="test_tool", tool_arguments={})
         assert notification.type == "function_detected"
 
 
@@ -260,28 +260,28 @@ class TestToolResultNotification:
     def test_successful_result(self) -> None:
         """Test successful tool result."""
         notification = ToolResultNotification(
-            name="read_file",
-            result="File contents here",
-            call_id="call_123",
-            success=True,
+            tool_name="read_file",
+            tool_result="File contents here",
+            tool_call_id="call_123",
+            tool_success=True,
         )
-        assert notification.name == "read_file"
-        assert notification.result == "File contents here"
-        assert notification.success is True
+        assert notification.tool_name == "read_file"
+        assert notification.tool_result == "File contents here"
+        assert notification.tool_success is True
 
     def test_failed_result(self) -> None:
         """Test failed tool result."""
         notification = ToolResultNotification(
-            name="read_file",
-            result="Error: File not found",
-            success=False,
+            tool_name="read_file",
+            tool_result="Error: File not found",
+            tool_success=False,
         )
-        assert notification.success is False
+        assert notification.tool_success is False
 
     def test_default_success(self) -> None:
         """Test that success defaults to True."""
-        notification = ToolResultNotification(name="test", result="ok")
-        assert notification.success is True
+        notification = ToolResultNotification(tool_name="test", tool_result="ok")
+        assert notification.tool_success is True
 
 
 class TestFunctionCallItem:

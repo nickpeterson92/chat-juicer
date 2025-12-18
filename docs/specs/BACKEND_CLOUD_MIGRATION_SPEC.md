@@ -127,7 +127,7 @@ This specification outlines migrating **only the Python backend** to a cloud-hos
 | System prompts | **UNCHANGED** - Still references `sources/`, `output/` |
 | Pydantic models | **REUSED** - `src/models/*.py` extended for API |
 
-> **Key insight**: Tools and prompts don't know about S3. A thin wrapper layer downloads files to a temp directory at request start, tools operate on local paths, and writes are synced back to S3. See [Section 7.2](#72-session-file-context-s3-abstraction-layer) for details.
+> **Key insight**: Tools and prompts don't know about S3. A thin wrapper layer downloads files to a temp directory upon opening a WS connection for a session, tools operate on local paths, and writes are synced back to S3. See [Section 7.2](#72-session-file-context-s3-abstraction-layer) for details.
 
 ---
 
@@ -203,43 +203,75 @@ async function getAuthToken() {
   return null;
 }
 
-// WebSocket connection for streaming
+// WebSocket connections - Map of session_id → WebSocket
+// Supports concurrent sessions (multiple streams at once)
+const wsConnections = new Map();
+
 function connectWebSocket(sessionId) {
-  if (wsConnection) {
-    wsConnection.close();
+  // Check if connection already exists for this session
+  if (wsConnections.has(sessionId)) {
+    const existing = wsConnections.get(sessionId);
+    if (existing.readyState === WebSocket.OPEN) {
+      return existing;
+    }
+    // Connection exists but not open - remove stale entry
+    wsConnections.delete(sessionId);
   }
 
-  currentSessionId = sessionId;
   const wsUrl = `${API_BASE.replace('https', 'wss')}/ws/chat/${sessionId}?token=${authToken}`;
-  wsConnection = new WebSocket(wsUrl);
+  const ws = new WebSocket(wsUrl);
 
-  wsConnection.onopen = () => {
+  ws.onopen = () => {
     logger.info(`WebSocket connected for session ${sessionId}`);
   };
 
-  wsConnection.onmessage = (event) => {
+  ws.onmessage = (event) => {
     const message = JSON.parse(event.data);
-    // Forward to renderer - SAME FORMAT as before!
-    handleServerMessage(message);
+    // Forward to renderer with session_id for routing
+    handleServerMessage(sessionId, message);
   };
 
-  wsConnection.onerror = (error) => {
-    logger.error('WebSocket error:', error);
-    mainWindow?.webContents.send('connection-error', { error: error.message });
+  ws.onerror = (error) => {
+    logger.error(`WebSocket error for session ${sessionId}:`, error);
+    mainWindow?.webContents.send('connection-error', {
+      session_id: sessionId,
+      error: error.message
+    });
   };
 
-  wsConnection.onclose = () => {
-    logger.info('WebSocket closed');
+  ws.onclose = () => {
+    logger.info(`WebSocket closed for session ${sessionId}`);
+    wsConnections.delete(sessionId);
   };
+
+  wsConnections.set(sessionId, ws);
+  return ws;
+}
+
+function disconnectWebSocket(sessionId) {
+  const ws = wsConnections.get(sessionId);
+  if (ws) {
+    ws.close();
+    wsConnections.delete(sessionId);
+  }
+}
+
+function disconnectAllWebSockets() {
+  for (const [sessionId, ws] of wsConnections) {
+    ws.close();
+  }
+  wsConnections.clear();
 }
 
 // Forward server messages to renderer (same format as Python used)
-function handleServerMessage(message) {
+// Includes session_id so renderer can route to correct session
+function handleServerMessage(sessionId, message) {
   switch (message.type) {
     case 'delta':
       mainWindow?.webContents.send('bot-message', {
         type: 'text_delta',
         content: message.content,
+        session_id: sessionId,
       });
       break;
 
@@ -250,6 +282,7 @@ function handleServerMessage(message) {
           name: message.name,
           arguments: message.arguments,
           call_id: message.id,
+          session_id: sessionId,
         });
       } else if (message.status === 'completed') {
         mainWindow?.webContents.send('bot-message', {
@@ -258,6 +291,7 @@ function handleServerMessage(message) {
           result: message.result,
           call_id: message.id,
           success: message.success,
+          session_id: sessionId,
         });
       }
       break;
@@ -266,6 +300,7 @@ function handleServerMessage(message) {
       mainWindow?.webContents.send('bot-message', {
         type: 'token_update',
         ...message,
+        session_id: sessionId,
       });
       break;
 
@@ -273,6 +308,7 @@ function handleServerMessage(message) {
       mainWindow?.webContents.send('bot-message', {
         type: 'end_turn',
         finish_reason: message.finish_reason,
+        session_id: sessionId,
       });
       break;
 
@@ -280,6 +316,7 @@ function handleServerMessage(message) {
       mainWindow?.webContents.send('bot-message', {
         type: 'error',
         message: message.message,
+        session_id: sessionId,
       });
       break;
 
@@ -407,15 +444,20 @@ ipcMain.handle('delete-file', async (_event, { dirPath, filename }) => {
 // MODIFY: Chat/session handlers to call API instead of Python
 // ============================================================
 
-// User input -> Send to WebSocket
+// User input -> Send to WebSocket (supports concurrent sessions)
 ipcMain.on('user-input', async (event, payload) => {
-  // OLD: sendToPython({ type: 'message', ...payload })
-  // NEW:
-  if (!wsConnection || wsConnection.readyState !== WebSocket.OPEN) {
-    await connectWebSocket(payload.session_id);
+  // Get or create WebSocket for this session
+  const ws = connectWebSocket(payload.session_id);
+
+  // Wait for connection if not yet open
+  if (ws.readyState !== WebSocket.OPEN) {
+    await new Promise((resolve, reject) => {
+      ws.addEventListener('open', resolve, { once: true });
+      ws.addEventListener('error', reject, { once: true });
+    });
   }
 
-  wsConnection.send(JSON.stringify({
+  ws.send(JSON.stringify({
     type: 'message',
     messages: payload.messages,
     model: payload.model,
@@ -423,27 +465,29 @@ ipcMain.on('user-input', async (event, payload) => {
   }));
 });
 
-// Session commands -> REST API
+// Session commands -> REST API (supports concurrent sessions)
 ipcMain.handle('session-command', async (event, { command, data }) => {
-  // OLD: sendToPython({ type: 'session_command', command, data })
-  // NEW:
   switch (command) {
     case 'create':
       const session = await apiRequest('/api/sessions', {
         method: 'POST',
         body: JSON.stringify(data || {}),
       });
-      await connectWebSocket(session.session_id);
+      // Connect WS for new session (doesn't close others)
+      connectWebSocket(session.session_id);
       return session;
 
     case 'list':
       return apiRequest('/api/sessions');
 
     case 'switch':
-      await connectWebSocket(data.session_id);
+      // Just connect if not already connected (doesn't close others)
+      connectWebSocket(data.session_id);
       return apiRequest(`/api/sessions/${data.session_id}`);
 
     case 'delete':
+      // Close WS for deleted session, then delete via API
+      disconnectWebSocket(data.session_id);
       return apiRequest(`/api/sessions/${data.session_id}`, {
         method: 'DELETE',
       });
@@ -497,10 +541,11 @@ ipcMain.handle('get-config', async () => {
   return apiRequest('/api/config');
 });
 
-// Interrupt streaming
-ipcMain.on('interrupt-stream', () => {
-  if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
-    wsConnection.send(JSON.stringify({ type: 'interrupt' }));
+// Interrupt streaming for a specific session
+ipcMain.on('interrupt-stream', (event, { session_id }) => {
+  const ws = wsConnections.get(session_id);
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'interrupt' }));
   }
 });
 ```
@@ -1672,30 +1717,95 @@ The key insight is that **tools don't know about S3**. They operate on local dir
 | s3fs/goofys mount | Zero tool changes | Slow (network I/O on every op), operational complexity, poor container support |
 | **Local cache + S3 sync** | Fast ops, clean separation | Small wrapper code needed |
 
-We use the **local cache approach**: download files at request start, tools work on temp directory, sync back on writes.
+We use the **local cache approach**: download files once per WebSocket connection, tools work on the local temp directory, and writes sync back to S3 immediately.
 
 #### How It Works
 
+Files are downloaded **once when the WebSocket connects**, not per message. This avoids redundant downloads during multi-message conversations while maintaining clean lifecycle management.
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      PER-REQUEST LIFECYCLE                      │
+│                   PER-CONNECTION LIFECYCLE                      │
 │                                                                 │
-│  1. WebSocket message received                                  │
+│  1. WebSocket connection established                            │
 │     └── Create SessionFileContext                               │
+│     └── Download session files from S3 → temp directory         │
+│         S3: users/{user_id}/sessions/{session_id}/sources/*     │
+│         └── /tmp/sessions/{session_id}/sources/*                │
 │                                                                 │
-│  2. Download session files from S3 → temp directory             │
-│     S3: users/{user_id}/sessions/{session_id}/sources/doc.pdf   │
-│     └── /tmp/sessions/{session_id}/sources/doc.pdf              │
+│  2. Message 1 received                                          │
+│     └── Run Agent with tools (files already local)              │
+│         • read_file("sources/doc.pdf")  → reads from temp       │
+│         • edit_file("output/result.md") → writes temp, syncs S3 │
 │                                                                 │
-│  3. Run Agent with tools                                        │
-│     • read_file("sources/doc.pdf")  → reads from temp dir       │
-│     • list_directory("sources/")    → lists temp dir            │
-│     • edit_file("output/result.md") → writes to temp, syncs S3  │
+│  3. Message 2 received                                          │
+│     └── Run Agent with tools (same local files, no re-download) │
 │                                                                 │
-│  4. Request completes                                           │
+│  4. ... Message N                                               │
+│                                                                 │
+│  5. WebSocket connection closes                                 │
 │     └── Clean up temp directory                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+**Why per-connection instead of per-message?**
+
+| Approach | 10 messages, 50MB files | Latency per message |
+|----------|-------------------------|---------------------|
+| Per-message download | 500MB transferred | High (S3 round-trip) |
+| **Per-connection** | 50MB transferred | Low (local disk) |
+
+#### Concurrent Sessions
+
+The application supports multiple concurrent streaming sessions. Each session has its own independent WebSocket connection and file context:
+
+```
+User with 3 concurrent sessions:
+
+Session A: WS-A → /tmp/session_A/{sources/,output/}  ← independent
+Session B: WS-B → /tmp/session_B/{sources/,output/}  ← independent
+Session C: WS-C → /tmp/session_C/{sources/,output/}  ← independent
+```
+
+**Key properties:**
+- Each session's files are isolated (different S3 paths, different temp dirs)
+- No shared state between sessions' file caches
+- Each WebSocket manages its own lifecycle independently
+- Closing one session doesn't affect others
+
+**Resource considerations:**
+- Disk usage scales with concurrent sessions: N sessions × avg file size
+- For desktop: typically acceptable (few concurrent sessions)
+- For cloud at scale: may need limits on concurrent sessions per user
+
+#### Idle Timeout
+
+WebSocket connections are closed after a configurable idle period (default: 10 minutes) to release resources:
+
+```python
+# Settings (src/core/constants.py)
+ws_idle_timeout: float = Field(
+    default=600.0,
+    description="Close WebSocket connections idle longer than this (seconds)",
+)
+```
+
+**How it works:**
+- `WebSocketManager` tracks last activity time per connection
+- Activity is updated on each message received (`touch()` method)
+- Background task periodically checks for and closes idle connections
+- When WS closes, the `SessionFileContext` cleanup happens automatically
+
+**When connections close:**
+
+| Event | Cleanup triggered? |
+|-------|-------------------|
+| Client disconnects | Yes |
+| Session deleted | Yes (client closes WS) |
+| Idle timeout | Yes (server closes WS) |
+| App shutdown | Yes (all connections) |
+
+This ensures file contexts don't leak even if clients misbehave.
 
 #### Implementation
 
@@ -1941,41 +2051,63 @@ def create_session_aware_tools(
 
 ### 7.4 Chat Service Integration
 
+The file context is created **once per WebSocket connection**, not per message. All messages within a connection share the same local file cache.
+
 ```python
-# src/api/services/chat_service.py (relevant section)
+# src/api/routes/chat.py
 
 from api.services.file_context import session_file_context
 from api.tools.wrappers import create_session_aware_tools
 
 
-async def process_chat_message(
+@router.websocket("/chat/{session_id}")
+async def websocket_chat(
+    websocket: WebSocket,
     session_id: str,
-    user: dict,
-    message: dict,
-    ws_manager: "WebSocketManager",
-    db: asyncpg.Pool,
-    file_service: "FileService",
-) -> None:
-    """Process chat message with session file context.
+    user: dict = Depends(get_current_user_ws),
+    file_service: FileService = Depends(get_file_service),
+):
+    """WebSocket endpoint for chat streaming.
 
-    Files are downloaded from S3 at start, tools operate locally,
-    outputs are synced back to S3.
+    File context lifecycle is tied to the WebSocket connection:
+    - Files downloaded once when connection opens
+    - All messages use the same local cache
+    - Cleanup happens when connection closes
     """
+    await websocket.accept()
 
-    # Create file context for this request
+    # Create file context ONCE for the entire connection
     async with session_file_context(session_id, user["id"], file_service) as file_ctx:
 
-        # Create tools with file context
-        # Tools see: sources/, output/ directories (same as before)
+        # Create tools with file context (reused across messages)
         tools = create_session_aware_tools(file_ctx)
-
-        # Create agent with tools (existing logic)
         agent = create_agent_with_tools(tools, session_id)
 
-        # Stream response (existing logic)
-        async for event in run_agent_stream(agent, message, session_id):
-            await ws_manager.broadcast_to_session(session_id, event)
+        try:
+            while True:
+                data = await websocket.receive_json()
+
+                if data["type"] == "message":
+                    # Process message - files already local, no re-download
+                    async for event in run_agent_stream(agent, data, session_id):
+                        await websocket.send_json(event)
+
+                elif data["type"] == "interrupt":
+                    await handle_interrupt(session_id)
+
+                elif data["type"] == "ping":
+                    await websocket.send_json({"type": "pong"})
+
+        except WebSocketDisconnect:
+            pass  # Connection closed, file_ctx cleanup happens automatically
 ```
+
+**Key difference from per-message approach:**
+- `session_file_context` wraps the entire `while True` loop
+- Files downloaded once at connection start
+- Multiple messages reuse the same local files
+- S3 writes still sync immediately (in tool wrappers)
+- Cleanup happens when WebSocket disconnects
 
 ### 7.5 System Prompt - UNCHANGED
 
@@ -2108,17 +2240,17 @@ volumes:
 │                      t3.xlarge (16GB RAM)                       │
 │                                                                 │
 │  ┌────────────────────────────────────────────────────────────┐ │
-│  │                       nginx                                 │ │
-│  │            (SSL termination, WebSocket proxy)               │ │
+│  │                       nginx                                │ │
+│  │            (SSL termination, WebSocket proxy)              │ │
 │  └─────────────────────────────┬──────────────────────────────┘ │
 │                                │                                │
 │  ┌─────────────────────────────▼──────────────────────────────┐ │
-│  │                    FastAPI (uvicorn x4)                     │ │
-│  │                                                             │ │
-│  │  • REST endpoints (/api/*)                                  │ │
-│  │  • WebSocket streaming (/ws/*)                              │ │
-│  │  • Agent/Runner (existing logic)                            │ │
-│  │  • MCP Servers (Sequential Thinking, Fetch)                 │ │
+│  │                    FastAPI (uvicorn x4)                    │ │
+│  │                                                            │ │
+│  │  • REST endpoints (/api/*)                                 │ │
+│  │  • WebSocket streaming (/ws/*)                             │ │
+│  │  • Agent/Runner (existing logic)                           │ │
+│  │  • MCP Servers (Sequential Thinking, Fetch)                │ │
 │  └─────────────────────────────┬──────────────────────────────┘ │
 │                                │                                │
 │  ┌────────────────┐  ┌─────────▼─────────┐                      │
