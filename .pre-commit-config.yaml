@@ -5,10 +5,10 @@
 repos:
   # Black - Python code formatter
   - repo: https://github.com/psf/black
-    rev: 23.12.1
+    rev: 25.1.0
     hooks:
       - id: black
-        args: ['--line-length=120']  # Match pyproject.toml setting
+        # Uses line-length from pyproject.toml automatically
         files: ^(src|tests)/.*\.py$
 
   # Ruff - Fast Python linter
