@@ -236,8 +236,8 @@ describe("ChatContainer", () => {
       chatContainer.setMessages([
         { role: "user", content: "hello" },
         { role: "assistant", content: "hi" },
-        { role: "tool_call", call_id: "123", status: "detected", arguments: "{a:1}" },
-        { role: "tool_call", call_id: "123", status: "completed", result: "ok", success: true },
+        { role: "tool_call", tool_call_id: "123", status: "detected", tool_arguments: "{a:1}" },
+        { role: "tool_call", tool_call_id: "123", status: "completed", tool_result: "ok", tool_success: true },
       ]);
 
       expect(createMessageElement).toHaveBeenCalledWith(containerElement, "hello", "user");
@@ -245,10 +245,10 @@ describe("ChatContainer", () => {
       expect(createCompletedToolCard).toHaveBeenCalledWith(
         expect.any(HTMLElement),
         expect.objectContaining({
-          call_id: "123",
-          arguments: "{a:1}",
-          result: "ok",
-          success: true,
+          tool_call_id: "123",
+          tool_arguments: "{a:1}",
+          tool_result: "ok",
+          tool_success: true,
           status: "completed",
         })
       );
