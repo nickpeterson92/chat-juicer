@@ -32,9 +32,13 @@ async def test_session_wrappers_inject_session_id(monkeypatch: pytest.MonkeyPatc
         return "listed"
 
     async def fake_read_file(
-        file_path: str, session_id: str | None = None, head: int | None = None, tail: int | None = None
+        file_path: str,
+        session_id: str | None = None,
+        head: int | None = None,
+        tail: int | None = None,
+        model: str | None = None,
     ) -> str:
-        calls["read_file"] = (file_path, session_id, head, tail)
+        calls["read_file"] = (file_path, session_id, head, tail, model)
         return "read"
 
     async def fake_search_files(
@@ -51,10 +55,8 @@ async def test_session_wrappers_inject_session_id(monkeypatch: pytest.MonkeyPatc
         calls["edit_file"] = (file_path, tuple(edits), session_id)
         return "edited"
 
-    async def fake_generate_document(
-        content: str, filename: str, create_backup: bool = False, session_id: str | None = None
-    ) -> str:
-        calls["generate_document"] = (content, filename, create_backup, session_id)
+    async def fake_generate_document(content: str, filename: str, session_id: str | None = None) -> str:
+        calls["generate_document"] = (content, filename, session_id)
         return "generated"
 
     async def fake_execute_python_code(code: str, session_id: str | None = None) -> str:
@@ -82,7 +84,7 @@ async def test_session_wrappers_inject_session_id(monkeypatch: pytest.MonkeyPatc
     assert calls["list_directory"] == ("docs", session_id, True)
 
     assert await tools[1]("notes.txt", head=5) == "read"
-    assert calls["read_file"] == ("notes.txt", session_id, 5, None)
+    assert calls["read_file"] == ("notes.txt", session_id, 5, None, None)  # model is None by default
 
     assert await tools[2]("*.md", base_path=".", recursive=False, max_results=10) == "searched"
     assert calls["search_files"] == ("*.md", ".", session_id, False, 10)
@@ -91,8 +93,8 @@ async def test_session_wrappers_inject_session_id(monkeypatch: pytest.MonkeyPatc
     assert await tools[3]("file.txt", edits=edits) == "edited"
     assert calls["edit_file"] == ("file.txt", tuple(edits), session_id)
 
-    assert await tools[4]("content", "out.md", create_backup=True) == "generated"
-    assert calls["generate_document"] == ("content", "out.md", True, session_id)
+    assert await tools[4]("content", "out.md") == "generated"
+    assert calls["generate_document"] == ("content", "out.md", session_id)
 
     assert await tools[5]("print('hello')") == "executed"
     assert calls["execute_python_code"] == ("print('hello')", session_id)

@@ -25,6 +25,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from core.constants import DATA_FILES_PATH
+
 logger = logging.getLogger(__name__)
 
 # ============================================
@@ -226,8 +228,14 @@ class SandboxPool:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, _ = await proc.communicate()
-        return stdout.decode().strip() == "true"
+
+        try:
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+            return stdout.decode().strip() == "true"
+        except asyncio.TimeoutError:
+            proc.kill()
+            logger.warning("Container inspect timed out, assuming dead")
+            return False
 
     async def _cleanup_stale_containers(self) -> None:
         """Kill any orphaned warm containers from previous runs."""
@@ -384,29 +392,32 @@ class SandboxPool:
             return await self._execute_cold(code, workspace_path, session_files_path)
 
         try:
-            # Copy workspace into container
-            await self._container_cp(
+            # Copy workspace into container (with timeout)
+            if not await self._container_cp(
                 f"{workspace_path}/.",
                 f"{self.warm_container_id}:/workspace/",
                 to_container=True,
-            )
+            ):
+                logger.warning("Failed to copy workspace to warm container, falling back to cold start")
+                return await self._execute_cold(code, workspace_path, session_files_path)
 
             # Copy session files (sources/output) for read access
             if session_files_path:
                 sources_path = session_files_path / "sources"
                 output_path = session_files_path / "output"
-                if sources_path.exists():
-                    await self._container_cp(
-                        f"{sources_path}/.",
-                        f"{self.warm_container_id}:/sources/",
-                        to_container=True,
-                    )
-                if output_path.exists():
-                    await self._container_cp(
-                        f"{output_path}/.",
-                        f"{self.warm_container_id}:/output/",
-                        to_container=True,
-                    )
+                # Non-critical: log warning but continue if copy fails
+                if sources_path.exists() and not await self._container_cp(
+                    f"{sources_path}/.",
+                    f"{self.warm_container_id}:/sources/",
+                    to_container=True,
+                ):
+                    logger.warning("Failed to copy sources to container")
+                if output_path.exists() and not await self._container_cp(
+                    f"{output_path}/.",
+                    f"{self.warm_container_id}:/output/",
+                    to_container=True,
+                ):
+                    logger.warning("Failed to copy output to container")
 
             # Execute script with timeout
             proc = await asyncio.create_subprocess_exec(
@@ -434,15 +445,27 @@ class SandboxPool:
                     exit_code=-1,
                 )
 
-            # Copy outputs back from container
-            await self._container_cp(
+            # Copy outputs back from container (with timeout)
+            if not await self._container_cp(
                 f"{self.warm_container_id}:/workspace/.",
                 f"{workspace_path}/",
                 to_container=False,
-            )
+            ):
+                logger.warning("Failed to copy workspace from container, files may be missing")
+
+            # Copy output directory back (code can write to /output/)
+            if session_files_path:
+                output_path = session_files_path / "output"
+                if output_path.exists() and not await self._container_cp(
+                    f"{self.warm_container_id}:/output/.",
+                    f"{output_path}/",
+                    to_container=False,
+                ):
+                    logger.warning("Failed to copy output from container")
 
             # Clean workspace in container for next execution (security)
-            await asyncio.create_subprocess_exec(
+            # Use timeout to prevent hanging
+            cleanup_proc = await asyncio.create_subprocess_exec(
                 self.runtime,
                 "exec",
                 self.warm_container_id,
@@ -452,6 +475,11 @@ class SandboxPool:
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )
+            try:
+                await asyncio.wait_for(cleanup_proc.wait(), timeout=10)
+            except asyncio.TimeoutError:
+                cleanup_proc.kill()
+                logger.warning("Workspace cleanup timed out")
 
             return ExecutionResult(
                 success=proc.returncode == 0,
@@ -503,14 +531,14 @@ class SandboxPool:
             f"{workspace_path}:/workspace:rw",  # Mount workspace
         ]
 
-        # Add session file mounts (read-only) if available
+        # Add session file mounts if available
         if session_files_path:
             sources_path = session_files_path / "sources"
             output_path = session_files_path / "output"
             if sources_path.exists():
-                cmd_args.extend(["-v", f"{sources_path}:/sources:ro"])
+                cmd_args.extend(["-v", f"{sources_path}:/sources:ro"])  # Read-only for uploads
             if output_path.exists():
-                cmd_args.extend(["-v", f"{output_path}:/output:ro"])
+                cmd_args.extend(["-v", f"{output_path}:/output:rw"])  # Read/write for outputs
 
         # Add working directory and command
         cmd_args.extend(
@@ -550,10 +578,20 @@ class SandboxPool:
             exit_code=proc.returncode or 0,
         )
 
-    async def _container_cp(self, src: str, dst: str, to_container: bool) -> None:
-        """Copy files to/from container."""
+    async def _container_cp(self, src: str, dst: str, to_container: bool, timeout: int = 30) -> bool:
+        """Copy files to/from container with timeout.
+
+        Args:
+            src: Source path
+            dst: Destination path
+            to_container: True if copying to container, False if from container
+            timeout: Timeout in seconds (default 30s)
+
+        Returns:
+            True if copy succeeded, False if failed or timed out
+        """
         if not self.runtime:
-            return
+            return False
 
         proc = await asyncio.create_subprocess_exec(
             self.runtime,
@@ -561,9 +599,20 @@ class SandboxPool:
             src,
             dst,
             stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
         )
-        await proc.wait()
+
+        try:
+            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            if proc.returncode != 0:
+                logger.warning(f"Container cp failed: {stderr.decode()}")
+                return False
+            return True
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            logger.error(f"Container cp timed out after {timeout}s: {src} -> {dst}")
+            return False
 
     def _collect_output_files(self, workspace_path: Path) -> list[dict[str, Any]]:
         """
@@ -682,7 +731,7 @@ async def execute_python_code(code: str, session_id: str) -> str:
     File Access:
     - /workspace: Read/write for code outputs (default working directory)
     - /sources: Read-only access to uploaded source files (session files)
-    - /output: Read-only access to previously generated output files
+    - /output: Read/write access to session output files (persistent)
 
     Limitations:
     - No internet access
@@ -696,12 +745,31 @@ async def execute_python_code(code: str, session_id: str) -> str:
     Returns:
         JSON string with execution results including stdout, files, and metadata
     """
+    # Pre-flight check: verify sandbox is available
+    ready, message = check_sandbox_ready()
+    if not ready:
+        logger.error(f"Sandbox not ready: {message}")
+        return json.dumps(
+            {
+                "success": False,
+                "error": message,
+                "stdout": "",
+                "stderr": "",
+                "exit_code": -1,
+                "files": [],
+                "output_dir": "",
+                "runtime": "",
+                "execution_time_ms": 0,
+            },
+            indent=2,
+        )
+
     # Create session-scoped workspace
-    workspace_base = (Path("data/files") / session_id / "output" / CODE_OUTPUT_SUBDIR).resolve()
+    workspace_base = (DATA_FILES_PATH / session_id / "output" / CODE_OUTPUT_SUBDIR).resolve()
     workspace_base.mkdir(parents=True, exist_ok=True)
 
     # Session files path (sources/ and output/ for read access)
-    session_files_path = (Path("data/files") / session_id).resolve()
+    session_files_path = (DATA_FILES_PATH / session_id).resolve()
 
     # Get sandbox pool and execute
     pool = get_sandbox_pool()

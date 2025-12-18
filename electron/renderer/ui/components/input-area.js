@@ -4,6 +4,7 @@
  */
 
 import { ComponentLifecycle } from "../../core/component-lifecycle.js";
+import { globalEventBus } from "../../core/event-bus.js";
 import { globalLifecycleManager } from "../../core/lifecycle-manager.js";
 import { showToast } from "../../utils/toast.js";
 import { ModelSelector } from "./model-selector.js";
@@ -287,18 +288,56 @@ export class InputArea {
     }
     this.summaryInFlightSessionId = sessionId;
 
+    // Generate unique call ID for this summarization
+    const callId = `summarize_${Date.now()}`;
+
     try {
       // Mark busy
       this.appState?.setState("python.status", "busy_summarizing");
 
+      // Emit function_detected to CREATE the card (like legacy backend did)
+      // NOTE: Don't wrap in { data: ... } - EventBus already wraps it
+      globalEventBus.emit("message:function_detected", {
+        session_id: sessionId,
+        tool_call_id: callId,
+        tool_name: "summarize_conversation",
+        tool_arguments: null, // No args display for summarize
+      });
+
       const result = await this.sessionService.summarizeSession(sessionId);
 
       if (!result?.success) {
+        // Emit function_completed with error
+        globalEventBus.emit("message:function_completed", {
+          session_id: sessionId,
+          tool_call_id: callId,
+          tool_name: "summarize_conversation",
+          tool_success: false,
+          tool_result: result?.error || "Summarization failed",
+        });
         throw new Error(result?.error || "Summarization failed");
       }
 
+      // Emit function_completed with success
+      globalEventBus.emit("message:function_completed", {
+        session_id: sessionId,
+        tool_call_id: callId,
+        tool_name: "summarize_conversation",
+        tool_success: true,
+        tool_result: result.message || "Session summarized successfully",
+      });
+
+      // Update token indicator with new count from backend
+      if (typeof result.new_token_count === "number") {
+        const currentUsage = this.appState?.getState("session.tokenUsage") || {};
+        this.appState?.setState("session.tokenUsage", {
+          ...currentUsage,
+          current: result.new_token_count,
+        });
+      }
+
       if (reason === "manual") {
-        showToast("Summarization requested", "info", 2000);
+        showToast("Session summarized", "success", 2000);
       }
     } catch (error) {
       console.error("[input] Summarize failed:", error);

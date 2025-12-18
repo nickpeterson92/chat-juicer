@@ -5,7 +5,9 @@ Tests client creation and configuration.
 
 from __future__ import annotations
 
-from unittest.mock import Mock, patch
+from unittest.mock import ANY, Mock, patch
+
+import httpx
 
 from utils.client_factory import (
     create_http_client,
@@ -26,19 +28,39 @@ class TestCreateHttpClient:
             result = create_http_client(enable_logging=True)
 
             assert result is mock_client
-            mock_create.assert_called_once_with(enabled=True)
+            # Verify called with enabled=True and a timeout object
+            mock_create.assert_called_once_with(enabled=True, timeout=ANY)
+            call_kwargs = mock_create.call_args[1]
+            assert isinstance(call_kwargs["timeout"], httpx.Timeout)
 
     def test_create_http_client_with_logging_disabled(self) -> None:
-        """Test creating HTTP client with logging disabled."""
+        """Test creating HTTP client with logging disabled returns plain client."""
         result = create_http_client(enable_logging=False)
 
-        assert result is None
+        assert isinstance(result, httpx.AsyncClient)
 
     def test_create_http_client_default(self) -> None:
         """Test creating HTTP client with default settings (no logging)."""
         result = create_http_client()
 
-        assert result is None
+        assert isinstance(result, httpx.AsyncClient)
+
+    def test_create_http_client_custom_read_timeout(self) -> None:
+        """Test creating HTTP client with custom read timeout."""
+        result = create_http_client(read_timeout=120.0)
+
+        assert isinstance(result, httpx.AsyncClient)
+        # The timeout should be set on the client
+        assert result.timeout.read == 120.0
+
+    def test_create_http_client_default_timeout_values(self) -> None:
+        """Test that default timeout values are applied."""
+        result = create_http_client()
+
+        assert result.timeout.connect == 30.0
+        assert result.timeout.read == 600.0  # 10 minutes for reasoning models
+        assert result.timeout.write == 30.0
+        assert result.timeout.pool == 30.0
 
 
 class TestCreateOpenAIClient:

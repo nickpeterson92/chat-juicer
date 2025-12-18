@@ -21,13 +21,15 @@ vi.mock("dompurify", () => ({
   },
 }));
 
-vi.mock("highlight.js", () => ({
-  default: {
-    getLanguage: vi.fn(() => true),
-    highlight: vi.fn((code, { language }) => ({
-      value: `<span data-lang="${language}">${code}</span>`,
-    })),
-  },
+const shikiHighlighterMock = {
+  codeToHtml: vi.fn(
+    (code, options) =>
+      `<pre class="shiki snazzy" style="background-color:#282a36"><code><span data-lang="${options.lang}">${code}</span></code></pre>`
+  ),
+};
+
+vi.mock("shiki", () => ({
+  createHighlighter: vi.fn(() => Promise.resolve(shikiHighlighterMock)),
 }));
 
 vi.mock("katex", () => ({
@@ -239,12 +241,7 @@ describe("markdown-renderer", () => {
     expect(mermaidInitializeMock.mock.calls.length).toBeGreaterThanOrEqual(initialCalls + 2);
   });
 
-  it("uses custom renderer for code blocks and falls back when language is unknown", async () => {
-    // Force highlight fallback
-    const hljs = (await import("highlight.js")).default;
-    hljs.getLanguage.mockReturnValueOnce(true).mockReturnValueOnce(false);
-    hljs.highlight.mockReturnValueOnce({ value: "highlighted" });
-
+  it("uses custom renderer for code blocks with Shiki highlighting", async () => {
     markedParseMock.mockImplementation((input) => {
       const match = input.match(/```(\w*)\n([\s\S]*?)```/);
       if (match && currentRenderer?.code) {
@@ -256,10 +253,13 @@ describe("markdown-renderer", () => {
     const { renderMarkdown } = await import("@utils/markdown-renderer.js");
 
     const highlighted = renderMarkdown("```js\nconst a = 1;\n```", false);
-    expect(highlighted).toContain("language-js");
+    expect(highlighted).toContain("shiki");
+    expect(highlighted).toContain("const a = 1;");
 
-    const fallback = renderMarkdown("```unknown\ncode\n```", false);
-    expect(fallback).toContain("hljs");
+    // Unknown languages still get syntax highlighting with Shiki
+    const unknown = renderMarkdown("```unknown\ncode\n```", false);
+    expect(unknown).toContain("shiki");
+    expect(unknown).toContain("code");
   });
 
   it("returns empty string when markdown is empty", async () => {

@@ -75,8 +75,7 @@ Example:
         # Generate document (auto-saved to output/)
         output = await generate_document(
             content="# My Document\n\nContent here",
-            filename="doc.md",
-            create_backup=True
+            filename="doc.md"
         )
 
 See Also:

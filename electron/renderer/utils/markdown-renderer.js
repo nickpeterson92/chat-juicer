@@ -4,15 +4,58 @@
  */
 
 import DOMPurify from "dompurify";
-import hljs from "highlight.js";
 import katex from "katex";
 // Import from npm packages (bundled by Vite)
 import { Marked, marked } from "marked";
 import markedFootnote from "marked-footnote";
 import mermaid from "mermaid";
+import { createHighlighter } from "shiki";
+import snazzyTheme from "../../../ui/shiki-snazzy.json";
 import { ComponentLifecycle } from "../core/component-lifecycle.js";
 import { globalLifecycleManager } from "../core/lifecycle-manager.js";
 import { getCSSVariable } from "./css-variables.js";
+
+// Shiki highlighter - initialized async, used sync once ready
+let shikiHighlighter = null;
+
+// Common languages to pre-load for best performance
+const SHIKI_LANGUAGES = [
+  "python",
+  "javascript",
+  "typescript",
+  "jsx",
+  "tsx",
+  "html",
+  "css",
+  "json",
+  "yaml",
+  "markdown",
+  "bash",
+  "shell",
+  "sql",
+  "rust",
+  "go",
+  "java",
+  "c",
+  "cpp",
+  "csharp",
+  "ruby",
+  "php",
+  "swift",
+];
+
+// Initialize Shiki with WASM engine (fast, CSP allows wasm-unsafe-eval)
+createHighlighter({
+  themes: [snazzyTheme],
+  langs: SHIKI_LANGUAGES,
+})
+  .then((highlighter) => {
+    shikiHighlighter = highlighter;
+    console.log("[Shiki] Syntax highlighter initialized");
+  })
+  .catch((err) => {
+    console.error("[Shiki] Failed to initialize:", err);
+  });
 
 // Markdown renderer component for lifecycle management
 const markdownRendererComponent = {};
@@ -407,7 +450,7 @@ function getMermaidObserver() {
 // Configure marked with custom renderer
 const renderer = new marked.Renderer();
 
-// Syntax highlighting for code blocks
+// Syntax highlighting for code blocks using Shiki
 renderer.code = (token) => {
   const code = token.text || "";
   const language = token.lang || "";
@@ -421,21 +464,38 @@ renderer.code = (token) => {
     return `<div class="mermaid-wrapper mermaid-loading" data-mermaid-id="${id}"><div class="mermaid-placeholder"><div class="mermaid-spinner"></div><span>Rendering diagram...</span></div></div>`;
   }
 
-  // Syntax highlighting for other languages
+  // Syntax highlighting using Shiki (if ready) or fallback to plain text
   let highlightedCode;
-  const _languageLabel = language || "text";
+  const lang = language || "text";
 
-  if (language && hljs.getLanguage(language)) {
+  if (shikiHighlighter) {
     try {
-      const highlighted = hljs.highlight(code, { language }).value;
-      highlightedCode = `<code class="hljs language-${language}">${highlighted}</code>`;
+      // Check if the language is loaded, otherwise use plaintext
+      const loadedLangs = shikiHighlighter.getLoadedLanguages();
+      const effectiveLang = loadedLangs.includes(lang) ? lang : "plaintext";
+
+      // Shiki returns full HTML with <pre><code>...</code></pre>
+      // We need to extract just the inner content for our wrapper
+      const html = shikiHighlighter.codeToHtml(code, {
+        lang: effectiveLang,
+        theme: "Snazzy",
+      });
+
+      // Shiki outputs: <pre class="shiki" style="..."><code>...</code></pre>
+      // We want just the inner code element content
+      const codeMatch = html.match(/<code[^>]*>([\s\S]*?)<\/code>/);
+      if (codeMatch) {
+        highlightedCode = `<code class="shiki language-${lang}">${codeMatch[1]}</code>`;
+      } else {
+        highlightedCode = `<code class="shiki language-${lang}">${escapeHtml(code)}</code>`;
+      }
     } catch (_err) {
       // Fall through to plain code on error
-      highlightedCode = `<code class="hljs">${escapeHtml(code)}</code>`;
+      highlightedCode = `<code class="shiki">${escapeHtml(code)}</code>`;
     }
   } else {
-    // Fallback to plain code
-    highlightedCode = `<code class="hljs">${escapeHtml(code)}</code>`;
+    // Shiki not ready yet - fallback to plain escaped code
+    highlightedCode = `<code class="shiki">${escapeHtml(code)}</code>`;
   }
 
   // Wrap in code-block-wrapper with overlaid copy button inside pre
@@ -1013,4 +1073,33 @@ export function initializeCodeCopyButtons(container) {
       }
     });
   });
+}
+
+/**
+ * Highlight code using Shiki (for use by other modules like function-card-ui)
+ * @param {string} code - Code to highlight
+ * @param {string} language - Language for syntax highlighting
+ * @returns {string} Highlighted HTML (inner content only, no wrapper tags)
+ */
+export function highlightCode(code, language = "plaintext") {
+  if (!shikiHighlighter) {
+    // Shiki not ready, return escaped plain text
+    return escapeHtml(code);
+  }
+
+  try {
+    const loadedLangs = shikiHighlighter.getLoadedLanguages();
+    const effectiveLang = loadedLangs.includes(language) ? language : "plaintext";
+
+    const html = shikiHighlighter.codeToHtml(code, {
+      lang: effectiveLang,
+      theme: "Snazzy",
+    });
+
+    // Extract just the inner content from <code>...</code>
+    const codeMatch = html.match(/<code[^>]*>([\s\S]*?)<\/code>/);
+    return codeMatch ? codeMatch[1] : escapeHtml(code);
+  } catch (_err) {
+    return escapeHtml(code);
+  }
 }

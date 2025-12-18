@@ -318,9 +318,9 @@ describe("Message Handlers V2 - Phase 3 State Management", () => {
     it("should use FunctionCallService when available", () => {
       setActiveSession();
       globalEventBus.emit("message:function_detected", {
-        call_id: "call-123",
-        name: "test_function",
-        arguments: { param: "value" },
+        tool_call_id: "call-123",
+        tool_name: "test_function",
+        tool_arguments: { param: "value" },
       });
 
       expect(services.functionCallService.createCall).toHaveBeenCalledWith("call-123", "test_function", {
@@ -331,8 +331,8 @@ describe("Message Handlers V2 - Phase 3 State Management", () => {
     it("should update function call status", () => {
       setActiveSession();
       globalEventBus.emit("message:function_executing", {
-        call_id: "call-123",
-        arguments: { param: "value" },
+        tool_call_id: "call-123",
+        tool_arguments: { param: "value" },
       });
 
       expect(services.functionCallService.updateCallStatus).toHaveBeenCalledWith("call-123", "streaming");
@@ -341,9 +341,9 @@ describe("Message Handlers V2 - Phase 3 State Management", () => {
     it("should handle function completion success", () => {
       setActiveSession();
       globalEventBus.emit("message:function_completed", {
-        call_id: "call-123",
-        success: true,
-        result: "Function completed successfully",
+        tool_call_id: "call-123",
+        tool_success: true,
+        tool_result: "Function completed successfully",
       });
 
       expect(services.functionCallService.setCallResult).toHaveBeenCalledWith(
@@ -355,8 +355,8 @@ describe("Message Handlers V2 - Phase 3 State Management", () => {
     it("should handle function completion error", () => {
       setActiveSession();
       globalEventBus.emit("message:function_completed", {
-        call_id: "call-123",
-        success: false,
+        tool_call_id: "call-123",
+        tool_success: false,
         error: "Function execution failed",
       });
 

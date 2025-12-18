@@ -8,10 +8,24 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from pydantic import Field, HttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# ============================================================================
+# Project Paths
+# ============================================================================
+
+#: Project root directory (parent of src/)
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+
+#: Data files directory for session workspaces
+DATA_FILES_PATH = PROJECT_ROOT / "data" / "files"
+
+#: Global templates directory
+TEMPLATES_PATH = PROJECT_ROOT / "templates"
 
 # ============================================================================
 # Model Configuration - Single Source of Truth
@@ -51,11 +65,20 @@ class ModelConfig:
 #: Models with is_ui_model=False are backend-only (for token limits, etc.)
 #: model_family groups secondary models into sub-dropdowns (e.g., "gpt-5", "gpt-4.1")
 MODEL_CONFIGS: tuple[ModelConfig, ...] = (
-    # GPT-5.1 series (latest) - Primary models shown at top level
-    ModelConfig("gpt-5.1", "GPT-5.1", "Latest reasoning model", 272000, True, True),
-    ModelConfig("gpt-5.1-codex-max", "GPT-5.1 Codex Max", "Maximum capability code generation", 272000, True, True),
+    # GPT-5.2/5.1 series (latest) - Primary models shown at top level
+    ModelConfig("gpt-5.2", "GPT-5.2", "Latest and most capable model", 272000, True, True),
+    ModelConfig("gpt-5.1", "GPT-5.1", "Advanced reasoning model", 272000, True, True),
     # GPT-5 series - Secondary models in "GPT-5 Models" sub-dropdown
     ModelConfig("gpt-5-pro", "GPT-5 Pro", "Most capable for complex tasks", 272000, True, False, is_ui_model=False),
+    ModelConfig(
+        "gpt-5.1-codex-max",
+        "GPT-5.1 Codex Max",
+        "Maximum capability code generation",
+        272000,
+        True,
+        False,
+        model_family="gpt-5.1",
+    ),
     ModelConfig("gpt-5", "GPT-5", "Deep reasoning for hard problems", 272000, True, False, model_family="gpt-5"),
     ModelConfig(
         "gpt-5-mini", "GPT-5 Mini", "Smart and fast for everyday use", 272000, True, False, model_family="gpt-5"
@@ -107,11 +130,6 @@ MAX_FILE_SIZE = 100 * 1024 * 1024
 #: Prevents resource exhaustion on large directory scans while providing
 #: enough results for typical search scenarios. Can be overridden per-call.
 DEFAULT_SEARCH_MAX_RESULTS = 100
-
-#: Maximum number of backup versions to keep for generated files.
-#: When create_backup=True in generate_document(), old versions are saved as
-#: .backup, .backup1, .backup2, etc. up to this limit.
-MAX_BACKUP_VERSIONS = 10
 
 # ============================================================================
 # Logging Configuration
@@ -423,7 +441,7 @@ SUMMARY_CALL_ID_PREFIX = "sum_"
 
 #: Trigger conversation summarization at this fraction of model's token limit.
 #: Example: 0.8 × GPT-5's 272k tokens = 217,600 token trigger point.
-#: When total_tokens exceeds this threshold, TokenAwareSQLiteSession automatically
+#: When total_tokens exceeds this threshold, PostgresTokenAwareSession automatically
 #: summarizes the conversation and resets the context.
 CONVERSATION_SUMMARIZATION_THRESHOLD = 0.8
 
@@ -431,16 +449,16 @@ CONVERSATION_SUMMARIZATION_THRESHOLD = 0.8
 #: Keeps the last N complete user-assistant exchanges unsummarized.
 #: Value of 2 = last 2 user messages + their assistant responses preserved.
 #: Tool calls between exchanges are included in the summary, not kept.
-#: Used as default parameter in TokenAwareSQLiteSession.summarize_with_agent()
+#: Used as default parameter in PostgresTokenAwareSession.summarize_with_agent()
 KEEP_LAST_N_MESSAGES = 2
 
 #: Token count threshold for document summarization during read_file().
 #: Documents exceeding this token count are automatically summarized to
 #: fit within context windows while preserving technical accuracy.
-#: Set to 7000 to allow ~3k tokens for summary + metadata.
+#: Set to 10000 to allow ~3k tokens for summary + metadata.
 #: Rationale: Based on typical document sizes and the need to preserve
-#: technical detail while keeping summaries under 3k tokens for efficiency.
-DOCUMENT_SUMMARIZATION_THRESHOLD = 7000
+#: technical detail while keeping room for multiple sources
+DOCUMENT_SUMMARIZATION_THRESHOLD = 10000
 
 #: Per-message token overhead for message structure (role, metadata, formatting).
 #: Added to each message token count during conversation token calculation.
@@ -469,7 +487,7 @@ SUMMARY_MAX_COMPLETION_TOKENS = 3000
 #: Default model name for fallback scenarios and initial agent setup.
 #: Used when agent model is not specified or during bootstrap.
 #: Sessions will override this with their own per-session model selection.
-DEFAULT_MODEL = "gpt-5.1"
+DEFAULT_MODEL = "gpt-5.2"
 
 #: Models that support reasoning_effort parameter (derived from MODEL_CONFIGS).
 #: Only these models can use the reasoning.effort configuration.
@@ -478,7 +496,7 @@ REASONING_MODELS: set[str] = {m.id for m in MODEL_CONFIGS if m.supports_reasonin
 
 #: Maximum number of conversation turns (user+assistant exchanges) per run.
 #: Prevents infinite loops and controls maximum conversation length per execution.
-MAX_CONVERSATION_TURNS = 50
+MAX_CONVERSATION_TURNS = 100
 
 # ============================================================================
 # Token Counting Configuration
@@ -491,29 +509,6 @@ MAX_CONVERSATION_TURNS = 50
 #: cache hit rate. Typical conversations reuse ~20-40 unique text chunks
 #: (messages, function args, results), so 128 provides 3-6x headroom.
 TOKEN_CACHE_SIZE = 128
-
-# ============================================================================
-# Storage Configuration
-# ============================================================================
-
-#: Default path for session metadata storage (sessions.json).
-#: Used by SessionManager to persist session information across app restarts.
-DEFAULT_SESSION_METADATA_PATH = "data/sessions.json"
-
-#: Database file path for session storage and full history.
-#: Both TokenAwareSQLiteSession (Layer 1) and FullHistoryStore (Layer 2)
-#: use this shared database with separate table structures.
-CHAT_HISTORY_DB_PATH = "data/chat_history.db"
-
-#: Shared table name for full conversation history storage (Layer 2).
-#: Used by FullHistoryStore to maintain complete user-visible history.
-#: All sessions share a single table with session_id column for filtering.
-FULL_HISTORY_TABLE_NAME = "full_history"
-
-#: Table prefix for LLM context storage (Layer 1).
-#: Used by TokenAwareSQLiteSession for token-optimized AI context.
-#: Table naming: {SESSION_TABLE_PREFIX}{session_id}
-SESSION_TABLE_PREFIX = "session_"
 
 # ============================================================================
 # Session Loading Pagination Configuration
@@ -580,7 +575,7 @@ MODELS_WITH_REASONING: list[str] = [m.id for m in MODEL_CONFIGS if m.supports_re
 
 #: Model-specific input token limits for conversation tracking (derived from MODEL_CONFIGS).
 #: These are INPUT limits (not output) since we track conversation context,
-#: not generation tokens. Used by TokenAwareSQLiteSession for auto-summarization.
+#: not generation tokens. Used by PostgresTokenAwareSession for auto-summarization.
 #:
 #: Notes:
 #: - Values are approximate and may change with model updates
@@ -620,6 +615,47 @@ class Settings(BaseSettings):
 
     # Tavily MCP server API key (optional - enables web search via Tavily)
     tavily_api_key: str | None = Field(default=None, description="Tavily API key for web search MCP server")
+
+    # Database (Phase 1: local PostgreSQL)
+    database_url: str = Field(
+        default="postgresql://chatjuicer:localdev@localhost:5433/chatjuicer",
+        description="PostgreSQL connection string",
+    )
+
+    # File storage
+    file_storage: str = Field(default="local", description="File storage backend: 'local' or 's3'")
+    file_storage_path: str = Field(default="data/files", description="Base path for local file storage")
+
+    # API server
+    api_port: int = Field(default=8000, description="FastAPI port")
+    api_host: str = Field(default="0.0.0.0", description="FastAPI host")
+
+    # Connection pool configuration
+    db_pool_min_size: int = Field(default=2, description="Minimum PostgreSQL connections")
+    db_pool_max_size: int = Field(default=10, description="Maximum PostgreSQL connections")
+    mcp_pool_size: int = Field(default=3, description="MCP server instances per server type")
+    mcp_acquire_timeout: float = Field(default=30.0, description="MCP server acquire timeout (seconds)")
+
+    # WebSocket connection management
+    ws_idle_timeout: float = Field(
+        default=600.0,
+        description="Close WebSocket connections idle longer than this (seconds, default 10 min)",
+    )
+
+    # HTTP client timeouts (for Azure OpenAI streaming)
+    # Reasoning models (GPT-5, O1, O3) can pause 30+ seconds while "thinking"
+    http_read_timeout: float = Field(default=600.0, description="HTTP read timeout for streaming (seconds)")
+
+    # Auth (Phase 1 convenience)
+    default_user_email: str = Field(default="local@chatjuicer.dev", description="Seeded default user email")
+    allow_localhost_noauth: bool = Field(
+        default=True,
+        description="Allow auth bypass on localhost during local development",
+    )
+    jwt_secret: str = Field(default="change-me-in-prod", description="JWT signing secret")
+    jwt_algorithm: str = Field(default="HS256", description="JWT signing algorithm")
+    access_token_expires_minutes: int = Field(default=15, description="Access token lifetime (minutes)")
+    refresh_token_expires_days: int = Field(default=7, description="Refresh token lifetime (days)")
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -661,6 +697,24 @@ class Settings(BaseSettings):
         """Basic validation of OpenAI API key format."""
         if v is not None and (not v or len(v) < 10):
             raise ValueError("Invalid OpenAI API key format")
+        return v
+
+    @field_validator("file_storage")
+    @classmethod
+    def validate_file_storage(cls, v: str) -> str:
+        """Validate file storage backend selection."""
+        allowed = {"local", "s3"}
+        value = v.lower()
+        if value not in allowed:
+            raise ValueError(f"file_storage must be one of {sorted(allowed)}")
+        return value
+
+    @field_validator("jwt_secret")
+    @classmethod
+    def validate_jwt_secret(cls, v: str) -> str:
+        """Validate JWT secret is provided."""
+        if not v or len(v) < 8:
+            raise ValueError("jwt_secret must be at least 8 characters")
         return v
 
     def model_post_init(self, __context: Any) -> None:

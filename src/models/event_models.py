@@ -30,19 +30,19 @@ class ToolCallNotification(BaseModel):
     """Tool call notification used in handle_tool_call()."""
 
     type: str = Field(default=MSG_TYPE_FUNCTION_DETECTED)
-    name: str
-    arguments: str | dict[str, Any]  # Can be JSON string or dict
-    call_id: str | None = None
+    tool_name: str
+    tool_arguments: str | dict[str, Any]  # Can be JSON string or dict
+    tool_call_id: str | None = None
 
 
 class ToolResultNotification(BaseModel):
     """Tool result notification used in handle_tool_output()."""
 
     type: str = Field(default=MSG_TYPE_FUNCTION_COMPLETED)
-    name: str
-    result: str | dict[str, Any]  # Tool response (JSON string or dict)
-    call_id: str | None = None
-    success: bool = True
+    tool_name: str
+    tool_result: str | dict[str, Any]  # Tool response (JSON string or dict)
+    tool_call_id: str | None = None
+    tool_success: bool = True
 
 
 class AssistantMessage(BaseModel):
@@ -87,8 +87,8 @@ class FunctionEventMessage(BaseModel):
     """Function execution event for frontend display."""
 
     type: Literal["function_started", "function_completed"]
-    call_id: str
-    success: bool = True
+    tool_call_id: str
+    tool_success: bool = True
     error: str | None = None
     output: str | None = None
 
@@ -166,7 +166,7 @@ class FunctionArgumentsDeltaMessage(BaseModel):
     """Function call arguments streaming - incremental JSON chunks."""
 
     type: Literal["function_call_arguments_delta"]
-    call_id: str
+    tool_call_id: str
     delta: str  # JSON chunk to append
     output_index: int | None = None
 
@@ -180,7 +180,7 @@ class FunctionArgumentsDoneMessage(BaseModel):
     """Function call arguments complete - signals finalization."""
 
     type: Literal["function_call_arguments_done"]
-    call_id: str
+    tool_call_id: str
     output_index: int | None = None
 
     def to_json(self) -> str:

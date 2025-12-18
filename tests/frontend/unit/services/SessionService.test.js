@@ -264,7 +264,8 @@ describe("SessionService", () => {
   describe("renameSession", () => {
     it("should rename session and update AppState", async () => {
       appState.setState("session.list", [{ session_id: "session-1", title: "Old Title" }]);
-      mockIPC.setResponse("session-command", { success: true });
+      // Backend returns SessionRecord directly (not wrapped in { success: true })
+      mockIPC.setResponse("session-command", { session_id: "session-1", title: "New Title" });
 
       const result = await sessionService.renameSession("session-1", "New Title");
 
@@ -275,7 +276,8 @@ describe("SessionService", () => {
 
     it("should trim title", async () => {
       appState.setState("session.list", [{ session_id: "session-1", title: "Old" }]);
-      mockIPC.setResponse("session-command", { success: true });
+      // Backend returns SessionRecord directly (not wrapped in { success: true })
+      mockIPC.setResponse("session-command", { session_id: "session-1", title: "New Title" });
 
       const result = await sessionService.renameSession("session-1", "  New Title  ");
 
@@ -301,6 +303,7 @@ describe("SessionService", () => {
 
   describe("summarizeSession", () => {
     it("should summarize current session", async () => {
+      appState.setState("session.current", "session-1");
       mockIPC.setResponse("session-command", {
         success: true,
         message: "Summarized successfully",
@@ -313,26 +316,15 @@ describe("SessionService", () => {
     });
 
     it("should handle summarization errors", async () => {
-      mockIPC.setResponse("session-command", { success: false, error: "No session" });
-
+      // No session.current set, so it returns early with error
       const result = await sessionService.summarizeSession();
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("No session");
+      expect(result.error).toBe("No session ID provided");
     });
   });
 
-  describe("clearCurrentSession", () => {
-    it("should clear current session in AppState", async () => {
-      appState.setState("session.current", "session-1");
-      mockIPC.setResponse("session-command", { success: true });
-
-      const result = await sessionService.clearCurrentSession();
-
-      expect(result.success).toBe(true);
-      expect(appState.getState("session.current")).toBeNull();
-    });
-  });
+  // clearCurrentSession method was removed - sessions are cleared via view transitions
 
   describe("loadMoreMessages", () => {
     it("should load more messages for session", async () => {

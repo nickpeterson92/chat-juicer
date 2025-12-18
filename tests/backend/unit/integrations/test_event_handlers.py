@@ -160,7 +160,7 @@ class TestHandleMessageOutput:
         mock_raw.content = [mock_content]
         mock_item.raw_item = mock_raw
 
-        result = handle_message_output(mock_item)
+        result = handle_message_output(mock_item, CallTracker())
 
         assert result is not None
         data = json.loads(result)
@@ -176,7 +176,7 @@ class TestHandleMessageOutput:
         mock_raw.content = [mock_content]
         mock_item.raw_item = mock_raw
 
-        result = handle_message_output(mock_item)
+        result = handle_message_output(mock_item, CallTracker())
 
         assert result is None
 
@@ -184,7 +184,7 @@ class TestHandleMessageOutput:
         """Test handling message output without raw_item attribute."""
         mock_item = Mock(spec=[])  # No attributes
 
-        result = handle_message_output(mock_item)
+        result = handle_message_output(mock_item, CallTracker())
 
         assert result is None
 
@@ -212,8 +212,8 @@ class TestHandleToolCall:
         assert result is not None
         data = json.loads(result)
         assert data["type"] == "function_executing"  # Changed from function_detected
-        assert data["name"] == "test_function"
-        assert data["call_id"] == "call_123"
+        assert data["tool_name"] == "test_function"
+        assert data["tool_call_id"] == "call_123"
         assert len(tracker.active_calls) == 1
 
     def test_handle_tool_call_fallback_to_id(self) -> None:
@@ -231,7 +231,7 @@ class TestHandleToolCall:
 
         assert result is not None
         data = json.loads(result)
-        assert data["name"] == "test_func"
+        assert data["tool_name"] == "test_func"
         # call_id from tracker should be fallback_id (pop by specific ID)
         call = tracker.pop_call_by_id("fallback_id")
         assert call is not None
@@ -250,7 +250,7 @@ class TestHandleReasoning:
         mock_raw.content = [mock_content]
         mock_item.raw_item = mock_raw
 
-        result = handle_reasoning(mock_item)
+        result = handle_reasoning(mock_item, CallTracker())
 
         assert result is not None
         data = json.loads(result)
@@ -267,7 +267,7 @@ class TestHandleReasoning:
         mock_raw.content = [mock_content]
         mock_item.raw_item = mock_raw
 
-        result = handle_reasoning(mock_item)
+        result = handle_reasoning(mock_item, CallTracker())
 
         assert result is None
 
@@ -281,6 +281,7 @@ class TestHandleToolOutput:
         tracker.add_call("call_123", "test_tool")
 
         mock_item = Mock()
+        mock_item.call_id = None  # Ensure fallback to raw_item
         mock_item.output = {"result": "success"}
         # raw_item must include call_id for parallel-safe matching
         mock_item.raw_item = {"call_id": "call_123"}
@@ -290,9 +291,9 @@ class TestHandleToolOutput:
         assert result is not None
         data = json.loads(result)
         assert data["type"] == "function_completed"
-        assert data["success"] is True
-        assert data["name"] == "test_tool"
-        assert data["call_id"] == "call_123"
+        assert data["tool_success"] is True
+        assert data["tool_name"] == "test_tool"
+        assert data["tool_call_id"] == "call_123"
 
     def test_handle_tool_output_with_error(self) -> None:
         """Test handling tool output with error."""
@@ -300,30 +301,32 @@ class TestHandleToolOutput:
         tracker.add_call("call_456", "failing_tool")
 
         mock_item = Mock()
+        mock_item.call_id = None  # Ensure fallback to raw_item
         mock_item.output = None
-        mock_item.raw_item = {"error": "Something went wrong"}
+        mock_item.raw_item = {"call_id": "call_456", "error": "Something went wrong"}
 
         result = handle_tool_output(mock_item, tracker)
 
         assert result is not None
         data = json.loads(result)
         assert data["type"] == "function_completed"
-        assert data["success"] is False
-        assert "Something went wrong" in data["result"]
+        assert data["tool_success"] is False
+        assert "Something went wrong" in data["tool_result"]
 
     def test_handle_tool_output_no_tracked_call(self) -> None:
         """Test handling tool output when no call is tracked."""
         tracker = CallTracker()
 
         mock_item = Mock()
+        mock_item.call_id = None  # Ensure fallback to raw_item
         mock_item.output = "result"
-        mock_item.raw_item = {}
+        mock_item.raw_item = {"call_id": "unknown_call"}
 
         result = handle_tool_output(mock_item, tracker)
 
         assert result is not None
         data = json.loads(result)
-        assert data["name"] == "unknown"
+        assert data["tool_name"] == "unknown"
 
 
 class TestHandleHandoffCall:
@@ -336,7 +339,7 @@ class TestHandleHandoffCall:
         mock_raw.target = "specialized_agent"
         mock_item.raw_item = mock_raw
 
-        result = handle_handoff_call(mock_item)
+        result = handle_handoff_call(mock_item, CallTracker())
 
         assert result is not None
         data = json.loads(result)
@@ -347,7 +350,7 @@ class TestHandleHandoffCall:
         """Test handling handoff call without raw_item."""
         mock_item = Mock(spec=[])  # No raw_item
 
-        result = handle_handoff_call(mock_item)
+        result = handle_handoff_call(mock_item, CallTracker())
 
         assert result is not None
         data = json.loads(result)
@@ -365,7 +368,7 @@ class TestHandleHandoffOutput:
         mock_item.raw_item = mock_raw
         mock_item.output = "Handoff result data"
 
-        result = handle_handoff_output(mock_item)
+        result = handle_handoff_output(mock_item, CallTracker())
 
         assert result is not None
         data = json.loads(result)
@@ -381,7 +384,7 @@ class TestHandleHandoffOutput:
         mock_item.raw_item = mock_raw
         mock_item.output = None
 
-        result = handle_handoff_output(mock_item)
+        result = handle_handoff_output(mock_item, CallTracker())
 
         assert result is not None
         data = json.loads(result)
@@ -532,9 +535,9 @@ class TestRawResponseEventHandling:
         assert result is not None
         payload = json.loads(result)
         assert payload["type"] == "function_detected"
-        assert payload["name"] == "generate_document"
-        assert payload["call_id"] == "call_abc123"
-        assert payload["arguments"] == "{}"  # Empty - args stream separately
+        assert payload["tool_name"] == "generate_document"
+        assert payload["tool_call_id"] == "call_abc123"
+        assert payload["tool_arguments"] == "{}"  # Empty - args stream separately
 
         # Verify call was added to tracker
         assert tracker.has_call("call_abc123") is True
@@ -581,7 +584,7 @@ class TestFunctionArgumentsEvents:
         assert result is not None
         payload = json.loads(result)
         assert payload["type"] == "function_call_arguments_delta"
-        assert payload["call_id"] == "call-1"
+        assert payload["tool_call_id"] == "call-1"
         assert payload["delta"] == '{"foo": "bar"}'
         assert payload["output_index"] == 2
 

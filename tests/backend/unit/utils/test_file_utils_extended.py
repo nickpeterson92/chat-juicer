@@ -24,39 +24,35 @@ from utils.file_utils import (
 class TestValidateFilePathMaxSize:
     """Tests for validate_file_path with max_size parameter."""
 
-    def test_file_within_size_limit(self, temp_file: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_file_within_size_limit(self, isolated_filesystem: Path) -> None:
         """Test file validation with size limit (within limit)."""
-        content = "x" * 100
-        temp_file.write_text(content)
-        monkeypatch.chdir(temp_file.parent)
+        test_file = isolated_filesystem / "test_file.txt"
+        test_file.write_text("x" * 100)
 
-        resolved, error = validate_file_path(temp_file.name, check_exists=True, max_size=1000)
+        resolved, error = validate_file_path("test_file.txt", check_exists=True, max_size=1000)
         assert error is None
         assert resolved.exists()
 
-    def test_file_exceeds_size_limit(self, temp_file: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_file_exceeds_size_limit(self, isolated_filesystem: Path) -> None:
         """Test file validation when file exceeds max_size."""
-        content = "x" * 1000
-        temp_file.write_text(content)
-        monkeypatch.chdir(temp_file.parent)
+        test_file = isolated_filesystem / "test_file.txt"
+        test_file.write_text("x" * 1000)
 
-        _resolved, error = validate_file_path(temp_file.name, check_exists=True, max_size=100)
+        _resolved, error = validate_file_path("test_file.txt", check_exists=True, max_size=100)
         assert error is not None
         assert "too large" in error.lower()
 
-    def test_file_exactly_at_size_limit(self, temp_file: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_file_exactly_at_size_limit(self, isolated_filesystem: Path) -> None:
         """Test file validation when file is exactly at max_size."""
-        content = "x" * 100
-        temp_file.write_text(content)
-        monkeypatch.chdir(temp_file.parent)
+        test_file = isolated_filesystem / "test_file.txt"
+        test_file.write_text("x" * 100)
 
-        file_size = temp_file.stat().st_size
-        _resolved, error = validate_file_path(temp_file.name, check_exists=True, max_size=file_size)
+        file_size = test_file.stat().st_size
+        _resolved, error = validate_file_path("test_file.txt", check_exists=True, max_size=file_size)
         assert error is None
 
-    def test_max_size_with_nonexistent_file(self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_max_size_with_nonexistent_file(self, isolated_filesystem: Path) -> None:
         """Test max_size parameter with non-existent file."""
-        monkeypatch.chdir(temp_dir)
         _resolved, error = validate_file_path("nonexistent.txt", check_exists=True, max_size=1000)
         # Should fail on existence check before size check
         assert error is not None
@@ -310,82 +306,97 @@ class TestFileOperation:
 class TestSaveUploadedFileExtended:
     """Extended tests for save_uploaded_file function."""
 
-    def test_save_file_with_backup_on_overwrite(self, temp_dir: Path) -> None:
+    def test_save_file_with_backup_on_overwrite(self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that existing file is backed up when overwritten."""
-        with patch("pathlib.Path.cwd", return_value=temp_dir):
-            session_id = "chat_test123"
-            session_workspace = temp_dir / "data" / "files" / session_id / "sources"
-            session_workspace.mkdir(parents=True, exist_ok=True)
+        import utils.file_utils
 
-            # Create existing file
-            existing_file = session_workspace / "test.txt"
-            existing_file.write_bytes(b"Original content")
+        # Patch PROJECT_ROOT and DATA_FILES_PATH
+        monkeypatch.setattr(utils.file_utils, "PROJECT_ROOT", temp_dir)
+        monkeypatch.setattr(utils.file_utils, "DATA_FILES_PATH", temp_dir / "data" / "files")
 
-            # Upload new version
-            result = save_uploaded_file(
-                filename="test.txt",
-                data=list(b"New content"),
-                session_id=session_id,
-            )
+        session_id = "chat_test123"
+        session_workspace = temp_dir / "data" / "files" / session_id / "sources"
+        session_workspace.mkdir(parents=True, exist_ok=True)
 
-            assert result["success"] is True
+        # Create existing file
+        existing_file = session_workspace / "test.txt"
+        existing_file.write_bytes(b"Original content")
 
-            # Check backup was created
-            backup_file = session_workspace / "test.txt.backup"
-            assert backup_file.exists()
-            assert backup_file.read_bytes() == b"Original content"
+        # Upload new version
+        result = save_uploaded_file(
+            filename="test.txt",
+            data=list(b"New content"),
+            session_id=session_id,
+        )
 
-            # Check new content
-            assert existing_file.read_bytes() == b"New content"
+        assert result["success"] is True
 
-    def test_save_file_with_windows_path_separator(self, temp_dir: Path) -> None:
+        # Check backup was created
+        backup_file = session_workspace / "test.txt.backup"
+        assert backup_file.exists()
+        assert backup_file.read_bytes() == b"Original content"
+
+        # Check new content
+        assert existing_file.read_bytes() == b"New content"
+
+    def test_save_file_with_windows_path_separator(self) -> None:
         """Test that Windows path separators are blocked."""
-        with patch("pathlib.Path.cwd", return_value=temp_dir):
-            result = save_uploaded_file(
-                filename="folder\\file.txt",  # Windows separator
-                data=list(b"Test"),
-                session_id="chat_test123",
-            )
+        result = save_uploaded_file(
+            filename="folder\\file.txt",  # Windows separator
+            data=list(b"Test"),
+            session_id="chat_test123",
+        )
 
-            assert result["success"] is False
-            assert "invalid" in result["error"].lower()
+        assert result["success"] is False
+        assert "invalid" in result["error"].lower()
 
-    def test_save_file_with_large_data(self, temp_dir: Path) -> None:
+    def test_save_file_with_large_data(self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test saving file with large data."""
-        with patch("pathlib.Path.cwd", return_value=temp_dir):
-            session_id = "chat_test123"
-            session_workspace = temp_dir / "data" / "files" / session_id / "sources"
-            session_workspace.mkdir(parents=True, exist_ok=True)
+        import utils.file_utils
 
-            # Create large data (1MB)
-            large_data = list(b"x" * (1024 * 1024))
+        # Patch PROJECT_ROOT and DATA_FILES_PATH
+        monkeypatch.setattr(utils.file_utils, "PROJECT_ROOT", temp_dir)
+        monkeypatch.setattr(utils.file_utils, "DATA_FILES_PATH", temp_dir / "data" / "files")
 
-            result = save_uploaded_file(
-                filename="large.bin",
-                data=large_data,
-                session_id=session_id,
-            )
+        session_id = "chat_test123"
+        session_workspace = temp_dir / "data" / "files" / session_id / "sources"
+        session_workspace.mkdir(parents=True, exist_ok=True)
 
-            assert result["success"] is True
-            assert result["size"] == 1024 * 1024
+        # Create large data (1MB)
+        large_data = list(b"x" * (1024 * 1024))
 
-    def test_save_file_returns_relative_path(self, temp_dir: Path) -> None:
+        result = save_uploaded_file(
+            filename="large.bin",
+            data=large_data,
+            session_id=session_id,
+        )
+
+        assert result["success"] is True
+        assert result["size"] == 1024 * 1024
+
+    def test_save_file_returns_relative_path(self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that save_uploaded_file returns relative path from cwd."""
-        with patch("pathlib.Path.cwd", return_value=temp_dir):
-            session_id = "chat_test123"
-            session_workspace = temp_dir / "data" / "files" / session_id / "sources"
-            session_workspace.mkdir(parents=True, exist_ok=True)
+        import utils.file_utils
 
-            result = save_uploaded_file(
-                filename="test.txt",
-                data=list(b"Test"),
-                session_id=session_id,
-            )
+        # Patch PROJECT_ROOT and DATA_FILES_PATH
+        monkeypatch.setattr(utils.file_utils, "PROJECT_ROOT", temp_dir)
+        monkeypatch.setattr(utils.file_utils, "DATA_FILES_PATH", temp_dir / "data" / "files")
 
-            assert result["success"] is True
-            # Path should be relative
-            assert not result["file_path"].startswith("/")
-            assert "data/files" in result["file_path"]
+        session_id = "chat_test123"
+        session_workspace = temp_dir / "data" / "files" / session_id / "sources"
+        session_workspace.mkdir(parents=True, exist_ok=True)
+
+        result = save_uploaded_file(
+            filename="test.txt",
+            data=list(b"Test"),
+            session_id=session_id,
+        )
+
+        assert result["success"] is True
+        # Path should be relative to jail root (data/files/{session_id}/)
+        # So result should be sources/test.txt, not absolute and not containing data/files
+        assert not result["file_path"].startswith("/")
+        assert result["file_path"] == "sources/test.txt"
 
     def test_save_file_with_special_characters_in_name(self, temp_dir: Path) -> None:
         """Test saving file with special characters in filename."""
