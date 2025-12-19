@@ -11,10 +11,13 @@ from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from api.dependencies import DATA_FILES_PATH
 from api.middleware.auth import get_current_user_from_token
+from api.middleware.request_context import create_websocket_context, get_request_id
 from api.services.chat_service import ChatService
 from api.services.file_service import LocalFileService
+from api.websocket.errors import WSCloseCode, send_ws_error
 from api.websocket.manager import WebSocketManager
 from core.constants import get_settings
+from models.error_models import ErrorCode
 from utils.logger import logger
 
 router = APIRouter()
@@ -42,10 +45,14 @@ async def chat_websocket(
     ws_manager: WebSocketManager = websocket.app.state.ws_manager
     mcp_pool = websocket.app.state.mcp_pool
 
+    # Initialize WebSocket request context for logging/tracking
+    client_ip = websocket.client.host if websocket.client else None
+    create_websocket_context(session_id=session_id, client_ip=client_ip)
+
     try:
         await _get_user_for_websocket(token, db)
     except WebSocketDisconnect:
-        await websocket.close(code=4401)
+        await websocket.close(code=WSCloseCode.AUTH_REQUIRED)
         return
 
     await ws_manager.connect(websocket, session_id)
@@ -85,7 +92,9 @@ async def chat_websocket(
                     chat_service.clear_interrupt(session_id)
 
                     # Run chat processing as background task so we can receive interrupts
-                    active_chat_task = asyncio.create_task(_handle_chat_message(data, session_id, chat_service))
+                    active_chat_task = asyncio.create_task(
+                        _handle_chat_message(data, session_id, chat_service, websocket)
+                    )
 
                 elif msg_type == "interrupt":
                     logger.info(f"Interrupt message received for session {session_id}")
@@ -121,18 +130,38 @@ async def _handle_chat_message(
     data: dict[str, Any],
     session_id: str,
     chat_service: ChatService,
+    websocket: WebSocket,
 ) -> None:
     """Handle chat message processing (runs as background task)."""
     messages = data.get("messages", [])
     model = data.get("model")
     reasoning_effort = data.get("reasoning_effort")
 
-    await chat_service.process_chat(
-        session_id=session_id,
-        messages=messages,
-        model=model,
-        reasoning_effort=reasoning_effort,
-    )
+    try:
+        await chat_service.process_chat(
+            session_id=session_id,
+            messages=messages,
+            model=model,
+            reasoning_effort=reasoning_effort,
+        )
+    except asyncio.CancelledError:
+        raise  # Let cancellation propagate
+    except Exception as e:
+        # Log error with request context
+        logger.error(
+            f"Chat processing error: {e}",
+            session_id=session_id,
+            request_id=get_request_id(),
+            exc_info=True,
+        )
+        # Send error to client via WebSocket
+        await send_ws_error(
+            websocket,
+            code=ErrorCode.INTERNAL_ERROR,
+            message=f"Chat processing failed: {type(e).__name__}",
+            session_id=session_id,
+            recoverable=True,
+        )
 
 
 async def _keepalive(websocket: WebSocket) -> None:

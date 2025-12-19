@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from api.dependencies import DB
 from api.middleware.auth import get_current_user
+from api.middleware.exception_handlers import AuthenticationError
 from api.services.auth_service import AuthService
 from models.api_models import TokenResponse, UserInfo
+from models.error_models import ErrorCode
 
 router = APIRouter()
 
@@ -33,7 +35,10 @@ async def login(body: LoginRequest, db: Annotated[DB, DB]) -> TokenResponse:
             refresh_token=result["refresh_token"],
         )
     except ValueError as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+        raise AuthenticationError(
+            message=str(exc),
+            code=ErrorCode.AUTH_INVALID_TOKEN,
+        ) from exc
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -44,7 +49,10 @@ async def refresh(body: RefreshRequest, db: Annotated[DB, DB]) -> TokenResponse:
         access = await auth.refresh(body.refresh_token)
         return TokenResponse(access_token=access, refresh_token=body.refresh_token)
     except ValueError as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+        raise AuthenticationError(
+            message=str(exc),
+            code=ErrorCode.AUTH_EXPIRED_TOKEN,
+        ) from exc
 
 
 @router.get("/me")

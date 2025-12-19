@@ -3,12 +3,15 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 from api.dependencies import DB, Files, Sessions
+from api.middleware.exception_handlers import SessionNotFoundError
+from api.middleware.request_context import update_request_context
 from core.constants import TEMPLATES_PATH, get_settings
 from models.api_models import SessionListResponse, SessionRecord, SessionWithHistoryResponse
+from models.error_models import ErrorCode
 
 router = APIRouter()
 
@@ -30,6 +33,8 @@ class UpdateSessionRequest(BaseModel):
 
 async def get_default_user_id(db: DB) -> UUID:
     """Get default user ID for Phase 1 (single user mode)."""
+    from api.middleware.exception_handlers import AppException
+
     settings = get_settings()
     async with db.acquire() as conn:
         user_id = await conn.fetchval(
@@ -37,7 +42,11 @@ async def get_default_user_id(db: DB) -> UUID:
             settings.default_user_email,
         )
     if not user_id:
-        raise HTTPException(status_code=500, detail="Default user not found")
+        raise AppException(
+            code=ErrorCode.AUTH_USER_NOT_FOUND,
+            message="Default user not found",
+            details={"email": settings.default_user_email},
+        )
     return UUID(str(user_id))
 
 
@@ -88,10 +97,13 @@ async def get_session(
     sessions: Sessions,
 ) -> SessionWithHistoryResponse:
     """Get session with history."""
+    # Update request context with session ID for logging
+    update_request_context(session_id=session_id)
+
     user_id = await get_default_user_id(db)
     result = await sessions.get_session_with_history(user_id, session_id)
     if not result:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise SessionNotFoundError(session_id)
     return SessionWithHistoryResponse(
         session=SessionRecord(**result["session"]),
         full_history=result["full_history"],
@@ -110,6 +122,8 @@ async def update_session(
     sessions: Sessions,
 ) -> SessionRecord:
     """Update session."""
+    update_request_context(session_id=session_id)
+
     user_id = await get_default_user_id(db)
     result = await sessions.update_session(
         user_id=user_id,
@@ -117,7 +131,7 @@ async def update_session(
         **request.model_dump(exclude_none=True),
     )
     if not result:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise SessionNotFoundError(session_id)
     return SessionRecord(**result)
 
 
@@ -128,10 +142,12 @@ async def delete_session(
     sessions: Sessions,
 ) -> dict[str, bool]:
     """Delete session."""
+    update_request_context(session_id=session_id)
+
     user_id = await get_default_user_id(db)
     success = await sessions.delete_session(user_id, session_id)
     if not success:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise SessionNotFoundError(session_id)
     return {"success": True}
 
 
@@ -153,6 +169,8 @@ async def summarize_session(
 
     from api.services.token_aware_session import PostgresTokenAwareSession
 
+    update_request_context(session_id=session_id)
+
     # Get session from database
     async with db.acquire() as conn:
         row = await conn.fetchrow(
@@ -161,7 +179,7 @@ async def summarize_session(
         )
 
     if not row:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise SessionNotFoundError(session_id)
 
     session_uuid = UUIDType(str(row["id"]))
     model = row["model"]

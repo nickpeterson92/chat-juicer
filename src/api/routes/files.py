@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, File as FastAPIFile, HTTPException, UploadFile
+from fastapi import APIRouter, File as FastAPIFile, UploadFile
 from fastapi.responses import Response
 
 from api.dependencies import Files
+from api.middleware.exception_handlers import FileNotFoundError as AppFileNotFoundError
+from api.middleware.request_context import update_request_context
 from models.api_models import FileInfo, FileListResponse, FilePathResponse
 
 router = APIRouter()
@@ -18,6 +20,7 @@ async def list_files(
     folder: str = "sources",
 ) -> FileListResponse:
     """List files in session folder."""
+    update_request_context(session_id=session_id)
     file_list = await files.list_files(session_id, folder)
     return FileListResponse(files=[FileInfo(**f) for f in file_list])
 
@@ -30,6 +33,8 @@ async def upload_file(
     folder: str = "sources",
 ) -> FileInfo:
     """Upload file directly (Phase 1 - local storage)."""
+    update_request_context(session_id=session_id)
+
     content = await file.read()
 
     result = await files.save_file(
@@ -53,10 +58,12 @@ async def download_file(
     """Get file content for download."""
     import mimetypes
 
+    update_request_context(session_id=session_id)
+
     try:
         content = await files.get_file_content(session_id, folder, filename)
     except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="File not found") from exc
+        raise AppFileNotFoundError(filename) from exc
 
     content_type, _ = mimetypes.guess_type(filename)
 
@@ -75,10 +82,12 @@ async def get_file_path(
     folder: str = "sources",
 ) -> FilePathResponse:
     """Get local file path (Phase 1 - for shell.openPath)."""
+    update_request_context(session_id=session_id)
+
     path = files.get_file_path(session_id, folder, filename)
 
     if not path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
+        raise AppFileNotFoundError(filename)
 
     return FilePathResponse(path=str(path.absolute()))
 
@@ -91,9 +100,11 @@ async def delete_file(
     folder: str = "sources",
 ) -> dict[str, bool]:
     """Delete file."""
+    update_request_context(session_id=session_id)
+
     success = await files.delete_file(session_id, folder, filename)
 
     if not success:
-        raise HTTPException(status_code=404, detail="File not found")
+        raise AppFileNotFoundError(filename)
 
     return {"success": True}

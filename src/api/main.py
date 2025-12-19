@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.middleware.exception_handlers import register_exception_handlers
+from api.middleware.request_context import RequestContextMiddleware
 from api.routes import auth, chat, config, files, health, messages, sessions
 from api.websocket.manager import WebSocketManager
 from core.constants import get_settings
@@ -108,6 +110,13 @@ app = FastAPI(
     version="1.0.0-local",
     lifespan=lifespan,
 )
+
+# Register global exception handlers for consistent error responses
+register_exception_handlers(app)
+
+# Request context middleware (adds request ID tracking)
+# Note: Middleware is executed in reverse order of registration
+app.add_middleware(RequestContextMiddleware)
 
 # CORS for Electron
 app.add_middleware(

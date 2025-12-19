@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from api.dependencies import DB
+from api.middleware.exception_handlers import SessionNotFoundError
+from api.middleware.request_context import update_request_context
 from api.services.message_utils import row_to_message
 
 router = APIRouter()
@@ -18,10 +20,12 @@ async def list_messages(
     offset: int = 0,
 ) -> dict[str, Any]:
     """List messages for a session (Layer 2 history)."""
+    update_request_context(session_id=session_id)
+
     async with db.acquire() as conn:
         session_uuid = await conn.fetchval("SELECT id FROM sessions WHERE session_id = $1", session_id)
         if not session_uuid:
-            raise HTTPException(status_code=404, detail="Session not found")
+            raise SessionNotFoundError(session_id)
 
         rows = await conn.fetch(
             """
