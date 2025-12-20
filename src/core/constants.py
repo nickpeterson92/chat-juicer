@@ -625,6 +625,7 @@ class Settings(BaseSettings):
     # File storage
     file_storage: str = Field(default="local", description="File storage backend: 'local' or 's3'")
     file_storage_path: str = Field(default="data/files", description="Base path for local file storage")
+    max_file_size: int = Field(default=10 * 1024 * 1024, description="Maximum upload file size in bytes (default 10MB)")
 
     # API server
     api_port: int = Field(default=8000, description="FastAPI port")

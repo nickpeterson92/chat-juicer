@@ -13,7 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.middleware.exception_handlers import register_exception_handlers
 from api.middleware.request_context import RequestContextMiddleware
-from api.routes import auth, chat, config, files, health, messages, sessions
+from api.routes import chat
+from api.routes.v1 import router as v1_router
 from api.websocket.manager import WebSocketManager
 from core.constants import get_settings
 from integrations.mcp_pool import initialize_mcp_pool
@@ -131,8 +132,62 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(
     title="Chat Juicer API",
-    version="1.0.0-local",
+    description="""
+## Chat Juicer API
+
+Production-grade chat interface for Azure OpenAI with Agent/Runner pattern
+and native MCP (Model Context Protocol) server support.
+
+### Features
+- **Session Management**: Create, update, and delete chat sessions
+- **Real-time Chat**: WebSocket streaming with tool execution
+- **File Management**: Upload and manage session files
+- **Token Tracking**: Automatic context management with summarization
+- **MCP Integration**: Sequential Thinking, Fetch, and optional Tavily
+
+### Authentication
+All endpoints except health checks require authentication via JWT Bearer token.
+Use `/api/v1/auth/login` to obtain tokens.
+
+### Versioning
+API uses URL path versioning: `/api/v1/...`
+Breaking changes will increment the version number.
+""",
+    version="1.0.0",
     lifespan=lifespan,
+    openapi_tags=[
+        {
+            "name": "Health",
+            "description": "Health check endpoints for monitoring and orchestration",
+        },
+        {
+            "name": "Authentication",
+            "description": "Login, token refresh, and user management",
+        },
+        {
+            "name": "Sessions",
+            "description": "Chat session CRUD operations",
+        },
+        {
+            "name": "Messages",
+            "description": "Message history and pagination",
+        },
+        {
+            "name": "Files",
+            "description": "File upload, download, and management",
+        },
+        {
+            "name": "Configuration",
+            "description": "Application configuration and metadata",
+        },
+        {
+            "name": "WebSocket",
+            "description": "Real-time chat streaming",
+        },
+    ],
+    openapi_url="/api/v1/openapi.json",
+    docs_url="/api/v1/docs",
+    redoc_url="/api/v1/redoc",
 )
 
 # Register global exception handlers for consistent error responses
@@ -151,14 +206,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routes
-app.include_router(health.router, prefix="/api", tags=["health"])
-app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
-app.include_router(messages.router, prefix="/api/sessions", tags=["messages"])
-app.include_router(files.router, prefix="/api/sessions", tags=["files"])
-app.include_router(config.router, prefix="/api", tags=["config"])
-app.include_router(chat.router, prefix="/ws", tags=["websocket"])
+# Routes - API v1
+app.include_router(v1_router, prefix="/api/v1")
+
+# WebSocket routes (not versioned - protocol-level)
+app.include_router(chat.router, prefix="/ws", tags=["WebSocket"])
 
 
 if __name__ == "__main__":
