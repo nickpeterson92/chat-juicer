@@ -225,7 +225,7 @@ export class SessionService {
         return {
           success: true,
           session: response.session,
-          fullHistory: response.full_history || [],
+          fullHistory: response.messages || response.full_history || [],
           hasMore: response.has_more || false,
           loadedCount: response.loaded_count || 0,
           messageCount: response.message_count || 0,

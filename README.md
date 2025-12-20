@@ -78,22 +78,22 @@ Chat Juicer uses a **three-tier architecture** with OpenAI's **Agent/Runner patt
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                     Electron Renderer Process                        │
-│                    (Component-based ES6 modules)                     │
+│                     Electron Renderer Process                       │
+│                    (Component-based ES6 modules)                    │
 └─────────────────────────────────────────────────────────────────────┘
                                     │
                                     │ IPC (context isolation)
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                     Electron Main Process                            │
-│                    (HTTP/WebSocket proxy)                            │
+│                     Electron Main Process                           │
+│                    (HTTP/WebSocket proxy)                           │
 └─────────────────────────────────────────────────────────────────────┘
                                     │
                                     │ HTTP REST / WebSocket
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                     FastAPI Backend (Python)                         │
-│              (PostgreSQL, Agent/Runner, MCP servers)                 │
+│                     FastAPI Backend (Python)                        │
+│              (PostgreSQL, Agent/Runner, MCP servers)                │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -360,9 +360,17 @@ chat-juicer/
 │   ├── logger.js     # Structured logging with IPC forwarding
 │   ├── config/
 │   │   └── main-constants.js
+│   ├── utils/        # Main process utilities
+│   │   ├── binary-message-parser.js  # Binary protocol message parsing
+│   │   └── ipc-v2-protocol.js        # IPC v2 protocol implementation
 │   └── renderer/     # Component-based renderer (ES modules)
 │       ├── index.js              # Entry point
 │       ├── bootstrap.js          # 7-phase bootstrap orchestrator
+│       ├── bootstrap/            # Bootstrap modules
+│       │   ├── phases/           # Individual bootstrap phases
+│       │   ├── error-recovery.js # Error recovery logic
+│       │   ├── types.js          # Type definitions
+│       │   └── validators.js     # Bootstrap validators
 │       ├── adapters/             # DOM, IPC, Storage adapters
 │       ├── config/               # constants, colors, model-metadata
 │       ├── core/                 # AppState + EventBus
@@ -381,24 +389,27 @@ chat-juicer/
 │   │   ├── main.py           # FastAPI app with lifespan, routes, CORS
 │   │   ├── dependencies.py   # Dependency injection (DB, services)
 │   │   ├── routes/           # API endpoints
-│   │   │   ├── auth.py       # Authentication routes
-│   │   │   ├── chat.py       # WebSocket chat endpoint
-│   │   │   ├── config.py     # Configuration endpoint
-│   │   │   ├── files.py      # File management routes
-│   │   │   ├── health.py     # Health check endpoint
-│   │   │   ├── messages.py   # Message pagination endpoint
-│   │   │   └── sessions.py   # Session CRUD routes
+│   │   │   ├── chat.py       # WebSocket chat endpoint (/ws/chat)
+│   │   │   └── v1/           # Versioned REST API routes
+│   │   │       ├── auth.py       # Authentication routes
+│   │   │       ├── config.py     # Configuration endpoint
+│   │   │       ├── files.py      # File management routes
+│   │   │       ├── health.py     # Health check endpoint
+│   │   │       ├── messages.py   # Message pagination endpoint
+│   │   │       └── sessions.py   # Session CRUD routes
 │   │   ├── services/         # Business logic
 │   │   │   ├── chat_service.py       # Chat streaming with Agent/Runner
 │   │   │   ├── session_service.py    # Session management
 │   │   │   ├── file_service.py       # File operations
-│   │   │   ├── auth_service.py       # Authentication
-│   │   │   ├── token_aware_session.py # Token-aware context
-│   │   │   └── postgres_session.py   # PostgreSQL session storage
+│   │   │   └── auth_service.py       # Authentication
 │   │   ├── middleware/       # FastAPI middleware
-│   │   │   └── auth.py       # Authentication middleware
+│   │   │   ├── auth.py               # Authentication middleware
+│   │   │   ├── exception_handlers.py # Global exception handlers
+│   │   │   └── request_context.py    # Request context middleware
 │   │   └── websocket/        # WebSocket management
-│   │       └── manager.py    # Connection tracking
+│   │       ├── manager.py        # WebSocket connection tracking
+│   │       ├── errors.py         # WebSocket error handling
+│   │       └── task_manager.py   # Async task/cancellation management
 │   ├── core/         # Core business logic
 │   │   ├── agent.py          # Agent/Runner with MCP support
 │   │   ├── prompts.py        # System instruction prompts
@@ -406,7 +417,17 @@ chat-juicer/
 │   ├── models/       # Pydantic data models
 │   │   ├── api_models.py     # API request/response models
 │   │   ├── event_models.py   # WebSocket event models
-│   │   └── session_models.py # Session metadata models
+│   │   ├── error_models.py   # Error response models
+│   │   ├── ipc_models.py     # IPC message models
+│   │   ├── sdk_models.py     # SDK integration models
+│   │   ├── session_models.py # Session metadata models
+│   │   └── schemas/          # Response schema models
+│   │       ├── auth.py       # Auth response schemas
+│   │       ├── base.py       # Base schema classes
+│   │       ├── config.py     # Config response schemas
+│   │       ├── files.py      # File response schemas
+│   │       ├── health.py     # Health response schemas
+│   │       └── sessions.py   # Session response schemas
 │   ├── tools/        # Function calling tools (async)
 │   │   ├── file_operations.py    # File reading, directory listing
 │   │   ├── document_generation.py # Document generation
@@ -418,14 +439,22 @@ chat-juicer/
 │   │   ├── mcp_servers.py       # MCP server setup
 │   │   ├── mcp_pool.py          # MCP server connection pool
 │   │   ├── mcp_registry.py      # MCP server registry
-│   │   ├── event_handlers.py    # Streaming event handlers
-│   │   └── sdk_token_tracker.py # Token tracking
+│   │   ├── sdk_token_tracker.py # Token tracking
+│   │   └── event_handlers/      # Streaming event handlers
+│   │       ├── agent_events.py      # Agent event handlers
+│   │       ├── base.py              # Base handler class
+│   │       ├── raw_events.py        # Raw event handlers
+│   │       ├── registry.py          # Handler registry
+│   │       └── run_item_events.py   # Run item event handlers
 │   └── utils/        # Utility modules
 │       ├── logger.py           # Enterprise JSON logging
 │       ├── token_utils.py      # Token counting with LRU cache
 │       ├── file_utils.py       # File system utilities
 │       ├── client_factory.py   # OpenAI client factory
-│       └── validation.py       # Input validation
+│       ├── db_utils.py         # Database utilities
+│       ├── document_processor.py # Document processing
+│       ├── http_logger.py      # HTTP request logging
+│       └── json_utils.py       # JSON utilities
 ├── data/             # Persistent data storage
 │   └── files/        # Session-scoped file storage
 ├── logs/             # Log files (gitignored)
@@ -452,20 +481,28 @@ chat-juicer/
 
 **API Routes** (`api/routes/`)
 - **chat.py**: WebSocket endpoint for real-time chat streaming (`/ws/chat/{session_id}`)
-- **sessions.py**: Session CRUD operations (create, list, get, update, delete, pin, rename)
-- **messages.py**: Message pagination and history retrieval
-- **files.py**: File upload and management
-- **config.py**: Model and configuration endpoint
-- **health.py**: Health check endpoint
-- **auth.py**: Authentication routes
+- **v1/sessions.py**: Session CRUD operations (create, list, get, update, delete, pin, rename)
+- **v1/messages.py**: Message pagination and history retrieval
+- **v1/files.py**: File upload and management
+- **v1/config.py**: Model and configuration endpoint
+- **v1/health.py**: Health check endpoint
+- **v1/auth.py**: Authentication routes
+
+**Middleware** (`api/middleware/`)
+- **auth.py**: Authentication middleware
+- **exception_handlers.py**: Global exception handlers
+- **request_context.py**: Request context middleware
+
+**WebSocket** (`api/websocket/`)
+- **manager.py**: WebSocket connection tracking
+- **errors.py**: WebSocket error handling
+- **task_manager.py**: Async task/cancellation management
 
 **Services** (`api/services/`)
 - **chat_service.py**: Chat streaming with Agent/Runner orchestration and interrupt handling
 - **session_service.py**: Session management with PostgreSQL persistence
 - **file_service.py**: File operations with session-scoped storage
 - **auth_service.py**: Authentication service
-- **token_aware_session.py**: Token-aware context management for summarization
-- **postgres_session.py**: PostgreSQL session storage adapter
 
 **Core Business Logic** (`core/`)
 - **agent.py**: Agent/Runner implementation with MCP server integration
@@ -475,7 +512,11 @@ chat-juicer/
 **Data Models** (`models/`)
 - **api_models.py**: Pydantic models for API requests/responses
 - **event_models.py**: WebSocket event models
+- **error_models.py**: Error response models
+- **ipc_models.py**: IPC message models
+- **sdk_models.py**: SDK integration models
 - **session_models.py**: Session metadata models
+- **schemas/**: Response schema models (auth, base, config, files, health, sessions)
 
 **Tools** (`tools/`)
 - **file_operations.py**: Directory listing and file reading with markitdown support
@@ -489,15 +530,23 @@ chat-juicer/
 - **mcp_servers.py**: MCP server setup (Sequential Thinking, Fetch, optional Tavily)
 - **mcp_pool.py**: MCP server connection pool for concurrent requests
 - **mcp_registry.py**: MCP server registry and discovery
-- **event_handlers.py**: Streaming event handlers for Agent/Runner pattern
 - **sdk_token_tracker.py**: Universal token tracking via SDK monkey-patching
+- **event_handlers/**: Streaming event handlers for Agent/Runner pattern
+  - **agent_events.py**: Agent event handlers
+  - **base.py**: Base handler class
+  - **raw_events.py**: Raw event handlers
+  - **registry.py**: Handler registry
+  - **run_item_events.py**: Run item event handlers
 
 **Utilities** (`utils/`)
 - **logger.py**: Enterprise JSON logging with rotation and session correlation
 - **token_utils.py**: Token counting with LRU caching
 - **file_utils.py**: File system utilities
 - **client_factory.py**: Azure OpenAI client factory
-- **validation.py**: Input validation and sanitization
+- **db_utils.py**: Database utilities
+- **document_processor.py**: Document processing utilities
+- **http_logger.py**: HTTP request logging
+- **json_utils.py**: JSON utilities
 
 ### Electron Frontend (`electron/`)
 
@@ -506,10 +555,18 @@ chat-juicer/
 - **api-client.js**: HTTP client for FastAPI backend communication
 - **preload.js**: Secure context-isolated bridge between main and renderer processes
 - **logger.js**: Centralized logging with IPC forwarding from renderer to main process
+- **utils/**: Main process utilities
+  - **binary-message-parser.js**: Binary protocol message parsing
+  - **ipc-v2-protocol.js**: IPC v2 protocol implementation
 
 **Renderer Process** (`electron/renderer/`) - Component-based ES6 architecture
 - **index.js**: Main entry point orchestrating all renderer modules
-- **bootstrap.js**: Renderer initialization and setup
+- **bootstrap.js**: 7-phase bootstrap orchestrator
+- **bootstrap/**: Bootstrap modules
+  - **phases/**: Individual bootstrap phases
+  - **error-recovery.js**: Error recovery logic
+  - **types.js**: Type definitions
+  - **validators.js**: Bootstrap validators
 - **adapters/**: Platform abstraction layer
   - **DOMAdapter.js**: DOM manipulation abstraction
   - **IPCAdapter.js**: IPC communication abstraction

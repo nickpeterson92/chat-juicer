@@ -9,7 +9,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from models.schemas.config import ReasoningLevelConfig
 
 from pydantic import Field, HttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -537,6 +540,23 @@ REASONING_EFFORT_OPTIONS: dict[str, str] = {
     "high": "High",
 }
 
+#: Default reasoning effort level for new sessions.
+DEFAULT_REASONING_EFFORT = "medium"
+
+
+#: Reasoning level configuration for frontend UI.
+#: Each entry contains value, label, and whether it's the default.
+#: Import ReasoningLevelConfig at runtime to avoid circular imports.
+def get_reasoning_levels() -> list[ReasoningLevelConfig]:
+    """Get reasoning levels as ReasoningLevelConfig instances."""
+    from models.schemas.config import ReasoningLevelConfig
+
+    return [
+        ReasoningLevelConfig(value=k, label=v, isDefault=k == DEFAULT_REASONING_EFFORT)
+        for k, v in REASONING_EFFORT_OPTIONS.items()
+    ]
+
+
 # Note: 'minimal' is also valid but deprecated in favor of 'none'
 # The backend maps between them based on model version
 
@@ -625,14 +645,22 @@ class Settings(BaseSettings):
     # File storage
     file_storage: str = Field(default="local", description="File storage backend: 'local' or 's3'")
     file_storage_path: str = Field(default="data/files", description="Base path for local file storage")
+    max_file_size: int = Field(default=10 * 1024 * 1024, description="Maximum upload file size in bytes (default 10MB)")
 
     # API server
     api_port: int = Field(default=8000, description="FastAPI port")
     api_host: str = Field(default="0.0.0.0", description="FastAPI host")
+    app_version: str = Field(default="1.0.0", description="Application version")
 
     # Connection pool configuration
     db_pool_min_size: int = Field(default=2, description="Minimum PostgreSQL connections")
     db_pool_max_size: int = Field(default=10, description="Maximum PostgreSQL connections")
+    db_command_timeout: float = Field(default=60.0, description="Default query timeout (seconds)")
+    db_connection_timeout: float = Field(default=10.0, description="Connection acquire timeout (seconds)")
+    db_statement_cache_size: int = Field(default=100, description="Prepared statement cache size per connection")
+    db_max_inactive_connection_lifetime: float = Field(
+        default=300.0, description="Close connections idle longer than this (seconds)"
+    )
     mcp_pool_size: int = Field(default=3, description="MCP server instances per server type")
     mcp_acquire_timeout: float = Field(default=30.0, description="MCP server acquire timeout (seconds)")
 
@@ -641,10 +669,32 @@ class Settings(BaseSettings):
         default=600.0,
         description="Close WebSocket connections idle longer than this (seconds, default 10 min)",
     )
+    ws_max_connections: int = Field(
+        default=100,
+        description="Maximum total WebSocket connections allowed",
+    )
+    ws_max_connections_per_session: int = Field(
+        default=3,
+        description="Maximum WebSocket connections per session (prevents resource exhaustion)",
+    )
+    ws_heartbeat_interval: float = Field(
+        default=30.0,
+        description="WebSocket heartbeat/ping interval (seconds)",
+    )
 
     # HTTP client timeouts (for Azure OpenAI streaming)
     # Reasoning models (GPT-5, O1, O3) can pause 30+ seconds while "thinking"
     http_read_timeout: float = Field(default=600.0, description="HTTP read timeout for streaming (seconds)")
+
+    # Graceful shutdown configuration
+    shutdown_timeout: float = Field(
+        default=30.0,
+        description="Maximum time to wait for graceful shutdown (seconds)",
+    )
+    shutdown_connection_drain_timeout: float = Field(
+        default=10.0,
+        description="Time to wait for WebSocket connections to drain during shutdown (seconds)",
+    )
 
     # Auth (Phase 1 convenience)
     default_user_email: str = Field(default="local@chatjuicer.dev", description="Seeded default user email")
