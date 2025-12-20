@@ -18,7 +18,8 @@ from api.services.token_aware_session import PostgresTokenAwareSession
 from api.websocket.manager import WebSocketManager
 
 if TYPE_CHECKING:
-    from api.websocket.task_manager import CancellationToken
+    pass
+from api.websocket.task_manager import CancellationToken
 from core.agent import create_agent
 from core.constants import (
     MAX_CONVERSATION_TURNS,
