@@ -269,4 +269,4 @@ async def graceful_pool_close(pool: asyncpg.Pool, timeout: float = 10.0) -> None
         await asyncio.sleep(0.1)
 
     await pool.close()
-    logger.info("Database pool closed")
+    # Database pool closed
