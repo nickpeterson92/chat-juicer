@@ -14,7 +14,23 @@ const MAX_CACHE_SIZE = 50;
  * @returns {any} Parsed JSON or defaultValue
  */
 export function safeParse(jsonStr, defaultValue = null) {
-  if (!jsonStr || typeof jsonStr !== "string") {
+  // Handle null/undefined
+  if (jsonStr === null || jsonStr === undefined) {
+    return defaultValue;
+  }
+
+  // If already an object (pre-parsed by backend), return as-is
+  if (typeof jsonStr === "object") {
+    return jsonStr;
+  }
+
+  // If not a string at this point, return default
+  if (typeof jsonStr !== "string") {
+    return defaultValue;
+  }
+
+  // Empty string
+  if (!jsonStr) {
     return defaultValue;
   }
 
