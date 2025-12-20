@@ -9,15 +9,15 @@ import asyncpg
 from jose import JWTError, jwt
 from passlib.hash import bcrypt
 
-from core.constants import get_settings
+from core.constants import Settings, get_settings
 
 
 class AuthService:
     """Authentication service for issuing and validating JWT tokens."""
 
-    def __init__(self, pool: asyncpg.Pool):
+    def __init__(self, pool: asyncpg.Pool, settings: Settings | None = None):
         self.pool = pool
-        self.settings = get_settings()
+        self.settings = settings or get_settings()
 
     async def login(self, email: str, password: str) -> dict[str, Any]:
         """Validate credentials and return access/refresh tokens."""
@@ -42,8 +42,7 @@ class AuthService:
 
     async def get_default_user(self) -> dict[str, Any] | None:
         """Retrieve the default seeded user for Phase 1."""
-        settings = get_settings()
-        return await self.get_user_by_email(settings.default_user_email)
+        return await self.get_user_by_email(self.settings.default_user_email)
 
     def decode_access_token(self, token: str) -> dict[str, Any]:
         """Decode and validate an access token."""

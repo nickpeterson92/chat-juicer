@@ -1,9 +1,15 @@
 # Dependencies
 node_modules/
 
-# Environment
+# Environment files (secrets)
 .env
+.env.local
+.env.production
 src/.env
+src/backend/.env
+src/backend/.env.local
+src/backend/.env.production
+# Note: .env.example, .env.development, .env.test, .env.production.example are tracked
 
 # Logs
 *.log
