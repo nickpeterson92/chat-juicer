@@ -74,7 +74,7 @@ async def login(body: LoginRequest, db: DB) -> TokenResponse:
     except ValueError as exc:
         raise AuthenticationError(
             message=str(exc),
-            code=ErrorCode.AUTH_INVALID_TOKEN,
+            code=ErrorCode.AUTH_INVALID_CREDENTIALS,
         ) from exc
 
 

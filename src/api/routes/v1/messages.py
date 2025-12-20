@@ -180,7 +180,15 @@ async def list_messages(
                 tool_arguments=args,
                 tool_result=row["tool_result"],
                 tool_success=row["tool_success"],
-                status="completed" if row["tool_call_id"] else None,
+                status=(
+                    None
+                    if not row["tool_call_id"]
+                    else (
+                        "completed"
+                        if row["tool_success"] is True
+                        else "failed" if row["tool_success"] is False else "pending"
+                    )
+                ),
             )
         )
 

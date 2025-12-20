@@ -96,7 +96,7 @@ class SessionNotFoundError(ResourceNotFoundError):
         super().__init__(resource="Session", resource_id=session_id, code=ErrorCode.SESSION_NOT_FOUND)
 
 
-class FileNotFoundError(ResourceNotFoundError):
+class ApiFileNotFoundError(ResourceNotFoundError):
     """File not found error."""
 
     def __init__(self, filename: str):
@@ -348,7 +348,7 @@ async def openai_exception_handler(request: Request, exc: OpenAIAPIError) -> JSO
     else:
         code = ErrorCode.OPENAI_ERROR
         status_code = 502
-        message = f"OpenAI API error: {str(exc)}"
+        message = f"OpenAI API error: {exc!s}"
 
     settings = get_settings()
     debug_info = None

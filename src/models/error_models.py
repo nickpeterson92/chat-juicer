@@ -23,6 +23,7 @@ class ErrorCode(str, Enum):
     AUTH_EXPIRED_TOKEN = "AUTH_1003"
     AUTH_INSUFFICIENT_PERMISSIONS = "AUTH_1004"
     AUTH_USER_NOT_FOUND = "AUTH_1005"
+    AUTH_INVALID_CREDENTIALS = "AUTH_1006"
 
     # Validation errors (2xxx)
     VALIDATION_ERROR = "VAL_2001"
@@ -165,6 +166,7 @@ ERROR_CODE_TO_STATUS: dict[ErrorCode, int] = {
     ErrorCode.AUTH_INVALID_TOKEN: 401,
     ErrorCode.AUTH_EXPIRED_TOKEN: 401,
     ErrorCode.AUTH_USER_NOT_FOUND: 401,
+    ErrorCode.AUTH_INVALID_CREDENTIALS: 401,
     # 403 Forbidden
     ErrorCode.AUTH_INSUFFICIENT_PERMISSIONS: 403,
     # 404 Not Found

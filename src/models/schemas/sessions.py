@@ -7,10 +7,12 @@ with comprehensive OpenAPI documentation.
 
 from __future__ import annotations
 
+import json
+
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from models.schemas.base import PaginationMeta
 
@@ -253,10 +255,26 @@ class MessageResponse(BaseModel):
         default=None,
         description="Name of the tool called",
     )
-    tool_arguments: dict[str, Any] | str | None = Field(
+    tool_arguments: dict[str, Any] | None = Field(
         default=None,
         description="Tool call arguments",
     )
+
+    @field_validator("tool_arguments", mode="before")
+    @classmethod
+    def parse_tool_arguments(cls, v: Any) -> dict[str, Any] | None:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            try:
+                parsed: dict[str, Any] = json.loads(v)
+                return parsed
+            except json.JSONDecodeError:
+                return {"raw": v}
+        if isinstance(v, dict):
+            return v
+        return {"raw": str(v)}
+
     tool_result: str | None = Field(
         default=None,
         description="Tool execution result",

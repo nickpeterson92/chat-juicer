@@ -78,7 +78,7 @@ class ConfigResponse(BaseModel):
                         "supports_reasoning": True,
                     }
                 ],
-                "reasoning_levels": [
+                "reasoning_efforts": ["none", "low", "medium", "high"],
                 "mcp_servers": [
                     {
                         "id": "sequential-thinking",
@@ -105,8 +105,8 @@ class ConfigResponse(BaseModel):
         ],
         description="Available reasoning effort levels",
     )
-    mcp_servers: list[MCPServerConfig] | list[str] = Field(
-        ...,
+    mcp_servers: list[MCPServerConfig] = Field(
+        default_factory=list,
         description="Available MCP servers",
     )
     max_file_size: int = Field(

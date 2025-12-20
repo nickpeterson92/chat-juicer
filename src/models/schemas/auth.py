@@ -7,6 +7,8 @@ with comprehensive OpenAPI documentation.
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -67,7 +69,7 @@ class UserInfo(BaseModel):
         }
     )
 
-    id: str = Field(
+    id: UUID = Field(
         ...,
         description="User UUID",
         json_schema_extra={"example": "550e8400-e29b-41d4-a716-446655440000"},

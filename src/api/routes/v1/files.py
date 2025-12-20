@@ -7,13 +7,15 @@ response patterns and comprehensive OpenAPI documentation.
 
 from __future__ import annotations
 
+import mimetypes
+
 from typing import Annotated
 
 from fastapi import APIRouter, File as FastAPIFile, Path, Query, UploadFile
 from fastapi.responses import Response
 
 from api.dependencies import Files
-from api.middleware.exception_handlers import FileNotFoundError as AppFileNotFoundError
+from api.middleware.exception_handlers import ApiFileNotFoundError
 from api.middleware.request_context import update_request_context
 from models.schemas.files import (
     DeleteFileResponse,
@@ -178,14 +180,12 @@ async def download_file(
     folder: FolderQuery = "sources",
 ) -> Response:
     """Download file content."""
-    import mimetypes
-
     update_request_context(session_id=session_id)
 
     try:
         content = await files.get_file_content(session_id, folder, filename)
     except FileNotFoundError as exc:
-        raise AppFileNotFoundError(filename) from exc
+        raise ApiFileNotFoundError(filename) from exc
 
     content_type, _ = mimetypes.guess_type(filename)
 
@@ -228,7 +228,7 @@ async def get_file_path(
     path = files.get_file_path(session_id, folder, filename)
 
     if not path.exists():
-        raise AppFileNotFoundError(filename)
+        raise ApiFileNotFoundError(filename)
 
     return FilePathResponse(
         path=str(path.absolute()),
@@ -269,7 +269,7 @@ async def delete_file(
     success = await files.delete_file(session_id, folder, filename)
 
     if not success:
-        raise AppFileNotFoundError(filename)
+        raise ApiFileNotFoundError(filename)
 
     return DeleteFileResponse(
         success=True,

@@ -78,15 +78,17 @@ async def health_check(db: DB, request: Request) -> HealthResponse:
 
     # MCP pool statistics
     mcp_pool = request.app.state.mcp_pool
-    mcp_health = MCPHealth(
-        initialized=mcp_pool is not None,
-        pool_size=3 if mcp_pool else 0,
-        available=3 if mcp_pool else 0,
-    )
+    if mcp_pool:
+        stats = mcp_pool.get_stats()
+        total = sum(s["total"] for s in stats.values())
+        available = sum(s["available"] for s in stats.values())
+        mcp_health = MCPHealth(initialized=True, pool_size=total, available=available)
+    else:
+        mcp_health = MCPHealth(initialized=False, pool_size=0, available=0)
 
     # Determine overall status
     db_healthy = db_health_data.get("healthy", False)
-    ws_healthy = not ws_health.shutting_down
+    ws_healthy = not ws_health.shutting_down and ws_health.error is None
 
     if db_healthy and ws_healthy:
         status = "healthy"

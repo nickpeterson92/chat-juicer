@@ -29,10 +29,9 @@ router = APIRouter()
                         "models": [
                             {
                                 "value": "gpt-4o",
-                                "isDefault": false,
-                                "supportsReasoning": true,
+                                "isDefault": False,
+                                "supportsReasoning": True,
                             }
-                        ],
                         ],
                         "reasoning_efforts": ["none", "low", "medium", "high"],
                         "mcp_servers": [

@@ -49,7 +49,8 @@ class WebSocketManager:
                 return False
 
             # Check total connection limit
-            if self.connection_count >= self.max_connections:
+            current_count = self.connection_count
+            if current_count >= self.max_connections:
                 logger.warning(f"Rejecting connection: max connections ({self.max_connections}) reached")
                 return False
 

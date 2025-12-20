@@ -14,7 +14,7 @@ This pattern enables:
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -126,13 +126,13 @@ class PaginatedResponse(BaseModel, Generic[T]):
         "data": [...],
         "meta": {
             "request_id": "req_abc123",
-            "timestamp": "2025-01-15T10:30:00Z",
-            "pagination": {
-                "total_count": 42,
-                "offset": 0,
-                "limit": 50,
-                "has_more": false
-            }
+            "timestamp": "2025-01-15T10:30:00Z"
+        },
+        "pagination": {
+            "total_count": 42,
+            "offset": 0,
+            "limit": 50,
+            "has_more": false
         }
     }
     ```

@@ -84,15 +84,6 @@ class CancellationToken:
         except Exception as e:
             logger.warning(f"Cancellation callback error: {e}")
 
-    def cancel_sync(self, reason: str | None = None) -> None:
-        """Synchronous cancellation (for use in sync contexts).
-
-        Note: Callbacks won't be called from this method to avoid
-        blocking. Use async cancel() when possible.
-        """
-        self._cancel_reason = reason
-        self._cancelled.set()
-
     async def wait_for_cancellation(self, timeout: float | None = None) -> bool:
         """Wait for cancellation to be requested.
 
@@ -116,20 +107,33 @@ class CancellationToken:
 
         Returns:
             The callback (for use as decorator)
+
+        Note:
+            Callbacks should be idempotent as they may be called twice
+            in rare race conditions.
         """
-        self._callbacks.append(callback)
         # If already cancelled, call immediately
         if self._cancelled.is_set():
-            try:
-                callback()
-            except Exception as e:
-                logger.warning(f"Cancellation callback error: {e}")
+            self._invoke_callback(callback)
+            return callback
+
+        self._callbacks.append(callback)
+
+        # Double-check: if cancelled between check and append, ensure callback runs
+        if self._cancelled.is_set():
+            self._invoke_callback(callback)
+
         return callback
 
     def remove_callback(self, callback: Callable[[], None]) -> None:
         """Remove a previously registered callback."""
         with contextlib.suppress(ValueError):
             self._callbacks.remove(callback)
+
+    async def _wait_and_cancel(self, callback: Callable[[], None]) -> None:
+        """Wait for cancellation event and invoke callback."""
+        await self._cancelled.wait()
+        callback()
 
     @contextlib.asynccontextmanager
     async def cancellation_scope(self) -> AsyncIterator[None]:
@@ -145,8 +149,14 @@ class CancellationToken:
         if self.is_cancelled:
             raise asyncio.CancelledError(self._cancel_reason or "Cancelled before scope entry")
 
-        # Create a task that waits for cancellation
-        cancel_waiter = asyncio.create_task(self._cancelled.wait())
+        current_task = asyncio.current_task()
+
+        def on_cancel() -> None:
+            if current_task and not current_task.done():
+                current_task.cancel()
+
+        # Create a task that cancels current task when event fires
+        cancel_waiter = asyncio.create_task(self._wait_and_cancel(on_cancel))
 
         try:
             yield

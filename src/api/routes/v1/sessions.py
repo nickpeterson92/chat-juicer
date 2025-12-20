@@ -358,10 +358,6 @@ async def summarize_session(
             success=False,
             message="Summarization skipped - not enough content or already summarized",
         )
-
-    # Persist updated token count
-    await session.update_db_token_count()
-
     # Generate call_id for the tool card
     call_id = f"sum_{secrets.token_hex(4)}"
 
@@ -373,15 +369,26 @@ async def summarize_session(
         }
     )
 
-    async with db.acquire() as conn:
+    # Persist token count and message atomically
+    async with db.acquire() as conn, conn.transaction():
         await conn.execute(
             """
-            INSERT INTO messages (
-                session_id, role, content, tool_call_id, tool_name,
-                tool_arguments, tool_result, tool_success
-            )
-            VALUES ($1, 'tool_call', $2, $3, $4, $5, $6, $7)
-            """,
+                UPDATE sessions
+                SET total_tokens = $1, accumulated_tool_tokens = $2
+                WHERE id = $3
+                """,
+            session.total_tokens,
+            session.accumulated_tool_tokens,
+            session_uuid,
+        )
+        await conn.execute(
+            """
+                INSERT INTO messages (
+                    session_id, role, content, tool_call_id, tool_name,
+                    tool_arguments, tool_result, tool_success
+                )
+                VALUES ($1, 'tool_call', $2, $3, $4, $5, $6, $7)
+                """,
             session_uuid,
             "Summarized conversation",
             call_id,
