@@ -71,7 +71,7 @@ class WebSocketManager:
 
             logger.info(
                 f"WebSocket connected for session {session_id} "
-                f"(total: {self.connection_count}, session: {session_connections + 1})"
+                f"(total: {current_count + 1}, session: {session_connections + 1})"
             )
             return True
 
