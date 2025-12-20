@@ -25,12 +25,12 @@ jobs:
       - name: Install dependencies
         run: |
           .juicer/bin/pip install --upgrade pip
-          .juicer/bin/pip install -r src/requirements.txt
+          .juicer/bin/pip install -r src/backend/requirements.txt
           .juicer/bin/pip install -r requirements-dev.txt
 
       - name: Run backend tests with coverage
         run: |
-          .juicer/bin/pytest tests/backend/ --cov=src --cov-report=xml --cov-report=term
+          .juicer/bin/pytest tests/backend/ --cov=src/backend --cov-report=xml --cov-report=term
 
       - name: Upload backend coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -92,7 +92,7 @@ jobs:
         run: |
           python -m venv .juicer
           .juicer/bin/pip install --upgrade pip
-          .juicer/bin/pip install -r src/requirements.txt
+          .juicer/bin/pip install -r src/backend/requirements.txt
           .juicer/bin/pip install -r requirements-dev.txt
 
       - name: Install Node dependencies
@@ -101,18 +101,18 @@ jobs:
       - name: Run Python quality checks
         run: |
           echo "Running Black formatter check..."
-          .juicer/bin/black --check src/ tests/
+          .juicer/bin/black --check src/backend/ tests/backend/
 
           echo "Running Ruff linter..."
-          .juicer/bin/ruff check src/ tests/
+          .juicer/bin/ruff check src/backend/ tests/backend/
 
           echo "Running Mypy type checker..."
-          .juicer/bin/mypy src/ tests/
+          .juicer/bin/mypy src/backend/ tests/backend/
 
       - name: Run JavaScript quality checks
         run: |
           echo "Running Biome linter..."
-          npx @biomejs/biome check electron/ scripts/
+          npx @biomejs/biome check src/frontend/*.js scripts/*.js
 
   test-summary:
     name: Test Summary
