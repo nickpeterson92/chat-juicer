@@ -40,7 +40,7 @@ class APIMetadata(BaseModel):
         json_schema_extra={"example": "req_abc123"},
     )
     timestamp: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="Response timestamp in UTC",
     )
 
