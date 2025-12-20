@@ -288,10 +288,10 @@ app.whenReady().then(() => {
           case "list": {
             const offset = data?.offset ?? 0;
             const limit = data?.limit ?? 50;
-            return apiRequest(`/api/sessions?offset=${offset}&limit=${limit}`, { signal: controller.signal });
+            return apiRequest(`/api/v1/sessions?offset=${offset}&limit=${limit}`, { signal: controller.signal });
           }
           case "new": {
-            const response = await apiRequest("/api/sessions", {
+            const response = await apiRequest("/api/v1/sessions", {
               method: "POST",
               body: data || {},
               signal: controller.signal,
@@ -302,7 +302,7 @@ app.whenReady().then(() => {
           case "switch": {
             const sessionId = data?.session_id;
             if (!sessionId) return { error: "Missing session_id" };
-            const response = await apiRequest(`/api/sessions/${sessionId}`, { signal: controller.signal });
+            const response = await apiRequest(`/api/v1/sessions/${sessionId}`, { signal: controller.signal });
             activeSessionId = sessionId;
             return response;
           }
@@ -315,7 +315,7 @@ app.whenReady().then(() => {
               closeWebSocket(ws);
               sessionWebSockets.delete(sessionId);
             }
-            const response = await apiRequest(`/api/sessions/${sessionId}`, {
+            const response = await apiRequest(`/api/v1/sessions/${sessionId}`, {
               method: "DELETE",
               signal: controller.signal,
             });
@@ -327,7 +327,7 @@ app.whenReady().then(() => {
           case "rename": {
             const sessionId = data?.session_id;
             if (!sessionId) return { error: "Missing session_id" };
-            return apiRequest(`/api/sessions/${sessionId}`, {
+            return apiRequest(`/api/v1/sessions/${sessionId}`, {
               method: "PATCH",
               body: { title: data?.title },
               signal: controller.signal,
@@ -336,7 +336,7 @@ app.whenReady().then(() => {
           case "pin": {
             const sessionId = data?.session_id;
             if (!sessionId) return { error: "Missing session_id" };
-            return apiRequest(`/api/sessions/${sessionId}`, {
+            return apiRequest(`/api/v1/sessions/${sessionId}`, {
               method: "PATCH",
               body: { pinned: data?.pinned },
               signal: controller.signal,
@@ -345,7 +345,7 @@ app.whenReady().then(() => {
           case "summarize": {
             const sessionId = data?.session_id || activeSessionId;
             if (!sessionId) return { error: "Missing session_id" };
-            return apiRequest(`/api/sessions/${sessionId}/summarize`, {
+            return apiRequest(`/api/v1/sessions/${sessionId}/summarize`, {
               method: "POST",
               signal: controller.signal,
             });
@@ -355,7 +355,7 @@ app.whenReady().then(() => {
             if (!sessionId) return { error: "Missing session_id", messages: [] };
             const offset = data?.offset ?? 0;
             const limit = data?.limit ?? 50;
-            const result = await apiRequest(`/api/sessions/${sessionId}/messages?limit=${limit}&offset=${offset}`, {
+            const result = await apiRequest(`/api/v1/sessions/${sessionId}/messages?limit=${limit}&offset=${offset}`, {
               signal: controller.signal,
             });
             return { success: true, messages: result.messages || [] };
@@ -363,7 +363,7 @@ app.whenReady().then(() => {
           case "update_config": {
             const sessionId = data?.session_id;
             if (!sessionId) return { error: "Missing session_id" };
-            return apiRequest(`/api/sessions/${sessionId}`, {
+            return apiRequest(`/api/v1/sessions/${sessionId}`, {
               method: "PATCH",
               body: {
                 model: data?.model,
@@ -374,7 +374,7 @@ app.whenReady().then(() => {
             });
           }
           case "config_metadata": {
-            const config = await apiRequest("/api/config", { signal: controller.signal });
+            const config = await apiRequest("/api/v1/config", { signal: controller.signal });
             // API returns { success, models, reasoning_levels } in ModelSelector format
             return {
               success: config.success ?? true,
@@ -411,7 +411,7 @@ app.whenReady().then(() => {
       formData.append("file", new Blob([buffer]), filename);
 
       const upload = await Promise.race([
-        apiRequest(`/api/sessions/${sessionId}/files/upload?folder=sources`, {
+        apiRequest(`/api/v1/sessions/${sessionId}/files/upload?folder=sources`, {
           method: "POST",
           body: formData,
         }),
@@ -436,7 +436,7 @@ app.whenReady().then(() => {
       }
 
       const { sessionId, folder } = parsed;
-      const response = await apiRequest(`/api/sessions/${sessionId}/files?folder=${encodeURIComponent(folder)}`);
+      const response = await apiRequest(`/api/v1/sessions/${sessionId}/files?folder=${encodeURIComponent(folder)}`);
 
       logger.debug("Directory listed successfully", { dirPath, fileCount: response.files?.length || 0 });
       return { success: true, files: response.files || [] };
@@ -457,7 +457,7 @@ app.whenReady().then(() => {
       }
       const { sessionId, folder } = parsed;
       await apiRequest(
-        `/api/sessions/${sessionId}/files/${encodeURIComponent(filename)}?folder=${encodeURIComponent(folder)}`,
+        `/api/v1/sessions/${sessionId}/files/${encodeURIComponent(filename)}?folder=${encodeURIComponent(folder)}`,
         { method: "DELETE" }
       );
       logger.info("File deleted successfully", { dirPath, filename });
@@ -495,7 +495,7 @@ app.whenReady().then(() => {
       }
       const { sessionId, folder } = parsed;
       const response = await apiRequest(
-        `/api/sessions/${sessionId}/files/${encodeURIComponent(filename)}/path?folder=${encodeURIComponent(folder)}`
+        `/api/v1/sessions/${sessionId}/files/${encodeURIComponent(filename)}/path?folder=${encodeURIComponent(folder)}`
       );
       const absolutePath = response.path;
 

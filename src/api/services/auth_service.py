@@ -32,14 +32,13 @@ class AuthService:
             "user": self.user_payload(user),
         }
 
-    async def refresh(self, refresh_token: str) -> str:
-        """Validate refresh token and return new access token."""
+    async def refresh(self, refresh_token: str) -> dict[str, str]:
+        """Validate refresh token and return new access and refresh tokens (rotation)."""
         payload = self._decode_token(refresh_token, "refresh")
         user = await self.get_user_by_id(UUID(payload["sub"]))
         if not user:
             raise ValueError("Invalid refresh token")
-        tokens = self._issue_tokens(user, include_refresh=False)
-        return tokens["access"]
+        return self._issue_tokens(user, include_refresh=True)
 
     async def get_default_user(self) -> dict[str, Any] | None:
         """Retrieve the default seeded user for Phase 1."""

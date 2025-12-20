@@ -200,55 +200,79 @@ async def read_file(  # noqa: PLR0911
         return FileReadResponse(success=False, file_path=file_path, error=error).to_json()  # type: ignore[no-any-return]
 
     try:
-        # Handle partial reads (head/tail) - raw text only, skip conversion
+        extension = target_file.suffix.lower()
+
+        # Handle partial reads (head/tail)
         if head is not None or tail is not None:
-            try:
-                async with aiofiles.open(target_file, encoding="utf-8") as f:
+            # For convertible files, convert first then apply head/tail
+            if extension in CONVERTIBLE_EXTENSIONS:
+                markitdown_converter = get_markitdown_converter()
+                if markitdown_converter is None:
+                    return FileReadResponse(  # type: ignore[no-any-return]
+                        success=False,
+                        file_path=file_path,
+                        error=f"MarkItDown is required for reading {extension} files. Install with: pip install markitdown",
+                    ).to_json()
+                try:
+                    result = markitdown_converter.convert(str(target_file))
+                    all_lines = result.text_content.splitlines(keepends=True)
                     if head is not None:
-                        # Read first N lines
-                        lines = []
-                        async for line in f:
-                            lines.append(line)
-                            if len(lines) >= head:
-                                break
-                        content = "".join(lines)
+                        content = "".join(all_lines[:head])
                     elif tail is not None:
-                        # Read last N lines (read all, take last N)
-                        all_lines = await f.readlines()
                         content = "".join(all_lines[-tail:] if len(all_lines) > tail else all_lines)
+                    file_format = f"converted {extension} (partial)"
+                except Exception as e:
+                    return FileReadResponse(  # type: ignore[no-any-return]
+                        success=False, file_path=file_path, error=f"Conversion failed: {e!s}"
+                    ).to_json()
+            else:
+                # Text files: read directly
+                try:
+                    async with aiofiles.open(target_file, encoding="utf-8") as f:
+                        if head is not None:
+                            # Read first N lines
+                            lines = []
+                            async for line in f:
+                                lines.append(line)
+                                if len(lines) >= head:
+                                    break
+                            content = "".join(lines)
+                        elif tail is not None:
+                            # Read last N lines (read all, take last N)
+                            all_lines = await f.readlines()
+                            content = "".join(all_lines[-tail:] if len(all_lines) > tail else all_lines)
+                    file_format = "text (partial)"
+                except UnicodeDecodeError:
+                    return FileReadResponse(  # type: ignore[no-any-return]
+                        success=False, file_path=file_path, error="File is not text/UTF-8 encoded"
+                    ).to_json()
+                except Exception as e:
+                    return FileReadResponse(  # type: ignore[no-any-return]
+                        success=False, file_path=file_path, error=f"Failed to read file: {e!s}"
+                    ).to_json()
 
-                # Token counting for partial read
-                token_count = count_tokens(content)
-                exact_tokens = token_count["exact_tokens"]
-                file_size = target_file.stat().st_size
+            # Token counting for partial read
+            token_count = count_tokens(content)
+            exact_tokens = token_count["exact_tokens"]
+            file_size = target_file.stat().st_size
 
-                logger.info(
-                    f"Partial read {target_file.name} ({'head' if head else 'tail'}={head or tail}): "
-                    f"{len(content)} chars, {len(content.splitlines())} lines, {exact_tokens} tokens",
-                    tokens=exact_tokens,
-                    functions="read_file",
-                    func="partial_read",
-                )
+            logger.info(
+                f"Partial read {target_file.name} ({'head' if head else 'tail'}={head or tail}): "
+                f"{len(content)} chars, {len(content.splitlines())} lines, {exact_tokens} tokens",
+                tokens=exact_tokens,
+                functions="read_file",
+                func="partial_read",
+            )
 
-                return FileReadResponse(  # type: ignore[no-any-return]
-                    success=True,
-                    content=content,
-                    file_path=get_jail_relative_path(target_file, session_id),
-                    size=file_size,
-                    format="text (partial)",
-                ).to_json()
-
-            except UnicodeDecodeError:
-                return FileReadResponse(  # type: ignore[no-any-return]
-                    success=False, file_path=file_path, error="File is not text/UTF-8 encoded"
-                ).to_json()
-            except Exception as e:
-                return FileReadResponse(  # type: ignore[no-any-return]
-                    success=False, file_path=file_path, error=f"Failed to read file: {e!s}"
-                ).to_json()
+            return FileReadResponse(  # type: ignore[no-any-return]
+                success=True,
+                content=content,
+                file_path=get_jail_relative_path(target_file, session_id),
+                size=file_size,
+                format=file_format,
+            ).to_json()
 
         # Full read with optional conversion
-        extension = target_file.suffix.lower()
         needs_conversion = extension in CONVERTIBLE_EXTENSIONS
         content = None  # type: ignore[assignment]
         conversion_method = "none"

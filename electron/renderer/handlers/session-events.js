@@ -183,22 +183,37 @@ export function setupSessionEventHandlers({
    * Load remaining messages in background and prepend to chat
    * Called after initial session load when has_more=true
    *
+   * The initial session load fetches the NEWEST messages (DESC order, then reversed).
+   * This function loads the OLDER messages that weren't included in the initial load.
+   * The messages API uses ASC order, so offset=0 gets the oldest messages first.
+   *
    * @param {string} sessionId - Session ID to load messages for
-   * @param {number} initialOffset - Number of messages already loaded
+   * @param {number} loadedCount - Number of messages already loaded (the newest ones)
    * @param {number} totalCount - Total messages in session
    * @param {Object} sessionService - Session service instance
    * @param {Object} chatContainer - Chat container component
    */
-  const loadRemainingMessages = async (sessionId, initialOffset, totalCount, sessionService, chatContainer) => {
-    let offset = initialOffset;
+  const loadRemainingMessages = async (sessionId, loadedCount, totalCount, sessionService, chatContainer) => {
+    // Calculate how many older messages we need to load
+    const remainingCount = totalCount - loadedCount;
+    if (remainingCount <= 0) {
+      console.log(`[session] No remaining messages to load`);
+      return;
+    }
+
     const chunkSize = 100; // Match backend MAX_MESSAGES_PER_CHUNK
+    let offset = 0; // Start from the oldest messages (ASC order)
+    let loaded = 0;
 
-    console.log(`[session] loadRemainingMessages starting: offset=${offset}, totalCount=${totalCount}`);
+    console.log(
+      `[session] loadRemainingMessages starting: need ${remainingCount} older messages, totalCount=${totalCount}, loadedCount=${loadedCount}`
+    );
 
-    while (offset < totalCount) {
+    while (loaded < remainingCount) {
       try {
-        console.log(`[session] Loading chunk at offset=${offset}, limit=${chunkSize}`);
-        const result = await sessionService.loadMoreMessages(sessionId, offset, chunkSize);
+        const limit = Math.min(chunkSize, remainingCount - loaded);
+        console.log(`[session] Loading chunk at offset=${offset}, limit=${limit}`);
+        const result = await sessionService.loadMoreMessages(sessionId, offset, limit);
         console.log(`[session] loadMoreMessages result:`, {
           success: result.success,
           messageCount: result.messages?.length,
@@ -206,10 +221,10 @@ export function setupSessionEventHandlers({
 
         if (result.success && result.messages?.length > 0) {
           // Prepend older messages to the beginning of chat
-          // Messages come back in chronological order (oldest first after reverse)
           chatContainer.prependMessages(result.messages);
           offset += result.messages.length;
-          console.log(`[session] Prepended ${result.messages.length} messages, new offset=${offset}`);
+          loaded += result.messages.length;
+          console.log(`[session] Prepended ${result.messages.length} messages, loaded ${loaded}/${remainingCount}`);
         } else {
           // No more messages or error - stop loading
           console.log(`[session] Stopping: success=${result.success}, error=${result.error}`);
@@ -220,7 +235,7 @@ export function setupSessionEventHandlers({
         break;
       }
     }
-    console.log(`[session] loadRemainingMessages complete: final offset=${offset}`);
+    console.log(`[session] loadRemainingMessages complete: loaded ${loaded} older messages`);
   };
 
   // Handle session rename
