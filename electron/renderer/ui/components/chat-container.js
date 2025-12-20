@@ -763,13 +763,39 @@ export class ChatContainer {
       return;
     }
 
-    // Chunk rendering
-    let index = 0;
     const container = this.element;
-    // Clear container first for main render
+
+    // For prepend with large datasets, we need to build all content first
+    // then insert it at once to maintain correct order
+    if (options.prepend) {
+      // Store scroll position
+      const scrollHeightBefore = options.scrollHeightBefore ?? container.scrollHeight;
+      const scrollTopBefore = options.scrollTopBefore ?? container.scrollTop;
+
+      // Build all prepend content in a fragment
+      const fragment = document.createDocumentFragment();
+      for (const msg of messages) {
+        const element = this._renderMessageNode(msg, mergedToolCalls);
+        if (element) fragment.appendChild(element);
+      }
+
+      // Insert at beginning
+      if (container.firstChild) {
+        container.insertBefore(fragment, container.firstChild);
+      } else {
+        container.appendChild(fragment);
+      }
+
+      // Restore scroll position
+      const scrollHeightAfter = container.scrollHeight;
+      const heightAdded = scrollHeightAfter - scrollHeightBefore;
+      container.scrollTop = scrollTopBefore + heightAdded;
+      return;
+    }
+
+    // Chunk rendering for append (setMessages)
+    let index = 0;
     container.innerHTML = "";
-    const initialFragment = document.createDocumentFragment();
-    container.appendChild(initialFragment);
 
     const renderChunk = () => {
       const start = index;
