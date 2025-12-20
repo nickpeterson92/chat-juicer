@@ -75,7 +75,7 @@ class TestGetSettings:
         monkeypatch.setenv("API_PROVIDER", "azure")
         monkeypatch.setenv("AZURE_OPENAI_API_KEY", valid_azure_key)
         monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com")
-        monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
+        # Note: AZURE_OPENAI_DEPLOYMENT is not used - model is selected per-session
         # Remove OpenAI vars to ensure Azure is used
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_MODEL", raising=False)
