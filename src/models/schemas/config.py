@@ -78,7 +78,7 @@ class ConfigResponse(BaseModel):
                         "supports_reasoning": True,
                     }
                 ],
-                "reasoning_efforts": ["none", "low", "medium", "high"],
+                "reasoning_levels": [
                 "mcp_servers": [
                     {
                         "id": "sequential-thinking",
