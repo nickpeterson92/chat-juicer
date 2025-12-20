@@ -71,14 +71,15 @@ class ConfigResponse(BaseModel):
             "example": {
                 "models": [
                     {
-                        "id": "gpt-4o",
-                        "name": "GPT-4o",
-                        "provider": "azure",
-                        "context_window": 128000,
-                        "supports_reasoning": True,
+                        "value": "gpt-4o",
+                        "isDefault": False,
+                        "supportsReasoning": True,
                     }
                 ],
-                "reasoning_levels": ["none", "low", "medium", "high"],
+                "reasoning_levels": [
+                    {"value": "none", "label": "None", "isDefault": False},
+                    {"value": "medium", "label": "Medium", "isDefault": True},
+                ],
                 "mcp_servers": [
                     {
                         "id": "sequential-thinking",

@@ -4,7 +4,7 @@ Base API schemas with consistent response envelope pattern.
 All API responses follow a consistent structure:
 - Success responses: {"data": {...}, "meta": {...}}
 - Error responses: {"error": {...}}
-- Paginated responses: {"data": [...], "meta": {"pagination": {...}}}
+- Paginated responses: {"data": [...], "meta": {...}, "pagination": {...}}
 
 This pattern enables:
 - Consistent client-side handling
@@ -15,7 +15,7 @@ This pattern enables:
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Generic, TypeVar
+from typing import Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -168,95 +168,6 @@ class SuccessResponse(BaseModel):
         default=None,
         description="Optional success message",
         json_schema_extra={"example": "Resource deleted successfully"},
-    )
-
-
-class ErrorDetail(BaseModel):
-    """Detailed error information for validation errors."""
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "field": "email",
-                "message": "Invalid email format",
-                "code": "value_error.email",
-            }
-        }
-    )
-
-    field: str | None = Field(
-        default=None,
-        description="Field that caused the error",
-        json_schema_extra={"example": "email"},
-    )
-    message: str = Field(
-        ...,
-        description="Human-readable error message",
-        json_schema_extra={"example": "Invalid email format"},
-    )
-    code: str | None = Field(
-        default=None,
-        description="Machine-readable error code",
-        json_schema_extra={"example": "value_error.email"},
-    )
-
-
-class ErrorResponse(BaseModel):
-    """
-    Standard error response envelope.
-
-    All error responses follow this structure:
-    ```json
-    {
-        "error": {
-            "code": "VALIDATION_ERROR",
-            "message": "Request validation failed",
-            "details": [...],
-            "request_id": "req_abc123"
-        }
-    }
-    ```
-    """
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "error": {
-                    "code": "VALIDATION_ERROR",
-                    "message": "Request validation failed",
-                    "request_id": "req_abc123",
-                }
-            }
-        }
-    )
-
-    code: str = Field(
-        ...,
-        description="Machine-readable error code",
-        json_schema_extra={"example": "VALIDATION_ERROR"},
-    )
-    message: str = Field(
-        ...,
-        description="Human-readable error message",
-        json_schema_extra={"example": "Request validation failed"},
-    )
-    details: list[ErrorDetail] | None = Field(
-        default=None,
-        description="Detailed error information",
-    )
-    request_id: str | None = Field(
-        default=None,
-        description="Request ID for error tracking",
-        json_schema_extra={"example": "req_abc123"},
-    )
-    path: str | None = Field(
-        default=None,
-        description="Request path that caused the error",
-        json_schema_extra={"example": "/api/v1/sessions/123"},
-    )
-    debug: dict[str, Any] | None = Field(
-        default=None,
-        description="Debug information (only in development)",
     )
 
 

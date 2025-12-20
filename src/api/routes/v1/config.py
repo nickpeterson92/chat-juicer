@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from core.constants import MODEL_METADATA, MODELS_WITH_REASONING, get_settings
+from core.constants import DEFAULT_MODEL, MODEL_METADATA, MODELS_WITH_REASONING, get_settings
 from models.schemas.config import ConfigResponse, MCPServerConfig, ModelConfigItem
 
 router = APIRouter()
@@ -33,7 +33,12 @@ router = APIRouter()
                                 "supportsReasoning": True,
                             }
                         ],
-                        "reasoning_efforts": ["none", "low", "medium", "high"],
+                        "reasoning_levels": [
+                            {"value": "none", "label": "None", "isDefault": False},
+                            {"value": "low", "label": "Low", "isDefault": False},
+                            {"value": "medium", "label": "Medium", "isDefault": True},
+                            {"value": "high", "label": "High", "isDefault": False},
+                        ],
                         "mcp_servers": [
                             {
                                 "id": "sequential-thinking",
@@ -55,7 +60,7 @@ async def get_config() -> ConfigResponse:
     settings = get_settings()
 
     # Build model list from metadata in frontend-expected format
-    default_model = "gpt-5.2"  # Default model
+    default_model = DEFAULT_MODEL
     models = [
         ModelConfigItem(
             value=model_id,

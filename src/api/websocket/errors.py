@@ -124,7 +124,7 @@ async def close_with_error(
     # Then close with appropriate code
     ws_close_code = ERROR_CODE_TO_WS_CLOSE.get(code, WSCloseCode.SERVER_ERROR)
     with contextlib.suppress(Exception):
-        await websocket.close(code=ws_close_code, reason=message[:123])  # Reason limited to 123 bytes
+        await websocket.close(code=ws_close_code, reason=message.encode("utf-8")[:123].decode("utf-8", errors="ignore"))
 
 
 @contextlib.asynccontextmanager

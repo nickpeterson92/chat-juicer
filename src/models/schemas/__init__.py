@@ -8,6 +8,7 @@ This module provides:
 - Reusable field definitions and validators
 """
 
+from models.error_models import ErrorDetail, ErrorResponse
 from models.schemas.auth import (
     LoginRequest,
     RefreshRequest,
@@ -16,7 +17,6 @@ from models.schemas.auth import (
 )
 from models.schemas.base import (
     APIResponse,
-    ErrorResponse,
     PaginatedResponse,
     SuccessResponse,
 )
@@ -54,6 +54,7 @@ __all__ = [
     "CreateSessionRequest",
     "DeleteFileResponse",
     "DeleteSessionResponse",
+    "ErrorDetail",
     "ErrorResponse",
     "FileInfo",
     "FileInfoResponse",

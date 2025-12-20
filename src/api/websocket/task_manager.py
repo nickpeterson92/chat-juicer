@@ -113,16 +113,17 @@ class CancellationToken:
             in rare race conditions.
         """
         # If already cancelled, call immediately
-        async with self._lock:
-            if self._cancelled.is_set():
-                self._invoke_callback(callback)
-                return callback
+        if self._cancelled.is_set():
+            self._invoke_callback(callback)
+            return callback
 
-            self._callbacks.append(callback)
+        self._callbacks.append(callback)
 
         # Double-check: if cancelled between check and append, ensure callback runs
         if self._cancelled.is_set():
             self._invoke_callback(callback)
+
+        return callback
 
     def remove_callback(self, callback: Callable[[], None]) -> None:
         """Remove a previously registered callback."""
@@ -187,6 +188,7 @@ class CancellationToken:
         """
         self._cancelled.clear()
         self._cancel_reason = None
+        self._callbacks.clear()
 
 
 __all__ = ["CancellationToken"]

@@ -145,9 +145,16 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         # Extract session_id from path if present
         session_id = None
         path_parts = request.url.path.split("/")
+
+        # Check REST routes: /api/v1/sessions/{session_id}
         if "sessions" in path_parts:
             idx = path_parts.index("sessions")
-            if idx + 1 < len(path_parts):
+            if idx + 1 < len(path_parts) and path_parts[idx + 1]:
+                session_id = path_parts[idx + 1]
+        # Check WebSocket routes: /ws/chat/{session_id}
+        elif "chat" in path_parts:
+            idx = path_parts.index("chat")
+            if idx + 1 < len(path_parts) and path_parts[idx + 1]:
                 session_id = path_parts[idx + 1]
 
         # Create and set context

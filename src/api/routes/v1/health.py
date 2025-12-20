@@ -8,6 +8,7 @@ response patterns and comprehensive OpenAPI documentation.
 from __future__ import annotations
 
 from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 
 from api.dependencies import DB
 from models.schemas.health import (
@@ -129,14 +130,17 @@ async def health_check(db: DB, request: Request) -> HealthResponse:
     },
     tags=["Health"],
 )
-async def readiness_check(db: DB) -> ReadinessResponse:
+async def readiness_check(db: DB) -> ReadinessResponse | JSONResponse:
     """Kubernetes-style readiness probe."""
     try:
         async with db.acquire(timeout=5.0) as conn:
             await conn.fetchval("SELECT 1")
         return ReadinessResponse(ready=True)
     except Exception as e:
-        return ReadinessResponse(ready=False, error=str(e))
+        return JSONResponse(
+            status_code=503,
+            content={"ready": False, "error": str(e)},
+        )
 
 
 @router.get(

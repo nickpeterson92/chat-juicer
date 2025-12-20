@@ -146,14 +146,14 @@ async def list_messages(
             session_uuid,
         )
 
-        # Get paginated messages (newest first, reversed for display)
+        # Get paginated messages (chronological order with offset from oldest)
         rows = await conn.fetch(
             """
             SELECT id, role, content, created_at,
                    tool_call_id, tool_name, tool_arguments, tool_result, tool_success
             FROM messages
             WHERE session_id = $1
-            ORDER BY created_at DESC
+            ORDER BY created_at ASC
             LIMIT $2 OFFSET $3
             """,
             session_uuid,
@@ -162,7 +162,7 @@ async def list_messages(
         )
 
     messages = []
-    for row in reversed(rows):  # Reverse to get chronological order
+    for row in rows:  # Already in chronological order
         # Parse tool_arguments if stored as JSON-encoded string
         args = row["tool_arguments"]
         if isinstance(args, str):

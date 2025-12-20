@@ -460,11 +460,11 @@ def register_exception_handlers(app: FastAPI) -> None:
 
 
 __all__ = [
+    "ApiFileNotFoundError",
     "AppException",
     "AuthenticationError",
     "DatabaseError",
     "ExternalServiceError",
-    "ApiFileNotFoundError",
     "ResourceNotFoundError",
     "SessionNotFoundError",
     "ValidationException",
