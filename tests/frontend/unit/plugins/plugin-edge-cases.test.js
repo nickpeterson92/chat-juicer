@@ -4,14 +4,14 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { EventBus } from "../../../../electron/renderer/core/event-bus.js";
-import { AppState } from "../../../../electron/renderer/core/state.js";
+import { EventBus } from "../../../../src/frontend/renderer/core/event-bus.js";
+import { AppState } from "../../../../src/frontend/renderer/core/state.js";
 import {
   createPlugin,
   Plugin,
   PluginRegistry,
   plugin as pluginDecorator,
-} from "../../../../electron/renderer/plugins/plugin-interface.js";
+} from "../../../../src/frontend/renderer/plugins/plugin-interface.js";
 
 describe("Plugin Edge Cases", () => {
   let app;

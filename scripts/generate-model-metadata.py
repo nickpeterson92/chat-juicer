@@ -3,7 +3,7 @@
 
 This script ensures frontend and backend model configurations stay in sync
 by generating the JavaScript file from the single source of truth in
-src/core/constants.py.
+src/backend/core/constants.py.
 
 Usage:
     python scripts/generate-model-metadata.py
@@ -18,14 +18,14 @@ import sys
 
 from pathlib import Path
 
-# Add src to path for imports
+# Add src/backend to path for imports
 PROJECT_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(PROJECT_ROOT / "src"))
+sys.path.insert(0, str(PROJECT_ROOT / "src" / "backend"))
 
 from core.constants import MODEL_CONFIGS, REASONING_EFFORT_OPTIONS  # noqa: E402
 
 # Output path for generated JS file
-OUTPUT_PATH = PROJECT_ROOT / "electron" / "renderer" / "config" / "model-metadata.js"
+OUTPUT_PATH = PROJECT_ROOT / "src" / "frontend" / "renderer" / "config" / "model-metadata.js"
 
 
 def generate_model_metadata_js() -> str:

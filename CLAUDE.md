@@ -35,108 +35,109 @@ The application uses a **three-tier architecture**:
 
 ```
 chat-juicer/
-├── electron/          # Electron main process and utilities
-│   ├── main.js       # Electron main process, IPC handlers, HTTP proxy to FastAPI
-│   ├── api-client.js # HTTP client for FastAPI backend communication
-│   ├── preload.js    # Preload script for secure context-isolated IPC
-│   ├── logger.js     # Centralized structured logging with IPC forwarding
-│   ├── config/
-│   │   └── main-constants.js     # Main process configuration constants
-│   ├── utils/        # Main process utilities
-│   │   ├── binary-message-parser.js  # Binary protocol message parsing
-│   │   └── ipc-v2-protocol.js        # IPC v2 protocol implementation
-│   └── renderer/     # Component-based renderer process (ES6 modules)
-│       ├── index.js              # Entry point
-│       ├── bootstrap.js          # 7-phase bootstrap orchestrator
-│       ├── bootstrap/            # Bootstrap modules
-│       │   ├── phases/           # Individual bootstrap phases
-│       │   ├── error-recovery.js # Error recovery logic
-│       │   ├── types.js          # Type definitions
-│       │   └── validators.js     # Bootstrap validators
-│       ├── adapters/             # DOM, IPC, Storage adapters
-│       ├── config/               # constants, colors, model-metadata
-│       ├── core/                 # AppState + EventBus
-│       ├── managers/             # DOM + view + file managers
-│       ├── services/             # Business logic (AppState-backed)
-│       ├── handlers/             # Event handlers
-│       ├── plugins/              # Plugin registry
-│       ├── ui/                   # UI components and renderers
-│       ├── viewmodels/           # Data transformation
-│       └── utils/                # Utility modules
-├── ui/               # Frontend static assets
-│   ├── index.html    # Main chat UI
-│   └── input.css     # Tailwind CSS source
-├── src/              # Python FastAPI backend
-│   ├── api/          # FastAPI application
-│   │   ├── main.py           # FastAPI app with lifespan, routes, CORS
-│   │   ├── dependencies.py   # Dependency injection (DB, services, managers)
-│   │   ├── routes/           # API endpoints
-│   │   │   ├── chat.py       # WebSocket chat endpoint (/ws/chat)
-│   │   │   └── v1/           # Versioned REST API routes
-│   │   │       ├── auth.py       # Authentication routes
-│   │   │       ├── config.py     # Configuration endpoint
-│   │   │       ├── files.py      # File management routes
-│   │   │       ├── health.py     # Health check endpoint
-│   │   │       ├── messages.py   # Message pagination endpoint
-│   │   │       └── sessions.py   # Session CRUD routes
-│   │   ├── services/         # Business logic
-│   │   │   ├── chat_service.py       # Chat streaming with Agent/Runner
-│   │   │   ├── session_service.py    # Session management
-│   │   │   ├── file_service.py       # File operations
-│   │   │   └── auth_service.py       # Authentication
-│   │   ├── middleware/       # FastAPI middleware
-│   │   │   ├── auth.py               # Authentication middleware
-│   │   │   ├── exception_handlers.py # Global exception handlers
-│   │   │   └── request_context.py    # Request context middleware
-│   │   └── websocket/        # WebSocket management
-│   │       ├── manager.py        # WebSocket connection tracking
-│   │       ├── errors.py         # WebSocket error handling
-│   │       └── task_manager.py   # Async task/cancellation management
-│   ├── core/         # Core business logic
-│   │   ├── agent.py          # Agent/Runner implementation with MCP
-│   │   ├── prompts.py        # System instruction prompts
-│   │   └── constants.py      # Configuration with Pydantic Settings
-│   ├── models/       # Pydantic data models
-│   │   ├── api_models.py     # API request/response models
-│   │   ├── event_models.py   # WebSocket event models
-│   │   ├── error_models.py   # Error response models
-│   │   ├── ipc_models.py     # IPC message models
-│   │   ├── sdk_models.py     # SDK integration models
-│   │   ├── session_models.py # Session metadata models
-│   │   └── schemas/          # Response schema models
-│   │       ├── auth.py       # Auth response schemas
-│   │       ├── base.py       # Base schema classes
-│   │       ├── config.py     # Config response schemas
-│   │       ├── files.py      # File response schemas
-│   │       ├── health.py     # Health response schemas
-│   │       └── sessions.py   # Session response schemas
-│   ├── tools/        # Function calling tools (async)
-│   │   ├── file_operations.py    # File reading, directory listing
-│   │   ├── document_generation.py # Document generation
-│   │   ├── text_editing.py       # Text editing operations
-│   │   ├── code_interpreter.py   # Sandboxed code execution
-│   │   ├── wrappers.py           # Session-aware tool wrappers
-│   │   └── registry.py           # Tool registration
-│   ├── integrations/ # External integrations
-│   │   ├── mcp_servers.py       # MCP server setup
-│   │   ├── mcp_pool.py          # MCP server connection pool
-│   │   ├── mcp_registry.py      # MCP server registry
-│   │   ├── sdk_token_tracker.py # Token tracking
-│   │   └── event_handlers/      # Streaming event handlers
-│   │       ├── agent_events.py      # Agent event handlers
-│   │       ├── base.py              # Base handler class
-│   │       ├── raw_events.py        # Raw event handlers
-│   │       ├── registry.py          # Handler registry
-│   │       └── run_item_events.py   # Run item event handlers
-│   └── utils/        # Utility modules
-│       ├── logger.py           # Enterprise JSON logging
-│       ├── token_utils.py      # Token counting with LRU cache
-│       ├── file_utils.py       # File system utilities
-│       ├── client_factory.py   # OpenAI client factory
-│       ├── db_utils.py         # Database utilities
-│       ├── document_processor.py # Document processing
-│       ├── http_logger.py      # HTTP request logging
-│       └── json_utils.py       # JSON utilities
+├── src/               # All application source code
+│   ├── frontend/      # Electron main process and renderer
+│   │   ├── main.js       # Electron main process, IPC handlers, HTTP proxy to FastAPI
+│   │   ├── api-client.js # HTTP client for FastAPI backend communication
+│   │   ├── preload.js    # Preload script for secure context-isolated IPC
+│   │   ├── logger.js     # Centralized structured logging with IPC forwarding
+│   │   ├── config/
+│   │   │   └── main-constants.js     # Main process configuration constants
+│   │   ├── utils/        # Main process utilities
+│   │   │   ├── binary-message-parser.js  # Binary protocol message parsing
+│   │   │   └── ipc-v2-protocol.js        # IPC v2 protocol implementation
+│   │   ├── ui/           # Frontend static assets
+│   │   │   ├── index.html    # Main chat UI
+│   │   │   └── input.css     # Tailwind CSS source
+│   │   └── renderer/     # Component-based renderer process (ES6 modules)
+│   │       ├── index.js              # Entry point
+│   │       ├── bootstrap.js          # 7-phase bootstrap orchestrator
+│   │       ├── bootstrap/            # Bootstrap modules
+│   │       │   ├── phases/           # Individual bootstrap phases
+│   │       │   ├── error-recovery.js # Error recovery logic
+│   │       │   ├── types.js          # Type definitions
+│   │       │   └── validators.js     # Bootstrap validators
+│   │       ├── adapters/             # DOM, IPC, Storage adapters
+│   │       ├── config/               # constants, colors, model-metadata
+│   │       ├── core/                 # AppState + EventBus
+│   │       ├── managers/             # DOM + view + file managers
+│   │       ├── services/             # Business logic (AppState-backed)
+│   │       ├── handlers/             # Event handlers
+│   │       ├── plugins/              # Plugin registry
+│   │       ├── ui/                   # UI components and renderers
+│   │       ├── viewmodels/           # Data transformation
+│   │       └── utils/                # Utility modules
+│   └── backend/       # Python FastAPI backend
+│       ├── api/          # FastAPI application
+│       │   ├── main.py           # FastAPI app with lifespan, routes, CORS
+│       │   ├── dependencies.py   # Dependency injection (DB, services, managers)
+│       │   ├── routes/           # API endpoints
+│       │   │   ├── chat.py       # WebSocket chat endpoint (/ws/chat)
+│       │   │   └── v1/           # Versioned REST API routes
+│       │   │       ├── auth.py       # Authentication routes
+│       │   │       ├── config.py     # Configuration endpoint
+│       │   │       ├── files.py      # File management routes
+│       │   │       ├── health.py     # Health check endpoint
+│       │   │       ├── messages.py   # Message pagination endpoint
+│       │   │       └── sessions.py   # Session CRUD routes
+│       │   ├── services/         # Business logic
+│       │   │   ├── chat_service.py       # Chat streaming with Agent/Runner
+│       │   │   ├── session_service.py    # Session management
+│       │   │   ├── file_service.py       # File operations
+│       │   │   └── auth_service.py       # Authentication
+│       │   ├── middleware/       # FastAPI middleware
+│       │   │   ├── auth.py               # Authentication middleware
+│       │   │   ├── exception_handlers.py # Global exception handlers
+│       │   │   └── request_context.py    # Request context middleware
+│       │   └── websocket/        # WebSocket management
+│       │       ├── manager.py        # WebSocket connection tracking
+│       │       ├── errors.py         # WebSocket error handling
+│       │       └── task_manager.py   # Async task/cancellation management
+│       ├── core/         # Core business logic
+│       │   ├── agent.py          # Agent/Runner implementation with MCP
+│       │   ├── prompts.py        # System instruction prompts
+│       │   └── constants.py      # Configuration with Pydantic Settings
+│       ├── models/       # Pydantic data models
+│       │   ├── api_models.py     # API request/response models
+│       │   ├── event_models.py   # WebSocket event models
+│       │   ├── error_models.py   # Error response models
+│       │   ├── ipc_models.py     # IPC message models
+│       │   ├── sdk_models.py     # SDK integration models
+│       │   ├── session_models.py # Session metadata models
+│       │   └── schemas/          # Response schema models
+│       │       ├── auth.py       # Auth response schemas
+│       │       ├── base.py       # Base schema classes
+│       │       ├── config.py     # Config response schemas
+│       │       ├── files.py      # File response schemas
+│       │       ├── health.py     # Health response schemas
+│       │       └── sessions.py   # Session response schemas
+│       ├── tools/        # Function calling tools (async)
+│       │   ├── file_operations.py    # File reading, directory listing
+│       │   ├── document_generation.py # Document generation
+│       │   ├── text_editing.py       # Text editing operations
+│       │   ├── code_interpreter.py   # Sandboxed code execution
+│       │   ├── wrappers.py           # Session-aware tool wrappers
+│       │   └── registry.py           # Tool registration
+│       ├── integrations/ # External integrations
+│       │   ├── mcp_servers.py       # MCP server setup
+│       │   ├── mcp_pool.py          # MCP server connection pool
+│       │   ├── mcp_registry.py      # MCP server registry
+│       │   ├── sdk_token_tracker.py # Token tracking
+│       │   └── event_handlers/      # Streaming event handlers
+│       │       ├── agent_events.py      # Agent event handlers
+│       │       ├── base.py              # Base handler class
+│       │       ├── raw_events.py        # Raw event handlers
+│       │       ├── registry.py          # Handler registry
+│       │       └── run_item_events.py   # Run item event handlers
+│       └── utils/        # Utility modules
+│           ├── logger.py           # Enterprise JSON logging
+│           ├── token_utils.py      # Token counting with LRU cache
+│           ├── file_utils.py       # File system utilities
+│           ├── client_factory.py   # OpenAI client factory
+│           ├── db_utils.py         # Database utilities
+│           ├── document_processor.py # Document processing
+│           ├── http_logger.py      # HTTP request logging
+│           └── json_utils.py       # JSON utilities
 ├── data/             # Persistent data storage
 │   └── files/        # Session-scoped file storage
 ├── logs/             # Log files (gitignored)
@@ -159,10 +160,10 @@ The backend is a FastAPI application with:
 - **MCP Server Pool**: Pre-spawned MCP server instances for concurrent requests
 
 **Key files:**
-- `src/api/main.py` - FastAPI app initialization, lifespan management, route registration
-- `src/api/dependencies.py` - Dependency injection for DB pool, services, managers
-- `src/api/routes/chat.py` - WebSocket endpoint for chat streaming
-- `src/api/services/chat_service.py` - Agent/Runner orchestration, interrupt handling
+- `src/backend/api/main.py` - FastAPI app initialization, lifespan management, route registration
+- `src/backend/api/dependencies.py` - Dependency injection for DB pool, services, managers
+- `src/backend/api/routes/chat.py` - WebSocket endpoint for chat streaming
+- `src/backend/api/services/chat_service.py` - Agent/Runner orchestration, interrupt handling
 
 ### Communication Flow
 
@@ -302,7 +303,7 @@ Optional:
 
 ### Dependencies
 
-#### Python (src/requirements.txt)
+#### Python (src/backend/requirements.txt)
 - `fastapi` - Web framework
 - `asyncpg` - Async PostgreSQL driver
 - `uvicorn` - ASGI server
@@ -353,20 +354,20 @@ async def get_session(session_id: str, sessions: Sessions):
 
 ### Adding New API Endpoints
 
-1. Create route in `src/api/routes/`
-2. Add service logic in `src/api/services/`
-3. Register route in `src/api/main.py`
+1. Create route in `src/backend/api/routes/`
+2. Add service logic in `src/backend/api/services/`
+3. Register route in `src/backend/api/main.py`
 
 ### Adding New Functions/Tools
 
-1. Implement in `src/tools/*.py`
-2. Register in `tools/registry.py`
-3. Add session-aware wrapper if needed in `tools/wrappers.py`
+1. Implement in `src/backend/tools/*.py`
+2. Register in `src/backend/tools/registry.py`
+3. Add session-aware wrapper if needed in `src/backend/tools/wrappers.py`
 
 ### Adding New MCP Servers
 
 ```python
-# In integrations/mcp_servers.py
+# In src/backend/integrations/mcp_servers.py
 new_server = MCPServerStdio(
     params={"command": "npx", "args": ["-y", "@mcp/server-name"]}
 )

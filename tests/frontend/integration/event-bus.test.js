@@ -4,7 +4,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { EventBus, ScopedEventBus } from "../../../electron/renderer/core/event-bus.js";
+import { EventBus, ScopedEventBus } from "../../../src/frontend/renderer/core/event-bus.js";
 
 describe("EventBus Integration Tests", () => {
   let eventBus;

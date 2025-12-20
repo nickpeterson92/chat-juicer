@@ -6,7 +6,7 @@
  * Output: DOM elements via DOMAdapter
  */
 
-import smokeAnimationData from "../../../../ui/Smoke.json";
+import smokeAnimationData from "../../../ui/Smoke.json";
 import { CRITICAL_COLORS } from "../../config/colors.js";
 import { initLottieWithColor } from "../../utils/lottie-color.js";
 import { formatTimestamp } from "../../viewmodels/session-viewmodel.js";

@@ -33,7 +33,7 @@ install-python: ## Install Python dependencies into .juicer venv
 		echo "$(YELLOW)⚠ Creating .juicer virtual environment first...$(NC)"; \
 		python3 -m venv .juicer || python -m venv .juicer; \
 	fi
-	@.juicer/bin/pip install -r src/requirements.txt
+	@.juicer/bin/pip install -r src/backend/requirements.txt
 	@echo "$(GREEN)✓ Python dependencies installed into .juicer venv$(NC)"
 
 install-mcp: ## Install MCP servers (Sequential Thinking via npm, Fetch via Python)
@@ -57,7 +57,7 @@ dev: ## Start in development mode (with DevTools and hot reload)
 backend-only: ## Run Python backend only (for testing)
 	@echo "$(BLUE)Starting Python backend...$(NC)"
 	@if [ -f ".juicer/bin/python3" ]; then \
-		cd src && ../.juicer/bin/python3 main.py; \
+		cd src/backend && ../../.juicer/bin/python3 main.py; \
 	else \
 		echo "$(YELLOW)⚠ Virtual environment not found$(NC)"; \
 		echo "$(BLUE)Run: make install-python$(NC)"; \
@@ -67,7 +67,7 @@ backend-only: ## Run Python backend only (for testing)
 api: ## Run FastAPI backend with hot reload (excludes data/ from watch)
 	@echo "$(BLUE)Starting FastAPI backend...$(NC)"
 	@if [ -f ".juicer/bin/python3" ]; then \
-		cd src && ../.juicer/bin/python3 -m api.main; \
+		cd src/backend && ../../.juicer/bin/python3 -m api.main; \
 	else \
 		echo "$(YELLOW)⚠ Virtual environment not found$(NC)"; \
 		echo "$(BLUE)Run: make install-python$(NC)"; \
@@ -142,7 +142,7 @@ test-frontend-ui: ## Run JavaScript tests with UI
 test-coverage-backend: ## Generate Python backend coverage report
 	@echo "$(BLUE)Generating Python coverage report...$(NC)"
 	@if [ -f ".juicer/bin/pytest" ]; then \
-		COVERAGE_FILE=.coverage .juicer/bin/coverage run --source=src --omit='tests/*,**/__pycache__/*' -m pytest tests/backend/ -q; \
+		COVERAGE_FILE=.coverage .juicer/bin/coverage run --source=src/backend --omit='tests/*,**/__pycache__/*' -m pytest tests/backend/ -q; \
 		.juicer/bin/coverage html; \
 		.juicer/bin/coverage report --skip-empty; \
 		echo "$(GREEN)✓ Coverage report generated at htmlcov/index.html$(NC)"; \
@@ -167,7 +167,7 @@ test-coverage-all: ## Generate coverage reports for both backend and frontend
 
 test-validate: ## Validate Python syntax (compilation check)
 	@echo "$(BLUE)Validating Python syntax...$(NC)"
-	@python3 -m compileall src/ tests/ || python -m compileall src/ tests/
+	@python3 -m compileall src/backend/ tests/ || python -m compileall src/backend/ tests/
 	@echo "$(GREEN)✓ Syntax validation passed$(NC)"
 
 ##@ Code Generation
@@ -188,7 +188,7 @@ generate-model-metadata: ## Generate model-metadata.js from Python MODEL_CONFIGS
 lint: ## Run ruff linter on Python code
 	@echo "$(BLUE)Running ruff linter...$(NC)"
 	@if [ -f ".juicer/bin/ruff" ]; then \
-		.juicer/bin/ruff check src/ tests/ --fix; \
+		.juicer/bin/ruff check src/backend/ tests/ --fix; \
 	else \
 		echo "$(YELLOW)⚠ Ruff not installed in .juicer venv$(NC)"; \
 		echo "$(BLUE)Run: make install-dev$(NC)"; \
@@ -198,7 +198,7 @@ lint: ## Run ruff linter on Python code
 format: ## Format Python code with black
 	@echo "$(BLUE)Formatting code with black...$(NC)"
 	@if [ -f ".juicer/bin/black" ]; then \
-		.juicer/bin/black src/ tests/; \
+		.juicer/bin/black src/backend/ tests/; \
 	else \
 		echo "$(YELLOW)⚠ Black not installed in .juicer venv$(NC)"; \
 		echo "$(BLUE)Run: make install-dev$(NC)"; \
@@ -208,7 +208,7 @@ format: ## Format Python code with black
 typecheck: ## Run mypy type checking
 	@echo "$(BLUE)Running mypy type checker...$(NC)"
 	@if [ -f ".juicer/bin/mypy" ]; then \
-		.juicer/bin/mypy src/ tests/; \
+		.juicer/bin/mypy src/backend/ tests/; \
 	else \
 		echo "$(YELLOW)⚠ Mypy not installed in .juicer venv$(NC)"; \
 		echo "$(BLUE)Run: make install-dev$(NC)"; \
@@ -256,14 +256,14 @@ validate: test-validate ## Validate Python code syntax
 fix: ## Auto-fix all fixable issues (format + lint with auto-fix)
 	@echo "$(BLUE)Auto-fixing code issues...$(NC)"
 	@if [ -f ".juicer/bin/black" ]; then \
-		.juicer/bin/black src/ tests/; \
+		.juicer/bin/black src/backend/ tests/; \
 	else \
 		echo "$(YELLOW)⚠ Black not installed in .juicer venv$(NC)"; \
 		echo "$(BLUE)Run: make install-dev$(NC)"; \
 		exit 1; \
 	fi
 	@if [ -f ".juicer/bin/ruff" ]; then \
-		.juicer/bin/ruff check src/ tests/ --fix; \
+		.juicer/bin/ruff check src/backend/ tests/ --fix; \
 	else \
 		echo "$(YELLOW)⚠ Ruff not installed in .juicer venv$(NC)"; \
 		echo "$(BLUE)Run: make install-dev$(NC)"; \
@@ -275,19 +275,19 @@ check: ## Pre-commit validation gate (format check + lint + typecheck + tests)
 	@echo "$(BLUE)Running pre-commit validation checks...$(NC)"
 	@echo "$(BLUE)→ Checking code format...$(NC)"
 	@if [ -f ".juicer/bin/black" ]; then \
-		.juicer/bin/black --check src/ tests/ || (echo "$(RED)✗ Format check failed. Run: make format$(NC)" && exit 1); \
+		.juicer/bin/black --check src/backend/ tests/ || (echo "$(RED)✗ Format check failed. Run: make format$(NC)" && exit 1); \
 	else \
 		echo "$(YELLOW)⚠ Black not installed, skipping format check$(NC)"; \
 	fi
 	@echo "$(BLUE)→ Running linter...$(NC)"
 	@if [ -f ".juicer/bin/ruff" ]; then \
-		.juicer/bin/ruff check src/ tests/ || (echo "$(RED)✗ Lint check failed. Run: make lint$(NC)" && exit 1); \
+		.juicer/bin/ruff check src/backend/ tests/ || (echo "$(RED)✗ Lint check failed. Run: make lint$(NC)" && exit 1); \
 	else \
 		echo "$(YELLOW)⚠ Ruff not installed, skipping lint check$(NC)"; \
 	fi
 	@echo "$(BLUE)→ Running type checker...$(NC)"
 	@if [ -f ".juicer/bin/mypy" ]; then \
-		.juicer/bin/mypy src/ tests/ || (echo "$(RED)✗ Type check failed. Run: make typecheck$(NC)" && exit 1); \
+		.juicer/bin/mypy src/backend/ tests/ || (echo "$(RED)✗ Type check failed. Run: make typecheck$(NC)" && exit 1); \
 	else \
 		echo "$(YELLOW)⚠ Mypy not installed, skipping type check$(NC)"; \
 	fi
@@ -462,7 +462,7 @@ update-deps: ## Update dependencies (Node.js and Python)
 	@echo "$(BLUE)→ Updating Python dependencies...$(NC)"
 	@if [ -f ".juicer/bin/pip" ]; then \
 		.juicer/bin/pip install --upgrade pip && \
-		.juicer/bin/pip install --upgrade -r src/requirements.txt; \
+		.juicer/bin/pip install --upgrade -r src/backend/requirements.txt; \
 		echo "$(GREEN)✓ Python dependencies updated$(NC)"; \
 	else \
 		echo "$(YELLOW)⚠ Virtual environment not found$(NC)"; \
@@ -491,8 +491,8 @@ restart: kill ## Quick restart (kill processes + restart in dev mode)
 clean: ## Clean temporary files and logs
 	@echo "$(BLUE)Cleaning temporary files...$(NC)"
 	@rm -rf logs/*.jsonl
-	@rm -rf src/__pycache__
-	@rm -rf src/*/__pycache__
+	@rm -rf src/backend/__pycache__
+	@rm -rf src/backend/*/__pycache__
 	@find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	@find . -type f -name "*.pyc" -delete 2>/dev/null || true
 	@find . -type f -name ".DS_Store" -delete 2>/dev/null || true
@@ -501,8 +501,8 @@ clean: ## Clean temporary files and logs
 
 clean-cache: ## Clean development cache directories (mypy, ruff, pytest)
 	@echo "$(BLUE)Cleaning development caches...$(NC)"
-	@rm -rf .mypy_cache src/.mypy_cache
-	@rm -rf .ruff_cache src/.ruff_cache
+	@rm -rf .mypy_cache src/backend/.mypy_cache
+	@rm -rf .ruff_cache src/backend/.ruff_cache
 	@rm -rf .pytest_cache
 	@rm -rf .serena
 	@echo "$(GREEN)✓ Cache cleanup complete$(NC)"
@@ -521,7 +521,7 @@ clean-all: clean clean-cache clean-venv ## Deep clean including dependencies and
 
 reset: clean-all ## Complete reset (clean + remove .env + remove venv)
 	@echo "$(BLUE)Resetting project...$(NC)"
-	@rm -f src/.env
+	@rm -f src/backend/.env
 	@echo "$(GREEN)✓ Reset complete$(NC)"
 	@echo "$(YELLOW)Run 'make setup' to reconfigure$(NC)"
 
@@ -535,7 +535,7 @@ health: ## Check system health and configuration
 	@echo "Python: $$(python3 --version 2>/dev/null || python --version 2>/dev/null || echo 'Not installed')"
 	@echo "pip: $$(pip3 --version 2>/dev/null | cut -d' ' -f2 || pip --version 2>/dev/null | cut -d' ' -f2 || echo 'Not installed')"
 	@echo "$(BLUE)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"
-	@echo "Environment: $$(\[ -f src/.env \] && echo '$(GREEN)✓ Configured$(NC)' || echo '$(YELLOW)⚠ Not configured$(NC)')"
+	@echo "Environment: $$(\[ -f src/backend/.env \] && echo '$(GREEN)✓ Configured$(NC)' || echo '$(YELLOW)⚠ Not configured$(NC)')"
 	@echo "Node modules: $$(\[ -d node_modules \] && echo '$(GREEN)✓ Installed$(NC)' || echo '$(YELLOW)⚠ Not installed$(NC)')"
 	@echo "Python venv: $$(\[ -d .juicer \] && echo '$(GREEN)✓ Installed$(NC)' || echo '$(YELLOW)⚠ Not installed$(NC)')"
 	@echo "MCP server: $$(which server-sequential-thinking >/dev/null 2>&1 && echo '$(GREEN)✓ Installed$(NC)' || echo '$(YELLOW)⚠ Not installed$(NC)')"
@@ -552,7 +552,7 @@ help: ## Show this help message
 	@echo ""
 	@echo "$(BLUE)Quick Start:$(NC)"
 	@echo "  1. Run 'make setup' (or 'make setup-dev' for dev tools)"
-	@echo "  2. Configure src/.env with your Azure OpenAI credentials"
+	@echo "  2. Configure src/backend/.env with your Azure OpenAI credentials"
 	@echo "  3. Run 'make run' to start the application"
 	@echo ""
 	@echo "$(BLUE)Setup Options:$(NC)"

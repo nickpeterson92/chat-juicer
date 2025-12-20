@@ -22,9 +22,9 @@ async function validate() {
     }
 
     // Check .env exists
-    const envPath = path.join(process.cwd(), "src", ".env");
+    const envPath = path.join(process.cwd(), "src", "backend", ".env");
     if (!existsSync(envPath)) {
-      console.error("✗ src/.env not found. Run: npm run setup");
+      console.error("✗ src/backend/.env not found. Run: npm run setup");
       process.exit(1);
     }
 

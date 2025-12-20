@@ -4,10 +4,10 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ModelSelector } from "../../../electron/renderer/ui/components/model-selector.js";
+import { ModelSelector } from "../../../src/frontend/renderer/ui/components/model-selector.js";
 
 // Mock MODEL_METADATA, MODEL_FAMILY_LABELS, and REASONING_DESCRIPTIONS
-vi.mock("../../../electron/renderer/config/model-metadata.js", () => ({
+vi.mock("../../../src/frontend/renderer/config/model-metadata.js", () => ({
   MODEL_METADATA: {
     "gpt-5": {
       displayName: "GPT-5",

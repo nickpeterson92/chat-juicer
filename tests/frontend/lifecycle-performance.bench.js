@@ -4,9 +4,9 @@
  */
 
 import { bench, describe } from "vitest";
-import { ComponentLifecycle } from "../../electron/renderer/core/component-lifecycle.js";
-import { EventBus } from "../../electron/renderer/core/event-bus.js";
-import { LifecycleManager } from "../../electron/renderer/core/lifecycle-manager.js";
+import { ComponentLifecycle } from "../../src/frontend/renderer/core/component-lifecycle.js";
+import { EventBus } from "../../src/frontend/renderer/core/event-bus.js";
+import { LifecycleManager } from "../../src/frontend/renderer/core/lifecycle-manager.js";
 
 describe("LifecycleManager Performance", () => {
   let manager;
