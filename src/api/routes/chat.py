@@ -16,6 +16,7 @@ from api.services.chat_service import ChatService
 from api.services.file_service import LocalFileService
 from api.websocket.errors import WSCloseCode, send_ws_error
 from api.websocket.manager import WebSocketManager
+from api.websocket.task_manager import CancellationToken
 from core.constants import get_settings
 from models.error_models import ErrorCode
 from utils.logger import logger
@@ -40,7 +41,13 @@ async def chat_websocket(
     session_id: str,
     token: str | None = Query(default=None),
 ) -> None:
-    """WebSocket endpoint for chat streaming."""
+    """WebSocket endpoint for chat streaming.
+
+    Features:
+    - Cooperative cancellation via CancellationToken (cleaner than flags)
+    - Proper task cleanup on disconnect
+    - Direct message processing (no queue overhead)
+    """
     db = websocket.app.state.db_pool
     ws_manager: WebSocketManager = websocket.app.state.ws_manager
     mcp_pool = websocket.app.state.mcp_pool
@@ -70,8 +77,9 @@ async def chat_websocket(
         mcp_pool=mcp_pool,
     )
 
-    # Track active chat task for this session
+    # Track active chat task and its cancellation token for this session
     active_chat_task: asyncio.Task[None] | None = None
+    active_cancellation_token: CancellationToken | None = None
 
     try:
         keepalive_task = asyncio.create_task(_keepalive(websocket))
@@ -82,10 +90,13 @@ async def chat_websocket(
                 msg_type = data.get("type")
 
                 if msg_type == "message":
-                    # If there's an existing task, interrupt it and wait for clean exit
+                    # If there's an existing task, cancel it cooperatively
                     if active_chat_task and not active_chat_task.done():
-                        await chat_service.interrupt(session_id)
-                        # Wait for task to exit cleanly (flag-based, no task.cancel needed)
+                        if active_cancellation_token:
+                            # Signal cooperative cancellation
+                            await active_cancellation_token.cancel(reason="New message received")
+
+                        # Wait for task to exit cleanly
                         try:
                             await asyncio.wait_for(active_chat_task, timeout=5.0)
                         except asyncio.TimeoutError:
@@ -94,22 +105,24 @@ async def chat_websocket(
                             with contextlib.suppress(asyncio.CancelledError):
                                 await active_chat_task
 
-                    # Clear interrupt flag before starting new task
-                    chat_service.clear_interrupt(session_id)
+                    # Create fresh cancellation token for new task
+                    active_cancellation_token = CancellationToken()
 
                     # Run chat processing as background task so we can receive interrupts
                     active_chat_task = asyncio.create_task(
-                        _handle_chat_message(data, session_id, chat_service, websocket)
+                        _handle_chat_message(data, session_id, chat_service, websocket, active_cancellation_token)
                     )
 
                 elif msg_type == "interrupt":
                     logger.info(f"Interrupt message received for session {session_id}")
                     # Only interrupt if there's an active task
                     if active_chat_task and not active_chat_task.done():
-                        # Set interrupt flag and send immediate feedback to frontend
-                        # Stream loop will detect flag and exit cleanly, sending assistant_end
+                        if active_cancellation_token:
+                            # Cooperative cancellation via token
+                            await active_cancellation_token.cancel(reason="User interrupt")
+                            logger.info(f"Cancellation token triggered for session {session_id}")
+                        # Also notify chat service to send immediate feedback
                         await chat_service.interrupt(session_id)
-                        logger.info(f"Interrupt flag set for session {session_id}")
                     else:
                         logger.info(f"No active chat task to interrupt for session {session_id}")
 
@@ -117,6 +130,8 @@ async def chat_websocket(
             keepalive_task.cancel()
             # Clean up any running chat task
             if active_chat_task and not active_chat_task.done():
+                if active_cancellation_token:
+                    await active_cancellation_token.cancel(reason="Connection closing")
                 active_chat_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await active_chat_task
@@ -137,6 +152,7 @@ async def _handle_chat_message(
     session_id: str,
     chat_service: ChatService,
     websocket: WebSocket,
+    cancellation_token: CancellationToken,
 ) -> None:
     """Handle chat message processing (runs as background task)."""
     messages = data.get("messages", [])
@@ -149,6 +165,7 @@ async def _handle_chat_message(
             messages=messages,
             model=model,
             reasoning_effort=reasoning_effort,
+            cancellation_token=cancellation_token,
         )
     except asyncio.CancelledError:
         raise  # Let cancellation propagate

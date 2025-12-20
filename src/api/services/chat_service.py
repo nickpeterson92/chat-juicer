@@ -4,7 +4,7 @@ import asyncio
 import inspect
 import json
 
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 from uuid import UUID
 
 import asyncpg
@@ -16,6 +16,9 @@ from api.services.file_context import session_file_context
 from api.services.file_service import FileService
 from api.services.token_aware_session import PostgresTokenAwareSession
 from api.websocket.manager import WebSocketManager
+
+if TYPE_CHECKING:
+    from api.websocket.task_manager import CancellationToken
 from core.agent import create_agent
 from core.constants import (
     MAX_CONVERSATION_TURNS,
@@ -37,11 +40,17 @@ from utils.logger import logger
 
 
 class ChatService:
-    """Chat orchestration service for streaming responses over WebSocket."""
+    """Chat orchestration service for streaming responses over WebSocket.
 
-    # Class-level interrupt flags shared across all instances (keyed by session_id)
-    # This ensures interrupts work correctly even with multiple ChatService instances
-    _interrupt_flags: ClassVar[dict[str, bool]] = {}
+    Uses CancellationToken for cooperative cancellation, providing:
+    - Clean cancellation semantics with reason tracking
+    - Event-driven (not polling) cancellation detection
+    - Integration with structured concurrency patterns
+    """
+
+    # Class-level cancellation tokens (keyed by session_id)
+    # Shared across instances to ensure interrupts work with multiple ChatService instances
+    _cancellation_tokens: ClassVar[dict[str, CancellationToken]] = {}
 
     def __init__(
         self,
@@ -63,11 +72,21 @@ class ChatService:
         messages: list[dict[str, Any]],
         model: str | None = None,
         reasoning_effort: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ) -> None:
-        """Process chat messages and stream response."""
-        # Note: Interrupt flag is defensively cleared by chat.py before starting
-        # this task, so we don't check it here. The flag is only set when there's
-        # an active task to interrupt, and cleared before new messages start.
+        """Process chat messages and stream response.
+
+        Args:
+            session_id: The session identifier
+            messages: List of user messages to process
+            model: Optional model override
+            reasoning_effort: Optional reasoning effort level
+            cancellation_token: Token for cooperative cancellation (preferred over flags)
+        """
+        # Store cancellation token for this session (used by _run_agent_stream)
+        # This supports both the new token-based approach and legacy flag-based approach
+        if cancellation_token is not None:
+            self._cancellation_tokens[session_id] = cancellation_token
 
         async with self.pool.acquire() as conn:
             session_row = await conn.fetchrow(
@@ -192,8 +211,8 @@ class ChatService:
                         logger.info(f"[DIAG:{session_id[:8]}] _run_agent_stream completed: {completed_normally}")
                     finally:
                         disconnect_session()
-                        # Clear interrupt flag after stream ends
-                        self._interrupt_flags.pop(session_id, None)
+                        # Clear cancellation token after stream ends
+                        self._cancellation_tokens.pop(session_id, None)
 
                     # Post-run: update token count in DB and notify frontend
                     await session.update_db_token_count()
@@ -306,9 +325,10 @@ class ChatService:
                     logger.info(f"[DIAG:{session_id[:8]}] First event received: {event.type}")
                 event_count += 1
 
-                # Check interrupt flag
-                if self._interrupt_flags.get(session_id, False):
-                    logger.info(f"Interrupt flag detected at event {event_count}, breaking stream")
+                # Check cancellation via token
+                token = self._cancellation_tokens.get(session_id)
+                if token is not None and token.is_cancelled:
+                    logger.info(f"Cancellation triggered at event {event_count}: reason={token.cancel_reason}")
                     interrupted = True
                     break
 
@@ -377,11 +397,13 @@ class ChatService:
             interrupted = True
             # Don't re-raise - post-stream handling will save partial text
 
-        # Fallback: also check if interrupt flag was set (covers case where stream
-        # completed naturally before CancelledError was raised, but user did interrupt)
-        if not interrupted and self._interrupt_flags.get(session_id, False):
-            logger.info(f"Interrupt flag detected post-stream for {session_id}, treating as interrupted")
-            interrupted = True
+        # Fallback: also check token (covers case where stream completed naturally
+        # before CancelledError was raised, but user did trigger cancellation)
+        if not interrupted:
+            token = self._cancellation_tokens.get(session_id)
+            if token is not None and token.is_cancelled:
+                logger.info(f"Cancellation detected post-stream for {session_id}, treating as interrupted")
+                interrupted = True
 
         # Log the interrupt state for debugging
         logger.info(
@@ -525,24 +547,31 @@ class ChatService:
         logger.info(f"Persisted tool call {name} (call_id={call_id}, success={success})")
 
     async def interrupt(self, session_id: str) -> None:
-        """Interrupt active chat processing via flag-based mechanism.
+        """Interrupt active chat processing via cancellation token.
 
-        Sets the interrupt flag and sends immediate feedback to frontend.
-        The streaming loop will detect the flag and exit cleanly.
+        Cancels the token (if available) and sends immediate feedback to frontend.
+        The stream loop will detect the cancellation and exit cleanly.
         """
-        self._interrupt_flags[session_id] = True
-        logger.info(
-            f"Interrupt flag SET for session {session_id}, ChatService id={id(self)}, "
-            f"dict_id={id(self._interrupt_flags)}, flags={self._interrupt_flags}"
-        )
+        token = self._cancellation_tokens.get(session_id)
+        if token is not None:
+            await token.cancel(reason="User interrupt")
+            logger.info(f"Cancellation token triggered for session {session_id}")
+        else:
+            logger.warning(f"No cancellation token found for session {session_id}")
+
         # Send immediate feedback to frontend (stream loop will send assistant_end when done)
         await self.ws_manager.send(session_id, {"type": "stream_interrupted", "session_id": session_id})
 
     def clear_interrupt(self, session_id: str) -> None:
-        """Clear interrupt flag (used before starting new message processing)."""
-        if session_id in self._interrupt_flags:
-            self._interrupt_flags.pop(session_id, None)
-            logger.info(f"Interrupt flag CLEARED for session {session_id}")
+        """Clear interrupt state (reset cancellation token).
+
+        Note: With the current design, a fresh token is created for each message,
+        so this is rarely needed. Kept for edge cases where token reuse occurs.
+        """
+        token = self._cancellation_tokens.get(session_id)
+        if token is not None:
+            token.reset()
+            logger.info(f"Cancellation token reset for session {session_id}")
 
     async def _send_token_usage(
         self,
