@@ -7,6 +7,7 @@ for both REST and WebSocket endpoints.
 
 from __future__ import annotations
 
+import re
 import secrets
 import time
 
@@ -142,20 +143,13 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         elif request.client:
             client_ip = request.client.host
 
-        # Extract session_id from path if present
+        # Extract session_id from path using explicit patterns
         session_id = None
-        path_parts = request.url.path.split("/")
+        path = request.url.path
 
-        # Check REST routes: /api/v1/sessions/{session_id}
-        if "sessions" in path_parts:
-            idx = path_parts.index("sessions")
-            if idx + 1 < len(path_parts) and path_parts[idx + 1]:
-                session_id = path_parts[idx + 1]
-        # Check WebSocket routes: /ws/chat/{session_id}
-        elif "chat" in path_parts:
-            idx = path_parts.index("chat")
-            if idx + 1 < len(path_parts) and path_parts[idx + 1]:
-                session_id = path_parts[idx + 1]
+        # REST routes: /api/v1/sessions/{session_id}...
+        if (match := re.search(r"/api/v\d+/sessions/([^/]+)", path)) or (match := re.search(r"/ws/chat/([^/]+)", path)):
+            session_id = match.group(1)
 
         # Create and set context
         context = RequestContext(

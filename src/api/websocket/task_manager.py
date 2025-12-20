@@ -181,14 +181,15 @@ class CancellationToken:
         if self.is_cancelled:
             raise asyncio.CancelledError(self._cancel_reason or "Cancellation requested")
 
-    def reset(self) -> None:
+    async def reset(self) -> None:
         """Reset the token to uncancelled state.
 
         Use with caution - typically you should create a new token instead.
         """
-        self._cancelled.clear()
-        self._cancel_reason = None
-        self._callbacks.clear()
+        async with self._lock:
+            self._cancelled.clear()
+            self._cancel_reason = None
+            self._callbacks.clear()
 
 
 __all__ = ["CancellationToken"]

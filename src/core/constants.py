@@ -9,7 +9,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from models.schemas.config import ReasoningLevelConfig
 
 from pydantic import Field, HttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -537,6 +540,23 @@ REASONING_EFFORT_OPTIONS: dict[str, str] = {
     "high": "High",
 }
 
+#: Default reasoning effort level for new sessions.
+DEFAULT_REASONING_EFFORT = "medium"
+
+
+#: Reasoning level configuration for frontend UI.
+#: Each entry contains value, label, and whether it's the default.
+#: Import ReasoningLevelConfig at runtime to avoid circular imports.
+def get_reasoning_levels() -> list[ReasoningLevelConfig]:
+    """Get reasoning levels as ReasoningLevelConfig instances."""
+    from models.schemas.config import ReasoningLevelConfig
+
+    return [
+        ReasoningLevelConfig(value=k, label=v, isDefault=k == DEFAULT_REASONING_EFFORT)
+        for k, v in REASONING_EFFORT_OPTIONS.items()
+    ]
+
+
 # Note: 'minimal' is also valid but deprecated in favor of 'none'
 # The backend maps between them based on model version
 
@@ -630,6 +650,7 @@ class Settings(BaseSettings):
     # API server
     api_port: int = Field(default=8000, description="FastAPI port")
     api_host: str = Field(default="0.0.0.0", description="FastAPI host")
+    app_version: str = Field(default="1.0.0", description="Application version")
 
     # Connection pool configuration
     db_pool_min_size: int = Field(default=2, description="Minimum PostgreSQL connections")

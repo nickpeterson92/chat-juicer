@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from core.constants import DEFAULT_MODEL, MODEL_METADATA, MODELS_WITH_REASONING, get_settings
+from core.constants import DEFAULT_MODEL, MODEL_METADATA, MODELS_WITH_REASONING, get_reasoning_levels, get_settings
 from models.schemas.config import ConfigResponse, MCPServerConfig, ModelConfigItem
 
 router = APIRouter()
@@ -28,8 +28,8 @@ router = APIRouter()
                     "example": {
                         "models": [
                             {
-                                "value": "gpt-4o",
-                                "isDefault": False,
+                                "value": "gpt-5.2",
+                                "isDefault": True,
                                 "supportsReasoning": True,
                             }
                         ],
@@ -99,13 +99,8 @@ async def get_config() -> ConfigResponse:
 
     return ConfigResponse(
         models=models,
-        reasoning_levels=[
-            {"value": "none", "label": "None", "isDefault": False},
-            {"value": "low", "label": "Low", "isDefault": False},
-            {"value": "medium", "label": "Medium", "isDefault": True},
-            {"value": "high", "label": "High", "isDefault": False},
-        ],
+        reasoning_levels=get_reasoning_levels(),
         mcp_servers=mcp_servers,
         max_file_size=settings.max_file_size,
-        version="1.0.0-local",
+        version=settings.app_version,
     )

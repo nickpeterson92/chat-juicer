@@ -17,19 +17,6 @@ from api.services.file_service import FileService
 from api.services.token_aware_session import PostgresTokenAwareSession
 from api.websocket.manager import WebSocketManager
 
-from typing import TYPE_CHECKING, Any, ClassVar
-from uuid import UUID
-
-import asyncpg
-
-from agents import Agent, RunConfig, Runner
-from agents.models.openai_provider import OpenAIProvider
-
-from api.services.file_context import session_file_context
-from api.services.file_service import FileService
-from api.services.token_aware_session import PostgresTokenAwareSession
-from api.websocket.manager import WebSocketManager
-
 if TYPE_CHECKING:
     from api.websocket.task_manager import CancellationToken
 from core.agent import create_agent
@@ -101,6 +88,20 @@ class ChatService:
         if cancellation_token is not None:
             self._cancellation_tokens[session_id] = cancellation_token
 
+        try:
+            await self._process_chat_inner(session_id, messages, model, reasoning_effort)
+        finally:
+            # Always clean up token to prevent memory leak on early failures
+            self._cancellation_tokens.pop(session_id, None)
+
+    async def _process_chat_inner(
+        self,
+        session_id: str,
+        messages: list[dict[str, Any]],
+        model: str | None,
+        reasoning_effort: str | None,
+    ) -> None:
+        """Inner chat processing logic."""
         async with self.pool.acquire() as conn:
             session_row = await conn.fetchrow(
                 "SELECT * FROM sessions WHERE session_id = $1",
@@ -224,8 +225,6 @@ class ChatService:
                         logger.info(f"[DIAG:{session_id[:8]}] _run_agent_stream completed: {completed_normally}")
                     finally:
                         disconnect_session()
-                        # Clear cancellation token after stream ends
-                        self._cancellation_tokens.pop(session_id, None)
 
                     # Post-run: update token count in DB and notify frontend
                     await session.update_db_token_count()

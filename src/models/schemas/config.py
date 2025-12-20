@@ -7,9 +7,25 @@ with comprehensive OpenAPI documentation.
 
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class ReasoningLevelConfig(BaseModel):
+    """Reasoning level configuration for frontend selector."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "value": "medium",
+                "label": "Medium",
+                "isDefault": True,
+            }
+        },
+    )
+
+    value: str = Field(..., description="Reasoning level identifier")
+    label: str = Field(..., description="Human-readable label")
+    isDefault: bool = Field(default=False, description="Whether this is the default level")
 
 
 class ModelConfigItem(BaseModel):
@@ -97,13 +113,8 @@ class ConfigResponse(BaseModel):
         ...,
         description="Available AI models",
     )
-    reasoning_levels: list[dict[str, Any]] = Field(
-        default_factory=lambda: [
-            {"value": "none", "label": "None", "isDefault": False},
-            {"value": "low", "label": "Low", "isDefault": False},
-            {"value": "medium", "label": "Medium", "isDefault": True},
-            {"value": "high", "label": "High", "isDefault": False},
-        ],
+    reasoning_levels: list[ReasoningLevelConfig] = Field(
+        default_factory=list,
         description="Available reasoning effort levels",
     )
     mcp_servers: list[MCPServerConfig] = Field(

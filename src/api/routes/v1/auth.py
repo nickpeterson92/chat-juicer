@@ -103,10 +103,10 @@ async def refresh(body: RefreshRequest, db: DB) -> TokenResponse:
     """Refresh access token."""
     auth = AuthService(db)
     try:
-        access = await auth.refresh(body.refresh_token)
+        tokens = await auth.refresh(body.refresh_token)
         return TokenResponse(
-            access_token=access,
-            refresh_token=body.refresh_token,
+            access_token=tokens["access"],
+            refresh_token=tokens["refresh"],
         )
     except ValueError as exc:
         raise AuthenticationError(
