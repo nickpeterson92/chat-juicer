@@ -28,12 +28,11 @@ router = APIRouter()
                     "example": {
                         "models": [
                             {
-                                "id": "gpt-4o",
-                                "name": "GPT-4o",
-                                "provider": "azure",
-                                "context_window": 128000,
-                                "supports_reasoning": True,
+                                "value": "gpt-4o",
+                                "isDefault": false,
+                                "supportsReasoning": true,
                             }
+                        ],
                         ],
                         "reasoning_efforts": ["none", "low", "medium", "high"],
                         "mcp_servers": [
