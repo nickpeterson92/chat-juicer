@@ -348,7 +348,7 @@ async def openai_exception_handler(request: Request, exc: OpenAIAPIError) -> JSO
     else:
         code = ErrorCode.OPENAI_ERROR
         status_code = 502
-        message = f"OpenAI API error: {exc.message}"
+        message = f"OpenAI API error: {str(exc)}"
 
     settings = get_settings()
     debug_info = None
