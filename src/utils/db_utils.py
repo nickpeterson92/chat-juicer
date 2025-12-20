@@ -95,10 +95,7 @@ async def create_database_pool(
         if pool is None:
             raise ConnectionPoolExhausted("Failed to create connection pool")
 
-        logger.info(
-            f"Database pool created (min={min_size}, max={max_size}, "
-            f"timeout={command_timeout}s, cache={statement_cache_size})"
-        )
+        # Database pool created successfully
 
         return pool
 
