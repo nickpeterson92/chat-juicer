@@ -17,9 +17,21 @@ from api.services.file_service import FileService
 from api.services.token_aware_session import PostgresTokenAwareSession
 from api.websocket.manager import WebSocketManager
 
+from typing import TYPE_CHECKING, Any, ClassVar
+from uuid import UUID
+
+import asyncpg
+
+from agents import Agent, RunConfig, Runner
+from agents.models.openai_provider import OpenAIProvider
+
+from api.services.file_context import session_file_context
+from api.services.file_service import FileService
+from api.services.token_aware_session import PostgresTokenAwareSession
+from api.websocket.manager import WebSocketManager
+
 if TYPE_CHECKING:
-    pass
-from api.websocket.task_manager import CancellationToken
+    from api.websocket.task_manager import CancellationToken
 from core.agent import create_agent
 from core.constants import (
     MAX_CONVERSATION_TURNS,
