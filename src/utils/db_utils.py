@@ -255,7 +255,7 @@ async def graceful_pool_close(pool: asyncpg.Pool, timeout: float = 10.0) -> None
         pool: The pool to close
         timeout: Maximum time to wait for connections to drain
     """
-    logger.info("Initiating graceful database pool shutdown")
+    # Initiating graceful database pool shutdown
 
     # Wait for active connections to be released
     start = asyncio.get_event_loop().time()
