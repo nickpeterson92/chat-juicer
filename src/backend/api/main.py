@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-import os
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from agents import set_default_openai_client, set_tracing_disabled
-from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -23,11 +21,20 @@ from utils.client_factory import create_http_client, create_openai_client
 from utils.db_utils import check_pool_health, create_database_pool, graceful_pool_close
 from utils.logger import logger
 
-# Load environment variables from src/.env at module load time
-env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
-load_dotenv(env_path)
-
+# Settings are loaded via Pydantic Settings with environment-specific file support
+# (.env, .env.{APP_ENV}, .env.local) - no manual dotenv loading needed
 settings = get_settings()
+
+# Log loaded settings in debug mode
+if settings.debug:
+    from core.constants import _get_env_files
+
+    logger.info(f"Env files: {[f.name for f in _get_env_files()]}")
+    logger.info(
+        f"Settings: app_env={settings.app_env}, "
+        f"mcp_pool_size={settings.mcp_pool_size}, "
+        f"db_pool=[{settings.db_pool_min_size},{settings.db_pool_max_size}]"
+    )
 
 
 def _setup_openai_client() -> None:

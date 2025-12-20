@@ -6,16 +6,22 @@ Includes Pydantic validation for environment variables.
 
 from __future__ import annotations
 
+import os
+import threading
+
 from dataclasses import dataclass
-from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from models.schemas.config import ReasoningLevelConfig
 
-from pydantic import Field, HttpUrl, field_validator
+from pydantic import Field, HttpUrl, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings.sources import (
+    DotEnvSettingsSource,
+    PydanticBaseSettingsSource,
+)
 
 # ============================================================================
 # Project Paths
@@ -607,14 +613,58 @@ MODEL_TOKEN_LIMITS: dict[str, int] = {m.id: m.token_limit for m in MODEL_CONFIGS
 # Environment Configuration with Pydantic Validation
 # ============================================================================
 
+#: Valid environment names for configuration loading
+Environment = Literal["development", "production", "test"]
+
+#: Backend source directory for .env file resolution
+_BACKEND_DIR = Path(__file__).parent.parent
+
+
+def _get_env_files() -> list[Path]:
+    """Determine which .env files to load based on APP_ENV.
+
+    Load order (later files override earlier - pydantic-settings last-wins):
+    1. .env (base defaults) - lowest priority
+    2. .env.{environment} (environment-specific overrides)
+    3. .env.local (local developer overrides, gitignored) - highest priority
+
+    Returns:
+        List of Path objects for env files that exist.
+    """
+    env_name = os.getenv("APP_ENV", "development").lower()
+    if env_name not in ("development", "production", "test"):
+        env_name = "development"
+
+    # Order: lowest priority first, highest priority last (last-wins)
+    candidates = [
+        _BACKEND_DIR / ".env",
+        _BACKEND_DIR / f".env.{env_name}",
+        _BACKEND_DIR / ".env.local",
+    ]
+    return [p for p in candidates if p.exists()]
+
 
 class Settings(BaseSettings):
-    """Environment settings with validation.
+    """Environment settings with validation and environment-specific file support.
 
-    Loads from environment variables and .env file.
+    Loads configuration from environment variables and .env files with the following
+    precedence (highest to lowest):
+    1. Environment variables (always highest priority)
+    2. .env.local (local developer overrides, gitignored)
+    3. .env.{APP_ENV} (environment-specific: .env.development, .env.production, .env.test)
+    4. .env (base defaults)
+
+    Set APP_ENV environment variable to control which environment config to load:
+    - development (default): Local development settings
+    - production: Production settings with stricter validation
+    - test: Test environment settings
+
     Validates at startup to fail fast on configuration errors.
     Supports both Azure OpenAI and base OpenAI API providers.
     """
+
+    # Environment identification
+    app_env: Environment = Field(default="development", description="Application environment")
 
     # API provider selection
     api_provider: str = Field(default="azure", description="API provider: 'azure' or 'openai'")
@@ -625,12 +675,9 @@ class Settings(BaseSettings):
 
     # Base OpenAI settings (required if provider=openai)
     openai_api_key: str | None = Field(default=None, description="OpenAI API key for authentication")
-    openai_model: str = Field(default="gpt-4-turbo", description="OpenAI model name")
 
-    # Optional debug setting
+    # Debug and logging
     debug: bool = Field(default=False, description="Enable debug logging")
-
-    # HTTP request/response logging (for debugging Azure OpenAI issues)
     http_request_logging: bool = Field(default=False, description="Enable HTTP request/response logging")
 
     # Tavily MCP server API key (optional - enables web search via Tavily)
@@ -707,12 +754,77 @@ class Settings(BaseSettings):
     access_token_expires_minutes: int = Field(default=15, description="Access token lifetime (minutes)")
     refresh_token_expires_days: int = Field(default=7, description="Refresh token lifetime (days)")
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,  # Allow both AZURE_OPENAI_API_KEY and azure_openai_api_key
-        extra="ignore",  # Ignore extra environment variables
+    # Hot-reload support (development only)
+    config_hot_reload: bool = Field(
+        default=False,
+        description="Enable configuration hot-reloading (development only, has performance cost)",
     )
+
+    model_config = SettingsConfigDict(
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """Customize settings source priority for environment-specific config.
+
+        Called at instantiation time (not class definition), ensuring fresh
+        file detection on each Settings() call. This fixes issues with uvicorn
+        reload where class-level env_file was evaluated only once at import time.
+
+        Priority (highest to lowest):
+        1. init_settings - Values passed to Settings() constructor
+        2. env_settings - Environment variables (always win over files)
+        3. .env.local - Local developer overrides (gitignored)
+        4. .env.{APP_ENV} - Environment-specific overrides
+        5. .env - Base defaults (lowest priority)
+        """
+        # Determine env files dynamically at instantiation time
+        env_files = _get_env_files()  # Returns [.env, .env.{env}, .env.local]
+
+        # Use single DotEnvSettingsSource with all files - last-wins semantics
+        dotenv_source = DotEnvSettingsSource(
+            settings_cls,
+            env_file=env_files,  # [.env, .env.development] - last wins
+            env_file_encoding="utf-8",
+        )
+
+        # IMPORTANT: dotenv_source comes BEFORE env_settings in priority.
+        # This is the opposite of pydantic-settings' default behavior.
+        #
+        # We do this because third-party libraries (like magika, imported by markitdown)
+        # call load_dotenv() at import time, polluting os.environ with base .env values.
+        # By giving our dotenv files higher priority than os.environ, we ensure that
+        # environment-specific configs (.env.development, .env.production) are respected.
+        #
+        # Priority order (first = highest):
+        # 1. init_settings - Values passed to Settings() constructor
+        # 2. dotenv files - .env.local > .env.{APP_ENV} > .env (last-wins in list)
+        # 3. env_settings - Actual environment variables (lowest priority)
+        #
+        # Note: This means env vars set via Docker/shell won't override dotenv files.
+        # To override in production, use .env.production or .env.local files instead.
+        return (init_settings, dotenv_source, env_settings)
+
+    @field_validator("app_env", mode="before")
+    @classmethod
+    def validate_app_env(cls, v: str | None) -> str:
+        """Validate and normalize APP_ENV value."""
+        if v is None:
+            return "development"
+        normalized = str(v).lower()
+        if normalized not in ("development", "production", "test"):
+            raise ValueError(f"app_env must be 'development', 'production', or 'test', got '{v}'")
+        return normalized
 
     @field_validator("api_provider")
     @classmethod
@@ -762,21 +874,45 @@ class Settings(BaseSettings):
     @field_validator("jwt_secret")
     @classmethod
     def validate_jwt_secret(cls, v: str) -> str:
-        """Validate JWT secret is provided."""
+        """Validate JWT secret meets minimum security requirements."""
         if not v or len(v) < 8:
             raise ValueError("jwt_secret must be at least 8 characters")
         return v
 
-    def model_post_init(self, __context: Any) -> None:
-        """Validate that required keys are present for selected provider."""
+    @model_validator(mode="after")
+    def validate_provider_credentials(self) -> Settings:
+        """Validate that required credentials are present for the selected provider."""
         if self.api_provider == "azure":
             if not self.azure_openai_api_key:
-                raise ValueError("azure_openai_api_key is required when api_provider='azure'")
+                raise ValueError(
+                    "Configuration Error: azure_openai_api_key is required when api_provider='azure'.\n"
+                    "Set AZURE_OPENAI_API_KEY in your .env file or environment."
+                )
             if not self.azure_openai_endpoint:
-                raise ValueError("azure_openai_endpoint is required when api_provider='azure'")
+                raise ValueError(
+                    "Configuration Error: azure_openai_endpoint is required when api_provider='azure'.\n"
+                    "Set AZURE_OPENAI_ENDPOINT in your .env file or environment."
+                )
         elif self.api_provider == "openai":
             if not self.openai_api_key:
-                raise ValueError("openai_api_key is required when api_provider='openai'")
+                raise ValueError(
+                    "Configuration Error: openai_api_key is required when api_provider='openai'.\n"
+                    "Set OPENAI_API_KEY in your .env file or environment."
+                )
+
+        # Production environment validation
+        if self.app_env == "production":
+            if self.jwt_secret == "change-me-in-prod":
+                raise ValueError(
+                    "Configuration Error: jwt_secret must be changed from default in production.\n"
+                    "Set JWT_SECRET to a secure random string in your .env.production file."
+                )
+            if self.allow_localhost_noauth:
+                raise ValueError(
+                    "Configuration Error: allow_localhost_noauth must be False in production.\n"
+                    "Set ALLOW_LOCALHOST_NOAUTH=false in your .env.production file."
+                )
+        return self
 
     @property
     def azure_endpoint_str(self) -> str:
@@ -785,13 +921,122 @@ class Settings(BaseSettings):
             return ""
         return str(self.azure_openai_endpoint)
 
+    @property
+    def is_development(self) -> bool:
+        """Check if running in development mode."""
+        return self.app_env == "development"
 
-@lru_cache
-def get_settings() -> Settings:
-    """Get cached settings instance.
+    @property
+    def is_production(self) -> bool:
+        """Check if running in production mode."""
+        return self.app_env == "production"
 
-    Uses LRU cache to ensure we only load and validate settings once.
-    This function will raise validation errors at startup if config is invalid.
-    Pydantic will load from environment variables automatically.
+    @property
+    def is_test(self) -> bool:
+        """Check if running in test mode."""
+        return self.app_env == "test"
+
+
+# ============================================================================
+# Settings Management (Thread-safe with Hot-Reload Support)
+# ============================================================================
+
+
+class _SettingsManager:
+    """Thread-safe settings manager with optional hot-reload support.
+
+    Uses a class to avoid global statement warnings from linters.
     """
-    return Settings()
+
+    __slots__ = ("_instance", "_lock")
+
+    def __init__(self) -> None:
+        self._instance: Settings | None = None
+        self._lock = threading.Lock()
+
+    def get(self) -> Settings:
+        """Get settings instance with optional hot-reload support.
+
+        In production: Settings are loaded once and cached (thread-safe singleton).
+        In development with hot-reload enabled: Settings are reloaded on each call.
+
+        Returns:
+            Validated Settings instance.
+
+        Raises:
+            ValueError: If required configuration is missing or invalid.
+        """
+        # Fast path: return cached instance if available and hot-reload disabled
+        if self._instance is not None and not self._instance.config_hot_reload:
+            return self._instance
+
+        with self._lock:
+            # Double-check after acquiring lock
+            if self._instance is not None and not self._instance.config_hot_reload:
+                return self._instance
+
+            # Load fresh settings
+            self._instance = Settings()
+            return self._instance
+
+    def reload(self) -> Settings:
+        """Force reload settings from environment files.
+
+        Useful for development hot-reload or testing scenarios.
+        Thread-safe: Uses lock to prevent concurrent reload issues.
+
+        Returns:
+            Fresh Settings instance loaded from current environment.
+        """
+        with self._lock:
+            self._instance = Settings()
+            return self._instance
+
+    def clear(self) -> None:
+        """Clear cached settings instance.
+
+        Primarily useful for testing to ensure fresh settings on each test.
+        """
+        with self._lock:
+            self._instance = None
+
+
+# Module-level singleton manager
+_settings_manager = _SettingsManager()
+
+
+def get_settings() -> Settings:
+    """Get settings instance with optional hot-reload support.
+
+    This is the primary entry point for accessing application settings.
+    Settings are validated at startup and cached for performance.
+
+    In development with CONFIG_HOT_RELOAD=true, settings are reloaded
+    on each call to pick up .env file changes without restart.
+
+    Returns:
+        Validated Settings instance.
+
+    Raises:
+        ValueError: If required configuration is missing or invalid.
+    """
+    return _settings_manager.get()
+
+
+def reload_settings() -> Settings:
+    """Force reload settings from environment files.
+
+    Useful for development hot-reload or testing scenarios.
+
+    Returns:
+        Fresh Settings instance loaded from current environment.
+    """
+    return _settings_manager.reload()
+
+
+def clear_settings_cache() -> None:
+    """Clear cached settings instance.
+
+    Primarily useful for testing to ensure fresh settings on each test.
+    """
+    _settings_manager.clear()

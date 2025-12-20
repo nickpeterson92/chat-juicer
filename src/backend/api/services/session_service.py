@@ -11,7 +11,7 @@ from uuid import UUID
 import asyncpg
 
 from api.services.message_utils import row_to_message
-from core.constants import DATA_FILES_PATH, DEFAULT_MODEL, MODEL_TOKEN_LIMITS, get_settings
+from core.constants import DATA_FILES_PATH, DEFAULT_MODEL, MODEL_TOKEN_LIMITS
 from utils.logger import logger
 
 
@@ -35,7 +35,6 @@ class SessionService:
     ) -> dict[str, Any]:
         """Create a new session."""
         session_id = self._generate_session_id()
-        settings = get_settings()
 
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
@@ -49,7 +48,7 @@ class SessionService:
                 user_id,
                 session_id,
                 title,
-                model or settings.openai_model or DEFAULT_MODEL,
+                model or DEFAULT_MODEL,
                 json.dumps(mcp_config or ["sequential-thinking", "fetch"]),
                 reasoning_effort or "medium",
             )
