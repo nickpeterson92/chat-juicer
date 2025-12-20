@@ -43,8 +43,8 @@ class TestGetSettings:
 
         # Ensure hot-reload is disabled for this test
         mock_env_no_reload = {**mock_env, "CONFIG_HOT_RELOAD": "false"}
-        # Mock _get_env_files to return empty list - prevents dotenv files from
-        # overriding os.environ (dotenv has higher priority in our config)
+        # Mock _get_env_files to return empty list - prevents actual dotenv files
+        # from being loaded, allowing us to control settings via os.environ patches
         with (
             patch.dict("os.environ", mock_env_no_reload, clear=True),
             patch("core.constants._get_env_files", return_value=[]),
@@ -80,8 +80,8 @@ class TestGetSettings:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_MODEL", raising=False)
 
-        # Mock _get_env_files to return empty list - prevents dotenv files from
-        # overriding os.environ (dotenv has higher priority in our config)
+        # Mock _get_env_files to return empty list - prevents actual dotenv files
+        # from being loaded, allowing us to control settings via os.environ patches
         with patch("core.constants._get_env_files", return_value=[]):
             # Force reload by calling directly instead of using cached instance
             settings = Settings()

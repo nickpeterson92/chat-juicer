@@ -644,15 +644,37 @@ def _get_env_files() -> list[Path]:
     return [p for p in candidates if p.exists()]
 
 
+def _reload_dotenv_into_environ() -> None:
+    """Reload our dotenv files into os.environ to fix third-party pollution.
+
+    Some libraries (magika via markitdown) call load_dotenv() at import time,
+    loading just the base .env file into os.environ. This pollutes os.environ
+    with base values that should be overridden by environment-specific configs.
+
+    This function reloads our full dotenv chain into os.environ to ensure
+    environment-specific values (.env.development, .env.production) take precedence.
+
+    Must be called BEFORE Settings() instantiation.
+    """
+    from dotenv import load_dotenv
+
+    for env_file in _get_env_files():
+        load_dotenv(env_file, override=True)
+
+
 class Settings(BaseSettings):
     """Environment settings with validation and environment-specific file support.
 
-    Loads configuration from environment variables and .env files with the following
-    precedence (highest to lowest):
-    1. Environment variables (always highest priority)
-    2. .env.local (local developer overrides, gitignored)
-    3. .env.{APP_ENV} (environment-specific: .env.development, .env.production, .env.test)
-    4. .env (base defaults)
+    Configuration priority (highest to lowest):
+    1. Values passed to Settings() constructor
+    2. Environment variables (standard Docker/K8s behavior)
+    3. .env.local > .env.{APP_ENV} > .env (dotenv files, last wins)
+
+    **Note on third-party library compatibility**: Some libraries (e.g., magika
+    via markitdown) call load_dotenv() at import time, polluting os.environ with
+    base .env values. We counteract this by explicitly reloading our environment-
+    specific dotenv files into os.environ before Settings is instantiated, ensuring
+    .env.{APP_ENV} values override any pollution from base .env.
 
     Set APP_ENV environment variable to control which environment config to load:
     - development (default): Local development settings
@@ -777,16 +799,15 @@ class Settings(BaseSettings):
     ) -> tuple[PydanticBaseSettingsSource, ...]:
         """Customize settings source priority for environment-specific config.
 
-        Called at instantiation time (not class definition), ensuring fresh
-        file detection on each Settings() call. This fixes issues with uvicorn
-        reload where class-level env_file was evaluated only once at import time.
-
-        Priority (highest to lowest):
+        Priority (highest to lowest) - standard Docker/K8s behavior:
         1. init_settings - Values passed to Settings() constructor
-        2. env_settings - Environment variables (always win over files)
-        3. .env.local - Local developer overrides (gitignored)
-        4. .env.{APP_ENV} - Environment-specific overrides
-        5. .env - Base defaults (lowest priority)
+        2. env_settings - Environment variables
+        3. dotenv files - .env.local > .env.{APP_ENV} > .env (last-wins in list)
+
+        Note: The env_settings source is already constructed before this method
+        is called, capturing os.environ at that moment. To handle third-party
+        library pollution (magika via markitdown calling load_dotenv at import),
+        call _reload_dotenv_into_environ() BEFORE instantiating Settings().
         """
         # Determine env files dynamically at instantiation time
         env_files = _get_env_files()  # Returns [.env, .env.{env}, .env.local]
@@ -798,22 +819,10 @@ class Settings(BaseSettings):
             env_file_encoding="utf-8",
         )
 
-        # IMPORTANT: dotenv_source comes BEFORE env_settings in priority.
-        # This is the opposite of pydantic-settings' default behavior.
-        #
-        # We do this because third-party libraries (like magika, imported by markitdown)
-        # call load_dotenv() at import time, polluting os.environ with base .env values.
-        # By giving our dotenv files higher priority than os.environ, we ensure that
-        # environment-specific configs (.env.development, .env.production) are respected.
-        #
-        # Priority order (first = highest):
-        # 1. init_settings - Values passed to Settings() constructor
-        # 2. dotenv files - .env.local > .env.{APP_ENV} > .env (last-wins in list)
-        # 3. env_settings - Actual environment variables (lowest priority)
-        #
-        # Note: This means env vars set via Docker/shell won't override dotenv files.
-        # To override in production, use .env.production or .env.local files instead.
-        return (init_settings, dotenv_source, env_settings)
+        # Standard priority: env vars override dotenv files
+        # This enables proper Docker/Kubernetes deployments where config
+        # is injected via environment variables
+        return (init_settings, env_settings, dotenv_source)
 
     @field_validator("app_env", mode="before")
     @classmethod
@@ -975,6 +984,12 @@ class _SettingsManager:
             if self._instance is not None and not self._instance.config_hot_reload:
                 return self._instance
 
+            # CRITICAL: Reload dotenv files BEFORE creating Settings.
+            # This fixes third-party library pollution (magika via markitdown
+            # calls load_dotenv() at import time, loading just base .env).
+            # Our reload ensures .env.{APP_ENV} values override the pollution.
+            _reload_dotenv_into_environ()
+
             # Load fresh settings
             self._instance = Settings()
             return self._instance
@@ -989,6 +1004,8 @@ class _SettingsManager:
             Fresh Settings instance loaded from current environment.
         """
         with self._lock:
+            # Reload dotenv files to fix any third-party pollution
+            _reload_dotenv_into_environ()
             self._instance = Settings()
             return self._instance
 
