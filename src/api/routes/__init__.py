@@ -6,6 +6,6 @@ WebSocket routes (chat) remain at the top level.
 
 from __future__ import annotations
 
-from api.routes import chat
+from . import chat
 
 __all__ = ["chat"]
