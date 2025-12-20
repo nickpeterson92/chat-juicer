@@ -633,6 +633,12 @@ class Settings(BaseSettings):
     # Connection pool configuration
     db_pool_min_size: int = Field(default=2, description="Minimum PostgreSQL connections")
     db_pool_max_size: int = Field(default=10, description="Maximum PostgreSQL connections")
+    db_command_timeout: float = Field(default=60.0, description="Default query timeout (seconds)")
+    db_connection_timeout: float = Field(default=10.0, description="Connection acquire timeout (seconds)")
+    db_statement_cache_size: int = Field(default=100, description="Prepared statement cache size per connection")
+    db_max_inactive_connection_lifetime: float = Field(
+        default=300.0, description="Close connections idle longer than this (seconds)"
+    )
     mcp_pool_size: int = Field(default=3, description="MCP server instances per server type")
     mcp_acquire_timeout: float = Field(default=30.0, description="MCP server acquire timeout (seconds)")
 
@@ -641,10 +647,32 @@ class Settings(BaseSettings):
         default=600.0,
         description="Close WebSocket connections idle longer than this (seconds, default 10 min)",
     )
+    ws_max_connections: int = Field(
+        default=100,
+        description="Maximum total WebSocket connections allowed",
+    )
+    ws_max_connections_per_session: int = Field(
+        default=3,
+        description="Maximum WebSocket connections per session (prevents resource exhaustion)",
+    )
+    ws_heartbeat_interval: float = Field(
+        default=30.0,
+        description="WebSocket heartbeat/ping interval (seconds)",
+    )
 
     # HTTP client timeouts (for Azure OpenAI streaming)
     # Reasoning models (GPT-5, O1, O3) can pause 30+ seconds while "thinking"
     http_read_timeout: float = Field(default=600.0, description="HTTP read timeout for streaming (seconds)")
+
+    # Graceful shutdown configuration
+    shutdown_timeout: float = Field(
+        default=30.0,
+        description="Maximum time to wait for graceful shutdown (seconds)",
+    )
+    shutdown_connection_drain_timeout: float = Field(
+        default=10.0,
+        description="Time to wait for WebSocket connections to drain during shutdown (seconds)",
+    )
 
     # Auth (Phase 1 convenience)
     default_user_email: str = Field(default="local@chatjuicer.dev", description="Seeded default user email")

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import os
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-
-import asyncpg
 
 from agents import set_default_openai_client, set_tracing_disabled
 from dotenv import load_dotenv
@@ -20,6 +19,7 @@ from core.constants import get_settings
 from integrations.mcp_pool import initialize_mcp_pool
 from integrations.sdk_token_tracker import patch_sdk_for_auto_tracking
 from utils.client_factory import create_http_client, create_openai_client
+from utils.db_utils import check_pool_health, create_database_pool, graceful_pool_close
 from utils.logger import logger
 
 # Load environment variables from src/.env at module load time
@@ -64,26 +64,44 @@ def _setup_openai_client() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Application lifespan: startup and shutdown."""
+    """Application lifespan: startup and shutdown with graceful handling."""
+    # Track shutdown state
+    shutdown_event = asyncio.Event()
+    app.state.shutdown_event = shutdown_event
+
     # Initialize OpenAI client for agents SDK
     _setup_openai_client()
 
     # Enable SDK-level tool token tracking
     patch_sdk_for_auto_tracking()
 
-    app.state.db_pool = await asyncpg.create_pool(
+    # Create database pool with production configuration
+    app.state.db_pool = await create_database_pool(
         dsn=settings.database_url,
         min_size=settings.db_pool_min_size,
         max_size=settings.db_pool_max_size,
+        command_timeout=settings.db_command_timeout,
+        connection_timeout=settings.db_connection_timeout,
+        statement_cache_size=settings.db_statement_cache_size,
+        max_inactive_connection_lifetime=settings.db_max_inactive_connection_lifetime,
     )
 
-    # Initialize WebSocket manager on app.state for centralized connection tracking
-    # Includes idle timeout to cleanup connections and release server-side file contexts
-    app.state.ws_manager = WebSocketManager(idle_timeout_seconds=settings.ws_idle_timeout)
+    # Verify database connectivity
+    health = await check_pool_health(app.state.db_pool)
+    if not health["healthy"]:
+        logger.error("Database health check failed during startup")
+        raise RuntimeError("Database connection failed")
+    logger.info(f"Database pool healthy: {health}")
+
+    # Initialize WebSocket manager with connection limits
+    app.state.ws_manager = WebSocketManager(
+        idle_timeout_seconds=settings.ws_idle_timeout,
+        max_connections=settings.ws_max_connections,
+        max_connections_per_session=settings.ws_max_connections_per_session,
+    )
     await app.state.ws_manager.start_idle_checker()
 
-    # Initialize MCP server pool on app.state for concurrent request handling
-    # Pool pre-spawns server instances to avoid per-request overhead
+    # Initialize MCP server pool
     app.state.mcp_pool = await initialize_mcp_pool(
         pool_size=settings.mcp_pool_size,
         acquire_timeout=settings.mcp_acquire_timeout,
@@ -93,16 +111,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     try:
         yield
     finally:
-        # Stop WebSocket idle checker
-        if app.state.ws_manager:
-            await app.state.ws_manager.stop_idle_checker()
+        logger.info("Initiating graceful shutdown sequence")
 
-        # Shutdown MCP pool (gracefully closes all pooled servers)
+        # Signal shutdown to any waiting tasks
+        shutdown_event.set()
+
+        # Phase 1: Stop accepting new WebSocket connections and drain existing
+        if app.state.ws_manager:
+            await app.state.ws_manager.graceful_shutdown(timeout=settings.shutdown_connection_drain_timeout)
+
+        # Phase 2: Shutdown MCP pool
         if app.state.mcp_pool:
             await app.state.mcp_pool.shutdown()
             logger.info("MCP server pool shutdown complete")
 
-        await app.state.db_pool.close()
+        # Phase 3: Gracefully close database pool
+        await graceful_pool_close(app.state.db_pool, timeout=settings.shutdown_timeout)
 
 
 app = FastAPI(

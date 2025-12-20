@@ -12,28 +12,67 @@ from utils.logger import logger
 
 
 class WebSocketManager:
-    """Manage active WebSocket connections by session with idle timeout support."""
+    """Manage active WebSocket connections by session with idle timeout and connection limits."""
 
-    def __init__(self, idle_timeout_seconds: float = 600.0) -> None:
+    def __init__(
+        self,
+        idle_timeout_seconds: float = 600.0,
+        max_connections: int = 100,
+        max_connections_per_session: int = 3,
+    ) -> None:
         """Initialize the WebSocket manager.
 
         Args:
             idle_timeout_seconds: Close connections idle longer than this (default 10 min)
+            max_connections: Maximum total connections allowed
+            max_connections_per_session: Maximum connections per session
         """
         self.connections: dict[str, set[WebSocket]] = {}
         self.last_activity: dict[WebSocket, float] = {}
         self.idle_timeout = idle_timeout_seconds
+        self.max_connections = max_connections
+        self.max_connections_per_session = max_connections_per_session
         self._lock = asyncio.Lock()
         self._idle_checker_task: asyncio.Task[None] | None = None
+        self._shutting_down = False
 
-    async def connect(self, websocket: WebSocket, session_id: str) -> None:
-        """Register a WebSocket connection."""
-        await websocket.accept()
+    async def connect(self, websocket: WebSocket, session_id: str) -> bool:
+        """Register a WebSocket connection.
+
+        Returns:
+            True if connection was accepted, False if rejected due to limits
+        """
         async with self._lock:
+            # Check if shutting down
+            if self._shutting_down:
+                logger.warning(f"Rejecting connection during shutdown for session {session_id}")
+                return False
+
+            # Check total connection limit
+            if self.connection_count >= self.max_connections:
+                logger.warning(f"Rejecting connection: max connections ({self.max_connections}) reached")
+                return False
+
+            # Check per-session limit
+            session_connections = len(self.connections.get(session_id, set()))
+            if session_connections >= self.max_connections_per_session:
+                logger.warning(
+                    f"Rejecting connection: session {session_id} at limit " f"({self.max_connections_per_session})"
+                )
+                return False
+
+            await websocket.accept()
+
             if session_id not in self.connections:
                 self.connections[session_id] = set()
             self.connections[session_id].add(websocket)
             self.last_activity[websocket] = time.monotonic()
+
+            logger.info(
+                f"WebSocket connected for session {session_id} "
+                f"(total: {self.connection_count}, session: {session_connections + 1})"
+            )
+            return True
 
     async def disconnect(self, websocket: WebSocket, session_id: str) -> None:
         """Remove a WebSocket connection."""
@@ -58,6 +97,11 @@ class WebSocketManager:
                 await ws.send_json(message)
             except Exception:  # noqa: PERF203
                 await self.disconnect(ws, session_id)
+
+    async def broadcast(self, message: dict[str, Any]) -> None:
+        """Broadcast message to all connected clients."""
+        for session_id in list(self.connections.keys()):
+            await self.send(session_id, message)
 
     async def start_idle_checker(self) -> None:
         """Start background task to close idle connections."""
@@ -100,6 +144,46 @@ class WebSocketManager:
                 await ws.close(code=4000, reason="Idle timeout")
             await self.disconnect(ws, session_id)
 
+    async def graceful_shutdown(self, timeout: float = 10.0) -> None:
+        """Gracefully shutdown all WebSocket connections.
+
+        Args:
+            timeout: Maximum time to wait for connections to close
+        """
+        self._shutting_down = True
+        logger.info(f"Initiating graceful WebSocket shutdown (timeout: {timeout}s)")
+
+        # Stop accepting new connections and idle checker
+        await self.stop_idle_checker()
+
+        # Notify all clients of shutdown
+        await self.broadcast({"type": "server_shutdown", "message": "Server is shutting down"})
+
+        # Give clients a moment to receive the message
+        await asyncio.sleep(0.5)
+
+        # Close all connections
+        all_connections: list[tuple[WebSocket, str]] = []
+        async with self._lock:
+            for session_id, websockets in list(self.connections.items()):
+                for ws in list(websockets):
+                    all_connections.append((ws, session_id))  # noqa: PERF401
+
+        # Close connections concurrently with timeout
+        async def close_connection(ws: WebSocket, session_id: str) -> None:
+            with contextlib.suppress(Exception):
+                await ws.close(code=1001, reason="Server shutdown")
+            await self.disconnect(ws, session_id)
+
+        if all_connections:
+            close_tasks = [close_connection(ws, sid) for ws, sid in all_connections]
+            try:
+                await asyncio.wait_for(asyncio.gather(*close_tasks), timeout=timeout)
+            except asyncio.TimeoutError:
+                logger.warning(f"Timeout closing {len(all_connections)} WebSocket connections")
+
+        logger.info(f"WebSocket shutdown complete (closed {len(all_connections)} connections)")
+
     @property
     def connection_count(self) -> int:
         """Total number of active connections."""
@@ -109,3 +193,14 @@ class WebSocketManager:
     def session_count(self) -> int:
         """Number of sessions with active connections."""
         return len(self.connections)
+
+    def get_stats(self) -> dict[str, Any]:
+        """Get connection statistics."""
+        return {
+            "total_connections": self.connection_count,
+            "total_sessions": self.session_count,
+            "max_connections": self.max_connections,
+            "max_per_session": self.max_connections_per_session,
+            "idle_timeout": self.idle_timeout,
+            "shutting_down": self._shutting_down,
+        }

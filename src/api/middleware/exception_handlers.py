@@ -438,17 +438,19 @@ def register_exception_handlers(app: FastAPI) -> None:
         register_exception_handlers(app)
     """
     # Application-specific exceptions
-    app.add_exception_handler(AppException, app_exception_handler)
+    # Note: type: ignore needed because Starlette's type signature expects Exception,
+    # but covariant exception types in handlers are safe and work correctly at runtime
+    app.add_exception_handler(AppException, app_exception_handler)  # type: ignore[arg-type]
 
     # FastAPI/Starlette exceptions
-    app.add_exception_handler(HTTPException, http_exception_handler)
-    app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[arg-type]
 
     # Pydantic exceptions
-    app.add_exception_handler(ValidationError, pydantic_exception_handler)
+    app.add_exception_handler(ValidationError, pydantic_exception_handler)  # type: ignore[arg-type]
 
     # OpenAI exceptions
-    app.add_exception_handler(OpenAIAPIError, openai_exception_handler)
+    app.add_exception_handler(OpenAIAPIError, openai_exception_handler)  # type: ignore[arg-type]
 
     # Database exceptions
     app.add_exception_handler(asyncpg.PostgresError, asyncpg_exception_handler)

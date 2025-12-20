@@ -55,7 +55,13 @@ async def chat_websocket(
         await websocket.close(code=WSCloseCode.AUTH_REQUIRED)
         return
 
-    await ws_manager.connect(websocket, session_id)
+    # Connect with limits checking - returns False if connection rejected
+    if not await ws_manager.connect(websocket, session_id):
+        # Connection was rejected (limits exceeded or shutting down)
+        # Note: WebSocket is not yet accepted, so we need to accept then close with proper code
+        await websocket.accept()
+        await websocket.close(code=4503, reason="Service unavailable - connection limit reached")
+        return
 
     chat_service = ChatService(
         db,
