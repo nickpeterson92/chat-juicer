@@ -118,7 +118,7 @@ async def list_messages(
     db: DB,
     offset: Annotated[
         int,
-        Query(ge=0, description="Number of messages to skip (from newest)", example=0),
+        Query(ge=0, description="Number of messages to skip (from oldest)", example=0),
     ] = 0,
     limit: Annotated[
         int,
