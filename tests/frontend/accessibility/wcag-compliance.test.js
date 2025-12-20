@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 describe("WCAG 2.1 AA Compliance", () => {
   describe("Images and SVGs", () => {
     it("should have accessible SVG content", () => {
-      const htmlPath = resolve(process.cwd(), "ui/index.html");
+      const htmlPath = resolve(process.cwd(), "src/frontend/ui/index.html");
       const html = readFileSync(htmlPath, "utf-8");
 
       // Find all SVG tags
@@ -40,7 +40,7 @@ describe("WCAG 2.1 AA Compliance", () => {
 
   describe("Semantic HTML", () => {
     it("should use proper ARIA labels for interactive elements", () => {
-      const htmlPath = resolve(process.cwd(), "ui/index.html");
+      const htmlPath = resolve(process.cwd(), "src/frontend/ui/index.html");
       const html = readFileSync(htmlPath, "utf-8");
 
       // Check for title attributes on interactive elements
@@ -50,7 +50,7 @@ describe("WCAG 2.1 AA Compliance", () => {
     });
 
     it("should have proper lang attribute", () => {
-      const htmlPath = resolve(process.cwd(), "ui/index.html");
+      const htmlPath = resolve(process.cwd(), "src/frontend/ui/index.html");
       const html = readFileSync(htmlPath, "utf-8");
 
       // HTML should have lang attribute
@@ -60,7 +60,7 @@ describe("WCAG 2.1 AA Compliance", () => {
 
   describe("Form Elements", () => {
     it("should have textarea with proper attributes", () => {
-      const htmlPath = resolve(process.cwd(), "ui/index.html");
+      const htmlPath = resolve(process.cwd(), "src/frontend/ui/index.html");
       const html = readFileSync(htmlPath, "utf-8");
 
       // Check textarea has id and placeholder
@@ -71,7 +71,7 @@ describe("WCAG 2.1 AA Compliance", () => {
 
   describe("Color Independence", () => {
     it("should use semantic status styling rather than color alone", () => {
-      const htmlPath = resolve(process.cwd(), "ui/index.html");
+      const htmlPath = resolve(process.cwd(), "src/frontend/ui/index.html");
       const html = readFileSync(htmlPath, "utf-8");
 
       // Toast notifications use semantic CSS classes for status indication

@@ -15,8 +15,8 @@ export default defineConfig({
       exclude: [
         "node_modules/",
         "dist/",
-        "electron/main.js",
-        "electron/preload.js",
+        "src/frontend/main.js",
+        "src/frontend/preload.js",
         "scripts/",
         "**/*.config.js",
         "**/*.spec.js",
@@ -61,12 +61,12 @@ export default defineConfig({
   // Resolve aliases to match main vite config
   resolve: {
     alias: {
-      "@": resolve(__dirname, "electron/renderer"),
-      "@utils": resolve(__dirname, "electron/renderer/utils"),
-      "@ui": resolve(__dirname, "electron/renderer/ui"),
-      "@config": resolve(__dirname, "electron/renderer/config"),
-      "@adapters": resolve(__dirname, "electron/renderer/adapters"),
-      "@services": resolve(__dirname, "electron/renderer/services"),
+      "@": resolve(__dirname, "src/frontend/renderer"),
+      "@utils": resolve(__dirname, "src/frontend/renderer/utils"),
+      "@ui": resolve(__dirname, "src/frontend/renderer/ui"),
+      "@config": resolve(__dirname, "src/frontend/renderer/config"),
+      "@adapters": resolve(__dirname, "src/frontend/renderer/adapters"),
+      "@services": resolve(__dirname, "src/frontend/renderer/services"),
       "@test-helpers": resolve(__dirname, "tests/frontend/helpers"),
     },
   },

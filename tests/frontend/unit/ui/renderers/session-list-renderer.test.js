@@ -12,7 +12,7 @@ vi.mock("@utils/lottie-color.js", () => ({
 }));
 
 // Mock the JSON import
-vi.mock("../../../../ui/Smoke.json", () => ({
+vi.mock("../../../ui/Smoke.json", () => ({
   default: { layers: [] },
 }));
 

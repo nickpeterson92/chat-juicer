@@ -9,7 +9,7 @@ import {
   ConsoleAnalyticsBackend,
   ElectronIPCAnalyticsBackend,
   LocalStorageAnalyticsBackend,
-} from "../../../electron/renderer/utils/analytics/analytics-adapter.js";
+} from "../../../src/frontend/renderer/utils/analytics/analytics-adapter.js";
 
 describe("ConsoleAnalyticsBackend Integration Tests", () => {
   let backend;

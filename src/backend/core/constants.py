@@ -22,7 +22,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # ============================================================================
 
 #: Project root directory (parent of src/)
-PROJECT_ROOT = Path(__file__).parent.parent.parent
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 
 #: Data files directory for session workspaces
 DATA_FILES_PATH = PROJECT_ROOT / "data" / "files"

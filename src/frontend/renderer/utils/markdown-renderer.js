@@ -10,7 +10,7 @@ import { Marked, marked } from "marked";
 import markedFootnote from "marked-footnote";
 import mermaid from "mermaid";
 import { createHighlighter } from "shiki";
-import snazzyTheme from "../../../ui/shiki-snazzy.json";
+import snazzyTheme from "../../ui/shiki-snazzy.json";
 import { ComponentLifecycle } from "../core/component-lifecycle.js";
 import { globalLifecycleManager } from "../core/lifecycle-manager.js";
 import { getCSSVariable } from "./css-variables.js";

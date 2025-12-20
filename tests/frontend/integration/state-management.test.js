@@ -9,7 +9,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AppState } from "../../../electron/renderer/core/state.js";
+import { AppState } from "../../../src/frontend/renderer/core/state.js";
 
 describe("State Management Integration Tests", () => {
   describe("State Flow: Session Creation", () => {

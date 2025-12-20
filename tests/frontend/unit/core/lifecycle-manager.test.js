@@ -3,8 +3,8 @@
  * Tests for automatic timer and event listener cleanup
  */
 
-import { ComponentLifecycle } from "../../../../electron/renderer/core/component-lifecycle.js";
-import { LifecycleManager } from "../../../../electron/renderer/core/lifecycle-manager.js";
+import { ComponentLifecycle } from "../../../../src/frontend/renderer/core/component-lifecycle.js";
+import { LifecycleManager } from "../../../../src/frontend/renderer/core/lifecycle-manager.js";
 
 describe("LifecycleManager", () => {
   let manager;
