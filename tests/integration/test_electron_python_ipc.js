@@ -16,8 +16,8 @@ const path = require("node:path");
 const assert = require("node:assert");
 
 // Import our V2 protocol implementation
-const IPCProtocolV2 = require("../../electron/utils/ipc-v2-protocol");
-const BinaryMessageParser = require("../../electron/utils/binary-message-parser");
+const IPCProtocolV2 = require("../../src/frontend/utils/ipc-v2-protocol");
+const BinaryMessageParser = require("../../src/frontend/utils/binary-message-parser");
 
 // Paths
 const PROJECT_ROOT = path.join(__dirname, "..", "..");

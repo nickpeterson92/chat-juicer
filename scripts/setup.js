@@ -199,32 +199,32 @@ async function installMCPServers() {
 async function setupEnvironment() {
   printHeader("Setting Up Environment Variables");
 
-  const envPath = path.join(process.cwd(), "src", ".env");
-  const envExamplePath = path.join(process.cwd(), "src", ".env.example");
+  const envPath = path.join(process.cwd(), "src", "backend", ".env");
+  const envExamplePath = path.join(process.cwd(), "src", "backend", ".env.example");
 
   if (existsSync(envPath)) {
-    printWarning("src/.env already exists, skipping...");
-    printInfo("If you need to reconfigure, edit src/.env manually");
+    printWarning("src/backend/.env already exists, skipping...");
+    printInfo("If you need to reconfigure, edit src/backend/.env manually");
 
     // Check if still has placeholder values
     const fs = require("node:fs");
     const envContent = fs.readFileSync(envPath, "utf-8");
     if (envContent.includes("your-azure-api-key-here")) {
-      printWarning("src/.env contains placeholder values");
-      printInfo("Remember to configure your Azure OpenAI credentials in src/.env");
+      printWarning("src/backend/.env contains placeholder values");
+      printInfo("Remember to configure your Azure OpenAI credentials in src/backend/.env");
     } else {
       printSuccess("Environment variables configured");
     }
   } else {
     if (existsSync(envExamplePath)) {
       await copyFile(envExamplePath, envPath);
-      printSuccess("Created src/.env from template");
-      printInfo("\nPlease edit src/.env with your Azure OpenAI credentials:");
+      printSuccess("Created src/backend/.env from template");
+      printInfo("\nPlease edit src/backend/.env with your Azure OpenAI credentials:");
       printInfo("  - AZURE_OPENAI_API_KEY");
       printInfo("  - AZURE_OPENAI_ENDPOINT");
       printInfo("  - AZURE_OPENAI_DEPLOYMENT");
     } else {
-      printError("src/.env.example not found");
+      printError("src/backend/.env.example not found");
       throw new Error("Missing .env.example file");
     }
   }

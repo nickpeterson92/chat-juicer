@@ -43,7 +43,7 @@ afterEach(() => {
 describe("upload-progress", () => {
   describe("startUploadProgress", () => {
     it("should initialize and show progress bar for single file", async () => {
-      const { startUploadProgress } = await import("../../../../electron/renderer/utils/upload-progress.js");
+      const { startUploadProgress } = await import("../../../../src/frontend/renderer/utils/upload-progress.js");
 
       startUploadProgress(1);
 
@@ -53,7 +53,7 @@ describe("upload-progress", () => {
     });
 
     it("should show file count for multiple files", async () => {
-      const { startUploadProgress } = await import("../../../../electron/renderer/utils/upload-progress.js");
+      const { startUploadProgress } = await import("../../../../src/frontend/renderer/utils/upload-progress.js");
 
       startUploadProgress(5);
 
@@ -64,7 +64,7 @@ describe("upload-progress", () => {
 
     it("should reset state when starting new upload", async () => {
       const { startUploadProgress, completeFileUpload } = await import(
-        "../../../../electron/renderer/utils/upload-progress.js"
+        "../../../../src/frontend/renderer/utils/upload-progress.js"
       );
 
       startUploadProgress(3);
@@ -81,7 +81,7 @@ describe("upload-progress", () => {
     it("should handle missing DOM elements gracefully", async () => {
       document.getElementById = vi.fn(() => null);
 
-      const { startUploadProgress } = await import("../../../../electron/renderer/utils/upload-progress.js");
+      const { startUploadProgress } = await import("../../../../src/frontend/renderer/utils/upload-progress.js");
 
       // Should not throw
       expect(() => startUploadProgress(1)).not.toThrow();
@@ -91,7 +91,7 @@ describe("upload-progress", () => {
   describe("updateUploadProgress", () => {
     it("should update progress for single file with percent", async () => {
       const { startUploadProgress, updateUploadProgress } = await import(
-        "../../../../electron/renderer/utils/upload-progress.js"
+        "../../../../src/frontend/renderer/utils/upload-progress.js"
       );
 
       startUploadProgress(1);
@@ -103,7 +103,7 @@ describe("upload-progress", () => {
 
     it("should update progress for multiple files with percent", async () => {
       const { startUploadProgress, updateUploadProgress } = await import(
-        "../../../../electron/renderer/utils/upload-progress.js"
+        "../../../../src/frontend/renderer/utils/upload-progress.js"
       );
 
       startUploadProgress(4);
@@ -116,7 +116,7 @@ describe("upload-progress", () => {
 
     it("should handle update without percent", async () => {
       const { startUploadProgress, updateUploadProgress } = await import(
-        "../../../../electron/renderer/utils/upload-progress.js"
+        "../../../../src/frontend/renderer/utils/upload-progress.js"
       );
 
       startUploadProgress(1);
@@ -128,7 +128,7 @@ describe("upload-progress", () => {
 
     it("should cap progress at 99% until complete", async () => {
       const { startUploadProgress, updateUploadProgress } = await import(
-        "../../../../electron/renderer/utils/upload-progress.js"
+        "../../../../src/frontend/renderer/utils/upload-progress.js"
       );
 
       startUploadProgress(1);
@@ -138,7 +138,7 @@ describe("upload-progress", () => {
     });
 
     it("should not update when not visible", async () => {
-      const { updateUploadProgress } = await import("../../../../electron/renderer/utils/upload-progress.js");
+      const { updateUploadProgress } = await import("../../../../src/frontend/renderer/utils/upload-progress.js");
 
       // Don't call startUploadProgress first
       updateUploadProgress("file.txt", 50);
@@ -149,7 +149,7 @@ describe("upload-progress", () => {
 
     it("should calculate correct progress after completing files", async () => {
       const { startUploadProgress, completeFileUpload, updateUploadProgress } = await import(
-        "../../../../electron/renderer/utils/upload-progress.js"
+        "../../../../src/frontend/renderer/utils/upload-progress.js"
       );
 
       startUploadProgress(4);
@@ -165,7 +165,7 @@ describe("upload-progress", () => {
   describe("completeFileUpload", () => {
     it("should increment completed count and update progress", async () => {
       const { startUploadProgress, completeFileUpload } = await import(
-        "../../../../electron/renderer/utils/upload-progress.js"
+        "../../../../src/frontend/renderer/utils/upload-progress.js"
       );
 
       startUploadProgress(4);
@@ -177,7 +177,7 @@ describe("upload-progress", () => {
 
     it("should update text for multiple completed files", async () => {
       const { startUploadProgress, completeFileUpload } = await import(
-        "../../../../electron/renderer/utils/upload-progress.js"
+        "../../../../src/frontend/renderer/utils/upload-progress.js"
       );
 
       startUploadProgress(4);
@@ -190,7 +190,7 @@ describe("upload-progress", () => {
 
     it("should not update text for single file uploads", async () => {
       const { startUploadProgress, completeFileUpload } = await import(
-        "../../../../electron/renderer/utils/upload-progress.js"
+        "../../../../src/frontend/renderer/utils/upload-progress.js"
       );
 
       startUploadProgress(1);
@@ -203,7 +203,7 @@ describe("upload-progress", () => {
 
     it("should skip intermediate updates once all files are complete", async () => {
       const { startUploadProgress, completeFileUpload } = await import(
-        "../../../../electron/renderer/utils/upload-progress.js"
+        "../../../../src/frontend/renderer/utils/upload-progress.js"
       );
 
       startUploadProgress(1);
@@ -218,7 +218,7 @@ describe("upload-progress", () => {
 
     it("should handle failed uploads", async () => {
       const { startUploadProgress, completeFileUpload } = await import(
-        "../../../../electron/renderer/utils/upload-progress.js"
+        "../../../../src/frontend/renderer/utils/upload-progress.js"
       );
 
       startUploadProgress(2);
@@ -229,7 +229,7 @@ describe("upload-progress", () => {
     });
 
     it("should not update when not visible", async () => {
-      const { completeFileUpload } = await import("../../../../electron/renderer/utils/upload-progress.js");
+      const { completeFileUpload } = await import("../../../../src/frontend/renderer/utils/upload-progress.js");
 
       completeFileUpload("file.txt", true);
 
@@ -240,7 +240,7 @@ describe("upload-progress", () => {
   describe("finishUploadProgress", () => {
     it("should show 100% and success message for single file", async () => {
       const { startUploadProgress, finishUploadProgress } = await import(
-        "../../../../electron/renderer/utils/upload-progress.js"
+        "../../../../src/frontend/renderer/utils/upload-progress.js"
       );
 
       startUploadProgress(1);
@@ -252,7 +252,7 @@ describe("upload-progress", () => {
 
     it("should show success message for multiple files", async () => {
       const { startUploadProgress, finishUploadProgress } = await import(
-        "../../../../electron/renderer/utils/upload-progress.js"
+        "../../../../src/frontend/renderer/utils/upload-progress.js"
       );
 
       startUploadProgress(5);
@@ -264,7 +264,7 @@ describe("upload-progress", () => {
 
     it("should show failure count when some uploads failed", async () => {
       const { startUploadProgress, finishUploadProgress } = await import(
-        "../../../../electron/renderer/utils/upload-progress.js"
+        "../../../../src/frontend/renderer/utils/upload-progress.js"
       );
 
       startUploadProgress(5);
@@ -276,7 +276,7 @@ describe("upload-progress", () => {
 
     it("should hide progress bar after delay", async () => {
       const { startUploadProgress, finishUploadProgress } = await import(
-        "../../../../electron/renderer/utils/upload-progress.js"
+        "../../../../src/frontend/renderer/utils/upload-progress.js"
       );
 
       startUploadProgress(1);
@@ -291,7 +291,7 @@ describe("upload-progress", () => {
     });
 
     it("should not update when not visible", async () => {
-      const { finishUploadProgress } = await import("../../../../electron/renderer/utils/upload-progress.js");
+      const { finishUploadProgress } = await import("../../../../src/frontend/renderer/utils/upload-progress.js");
 
       finishUploadProgress(1, 0);
 
@@ -302,7 +302,7 @@ describe("upload-progress", () => {
   describe("hideUploadProgress", () => {
     it("should remove active class and reset state", async () => {
       const { startUploadProgress, hideUploadProgress } = await import(
-        "../../../../electron/renderer/utils/upload-progress.js"
+        "../../../../src/frontend/renderer/utils/upload-progress.js"
       );
 
       startUploadProgress(3);
@@ -312,7 +312,7 @@ describe("upload-progress", () => {
     });
 
     it("should handle missing container gracefully", async () => {
-      const { hideUploadProgress } = await import("../../../../electron/renderer/utils/upload-progress.js");
+      const { hideUploadProgress } = await import("../../../../src/frontend/renderer/utils/upload-progress.js");
 
       // Container is null initially before init
       expect(() => hideUploadProgress()).not.toThrow();
@@ -322,7 +322,7 @@ describe("upload-progress", () => {
   describe("isActive state tracking", () => {
     it("should track visibility state correctly through lifecycle", async () => {
       const { startUploadProgress, updateUploadProgress, hideUploadProgress, completeFileUpload } = await import(
-        "../../../../electron/renderer/utils/upload-progress.js"
+        "../../../../src/frontend/renderer/utils/upload-progress.js"
       );
 
       // Initially not visible - updates should be ignored
@@ -356,7 +356,7 @@ describe("upload-progress", () => {
   describe("edge cases", () => {
     it("should handle zero file count", async () => {
       const { startUploadProgress, finishUploadProgress } = await import(
-        "../../../../electron/renderer/utils/upload-progress.js"
+        "../../../../src/frontend/renderer/utils/upload-progress.js"
       );
 
       startUploadProgress(0);
@@ -367,7 +367,7 @@ describe("upload-progress", () => {
 
     it("should handle rapid successive calls", async () => {
       const { startUploadProgress, updateUploadProgress, completeFileUpload } = await import(
-        "../../../../electron/renderer/utils/upload-progress.js"
+        "../../../../src/frontend/renderer/utils/upload-progress.js"
       );
 
       startUploadProgress(3);
@@ -386,7 +386,7 @@ describe("upload-progress", () => {
       // Start with no elements
       document.getElementById = vi.fn(() => null);
 
-      const { startUploadProgress } = await import("../../../../electron/renderer/utils/upload-progress.js");
+      const { startUploadProgress } = await import("../../../../src/frontend/renderer/utils/upload-progress.js");
 
       startUploadProgress(1);
       // Should not throw, just return early

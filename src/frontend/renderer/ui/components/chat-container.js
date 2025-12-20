@@ -9,7 +9,7 @@
  * that is realistically testable in the current environment.
  */
 
-import smokeAnimationData from "../../../../ui/Smoke.json";
+import smokeAnimationData from "../../../ui/Smoke.json";
 import { CRITICAL_COLORS } from "../../config/colors.js";
 import { ComponentLifecycle } from "../../core/component-lifecycle.js";
 import { globalEventBus } from "../../core/event-bus.js";

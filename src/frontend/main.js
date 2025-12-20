@@ -69,7 +69,7 @@ function createWindow() {
     logger.info("Loading from Vite dev server", { url: devUrl });
     mainWindow.loadURL(devUrl);
   } else {
-    const prodPath = path.join(__dirname, "..", "dist", "renderer", "ui", "index.html");
+    const prodPath = path.join(__dirname, "..", "..", "dist", "renderer", "src", "frontend", "ui", "index.html");
     logger.info("Loading from built files", { path: prodPath });
     mainWindow.loadFile(prodPath);
   }

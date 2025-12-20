@@ -3,7 +3,7 @@
  * Optimized with DOM caching and batched scroll updates
  */
 
-import smokeAnimationData from "../../../ui/Smoke.json";
+import smokeAnimationData from "../../ui/Smoke.json";
 import { CRITICAL_COLORS } from "../config/colors.js";
 import { MAX_MESSAGES } from "../config/constants.js";
 import { ComponentLifecycle } from "../core/component-lifecycle.js";

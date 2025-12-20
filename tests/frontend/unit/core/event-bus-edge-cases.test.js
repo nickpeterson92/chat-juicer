@@ -4,7 +4,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { EventBus } from "../../../../electron/renderer/core/event-bus.js";
+import { EventBus } from "../../../../src/frontend/renderer/core/event-bus.js";
 
 describe("EventBus Edge Cases", () => {
   let eventBus;

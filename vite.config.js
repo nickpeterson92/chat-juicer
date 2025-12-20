@@ -18,7 +18,7 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: {
-        main: resolve(__dirname, "ui/index.html"),
+        main: resolve(__dirname, "src/frontend/ui/index.html"),
       },
     },
     // Electron-specific optimizations
@@ -36,10 +36,10 @@ export default defineConfig({
   // Resolve configuration
   resolve: {
     alias: {
-      "@": resolve(__dirname, "electron/renderer"),
-      "@utils": resolve(__dirname, "electron/renderer/utils"),
-      "@ui": resolve(__dirname, "electron/renderer/ui"),
-      "@config": resolve(__dirname, "electron/renderer/config"),
+      "@": resolve(__dirname, "src/frontend/renderer"),
+      "@utils": resolve(__dirname, "src/frontend/renderer/utils"),
+      "@ui": resolve(__dirname, "src/frontend/renderer/ui"),
+      "@config": resolve(__dirname, "src/frontend/renderer/config"),
     },
   },
 

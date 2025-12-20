@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 import logging.handlers
 import os
-import pathlib
 import sys
 import uuid
 
@@ -28,6 +27,7 @@ from core.constants import (
     LOG_BACKUP_COUNT_ERRORS,
     LOG_MAX_SIZE,
     LOG_PREVIEW_LENGTH,
+    PROJECT_ROOT,
     SESSION_ID_LENGTH,
 )
 
@@ -100,8 +100,7 @@ def setup_logging(name: str = "chat-juicer", debug: bool | None = None) -> loggi
 
     # --- Conversation Log Handler (JSON) ---
     # Use absolute path to project root logs directory
-    project_root = pathlib.Path(__file__).parent.parent.parent
-    log_dir = project_root / "logs"
+    log_dir = PROJECT_ROOT / "logs"
     log_dir.mkdir(exist_ok=True)
 
     conv_handler = logging.handlers.RotatingFileHandler(
