@@ -464,7 +464,7 @@ __all__ = [
     "AuthenticationError",
     "DatabaseError",
     "ExternalServiceError",
-    "FileNotFoundError",
+    "ApiFileNotFoundError",
     "ResourceNotFoundError",
     "SessionNotFoundError",
     "ValidationException",
