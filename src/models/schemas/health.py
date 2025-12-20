@@ -81,7 +81,12 @@ class HealthResponse(BaseModel):
                 "database": {
                     "healthy": True,
                     "pool_size": 10,
+                    "database": {
+                    "healthy": True,
+                    "pool_size": 10,
                     "pool_free": 8,
+                    "pool_used": 2,
+                },
                 },
                 "websocket": {
                     "active_connections": 5,
