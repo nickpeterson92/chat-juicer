@@ -328,7 +328,7 @@ def mock_env(monkeypatch: pytest.MonkeyPatch) -> Generator[dict[str, str], None,
         "OPENAI_MODEL": "gpt-4o",
         "AZURE_OPENAI_API_KEY": "test-azure-key",
         "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com",
-        "AZURE_OPENAI_DEPLOYMENT": "gpt-4o-deployment",
+        # Note: AZURE_OPENAI_DEPLOYMENT is not used - model is selected per-session
     }
     for key, value in env_vars.items():
         monkeypatch.setenv(key, value)

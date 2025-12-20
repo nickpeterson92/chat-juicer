@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from core.constants import DEFAULT_MODEL, MODEL_METADATA, MODELS_WITH_REASONING, get_reasoning_levels, get_settings
+from api.dependencies import AppSettings
+from core.constants import DEFAULT_MODEL, MODEL_METADATA, MODELS_WITH_REASONING, get_reasoning_levels
 from models.schemas.config import ConfigResponse, MCPServerConfig, ModelConfigItem
 
 router = APIRouter()
@@ -55,9 +56,8 @@ router = APIRouter()
         }
     },
 )
-async def get_config() -> ConfigResponse:
+async def get_config(settings: AppSettings) -> ConfigResponse:
     """Get application configuration for frontend."""
-    settings = get_settings()
 
     # Build model list from metadata in frontend-expected format
     default_model = DEFAULT_MODEL
