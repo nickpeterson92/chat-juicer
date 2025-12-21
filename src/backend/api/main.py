@@ -19,7 +19,7 @@ from integrations.mcp_pool import initialize_mcp_pool
 from integrations.sdk_token_tracker import patch_sdk_for_auto_tracking
 from utils.client_factory import create_http_client, create_openai_client
 from utils.db_utils import check_pool_health, create_database_pool, graceful_pool_close
-from utils.logger import logger
+from utils.logger import configure_uvicorn_logging, logger
 
 # Settings are loaded via Pydantic Settings with environment-specific file support
 # (.env, .env.{APP_ENV}, .env.local) - no manual dotenv loading needed
@@ -35,6 +35,9 @@ if settings.debug:
         f"mcp_pool_size={settings.mcp_pool_size}, "
         f"db_pool=[{settings.db_pool_min_size},{settings.db_pool_max_size}]"
     )
+
+# Configure uvicorn logging at module level to ensure workers use it
+configure_uvicorn_logging()
 
 
 def _setup_openai_client() -> None:
@@ -230,4 +233,5 @@ if __name__ == "__main__":
         port=8000,
         reload=True,
         reload_dirs=["src"],
+        log_config=None,
     )
