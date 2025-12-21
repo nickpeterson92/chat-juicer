@@ -168,7 +168,7 @@ class LocalFileService:
         try:
             image_bytes = file_path.read_bytes()
             base64_data = base64.b64encode(image_bytes).decode("utf-8")
-            logger.info(f"Encoded image {filename} to base64 ({len(base64_data)} chars)")
+            logger.debug(f"Encoded image {filename} to base64 ({len(base64_data)} chars)")
             return (mime_type, base64_data)
         except Exception as e:
             logger.error(f"Failed to read/encode image {filename}: {e}")
