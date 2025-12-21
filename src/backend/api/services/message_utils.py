@@ -49,6 +49,7 @@ def row_to_message(row: MessageRow) -> dict[str, Any]:
         "role": row["role"],
         "content": row["content"],
         "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+        "metadata": metadata,
     }
 
     # Add partial flag if present in metadata (for interrupted responses)
@@ -62,15 +63,39 @@ def row_to_message(row: MessageRow) -> dict[str, Any]:
         if isinstance(args, str):
             with contextlib.suppress(json.JSONDecodeError):
                 args = json.loads(args)
+
+        # Determine status
+        status = calculate_tool_status(metadata, row["tool_success"])
+
         msg.update(
             {
                 "tool_call_id": row["tool_call_id"],
                 "tool_name": row["tool_name"],
                 "tool_arguments": args,
                 "tool_result": row["tool_result"],
-                "status": "completed",  # All persisted tool calls are completed
+                "status": status,
                 "tool_success": row["tool_success"],
             }
         )
 
     return msg
+
+
+def calculate_tool_status(metadata: dict[str, Any], tool_success: bool | None) -> str:
+    """Calculate normalized tool status string.
+
+    Args:
+        metadata: Message metadata dictionary
+        tool_success: Boolean success flag from DB
+
+    Returns:
+        One of: "interrupted", "completed", "failed", "pending"
+    """
+    interrupted = metadata.get("interrupted", False)
+    if interrupted:
+        return "interrupted"
+    if tool_success is True:
+        return "completed"
+    if tool_success is False:
+        return "failed"
+    return "pending"

@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from api.dependencies import DB
 from api.middleware.exception_handlers import SessionNotFoundError
 from api.middleware.request_context import update_request_context
+from api.services.message_utils import calculate_tool_status
 from models.schemas.base import PaginationMeta
 from models.schemas.sessions import MessageResponse
 
@@ -150,7 +151,7 @@ async def list_messages(
         rows = await conn.fetch(
             """
             SELECT id, role, content, created_at,
-                   tool_call_id, tool_name, tool_arguments, tool_result, tool_success
+                   tool_call_id, tool_name, tool_arguments, tool_result, tool_success, metadata
             FROM messages
             WHERE session_id = $1
             ORDER BY created_at ASC
@@ -169,6 +170,18 @@ async def list_messages(
             with contextlib.suppress(json.JSONDecodeError):
                 args = json.loads(args)
 
+        # Parse metadata column
+        metadata = row.get("metadata")
+        if isinstance(metadata, str):
+            with contextlib.suppress(json.JSONDecodeError):
+                metadata = json.loads(metadata)
+        metadata = metadata or {}
+
+        # Determine status, favoring interrupted if present in metadata
+        status = None
+        if row["tool_call_id"]:
+            status = calculate_tool_status(metadata, row["tool_success"])
+
         messages.append(
             MessageResponse(
                 id=str(row["id"]),
@@ -180,15 +193,8 @@ async def list_messages(
                 tool_arguments=args,
                 tool_result=row["tool_result"],
                 tool_success=row["tool_success"],
-                status=(
-                    None
-                    if not row["tool_call_id"]
-                    else (
-                        "completed"
-                        if row["tool_success"] is True
-                        else "failed" if row["tool_success"] is False else "pending"
-                    )
-                ),
+                status=status,
+                metadata=metadata,
             )
         )
 

@@ -1,6 +1,6 @@
 # Alembic Migrations
 
-Phase 1 uses Alembic for schema management. Bootstrap steps:
+Chat Juicer uses Alembic for schema management. Bootstrap steps:
 
 1) Create Alembic scaffold (already initialized here):
    - `migrations/env.py`
