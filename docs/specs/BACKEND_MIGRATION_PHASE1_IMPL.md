@@ -241,7 +241,7 @@ Sessions = Annotated[SessionService, Depends(get_session_service)]
 #### Task 1.4: Create Docker Compose for PostgreSQL
 
 ```yaml
-# docker-compose.local.yml
+# docker/docker-compose.local.yml
 services:
   postgres:
     image: postgres:16
@@ -271,7 +271,7 @@ Use Alembic as source of truth (no init.sql mount):
 
 ```bash
 # From repo root
-docker-compose -f docker-compose.local.yml up -d
+docker-compose -f docker/docker-compose.local.yml up -d
 
 # Apply migrations (empty DB)
 export DATABASE_URL=postgresql://chatjuicer:localdev@127.0.0.1:5433/chatjuicer
@@ -313,7 +313,7 @@ class Settings(BaseSettings):
 
 ```bash
 # Start PostgreSQL
-docker-compose -f docker-compose.local.yml up -d
+docker-compose -f docker/docker-compose.local.yml up -d
 
 # Verify database
 docker exec -it chatjuicer-postgres psql -U chatjuicer -c '\dt'
@@ -1729,7 +1729,7 @@ module.exports = {
 
 ```bash
 # 1. Start PostgreSQL
-docker-compose -f docker-compose.local.yml up -d
+docker-compose -f docker/docker-compose.local.yml up -d
 
 # 2. Start FastAPI
 cd src && uvicorn api.main:app --reload --port 8000
