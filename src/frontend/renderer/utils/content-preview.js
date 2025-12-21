@@ -108,7 +108,7 @@ export function isCsvFile(ext) {
 export function generateCodePreview(content, ext) {
   const lines = content.split("\n").slice(0, MAX_PREVIEW_LINES);
   const truncatedLines = lines.map((line) =>
-    line.length > MAX_CHARS_PER_LINE ? line.slice(0, MAX_CHARS_PER_LINE) + "…" : line
+    line.length > MAX_CHARS_PER_LINE ? `${line.slice(0, MAX_CHARS_PER_LINE)}…` : line
   );
   const previewContent = truncatedLines.join("\n");
 
@@ -130,7 +130,7 @@ export function generateCodePreview(content, ext) {
 export function generateTextPreview(content, ext = "") {
   const lines = content.split("\n").slice(0, MAX_PREVIEW_LINES);
   const truncatedLines = lines.map((line) =>
-    line.length > MAX_CHARS_PER_LINE ? line.slice(0, MAX_CHARS_PER_LINE) + "…" : line
+    line.length > MAX_CHARS_PER_LINE ? `${line.slice(0, MAX_CHARS_PER_LINE)}…` : line
   );
   const previewContent = truncatedLines.join("\n");
 
@@ -165,7 +165,7 @@ export function generateCsvPreview(content) {
       const cells = row
         .slice(0, maxCols)
         .map((cell) => {
-          const truncated = cell.length > 8 ? cell.slice(0, 8) + "…" : cell;
+          const truncated = cell.length > 8 ? `${cell.slice(0, 8)}…` : cell;
           return `<td>${escapeHtml(truncated)}</td>`;
         })
         .join("");

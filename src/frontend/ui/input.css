@@ -1829,6 +1829,23 @@
     backface-visibility: hidden;
   }
 
+  /* Chat page input container */
+  .chat-input-section {
+    @apply w-full flex flex-col gap-3 rounded-3xl py-5 px-6 transition-all;
+    background-color: var(--color-surface-1);
+    border: 1px solid var(--color-border-secondary);
+  }
+
+  .chat-input-section:focus-within {
+    border-color: var(--color-border-focus);
+  }
+
+  /* Compact variant for chat page - minimal padding */
+  .chat-input-section.compact {
+    @apply gap-0 py-1 px-2 rounded-lg;
+    background-color: var(--color-surface-2);
+  }
+
   /* =========================================
    * SIBLING ARCHITECTURE (Files & Input Decoupled)
    * ========================================= */
@@ -1935,17 +1952,17 @@
   }
 
   /* Compact variant - simplified layout, controls on right */
-  .welcome-input-section.compact .welcome-input-footer {
+  .chat-input-section.compact .welcome-input-footer {
     @apply pt-0 gap-1.5 grid-cols-[1fr_auto_auto] grid-rows-1;
   }
 
   /* Model selector in compact mode goes to column 2 */
-  .welcome-input-section.compact .model-config-inline {
+  .chat-input-section.compact .model-config-inline {
     @apply col-start-2 row-start-1;
   }
 
   /* Send button in compact mode goes to column 3 */
-  .welcome-input-section.compact .welcome-send-btn {
+  .chat-input-section.compact .welcome-send-btn {
     @apply col-start-3 row-start-1;
   }
 
@@ -1969,7 +1986,7 @@
   }
 
   /* Compact variant - smaller model selector trigger */
-  .welcome-input-section.compact .model-selector-trigger {
+  .chat-input-section.compact .model-selector-trigger {
     @apply py-1 px-2 text-xs;
   }
 
@@ -2288,7 +2305,7 @@
   }
 
   /* Compact variant - very small min height, tight text */
-  .welcome-input-section.compact .welcome-input {
+  .chat-input-section.compact .welcome-input {
     @apply min-h-5 text-sm leading-[1.3] py-1.5;
     background-color: var(--color-surface-2);
     color: var(--color-text-user);
@@ -2302,11 +2319,11 @@
   }
 
   /* Compact variant - very small button with equal spacing from edges */
-  .welcome-input-section.compact .welcome-send-btn {
+  .chat-input-section.compact .welcome-send-btn {
     @apply w-6 h-6 mr-1 mb-1;
   }
 
-  .welcome-input-section.compact .welcome-send-btn svg {
+  .chat-input-section.compact .welcome-send-btn svg {
     @apply w-3.5 h-3.5;
   }
 

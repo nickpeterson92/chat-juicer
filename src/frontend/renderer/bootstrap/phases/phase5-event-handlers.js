@@ -379,8 +379,15 @@ export async function initializeEventHandlers({
       if (isOnWelcomePage && !sessionService.getCurrentSessionId()) {
         const pendingFiles = appState.getState("ui.pendingWelcomeFiles") || [];
         const { showToast } = await import("../../utils/toast.js");
+        const MAX_PENDING_FILE_SIZE = 50 * 1024 * 1024; // 50MB per file
 
         for (const file of files) {
+          // Reject files that are too large for memory buffering
+          if (file.size > MAX_PENDING_FILE_SIZE) {
+            showToast(`${file.name} exceeds 50MB limit`, "warning", 3000);
+            continue;
+          }
+
           // Create preview data
           let previewUrl = null;
           let previewContent = null;
@@ -396,9 +403,7 @@ export async function initializeEventHandlers({
             // Check if it's a code/text file based on extension or mime type
             // IMPORTANT: Exclude known binary formats even if small
             const isBinaryFile = hasBinaryExtension(file.name);
-            const isTextFile =
-              !isBinaryFile &&
-              (file.type?.startsWith("text/") || hasTextExtension(file.name) || file.size < 100 * 1024); // Assume small non-binary files are text safe
+            const isTextFile = !isBinaryFile && (file.type?.startsWith("text/") || hasTextExtension(file.name));
 
             if (isTextFile) {
               try {
@@ -575,6 +580,13 @@ export async function initializeEventHandlers({
           // Clear UI state but do NOT delete database data
           // clearCurrentSession() was incorrectly deleting all messages
           appState.setState("session.current", null);
+
+          // Clean up pending welcome files to prevent memory leaks
+          const pendingFiles = appState.getState("ui.pendingWelcomeFiles") || [];
+          pendingFiles.forEach((f) => {
+            if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+          });
+          appState.setState("ui.pendingWelcomeFiles", []);
 
           if (previousSessionId) {
             const sessionsList = document.getElementById("sessions-list");
@@ -984,7 +996,7 @@ function readTextFileChunk(file, maxLength) {
     const blob = file.slice(0, maxLength); // Read only the first chunk
 
     reader.onload = (e) => resolve(e.target.result);
-    reader.onerror = (e) => reject(new Error("File read failed"));
+    reader.onerror = (_e) => reject(new Error("File read failed"));
 
     reader.readAsText(blob);
   });

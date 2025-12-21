@@ -556,7 +556,7 @@ class ChatService:
 
         # Add text content first (if non-empty)
         if text_content and text_content.strip():
-            content_parts.append({"type": "text", "text": text_content})
+            content_parts.append({"type": "input_text", "text": text_content})
 
         # Process image attachments
         for attachment in image_attachments:
@@ -577,10 +577,8 @@ class ChatService:
                 mime_type, base64_data = result
                 content_parts.append(
                     {
-                        {
-                        "type": "image_url",
+                        "type": "input_image",
                         "image_url": f"data:{mime_type};base64,{base64_data}",
-                        "detail": "auto",  # Let model decide optimal resolution
                     }
                 )
                 logger.info(f"Inflated image {file_name} for multimodal input")

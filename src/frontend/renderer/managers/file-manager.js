@@ -874,7 +874,7 @@ function createPendingFileCard(pendingFile, index, appState) {
  * @returns {HTMLElement}
  */
 function createThumbnailCard(file, directory, onDelete = null) {
-  const handleDelete = (e) => {
+  const handleDelete = (_e) => {
     handleDeleteFile(file.name, directory, null, onDelete);
   };
 
@@ -998,7 +998,7 @@ function getThumbnailObserver() {
  * @param {HTMLElement} card - Thumbnail card element
  * @param {HTMLElement} skeleton - Skeleton element to replace
  */
-function observeForLazyLoad(card, skeleton) {
+function observeForLazyLoad(card, _skeleton) {
   const observer = getThumbnailObserver();
   observer.observe(card);
 }
@@ -1065,7 +1065,7 @@ async function loadImageThumbnail(card, skeleton, directory, filename) {
       const badge = card.querySelector(".thumbnail-badge");
       card.insertBefore(iconWrapper, badge);
     }
-  } catch (error) {
+  } catch (_error) {
     // On error, fall back to icon
     skeleton.remove();
     const iconWrapper = document.createElement("div");
@@ -1110,7 +1110,7 @@ async function loadPdfThumbnail(card, skeleton, directory, filename) {
       // On error, fall back to icon
       fallbackToIcon(card, skeleton, filename);
     }
-  } catch (error) {
+  } catch (_error) {
     // On error, fall back to icon
     fallbackToIcon(card, skeleton, filename);
   }
@@ -1171,7 +1171,7 @@ async function loadContentPreview(card, skeleton, directory, filename, ext, type
     } else {
       fallbackToIcon(card, skeleton, filename);
     }
-  } catch (error) {
+  } catch (_error) {
     fallbackToIcon(card, skeleton, filename);
   }
 }
