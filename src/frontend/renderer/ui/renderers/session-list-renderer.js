@@ -180,18 +180,6 @@ export function renderEmptySessionList(message, domAdapter) {
 }
 
 /**
- * Get session ID from element
- *
- * @param {HTMLElement} element - Session item or child element
- * @param {Object} domAdapter - DOM adapter
- * @returns {string|null} Session ID
- */
-export function getSessionIdFromElement(element, domAdapter) {
-  const sessionItem = domAdapter.closest(element, ".session-item");
-  return sessionItem ? domAdapter.getAttribute(sessionItem, "data-session-id") : null;
-}
-
-/**
  * Update session active state
  *
  * @param {HTMLElement} sessionElement - Session item element
@@ -218,16 +206,6 @@ export function updateSessionTitle(sessionElement, newTitle, domAdapter) {
   if (titleDiv) {
     domAdapter.setTextContent(titleDiv, newTitle);
   }
-}
-
-/**
- * Remove session item from DOM
- *
- * @param {HTMLElement} sessionElement - Session item element
- * @param {Object} domAdapter - DOM adapter
- */
-export function removeSessionItem(sessionElement, domAdapter) {
-  domAdapter.remove(sessionElement);
 }
 
 /**
@@ -290,18 +268,5 @@ export function updateSessionStreamingIndicator(sessionId, isStreaming) {
       sessionLottieAnimations.delete(sessionId);
     }
     indicator.innerHTML = "";
-  }
-}
-
-/**
- * Clean up Lottie animation for a session
- * Called when session item is removed from DOM
- *
- * @param {string} sessionId - Session ID to clean up
- */
-export function cleanupSessionStreamingAnimation(sessionId) {
-  if (sessionLottieAnimations.has(sessionId)) {
-    sessionLottieAnimations.get(sessionId).destroy();
-    sessionLottieAnimations.delete(sessionId);
   }
 }

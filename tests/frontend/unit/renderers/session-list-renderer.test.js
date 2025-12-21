@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   findSessionElement,
-  getSessionIdFromElement,
-  removeSessionItem,
   renderEmptySessionList,
   renderSessionItem,
   renderSessionList,
@@ -67,10 +65,9 @@ describe("Session List Renderer", () => {
     const container = document.createElement("div");
     container.appendChild(item);
 
-    // find + get ID
+    // find session by ID
     const found = findSessionElement(container, "s1", domAdapter);
     expect(found).toBe(item);
-    expect(getSessionIdFromElement(found, domAdapter)).toBe("s1");
 
     // update active state
     updateSessionActive(found, true, domAdapter);
@@ -81,10 +78,6 @@ describe("Session List Renderer", () => {
     // update title
     updateSessionTitle(found, "Updated", domAdapter);
     expect(found.querySelector(".session-title")?.textContent).toBe("Updated");
-
-    // remove item
-    removeSessionItem(found, domAdapter);
-    expect(container.children.length).toBe(0);
   });
 
   it("applies streaming indicator when session is streaming", () => {

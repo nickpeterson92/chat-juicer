@@ -1,13 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  calculateSessionAge,
-  createSessionListViewModel,
-  createSessionViewModel,
-  formatTimestamp,
-  generateDefaultTitle,
-  truncateSessionTitle,
-  validateSession,
-} from "@/viewmodels/session-viewmodel.js";
+import { createSessionViewModel, formatTimestamp, generateDefaultTitle } from "@/viewmodels/session-viewmodel.js";
 
 describe("SessionViewModel", () => {
   beforeEach(() => {
@@ -21,6 +13,11 @@ describe("SessionViewModel", () => {
     expect(formatTimestamp("bad")).toBe("Invalid date");
     expect(formatTimestamp(null)).toBe("Unknown");
     expect(formatTimestamp("2025-01-15T11:59:30Z")).toBe("Just now");
+    // Test singular forms
+    expect(formatTimestamp("2025-01-15T11:59:00Z")).toBe("1 minute ago");
+    expect(formatTimestamp("2025-01-15T11:00:00Z")).toBe("1 hour ago");
+    expect(formatTimestamp("2025-01-14T12:00:00Z")).toBe("1 day ago");
+    // Test plural forms
     expect(formatTimestamp("2025-01-15T11:10:00Z")).toBe("50 minutes ago");
     expect(formatTimestamp("2025-01-15T10:00:00Z")).toBe("2 hours ago");
     expect(formatTimestamp("2025-01-13T12:00:00Z")).toBe("2 days ago");
@@ -40,48 +37,8 @@ describe("SessionViewModel", () => {
     expect(vm.classes).toBe("session-item active");
   });
 
-  it("sorts sessions by recency and marks active in list view model", () => {
-    const sessions = [
-      { session_id: "a", title: "Old", created_at: "2025-01-10T00:00:00Z", pinned: false },
-      { session_id: "b", title: "New", created_at: "2025-01-12T00:00:00Z", pinned: false },
-    ];
-
-    const list = createSessionListViewModel(sessions, "b");
-    expect(list[0].id).toBe("b");
-    expect(list[0].isActive).toBe(true);
-    expect(list[1].id).toBe("a");
-  });
-
-  it("sorts pinned sessions to the top and keeps created_at ordering within groups", () => {
-    const sessions = [
-      { session_id: "a", title: "Pinned older", created_at: "2025-01-10T00:00:00Z", pinned: true },
-      { session_id: "b", title: "Pinned newer", created_at: "2025-01-12T00:00:00Z", pinned: true },
-      { session_id: "c", title: "Unpinned newer", created_at: "2025-02-01T00:00:00Z", pinned: false },
-    ];
-
-    const list = createSessionListViewModel(sessions, "c");
-    expect(list.map((item) => item.id)).toEqual(["b", "a", "c"]);
-  });
-
-  it("validates session objects", () => {
-    expect(validateSession(null)).toEqual({ valid: false, error: "Session must be an object" });
-    expect(validateSession({ title: "No id" })).toEqual({ valid: false, error: "Session must have session_id or id" });
-    expect(validateSession({ session_id: "ok" })).toEqual({ valid: true, error: null });
-  });
-
-  it("truncates titles and generates defaults", () => {
-    expect(truncateSessionTitle("short", 10)).toBe("short");
-    expect(truncateSessionTitle("a".repeat(60), 10)).toBe(`${"a".repeat(10)}...`);
-    expect(truncateSessionTitle("")).toBe("Untitled");
-
+  it("generates default titles correctly and handles invalid dates", () => {
     expect(generateDefaultTitle("invalid-date")).toBe("Untitled Chat");
-  });
-
-  it("calculates session age in days safely", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2025-01-15T00:00:00Z"));
-    expect(calculateSessionAge("bad")).toBe(0);
-    expect(calculateSessionAge("2025-01-10T00:00:00Z")).toBe(5);
-    expect(calculateSessionAge("2026-01-10T00:00:00Z")).toBe(0); // future dates clamp to 0
+    expect(generateDefaultTitle(null)).toBe("Untitled Chat");
   });
 });

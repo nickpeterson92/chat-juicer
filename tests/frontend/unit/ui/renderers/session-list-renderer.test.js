@@ -20,13 +20,10 @@ describe("SessionListRenderer", () => {
   let renderSessionItem;
   let renderSessionList;
   let renderEmptySessionList;
-  let getSessionIdFromElement;
   let updateSessionActive;
   let updateSessionTitle;
-  let removeSessionItem;
   let findSessionElement;
   let updateSessionStreamingIndicator;
-  let cleanupSessionStreamingAnimation;
   let initLottieWithColor;
   let domAdapter;
 
@@ -37,13 +34,10 @@ describe("SessionListRenderer", () => {
     renderSessionItem = module.renderSessionItem;
     renderSessionList = module.renderSessionList;
     renderEmptySessionList = module.renderEmptySessionList;
-    getSessionIdFromElement = module.getSessionIdFromElement;
     updateSessionActive = module.updateSessionActive;
     updateSessionTitle = module.updateSessionTitle;
-    removeSessionItem = module.removeSessionItem;
     findSessionElement = module.findSessionElement;
     updateSessionStreamingIndicator = module.updateSessionStreamingIndicator;
-    cleanupSessionStreamingAnimation = module.cleanupSessionStreamingAnimation;
 
     const lottieModule = await import("@utils/lottie-color.js");
     initLottieWithColor = lottieModule.initLottieWithColor;
@@ -214,39 +208,6 @@ describe("SessionListRenderer", () => {
     });
   });
 
-  describe("getSessionIdFromElement", () => {
-    it("should get session ID from session item", () => {
-      const item = document.createElement("div");
-      item.className = "session-item";
-      item.setAttribute("data-session-id", "test-123");
-
-      const result = getSessionIdFromElement(item, domAdapter);
-
-      expect(result).toBe("test-123");
-    });
-
-    it("should get session ID from child element", () => {
-      const item = document.createElement("div");
-      item.className = "session-item";
-      item.setAttribute("data-session-id", "test-456");
-
-      const child = document.createElement("span");
-      item.appendChild(child);
-
-      const result = getSessionIdFromElement(child, domAdapter);
-
-      expect(result).toBe("test-456");
-    });
-
-    it("should return null when element is not inside session item", () => {
-      const element = document.createElement("div");
-
-      const result = getSessionIdFromElement(element, domAdapter);
-
-      expect(result).toBeNull();
-    });
-  });
-
   describe("updateSessionActive", () => {
     it("should add active class when isActive is true", () => {
       const element = document.createElement("div");
@@ -285,19 +246,6 @@ describe("SessionListRenderer", () => {
       expect(() => {
         updateSessionTitle(element, "New Title", domAdapter);
       }).not.toThrow();
-    });
-  });
-
-  describe("removeSessionItem", () => {
-    it("should remove element from DOM", () => {
-      const parent = document.createElement("div");
-      const child = document.createElement("div");
-      parent.appendChild(child);
-      document.body.appendChild(parent);
-
-      removeSessionItem(child, domAdapter);
-
-      expect(parent.children.length).toBe(0);
     });
   });
 
@@ -368,13 +316,23 @@ describe("SessionListRenderer", () => {
         updateSessionStreamingIndicator("no-indicator", true);
       }).not.toThrow();
     });
-  });
 
-  describe("cleanupSessionStreamingAnimation", () => {
-    it("should not throw when session has no animation", () => {
-      expect(() => {
-        cleanupSessionStreamingAnimation("no-animation-session");
-      }).not.toThrow();
+    it("should clean up existing animation when restarting streaming", async () => {
+      // Start streaming to create animation
+      const sessionItem = document.createElement("div");
+      sessionItem.setAttribute("data-session-id", "cleanup-test");
+      const indicator = document.createElement("div");
+      indicator.className = "session-streaming-indicator";
+      sessionItem.appendChild(indicator);
+      document.body.appendChild(sessionItem);
+
+      // Start streaming to create an animation
+      updateSessionStreamingIndicator("cleanup-test", true);
+      expect(initLottieWithColor).toHaveBeenCalled();
+
+      // Start streaming again - should cleanup existing animation first
+      updateSessionStreamingIndicator("cleanup-test", true);
+      expect(initLottieWithColor).toHaveBeenCalledTimes(2);
     });
   });
 });
