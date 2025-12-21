@@ -577,7 +577,8 @@ class ChatService:
                 mime_type, base64_data = result
                 content_parts.append(
                     {
-                        "type": "input_image",
+                        {
+                        "type": "image_url",
                         "image_url": f"data:{mime_type};base64,{base64_data}",
                         "detail": "auto",  # Let model decide optimal resolution
                     }
