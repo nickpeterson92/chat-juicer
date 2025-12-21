@@ -330,9 +330,12 @@ async function handleSwitch(sessionId, sessionService, streamManager, updateSess
       }
 
       // Render messages from backend (including tool cards from Layer 2)
+      // Skip auto-scroll here - we handle it explicitly after pagination completes
+      // This fixes the race condition on first welcome page load where scroll fires
+      // before DOM is fully painted, causing incorrect position when prepending
       const messages = result.fullHistory || [];
       if (window.components?.chatContainer) {
-        window.components.chatContainer.setMessages(messages);
+        window.components.chatContainer.setMessages(messages, { skipAutoScroll: true });
       }
 
       // Refresh sidebar ordering immediately after switching sessions
@@ -385,13 +388,13 @@ async function handleSwitch(sessionId, sessionService, streamManager, updateSess
       }
 
       // Scroll to bottom after loading
+      // Use setTimeout instead of RAF - ensures batched rendering and view transitions complete
+      // before scrolling. RAF timing can fire before async renders finish.
       if (messages.length > 0 && window.components?.chatContainer) {
         const { scheduleScroll } = await import("../utils/scroll-utils.js");
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            scheduleScroll(window.components.chatContainer.getElement(), { force: true });
-          });
-        });
+        setTimeout(() => {
+          scheduleScroll(window.components.chatContainer.getElement(), { force: true });
+        }, 50);
       }
     } else {
       throw new Error(result.error);
@@ -460,4 +463,16 @@ async function loadRemainingMessages(sessionId, loadedCount, totalCount, session
     }
   }
   console.log(`[session] loadRemainingMessages complete: loaded ${loaded} older messages`);
+
+  // Force scroll to bottom after all prepends complete
+  // This is critical for first welcome page load where timing issues can cause
+  // the scroll position to be in the middle of the conversation
+  if (loaded > 0 && window.components?.chatContainer) {
+    const container = window.components.chatContainer.getElement();
+    // Use direct DOM manipulation for immediate scroll (bypass smart scroll logic)
+    container.scrollTop = container.scrollHeight;
+    console.log(
+      `[session] Forced scroll to bottom after prepends: scrollTop=${container.scrollTop}, scrollHeight=${container.scrollHeight}`
+    );
+  }
 }
