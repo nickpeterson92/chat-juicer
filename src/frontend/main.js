@@ -532,8 +532,9 @@ app.whenReady().then(() => {
       const absolutePath = path.isAbsolute(filePath) ? filePath : path.join(projectRoot, filePath);
       const normalizedPath = path.normalize(absolutePath);
       const normalizedRoot = path.normalize(projectRoot);
+      const rootWithSep = normalizedRoot.endsWith(path.sep) ? normalizedRoot : normalizedRoot + path.sep;
 
-      if (!normalizedPath.startsWith(normalizedRoot)) {
+      if (!normalizedPath.startsWith(rootWithSep)) {
         logger.error("Security: Attempted to download file outside project", { path: normalizedPath });
         return { success: false, error: "Invalid file path" };
       }
@@ -639,8 +640,9 @@ app.whenReady().then(() => {
       const normalizedPath = path.normalize(absolutePath);
       const normalizedRoot = path.normalize(projectRoot);
 
-      // Check if file is inside project root
-      const isInsideProject = normalizedPath.startsWith(normalizedRoot);
+      // Check if file is inside project root (prevent partial matches)
+      const rootWithSep = normalizedRoot.endsWith(path.sep) ? normalizedRoot : normalizedRoot + path.sep;
+      const isInsideProject = normalizedPath.startsWith(rootWithSep);
 
       // Check if file was explicitly authorized by user (via open dialog)
       const isWhitelisted = allowedExternalFiles.has(normalizedPath);
