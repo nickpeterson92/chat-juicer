@@ -148,6 +148,21 @@ def mock_mcp_server() -> Generator[Mock, None, None]:
     yield server
 
 
+@pytest.fixture
+def mock_db_pool() -> Generator[MagicMock, None, None]:
+    """Mock asyncpg.Pool for database testing."""
+    pool = MagicMock()
+    # Mock acquire context manager
+    conn = AsyncMock()
+
+    # transaction() is synchronous but returns an async context manager
+    tx_cm = AsyncMock()
+    conn.transaction = MagicMock(return_value=tx_cm)
+
+    pool.acquire.return_value.__aenter__.return_value = conn
+    yield pool
+
+
 # ============================================================================
 # Database Fixtures
 # ============================================================================

@@ -37,7 +37,7 @@ SessionIdPath = Annotated[
     Path(
         ...,
         description="Session identifier",
-        example="sess_abc123",
+        examples=["sess_abc123"],
     ),
 ]
 
@@ -46,7 +46,7 @@ FilenamePath = Annotated[
     Path(
         ...,
         description="File name",
-        example="document.pdf",
+        examples=["document.pdf"],
     ),
 ]
 
@@ -54,7 +54,7 @@ FolderQuery = Annotated[
     str,
     Query(
         description="Folder within session (sources, outputs, templates)",
-        example="sources",
+        examples=["sources"],
     ),
 ]
 

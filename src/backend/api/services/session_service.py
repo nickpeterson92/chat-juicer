@@ -4,7 +4,7 @@ import json
 import secrets
 import shutil
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -178,7 +178,7 @@ class SessionService:
             return await self.get_session(user_id, session_id)
 
         set_clauses.append(f"last_used_at = ${idx}")
-        values.append(datetime.utcnow())
+        values.append(datetime.now(timezone.utc))
 
         query = f"""
             UPDATE sessions
