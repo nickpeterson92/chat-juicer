@@ -12,9 +12,114 @@ import tempfile
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, Mock
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
+
+# ============================================================================
+# EARLY INITIALIZATION: Runs before test collection
+# ============================================================================
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Configure settings mock before any test modules are imported.
+
+    This hook runs before test collection, which is when module-level
+    imports happen. We patch get_settings here to prevent ValidationError
+    on CI where .env is not available.
+    """
+    mock_settings = MagicMock()
+    mock_settings.database_url = "postgresql://test:test@localhost/test"
+    mock_settings.api_provider = "openai"
+    mock_settings.openai_api_key = "test-openai-key"
+    mock_settings.azure_openai_api_key = "test-azure-key"
+    mock_settings.azure_openai_endpoint = "https://test.openai.azure.com"
+    mock_settings.jwt_secret = "test-jwt-secret"
+    mock_settings.jwt_algorithm = "HS256"
+    mock_settings.jwt_access_token_expire_minutes = 30
+    mock_settings.jwt_refresh_token_expire_days = 7
+    mock_settings.debug = False
+    mock_settings.app_env = "testing"
+    mock_settings.log_level = "INFO"
+    mock_settings.http_request_logging = False
+    mock_settings.tavily_api_key = None
+
+    # Store for later use
+    config._mock_settings = mock_settings
+
+    # Patch get_settings at the module level BEFORE any imports
+    patcher = patch("core.constants.get_settings", return_value=mock_settings)
+    patcher.start()
+    config._settings_patcher = patcher
+
+
+def pytest_unconfigure(config: pytest.Config) -> None:
+    """Clean up settings mock after all tests complete."""
+    if hasattr(config, "_settings_patcher"):
+        config._settings_patcher.stop()
+
+
+# ============================================================================
+# Test Isolation: Settings Management (MUST BE FIRST)
+# ============================================================================
+
+
+@pytest.fixture(autouse=True, scope="function")
+def reset_settings_singleton() -> Generator[None, None, None]:
+    """Reset settings singleton before each test to prevent state pollution.
+
+    This ensures each test starts with a fresh settings state and allows
+    tests to mock get_settings() without interference from cached values.
+    """
+    # Reset the singleton before test
+    try:
+        from core import constants
+
+        if hasattr(constants, "_settings_manager"):
+            constants._settings_manager._instance = None
+    except ImportError:
+        pass
+
+    yield
+
+    # Reset again after test for cleanup
+    try:
+        from core import constants
+
+        if hasattr(constants, "_settings_manager"):
+            constants._settings_manager._instance = None
+    except ImportError:
+        pass
+
+
+@pytest.fixture(autouse=True)
+def mock_settings_for_ci(monkeypatch: pytest.MonkeyPatch) -> Generator[MagicMock, None, None]:
+    """Provide mock settings that work without .env file (for CI).
+
+    This fixture patches get_settings() to return a mock with valid defaults,
+    preventing ValidationError when Azure credentials aren't available.
+    """
+    mock_settings = MagicMock()
+    mock_settings.database_url = "postgresql://test:test@localhost/test"
+    mock_settings.api_provider = "openai"
+    mock_settings.openai_api_key = "test-openai-key"
+    mock_settings.azure_openai_api_key = "test-azure-key"
+    mock_settings.azure_openai_endpoint = "https://test.openai.azure.com"
+    mock_settings.jwt_secret = "test-jwt-secret"
+    mock_settings.jwt_algorithm = "HS256"
+    mock_settings.jwt_access_token_expire_minutes = 30
+    mock_settings.jwt_refresh_token_expire_days = 7
+    mock_settings.debug = False
+    mock_settings.app_env = "testing"
+    mock_settings.log_level = "INFO"
+    mock_settings.http_request_logging = False
+    mock_settings.tavily_api_key = None
+
+    # Patch at the core.constants level so all imports get the mock
+    monkeypatch.setattr("core.constants.get_settings", lambda: mock_settings)
+
+    yield mock_settings
+
 
 # ============================================================================
 # Test Isolation: Cache Management
