@@ -28,6 +28,7 @@ def pytest_configure(config: pytest.Config) -> None:
     imports happen. We patch get_settings here to prevent ValidationError
     on CI where .env is not available.
     """
+
     mock_settings = MagicMock()
     mock_settings.database_url = "postgresql://test:test@localhost/test"
     mock_settings.api_provider = "openai"
@@ -44,19 +45,21 @@ def pytest_configure(config: pytest.Config) -> None:
     mock_settings.http_request_logging = False
     mock_settings.tavily_api_key = None
 
-    # Store for later use
-    config._mock_settings = mock_settings
+    # Store for later use - cast to Any to avoid mypy attr-defined errors
+    cfg: Any = config
+    cfg._mock_settings = mock_settings
 
     # Patch get_settings at the module level BEFORE any imports
     patcher = patch("core.constants.get_settings", return_value=mock_settings)
     patcher.start()
-    config._settings_patcher = patcher
+    cfg._settings_patcher = patcher
 
 
 def pytest_unconfigure(config: pytest.Config) -> None:
     """Clean up settings mock after all tests complete."""
-    if hasattr(config, "_settings_patcher"):
-        config._settings_patcher.stop()
+    patcher = getattr(config, "_settings_patcher", None)
+    if patcher:
+        patcher.stop()
 
 
 # ============================================================================
