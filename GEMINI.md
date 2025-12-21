@@ -1,4 +1,4 @@
-# CLAUDE.md
+# GEMINI.md
 
 This file provides guidance to you (Claude) when working with code in this repository.
 
