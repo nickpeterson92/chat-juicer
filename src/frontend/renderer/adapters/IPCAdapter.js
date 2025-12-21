@@ -63,8 +63,8 @@ export class IPCAdapter {
           })),
         };
       }
-      // Return string messages as-is for backward compatibility
-      return typeof msg === "string" ? msg : msg.content;
+      // Return messages in consistent format - preserve object structure
+      return msg;
     });
 
     // Clear pending attachments after including them

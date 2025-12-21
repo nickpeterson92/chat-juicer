@@ -699,20 +699,6 @@ function updateWelcomeFileVisibility(container, hasFiles) {
 }
 
 /**
- * Create a thumbnail card for a pending (not yet uploaded) file
- * @param {Object} pendingFile - {file, previewUrl, name, size, type}
- * @param {number} index - Index in pending files array
- * @param {Object} appState - AppState for managing pending files
- * @returns {HTMLElement}
- */
-/**
- * Create a thumbnail card for a pending (not yet uploaded) file
- * @param {Object} pendingFile - {file, previewUrl, name, size, type}
- * @param {number} index - Index in pending files array
- * @param {Object} appState - AppState for managing pending files
- * @returns {HTMLElement}
- */
-/**
  * Shared helper to create the base structure of a file card
  * ensuring consistent styling between pending and persisted files.
  */

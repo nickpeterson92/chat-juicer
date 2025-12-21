@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import mimetypes
 import platform
 import shutil
 
@@ -137,8 +139,6 @@ class LocalFileService:
             Tuple of (mime_type, base64_encoded_data) or None if file doesn't exist
             or is not a supported image format.
         """
-        import base64
-        import mimetypes
 
         file_path = self.get_file_path(session_id, folder, filename)
 

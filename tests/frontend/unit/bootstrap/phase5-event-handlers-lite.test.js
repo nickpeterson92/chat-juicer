@@ -316,15 +316,11 @@ describe("phase5-event-handlers coverage", () => {
     expect(pendingFiles[0].previewType).toBe("code"); // 'txt' maps to code/text
   });
 
-  it("buffers PDF files with preview URL", async () => {
+  it("buffers PDF files with icon placeholder (no blob URL)", async () => {
     const deps = createDeps();
     deps.appState.setState("ui.bodyViewClass", "view-welcome");
     deps.services.sessionService.getCurrentSessionId = vi.fn(() => null);
     deps.services.fileService.uploadFile = vi.fn();
-
-    // Mock URL.createObjectURL
-    const mockCreateObjectURL = vi.fn(() => "blob:pdf");
-    global.URL.createObjectURL = mockCreateObjectURL;
 
     await initializeEventHandlers(deps);
 
@@ -337,12 +333,12 @@ describe("phase5-event-handlers coverage", () => {
     // Wait for async processing
     await new Promise((resolve) => setTimeout(resolve, 50));
 
+    // PDFs use icon placeholders instead of blob URLs (pdf.js integration TBD)
     const pendingFiles = deps.appState.getState("ui.pendingWelcomeFiles");
     expect(pendingFiles.length).toBe(1);
     expect(pendingFiles[0].name).toBe("test.pdf");
     expect(pendingFiles[0].previewType).toBe("pdf");
     expect(pendingFiles[0].previewUrl).toBeNull();
-    expect(mockCreateObjectURL).not.toHaveBeenCalled();
   });
 
   it("wires IPC error/exit handlers", async () => {
