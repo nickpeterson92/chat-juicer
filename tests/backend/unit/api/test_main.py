@@ -5,7 +5,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 # Mock settings BEFORE importing app to prevent ValidationError on CI
-# where env vars are not set
+# where env vars are not set. Must patch core.constants.get_settings
+# because api.main imports it at module level.
 _mock_settings = MagicMock()
 _mock_settings.database_url = "postgresql://test:test@localhost/test"
 _mock_settings.api_provider = "openai"
@@ -14,8 +15,11 @@ _mock_settings.jwt_secret = "testsecret"
 _mock_settings.jwt_algorithm = "HS256"
 _mock_settings.debug = False
 
-with patch("api.main.get_settings", return_value=_mock_settings), patch("api.main.settings", _mock_settings):
-    from api.main import app, lifespan
+# Patch at core.constants level BEFORE api.main is ever imported
+_settings_patch = patch("core.constants.get_settings", return_value=_mock_settings)
+_settings_patch.start()
+
+from api.main import app, lifespan  # noqa: E402
 
 
 @pytest.fixture
