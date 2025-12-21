@@ -450,7 +450,7 @@
   }
 
   .function-disclosure.expanded .disclosure-chevron {
-    transform: rotate(0deg);
+    transform: rotate(90deg);
   }
 
   /* Status-based styling - only highlight errors/interrupts, keep everything else chill */
