@@ -49,18 +49,25 @@ function createWelcomeHeader(userName, greeting) {
 function createMcpToggles() {
   return `
     <div class="mcp-toggle-buttons">
+      <div class="attachment-btn-wrapper">
+        <button class="attachment-plus-btn" id="attachment-plus-btn" title="Attach files" aria-label="Attach files">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+        </button>
+      </div>
       <button class="mcp-toggle-btn active" data-mcp="sequential" title="Sequential Thinking">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/>
         </svg>
       </button>
       <button class="mcp-toggle-btn active" data-mcp="fetch" title="Web Fetch">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M14.1374 2.73779C13.3942 3.48102 13.0092 4.77646 13.2895 5.7897C13.438 6.32603 13.4622 6.97541 13.0687 7.3689L7.3689 13.0687C6.97541 13.4622 6.32603 13.438 5.7897 13.2895C4.77646 13.0092 3.48101 13.3942 2.73779 14.1374C1.75407 15.1212 1.75407 16.7161 2.73779 17.6998C3.72152 18.6835 5.31646 18.6835 6.30018 17.6998C5.31646 18.6835 5.31645 20.2785 6.30018 21.2622C7.28391 22.2459 8.87884 22.2459 9.86257 21.2622C10.6058 20.519 10.9908 19.2235 10.7105 18.2103C10.562 17.674 10.5378 17.0246 10.9313 16.6311L16.6311 10.9313C17.0246 10.5378 17.674 10.562 18.2103 10.7105C19.2235 10.9908 20.519 10.6058 21.2622 9.86257C22.2459 8.87884 22.2459 7.28391 21.2622 6.30018C20.2785 5.31646 18.6835 5.31646 17.6998 6.30018C18.6835 5.31646 18.6835 3.72152 17.6998 2.73779C16.7161 1.75407 15.1212 1.75407 14.1374 2.73779Z"/>
         </svg>
       </button>
       <button class="mcp-toggle-btn active" data-mcp="tavily" title="Web Search">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <circle cx="12" cy="12" r="10"/>
           <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
         </svg>
@@ -250,7 +257,7 @@ export function showWelcomePage(container, userName = "User") {
       // Use requestAnimationFrame to prevent layout thrashing
       requestAnimationFrame(() => {
         welcomeInput.style.height = "auto";
-        welcomeInput.style.height = `${Math.min(welcomeInput.scrollHeight, 200)}px`;
+        welcomeInput.style.height = `${Math.max(44, Math.min(welcomeInput.scrollHeight, 200))}px`;
         updateSendButtonState();
       });
     });
@@ -258,8 +265,8 @@ export function showWelcomePage(container, userName = "User") {
 
   updateSendButtonState();
 
-  // Setup MCP toggle buttons
-  const mcpButtons = document.querySelectorAll(".mcp-toggle-btn");
+  // Setup MCP toggle buttons (scoped to container)
+  const mcpButtons = container.querySelectorAll(".mcp-toggle-btn");
   mcpButtons.forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.preventDefault();
@@ -291,6 +298,125 @@ export function showWelcomePage(container, userName = "User") {
       );
     });
   });
+
+  // Setup attachment plus button
+  const attachmentPlusBtn = document.getElementById("attachment-plus-btn");
+  let attachmentContextMenu = null;
+
+  if (attachmentPlusBtn) {
+    // Create menu element and append to body (avoids overflow clipping)
+    const createMenu = () => {
+      const menu = document.createElement("div");
+      menu.className = "attachment-context-menu";
+      menu.id = "attachment-context-menu";
+      menu.innerHTML = `
+        <button class="attachment-menu-item" data-action="attach-file">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+          </svg>
+          Attach file
+        </button>
+      `;
+      document.body.appendChild(menu);
+      
+      // Store cleanup function to remove menu element
+      if (!container._attachmentCleanup) {
+        container._attachmentCleanup = [];
+      }
+      container._attachmentCleanup.push(() => {
+        if (menu && menu.parentNode) {
+          menu.parentNode.removeChild(menu);
+        }
+      });
+      return menu;
+    };
+
+    const closeMenu = () => {
+      attachmentPlusBtn.classList.remove("open");
+      if (attachmentContextMenu) {
+        attachmentContextMenu.classList.remove("visible");
+      }
+    };
+
+    const openMenu = () => {
+      if (!attachmentContextMenu) {
+        attachmentContextMenu = createMenu();
+
+        // Handle menu item clicks
+        const attachMenuItem = attachmentContextMenu.querySelector('[data-action="attach-file"]');
+        if (attachMenuItem) {
+          attachMenuItem.addEventListener("click", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            closeMenu();
+
+            // Open file dialog via IPC
+            try {
+              const ipcAdapter = window.app?.adapters?.ipcAdapter;
+              if (ipcAdapter) {
+                const filePaths = await ipcAdapter.openFileDialog({ multiple: true });
+                if (filePaths && filePaths.length > 0) {
+                  window.dispatchEvent(
+                    new CustomEvent("files-selected-from-dialog", {
+                      detail: { filePaths },
+                    })
+                  );
+                }
+              }
+            } catch (error) {
+              console.error("Failed to open file dialog:", error);
+            }
+          });
+        }
+      }
+
+      // Position menu above button with viewport clamping
+      const btnRect = attachmentPlusBtn.getBoundingClientRect();
+      attachmentContextMenu.style.position = "fixed";
+      attachmentContextMenu.style.transform = "translateY(-100%)";
+      attachmentContextMenu.style.top = `${btnRect.top - 8}px`;
+
+      // Calculate left position, ensuring menu stays within viewport
+      const menuWidth = 140; // min-width from CSS
+      let leftPos = btnRect.left + btnRect.width / 2 - menuWidth / 2;
+
+      // Clamp to viewport bounds (8px padding from edges)
+      leftPos = Math.max(8, Math.min(leftPos, window.innerWidth - menuWidth - 8));
+      attachmentContextMenu.style.left = `${leftPos}px`;
+
+      attachmentPlusBtn.classList.add("open");
+      attachmentContextMenu.classList.add("visible");
+    };
+
+    // Toggle menu on plus button click
+    attachmentPlusBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const isOpen = attachmentPlusBtn.classList.contains("open");
+      if (isOpen) {
+        closeMenu();
+      } else {
+        openMenu();
+      }
+    });
+
+    // Close menu when clicking outside
+    const globalClickHandler = (e) => {
+      if (attachmentContextMenu && !attachmentPlusBtn.contains(e.target) && !attachmentContextMenu.contains(e.target)) {
+        closeMenu();
+      }
+    };
+    document.addEventListener("click", globalClickHandler);
+
+    // Store cleanup function
+    if (!container._attachmentCleanup) {
+      container._attachmentCleanup = [];
+    }
+    container._attachmentCleanup.push(() => {
+      document.removeEventListener("click", globalClickHandler);
+    });
+  }
 
   // Trigger welcome animations AFTER DOM mount
   const greetingElement = container.querySelector(".welcome-greeting");
@@ -334,7 +460,11 @@ export function hideWelcomePage(container) {
  * @returns {string[]} Array of enabled MCP server keys
  */
 export function getMcpConfig() {
-  const activeButtons = document.querySelectorAll(".mcp-toggle-btn.active");
+  const container = document.getElementById("welcome-page-container");
+  const activeButtons = container
+    ? container.querySelectorAll(".mcp-toggle-btn.active")
+    : document.querySelectorAll(".mcp-toggle-buttons .mcp-toggle-btn.active"); // Fallback
+
   return Array.from(activeButtons).map((btn) => btn.dataset.mcp);
 }
 

@@ -36,8 +36,16 @@ export async function generatePdfThumbnail(inputData, maxSize = 200) {
   // Load PDF document
   const loadingTask = pdfjsLib.getDocument({ data: bytes });
   const pdf = await loadingTask.promise;
+  return renderPdfPageToDataUrl(pdf, maxSize);
+}
 
-  // Get first page
+/**
+ * Render first page of a PDF document to a data URL
+ * @param {PDFDocumentProxy} pdf - Loaded PDF document
+ * @param {number} maxSize - Maximum width/height of thumbnail
+ * @returns {Promise<string>} Data URL of the rendered thumbnail (PNG)
+ */
+async function renderPdfPageToDataUrl(pdf, maxSize) {
   const page = await pdf.getPage(1);
   const viewport = page.getViewport({ scale: 1 });
 
@@ -45,19 +53,17 @@ export async function generatePdfThumbnail(inputData, maxSize = 200) {
   const scale = maxSize / Math.max(viewport.width, viewport.height);
   const scaledViewport = page.getViewport({ scale });
 
-  // Create canvas
+  // Create canvas and render
   const canvas = document.createElement("canvas");
   canvas.width = scaledViewport.width;
   canvas.height = scaledViewport.height;
   const ctx = canvas.getContext("2d");
 
-  // Render page to canvas
   await page.render({
     canvasContext: ctx,
     viewport: scaledViewport,
   }).promise;
 
-  // Convert canvas to data URL
   return canvas.toDataURL("image/png");
 }
 
@@ -68,30 +74,7 @@ export async function generatePdfThumbnail(inputData, maxSize = 200) {
  * @returns {Promise<string>} Data URL of the rendered thumbnail (PNG)
  */
 export async function generatePdfThumbnailFromUrl(url, maxSize = 200) {
-  // Load PDF document from URL
   const loadingTask = pdfjsLib.getDocument(url);
   const pdf = await loadingTask.promise;
-
-  // Get first page
-  const page = await pdf.getPage(1);
-  const viewport = page.getViewport({ scale: 1 });
-
-  // Calculate scale to fit within maxSize while maintaining aspect ratio
-  const scale = maxSize / Math.max(viewport.width, viewport.height);
-  const scaledViewport = page.getViewport({ scale });
-
-  // Create canvas
-  const canvas = document.createElement("canvas");
-  canvas.width = scaledViewport.width;
-  canvas.height = scaledViewport.height;
-  const ctx = canvas.getContext("2d");
-
-  // Render page to canvas
-  await page.render({
-    canvasContext: ctx,
-    viewport: scaledViewport,
-  }).promise;
-
-  // Convert canvas to data URL
-  return canvas.toDataURL("image/png");
+  return renderPdfPageToDataUrl(pdf, maxSize);
 }

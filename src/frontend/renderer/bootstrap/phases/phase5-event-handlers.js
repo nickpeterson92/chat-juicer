@@ -15,6 +15,8 @@ import { loadFilesIntoState } from "../../managers/file-manager.js";
 import { MessageHandlerPlugin } from "../../plugins/core-plugins.js";
 import { renderEmptySessionList, renderSessionList } from "../../ui/renderers/session-list-renderer.js";
 import { initializeTitlebar } from "../../ui/titlebar.js";
+import { getPreviewType, hasBinaryExtension, hasTextExtension } from "../../utils/content-preview.js";
+import { base64ToFile, readTextFileChunk } from "../../utils/file-utils.js";
 import {
   completeFileUpload,
   finishUploadProgress,
@@ -539,6 +541,276 @@ export async function initializeEventHandlers({
       addListener(fileDropZone, "drop", handleFileDrop);
     }
 
+    // Handle files selected via file dialog (from attachment plus button)
+    const handleFilesFromDialog = async (event) => {
+      const { filePaths } = event.detail;
+      if (!filePaths || filePaths.length === 0) return;
+
+      const isOnWelcomePage = document.body.classList.contains("view-welcome");
+
+      // Convert file paths to File-like objects by reading them
+      const { showToast } = await import("../../utils/toast.js");
+      const pendingFiles = appState.getState("ui.pendingWelcomeFiles") || [];
+      const MAX_PENDING_FILE_SIZE = 50 * 1024 * 1024; // 50MB per file
+
+      // Process files from paths (Node.js fs access via IPC)
+      for (const filePath of filePaths) {
+        try {
+          // Get file info and content via IPC
+          const fileName = filePath.split("/").pop() || filePath.split("\\").pop();
+
+          // For welcome page, we need to create pending file entries
+          // Since we can't directly read files in renderer, we'll upload after session creation
+          // For now, store the path and let the upload happen when session is created
+          if (isOnWelcomePage && !sessionService.getCurrentSessionId()) {
+            // Read file via fetch (for local files packaged with app) or create File reference
+            // Read file via IPC (fetch file:// fails in renderer)
+            const fileData = await ipcAdapter.readFile(filePath);
+            if (!fileData || !fileData.success) throw new Error(fileData?.error || "Failed to read file");
+
+            // Convert base64 to File
+            const file = base64ToFile(fileData.data, fileName, fileData.mimeType);
+
+            if (file.size > MAX_PENDING_FILE_SIZE) {
+              showToast(`${fileName} exceeds 50MB limit`, "warning", 3000);
+              continue;
+            }
+
+            // Create preview data
+            let previewUrl = null;
+            let previewContent = null;
+            let previewType = null;
+
+            if (file.type?.startsWith("image/")) {
+              previewUrl = URL.createObjectURL(file);
+              previewType = "image";
+            } else if (file.type === "application/pdf") {
+              previewType = "pdf";
+            } else {
+              const isBinaryFile = hasBinaryExtension(file.name);
+              const isTextFile = !isBinaryFile && (file.type?.startsWith("text/") || hasTextExtension(file.name));
+
+              if (isTextFile) {
+                try {
+                  previewContent = await readTextFileChunk(file, 2048);
+                  previewType = getPreviewType(file.name);
+                } catch (err) {
+                  console.warn("Failed to read local file for preview:", err);
+                }
+              }
+            }
+
+            pendingFiles.push({
+              file,
+              previewUrl,
+              previewContent,
+              previewType,
+              name: file.name,
+              size: file.size,
+              type: file.type,
+            });
+          } else {
+            // If we have an active session, upload directly via file service
+            // Read the file via fetch and upload
+            // Read file via IPC (fetch file:// fails in renderer)
+            const fileData = await ipcAdapter.readFile(filePath);
+            if (!fileData || !fileData.success) throw new Error(fileData?.error || "Failed to read file");
+
+            // Convert base64 to File
+            const file = base64ToFile(fileData.data, fileName, fileData.mimeType);
+
+            const result = await services.fileService.uploadFile(file, sessionService.getCurrentSessionId());
+            if (result.success) {
+              // Add image files to pending attachments
+              if (file.type?.startsWith("image/")) {
+                const currentAttachments = appState.getState("message.pendingAttachments") || [];
+                appState.setState("message.pendingAttachments", [
+                  ...currentAttachments,
+                  {
+                    type: "image_ref",
+                    filename: file.name,
+                    path: `sources/${file.name}`,
+                    mimeType: file.type,
+                  },
+                ]);
+              }
+
+              // Refresh file panel
+              if (components.filePanel) {
+                await components.filePanel.refresh();
+              }
+            } else {
+              showToast(`Failed to upload ${fileName}`, "error", 3000);
+            }
+          }
+        } catch (error) {
+          console.error("Failed to process file from dialog:", error);
+          showToast(`Error processing file`, "error", 3000);
+        }
+      }
+
+      // Update pending files state
+      if (isOnWelcomePage && !sessionService.getCurrentSessionId() && pendingFiles.length > 0) {
+        appState.setState("ui.pendingWelcomeFiles", [...pendingFiles]);
+        appState.setState("ui.welcomeFilesSectionVisible", true);
+        showToast(`${filePaths.length} file${filePaths.length > 1 ? "s" : ""} ready to attach`, "success", 2000);
+      }
+    };
+
+    window.addEventListener("files-selected-from-dialog", handleFilesFromDialog);
+    listeners.push({ element: window, event: "files-selected-from-dialog", handler: handleFilesFromDialog });
+
+    // Setup chat input attachment plus button
+    const chatAttachmentBtn = document.getElementById("chat-attachment-plus-btn");
+    let chatAttachmentMenu = null;
+
+    if (chatAttachmentBtn) {
+      const createChatMenu = () => {
+        const menu = document.createElement("div");
+        menu.className = "attachment-context-menu";
+        menu.id = "chat-attachment-context-menu";
+        menu.innerHTML = `
+          <button class="attachment-menu-item" data-action="attach-file">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+            </svg>
+            Attach file
+          </button>
+        `;
+        document.body.appendChild(menu);
+        return menu;
+      };
+
+      const closeChatMenu = () => {
+        chatAttachmentBtn.classList.remove("open");
+        if (chatAttachmentMenu) {
+          chatAttachmentMenu.classList.remove("visible");
+        }
+      };
+
+      const openChatMenu = async () => {
+        if (!chatAttachmentMenu) {
+          chatAttachmentMenu = createChatMenu();
+
+          const attachMenuItem = chatAttachmentMenu.querySelector('[data-action="attach-file"]');
+          if (attachMenuItem) {
+            attachMenuItem.addEventListener("click", async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              closeChatMenu();
+
+              try {
+                const filePaths = await ipcAdapter.openFileDialog({ multiple: true });
+                if (filePaths && filePaths.length > 0) {
+                  window.dispatchEvent(
+                    new CustomEvent("files-selected-from-dialog", {
+                      detail: { filePaths },
+                    })
+                  );
+                }
+              } catch (error) {
+                console.error("Failed to open file dialog:", error);
+              }
+            });
+          }
+        }
+
+        // Position menu above button with viewport clamping
+        const btnRect = chatAttachmentBtn.getBoundingClientRect();
+        chatAttachmentMenu.style.position = "fixed";
+        chatAttachmentMenu.style.transform = "translateY(-100%)";
+        chatAttachmentMenu.style.top = `${btnRect.top - 8}px`;
+
+        // Calculate left position, ensuring menu stays within viewport
+        const menuWidth = 140; // min-width from CSS
+        let leftPos = btnRect.left + btnRect.width / 2 - menuWidth / 2;
+
+        // Clamp to viewport bounds (8px padding from edges)
+        leftPos = Math.max(8, Math.min(leftPos, window.innerWidth - menuWidth - 8));
+        chatAttachmentMenu.style.left = `${leftPos}px`;
+
+        chatAttachmentBtn.classList.add("open");
+        chatAttachmentMenu.classList.add("visible");
+      };
+
+      addListener(chatAttachmentBtn, "click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const isOpen = chatAttachmentBtn.classList.contains("open");
+        if (isOpen) {
+          closeChatMenu();
+        } else {
+          openChatMenu();
+        }
+      });
+
+      // Close menu when clicking outside
+      const closeChatMenuOnOutsideClick = (e) => {
+        if (chatAttachmentMenu && !chatAttachmentBtn.contains(e.target) && !chatAttachmentMenu.contains(e.target)) {
+          closeChatMenu();
+        }
+      };
+      addListener(document, "click", closeChatMenuOnOutsideClick);
+    }
+
+    // Setup chat MCP toggle buttons (scoped to chat-input-section)
+    const chatInputSection = document.querySelector(".chat-input-section");
+    if (chatInputSection) {
+      const chatMcpButtons = chatInputSection.querySelectorAll(".mcp-toggle-btn");
+      let mcpUpdateTimeout = null;
+
+      const updateSessionMcpConfig = async () => {
+        const sessionId = sessionService.getCurrentSessionId();
+        if (!sessionId) return;
+
+        // Collect enabled MCP servers only from the chat input section
+        const mcpConfig = [];
+        chatInputSection.querySelectorAll(".mcp-toggle-btn.active").forEach((btn) => {
+          const mcpType = btn.dataset.mcp;
+          // Map to backend keys
+          if (mcpType === "sequential") mcpConfig.push("sequential");
+          else if (mcpType === "fetch") mcpConfig.push("fetch");
+          else if (mcpType === "tavily") mcpConfig.push("tavily");
+        });
+
+        try {
+          await window.electronAPI.sessionCommand("update_config", {
+            session_id: sessionId,
+            mcp_config: mcpConfig,
+          });
+          logger.info(`Updated session config for ${sessionId}: ${mcpConfig.join(", ")}`);
+        } catch (error) {
+          console.error("Failed to update MCP config:", error);
+        }
+      };
+
+      chatMcpButtons.forEach((btn) => {
+        addListener(btn, "click", () => {
+          // Toggle active state
+          btn.classList.toggle("active");
+
+          // Animation
+          if (btn.classList.contains("active")) {
+            btn.classList.add("animate-on");
+          } else {
+            btn.classList.add("animate-off");
+          }
+
+          btn.addEventListener(
+            "animationend",
+            () => {
+              btn.classList.remove("animate-on", "animate-off");
+            },
+            { once: true }
+          );
+
+          // Debounce update
+          if (mcpUpdateTimeout) clearTimeout(mcpUpdateTimeout);
+          mcpUpdateTimeout = setTimeout(updateSessionMcpConfig, 300);
+        });
+      });
+    }
+
     // ======================
     // 3. Titlebar
     // ======================
@@ -869,135 +1141,4 @@ export async function initializeEventHandlers({
     console.error("Phase 5 failed:", error);
     throw new Error(`Event handler initialization failed: ${error.message}`);
   }
-}
-
-// Helper to check for common text extensions
-function hasTextExtension(filename) {
-  const ext = filename.split(".").pop()?.toLowerCase();
-  const textExts = [
-    "js",
-    "jsx",
-    "ts",
-    "tsx",
-    "py",
-    "java",
-    "c",
-    "cpp",
-    "cs",
-    "go",
-    "rb",
-    "php",
-    "swift",
-    "kt",
-    "rs",
-    "sh",
-    "bash",
-    "sql",
-    "r",
-    "scala",
-    "dart",
-    "lua",
-    "txt",
-    "md",
-    "html",
-    "xml",
-    "json",
-    "yaml",
-    "yml",
-    "toml",
-    "ini",
-    "log",
-    "css",
-    "scss",
-    "less",
-    "csv",
-  ];
-  return textExts.includes(ext);
-}
-
-// Helper to check for known binary file extensions that should NEVER be read as text
-function hasBinaryExtension(filename) {
-  const ext = filename.split(".").pop()?.toLowerCase();
-  const binaryExts = [
-    // Microsoft Office
-    "xlsx",
-    "xls",
-    "xlsm",
-    "xlsb",
-    "docx",
-    "doc",
-    "docm",
-    "pptx",
-    "ppt",
-    "pptm",
-    // Archives
-    "zip",
-    "rar",
-    "7z",
-    "tar",
-    "gz",
-    "bz2",
-    "xz",
-    // Executables / Binaries
-    "exe",
-    "dll",
-    "so",
-    "dylib",
-    "bin",
-    "dmg",
-    "iso",
-    "app",
-    // Media (non-image)
-    "mp3",
-    "mp4",
-    "wav",
-    "avi",
-    "mov",
-    "mkv",
-    "flv",
-    "ogg",
-    "webm",
-    // Databases
-    "sqlite",
-    "db",
-    "mdb",
-    "accdb",
-    // Other binary formats
-    "wasm",
-    "class",
-    "pyc",
-    "pyo",
-    "o",
-    "a",
-    // Fonts
-    "ttf",
-    "otf",
-    "woff",
-    "woff2",
-    "eot",
-  ];
-  return binaryExts.includes(ext);
-}
-
-// Helper to determine preview type
-function getPreviewType(filename) {
-  const ext = filename.split(".").pop()?.toLowerCase();
-  if (ext === "csv") return "csv";
-  if (["js", "jsx", "ts", "tsx", "py"].includes(ext)) return "code";
-  // ... maps to existing content-preview.js logic types
-  if (hasTextExtension(filename)) return "code"; // Treat most text as code for syntax highlighting
-  return "text";
-}
-
-// Helper to read a chunk of a file as text
-function readTextFileChunk(file, maxLength) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    const blob = file.slice(0, maxLength); // Read only the first chunk
-
-    reader.onload = (e) => resolve(e.target.result);
-    reader.onerror = (_e) => reject(new Error("File read failed"));
-
-    reader.readAsText(blob);
-  });
 }

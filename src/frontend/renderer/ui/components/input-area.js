@@ -527,8 +527,8 @@ export class InputArea {
       this.textarea.style.height = "auto";
 
       // Get scroll height and apply constraints
-      const scrollHeight = this.textarea.scrollHeight || 40;
-      const minHeight = 40;
+      const scrollHeight = this.textarea.scrollHeight || 44;
+      const minHeight = 44;
       const maxHeight = 200;
       const newHeight = Math.max(minHeight, Math.min(scrollHeight, maxHeight));
 

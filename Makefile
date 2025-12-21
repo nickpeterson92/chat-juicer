@@ -195,7 +195,7 @@ lint: ## Run linters (Ruff for Python, Biome for JS)
 		exit 1; \
 	fi
 	@echo "$(BLUE)Running biome linter (JavaScript)...$(NC)"
-	@npm run lint
+	@npm run lint || exit 1
 
 format: ## Format Python code with black
 	@echo "$(BLUE)Formatting code with black...$(NC)"

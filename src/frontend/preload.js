@@ -75,6 +75,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return await ipcRenderer.invoke("get-file-content", { dirPath, filename });
   },
 
+  // Read arbitrary local file (absolute path)
+  readFile: async (filePath) => {
+    return await ipcRenderer.invoke("read-file", filePath);
+  },
+
   // Get system username
   getUsername: async () => {
     return await ipcRenderer.invoke("get-username");
@@ -82,6 +87,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Stream interruption
   interruptStream: (sessionId = null) => ipcRenderer.invoke("interrupt-stream", { session_id: sessionId }),
+
+  // Open file picker dialog
+  openFileDialog: async (options = {}) => {
+    return await ipcRenderer.invoke("open-file-dialog", options);
+  },
 
   // Window controls (for custom titlebar on Windows/Linux)
   windowMinimize: () => {
