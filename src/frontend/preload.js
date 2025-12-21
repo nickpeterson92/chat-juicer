@@ -75,6 +75,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return await ipcRenderer.invoke("get-file-content", { dirPath, filename });
   },
 
+  // Read arbitrary local file (absolute path)
+  readFile: async (filePath) => {
+    return await ipcRenderer.invoke("read-file", filePath);
+  },
+
   // Get system username
   getUsername: async () => {
     return await ipcRenderer.invoke("get-username");

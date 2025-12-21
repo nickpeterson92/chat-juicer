@@ -15,6 +15,8 @@ import { loadFilesIntoState } from "../../managers/file-manager.js";
 import { MessageHandlerPlugin } from "../../plugins/core-plugins.js";
 import { renderEmptySessionList, renderSessionList } from "../../ui/renderers/session-list-renderer.js";
 import { initializeTitlebar } from "../../ui/titlebar.js";
+import { getPreviewType, hasBinaryExtension, hasTextExtension } from "../../utils/content-preview.js";
+import { readTextFileChunk } from "../../utils/file-utils.js";
 import {
   completeFileUpload,
   finishUploadProgress,
@@ -562,8 +564,18 @@ export async function initializeEventHandlers({
           // For now, store the path and let the upload happen when session is created
           if (isOnWelcomePage && !sessionService.getCurrentSessionId()) {
             // Read file via fetch (for local files packaged with app) or create File reference
-            const response = await fetch(`file://${filePath}`);
-            const blob = await response.blob();
+            // Read file via IPC (fetch file:// fails in renderer)
+            const fileData = await ipcAdapter.readFile(filePath);
+            if (!fileData || !fileData.success) throw new Error(fileData?.error || "Failed to read file");
+
+            // Convert base64 to Blob
+            const byteCharacters = atob(fileData.data);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+              byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: fileData.mimeType });
             const file = new File([blob], fileName, { type: blob.type });
 
             if (file.size > MAX_PENDING_FILE_SIZE) {
@@ -607,8 +619,18 @@ export async function initializeEventHandlers({
           } else {
             // If we have an active session, upload directly via file service
             // Read the file via fetch and upload
-            const response = await fetch(`file://${filePath}`);
-            const blob = await response.blob();
+            // Read file via IPC (fetch file:// fails in renderer)
+            const fileData = await ipcAdapter.readFile(filePath);
+            if (!fileData || !fileData.success) throw new Error(fileData?.error || "Failed to read file");
+
+            // Convert base64 to Blob
+            const byteCharacters = atob(fileData.data);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+              byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: fileData.mimeType });
             const file = new File([blob], fileName, { type: blob.type });
 
             const result = await services.fileService.uploadFile(file, sessionService.getCurrentSessionId());
@@ -1133,135 +1155,4 @@ export async function initializeEventHandlers({
     console.error("Phase 5 failed:", error);
     throw new Error(`Event handler initialization failed: ${error.message}`);
   }
-}
-
-// Helper to check for common text extensions
-function hasTextExtension(filename) {
-  const ext = filename.split(".").pop()?.toLowerCase();
-  const textExts = [
-    "js",
-    "jsx",
-    "ts",
-    "tsx",
-    "py",
-    "java",
-    "c",
-    "cpp",
-    "cs",
-    "go",
-    "rb",
-    "php",
-    "swift",
-    "kt",
-    "rs",
-    "sh",
-    "bash",
-    "sql",
-    "r",
-    "scala",
-    "dart",
-    "lua",
-    "txt",
-    "md",
-    "html",
-    "xml",
-    "json",
-    "yaml",
-    "yml",
-    "toml",
-    "ini",
-    "log",
-    "css",
-    "scss",
-    "less",
-    "csv",
-  ];
-  return textExts.includes(ext);
-}
-
-// Helper to check for known binary file extensions that should NEVER be read as text
-function hasBinaryExtension(filename) {
-  const ext = filename.split(".").pop()?.toLowerCase();
-  const binaryExts = [
-    // Microsoft Office
-    "xlsx",
-    "xls",
-    "xlsm",
-    "xlsb",
-    "docx",
-    "doc",
-    "docm",
-    "pptx",
-    "ppt",
-    "pptm",
-    // Archives
-    "zip",
-    "rar",
-    "7z",
-    "tar",
-    "gz",
-    "bz2",
-    "xz",
-    // Executables / Binaries
-    "exe",
-    "dll",
-    "so",
-    "dylib",
-    "bin",
-    "dmg",
-    "iso",
-    "app",
-    // Media (non-image)
-    "mp3",
-    "mp4",
-    "wav",
-    "avi",
-    "mov",
-    "mkv",
-    "flv",
-    "ogg",
-    "webm",
-    // Databases
-    "sqlite",
-    "db",
-    "mdb",
-    "accdb",
-    // Other binary formats
-    "wasm",
-    "class",
-    "pyc",
-    "pyo",
-    "o",
-    "a",
-    // Fonts
-    "ttf",
-    "otf",
-    "woff",
-    "woff2",
-    "eot",
-  ];
-  return binaryExts.includes(ext);
-}
-
-// Helper to determine preview type
-function getPreviewType(filename) {
-  const ext = filename.split(".").pop()?.toLowerCase();
-  if (ext === "csv") return "csv";
-  if (["js", "jsx", "ts", "tsx", "py"].includes(ext)) return "code";
-  // ... maps to existing content-preview.js logic types
-  if (hasTextExtension(filename)) return "code"; // Treat most text as code for syntax highlighting
-  return "text";
-}
-
-// Helper to read a chunk of a file as text
-function readTextFileChunk(file, maxLength) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    const blob = file.slice(0, maxLength); // Read only the first chunk
-
-    reader.onload = (e) => resolve(e.target.result);
-    reader.onerror = (_e) => reject(new Error("File read failed"));
-
-    reader.readAsText(blob);
-  });
 }

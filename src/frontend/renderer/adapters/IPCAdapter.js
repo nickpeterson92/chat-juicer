@@ -254,6 +254,18 @@ export class IPCAdapter {
   }
 
   /**
+   * Read local file from disk
+   * @param {string} filePath - Absolute path to file
+   * @returns {Promise<object>} { success, data (base64), mimeType, error }
+   */
+  async readFile(filePath) {
+    if (!this.api?.readFile) {
+      throw new Error("IPC API not available: readFile");
+    }
+    return this.api.readFile(filePath);
+  }
+
+  /**
    * Show file in system file manager (not implemented in electronAPI)
    * @param {string} filePath - Path to file to show
    * @returns {Promise<void>}

@@ -621,6 +621,47 @@ app.whenReady().then(() => {
     }
   });
 
+  // IPC handler for reading local files (used for attachment previews)
+  ipcMain.handle("read-file", async (_event, filePath) => {
+    logger.debug("Read file requested", { filePath });
+
+    try {
+      if (!filePath || typeof filePath !== "string") {
+        return { success: false, error: "Invalid path" };
+      }
+
+      // Read file and convert to base64
+      const buffer = await fs.readFile(filePath);
+      const base64 = buffer.toString("base64");
+
+      // Determine mime type from extension
+      const ext = path.extname(filePath).slice(1).toLowerCase();
+      const mimeTypes = {
+        jpg: "image/jpeg",
+        jpeg: "image/jpeg",
+        png: "image/png",
+        gif: "image/gif",
+        webp: "image/webp",
+        svg: "image/svg+xml",
+        bmp: "image/bmp",
+        ico: "image/x-icon",
+        pdf: "application/pdf",
+        txt: "text/plain",
+        md: "text/markdown",
+        js: "text/javascript",
+        json: "application/json",
+        html: "text/html",
+        css: "text/css",
+      };
+      const mimeType = mimeTypes[ext] || "application/octet-stream";
+
+      return { success: true, data: base64, mimeType };
+    } catch (error) {
+      logger.error("Failed to read file", { filePath, error: error.message });
+      return { success: false, error: error.message };
+    }
+  });
+
   // IPC handler for getting file content as base64 (for thumbnails)
   ipcMain.handle("get-file-content", async (_event, { dirPath, filename }) => {
     logger.debug("File content requested", { dirPath, filename });

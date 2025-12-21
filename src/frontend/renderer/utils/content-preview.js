@@ -203,3 +203,74 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 }
+
+// Binary extensions that should strictly NOT be treated as text
+const BINARY_EXTENSIONS = [
+  "exe",
+  "dll",
+  "so",
+  "dylib",
+  "bin",
+  "zip",
+  "tar",
+  "gz",
+  "rar",
+  "7z",
+  "iso",
+  "img",
+  "dmg",
+  "pdf",
+  "doc",
+  "docx",
+  "xls",
+  "xlsx",
+  "ppt",
+  "pptx",
+  "mp3",
+  "mp4",
+  "avi",
+  "mov",
+  "mkv",
+  "webm",
+  "flv",
+  "wav",
+  "flac",
+  "class",
+  "jar",
+  "db",
+  "sqlite",
+  "parquet",
+];
+
+/**
+ * Check if a file has a known binary extension
+ * @param {string} filename
+ * @returns {boolean}
+ */
+export function hasBinaryExtension(filename) {
+  const ext = filename.split(".").pop()?.toLowerCase();
+  return BINARY_EXTENSIONS.includes(ext);
+}
+
+/**
+ * Check if a file has a known text extension
+ * @param {string} filename
+ * @returns {boolean}
+ */
+export function hasTextExtension(filename) {
+  const ext = filename.split(".").pop()?.toLowerCase();
+  return isTextFile(ext);
+}
+
+/**
+ * Determine the preview type based on filename
+ * @param {string} filename
+ * @returns {string|null} 'code', 'csv', 'text', or null
+ */
+export function getPreviewType(filename) {
+  const ext = filename.split(".").pop()?.toLowerCase();
+  if (isCodeFile(ext)) return "code";
+  if (isCsvFile(ext)) return "csv";
+  if (isTextFile(ext)) return "text";
+  return null;
+}

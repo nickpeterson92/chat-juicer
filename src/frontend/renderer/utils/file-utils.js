@@ -124,3 +124,19 @@ export function formatFileSize(bytes) {
     sizes[i]
   );
 }
+
+/**
+ * Read the first N bytes of a file as text
+ * @param {File} file - File object
+ * @param {number} size - Number of bytes to read
+ * @returns {Promise<string>}
+ */
+export function readTextFileChunk(file, size) {
+  return new Promise((resolve, reject) => {
+    const slice = file.slice(0, size);
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(slice);
+  });
+}
