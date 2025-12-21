@@ -313,7 +313,7 @@ describe("phase5-event-handlers coverage", () => {
     expect(pendingFiles.length).toBe(1);
     expect(pendingFiles[0].name).toBe("test.txt");
     expect(pendingFiles[0].previewContent).toBe("x"); // 'x' was the file content
-    expect(pendingFiles[0].previewType).toBe("code"); // 'txt' maps to code/text
+    expect(pendingFiles[0].previewType).toBe("text"); // 'txt' maps to code/text
   });
 
   it("buffers PDF files with icon placeholder (no blob URL)", async () => {
