@@ -4,7 +4,18 @@ import pytest
 
 from fastapi.testclient import TestClient
 
-from api.main import app, lifespan
+# Mock settings BEFORE importing app to prevent ValidationError on CI
+# where env vars are not set
+_mock_settings = MagicMock()
+_mock_settings.database_url = "postgresql://test:test@localhost/test"
+_mock_settings.api_provider = "openai"
+_mock_settings.openai_api_key = "test_key"
+_mock_settings.jwt_secret = "testsecret"
+_mock_settings.jwt_algorithm = "HS256"
+_mock_settings.debug = False
+
+with patch("api.main.get_settings", return_value=_mock_settings), patch("api.main.settings", _mock_settings):
+    from api.main import app, lifespan
 
 
 @pytest.fixture
