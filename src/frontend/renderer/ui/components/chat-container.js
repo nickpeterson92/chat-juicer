@@ -574,8 +574,10 @@ export class ChatContainer {
    * Clears existing content and renders messages including completed tool cards
    *
    * @param {Array<Object>} messages - Array of message objects with role and content
+   * @param {Object} options - Optional configuration
+   * @param {boolean} options.skipAutoScroll - If true, skip auto-scroll to bottom (caller will handle scroll)
    */
-  setMessages(messages) {
+  setMessages(messages, options = {}) {
     // Clear existing content
     this.clear();
 
@@ -586,7 +588,10 @@ export class ChatContainer {
     const { sortedMessages, mergedToolCalls } = this._prepareMessagesWithMergedTools(messages);
 
     // Virtualized render in batches to reduce main-thread blocking
-    this._renderVirtualizedBatched(sortedMessages, mergedToolCalls, { prepend: false });
+    this._renderVirtualizedBatched(sortedMessages, mergedToolCalls, {
+      prepend: false,
+      skipAutoScroll: options.skipAutoScroll,
+    });
   }
 
   /**
@@ -695,7 +700,10 @@ export class ChatContainer {
         }
       } else {
         this.element.appendChild(fragment);
-        this.scrollToBottom();
+        // Skip auto-scroll if caller will handle it (e.g., after pagination completes)
+        if (!options.skipAutoScroll) {
+          this.scrollToBottom();
+        }
       }
       return;
     }

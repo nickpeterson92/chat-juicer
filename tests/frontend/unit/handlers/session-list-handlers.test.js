@@ -247,7 +247,10 @@ describe("Session List Handlers", () => {
 
     expect(sessionService.switchSession).toHaveBeenCalledWith("next", expect.any(Object));
     // setMessages handles message rendering (including tool cards from Layer 2)
-    expect(window.components.chatContainer.setMessages).toHaveBeenCalledWith([{ role: "assistant", content: "hi" }]);
+    // skipAutoScroll: true because handleSwitch handles scroll explicitly after pagination
+    expect(window.components.chatContainer.setMessages).toHaveBeenCalledWith([{ role: "assistant", content: "hi" }], {
+      skipAutoScroll: true,
+    });
     expect(updateSessionsList).toHaveBeenCalled();
 
     const sidebar = document.getElementById("sidebar");
