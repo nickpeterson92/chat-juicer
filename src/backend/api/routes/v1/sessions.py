@@ -44,7 +44,7 @@ SessionIdPath = Annotated[
     Path(
         ...,
         description="Session identifier",
-        example="sess_abc123",
+        examples=["sess_abc123"],
         min_length=1,
         max_length=100,
     ),
@@ -118,11 +118,11 @@ async def list_sessions(
     sessions: Sessions,
     offset: Annotated[
         int,
-        Query(ge=0, description="Number of sessions to skip", example=0),
+        Query(ge=0, description="Number of sessions to skip", examples=[0]),
     ] = 0,
     limit: Annotated[
         int,
-        Query(ge=1, le=100, description="Maximum sessions to return", example=50),
+        Query(ge=1, le=100, description="Maximum sessions to return", examples=[50]),
     ] = 50,
 ) -> SessionListResponse:
     """List all sessions with pagination."""
