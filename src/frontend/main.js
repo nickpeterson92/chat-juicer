@@ -673,6 +673,32 @@ app.whenReady().then(() => {
     return { success: true };
   });
 
+  // IPC handler for opening file picker dialog
+  ipcMain.handle("open-file-dialog", async (_event, options = {}) => {
+    logger.debug("File dialog requested", { options });
+
+    try {
+      const properties = ["openFile"];
+      if (options.multiple) {
+        properties.push("multiSelections");
+      }
+
+      const result = await dialog.showOpenDialog(mainWindow, {
+        properties,
+        filters: options.filters || [{ name: "All Files", extensions: ["*"] }],
+      });
+
+      if (result.canceled) {
+        return null;
+      }
+
+      return result.filePaths;
+    } catch (error) {
+      logger.error("Failed to open file dialog", { error: error.message });
+      return null;
+    }
+  });
+
   // IPC handler for restart request
   ipcMain.on("restart-bot", () => {
     logger.info("Restart requested");

@@ -309,15 +309,18 @@ export class IPCAdapter {
   }
 
   /**
-   * Open file picker dialog (not implemented in electronAPI)
+   * Open file picker dialog
    * @param {object} options - Dialog options
-   * @param {string[]} [options.filters] - File type filters
    * @param {boolean} [options.multiple] - Allow multiple file selection
+   * @param {Array} [options.filters] - File type filters
    * @returns {Promise<string[] | null>} Selected file paths or null if cancelled
    */
-  async openFileDialog(_options = {}) {
-    console.warn("openFileDialog not implemented in electronAPI");
-    return Promise.resolve(null);
+  async openFileDialog(options = {}) {
+    if (!this.api?.openFileDialog) {
+      console.warn("IPC API not available: openFileDialog");
+      return Promise.resolve(null);
+    }
+    return this.api.openFileDialog(options);
   }
 
   /**

@@ -463,7 +463,7 @@ function attachWelcomePageListeners(elements, appState) {
     });
 
     // MCP toggle clicks
-    document.querySelectorAll(".mcp-toggle-btn").forEach((btn) => {
+    welcomeContainer.querySelectorAll(".mcp-toggle-btn").forEach((btn) => {
       const handler = () => handleModelConfigChange();
       btn.addEventListener("click", handler);
       welcomePageListeners.push({ element: btn, event: "click", handler });

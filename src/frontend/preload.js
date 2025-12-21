@@ -83,6 +83,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Stream interruption
   interruptStream: (sessionId = null) => ipcRenderer.invoke("interrupt-stream", { session_id: sessionId }),
 
+  // Open file picker dialog
+  openFileDialog: async (options = {}) => {
+    return await ipcRenderer.invoke("open-file-dialog", options);
+  },
+
   // Window controls (for custom titlebar on Windows/Linux)
   windowMinimize: () => {
     ipcRenderer.send("window-minimize");
