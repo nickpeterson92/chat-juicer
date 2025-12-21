@@ -2528,6 +2528,242 @@
     color: var(--color-text-secondary);
   }
 
+  /* ==========================================
+   * THUMBNAIL GRID SYSTEM
+   * Square card grid for file previews
+   * ========================================== */
+
+  .thumbnail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+    padding: 8px;
+  }
+
+  .thumbnail-card {
+    @apply relative rounded-lg cursor-pointer transition-all overflow-hidden;
+    aspect-ratio: 1;
+    background-color: var(--color-surface-2);
+    border: 1px solid var(--color-border-secondary);
+  }
+
+  .thumbnail-card:hover {
+    border-color: var(--color-border-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  .thumbnail-card:active {
+    transform: translateY(0);
+  }
+
+  /* Filename - top left, with padding for delete button */
+  .thumbnail-filename {
+    @apply absolute top-0 left-0 right-0 pl-7 pr-2 py-1.5 text-xs font-medium truncate;
+    color: var(--color-text-primary);
+    background: linear-gradient(to bottom, var(--color-surface-2) 60%, transparent);
+    z-index: 2;
+  }
+
+  /* Icon container - centered */
+  .thumbnail-icon-wrapper {
+    @apply absolute inset-0 flex items-center justify-center;
+    padding-top: 20px;
+    /* Account for filename */
+    padding-bottom: 28px;
+    /* Account for badge */
+  }
+
+  .thumbnail-icon-wrapper svg {
+    width: 36px;
+    height: 36px;
+    opacity: 0.7;
+    transition: opacity 0.15s, transform 0.15s;
+  }
+
+  .thumbnail-card:hover .thumbnail-icon-wrapper svg {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+
+  /* Extension badge - bottom left */
+  .thumbnail-badge {
+    @apply absolute bottom-2 left-2 px-2 py-0.5 text-[10px] font-bold uppercase rounded;
+    background-color: var(--badge-bg, var(--color-surface-active));
+    color: var(--badge-text, var(--color-text-primary));
+    letter-spacing: 0.02em;
+    z-index: 2;
+  }
+
+  /* Delete button - top left, hidden until hover */
+  .thumbnail-delete-btn {
+    @apply absolute top-1 left-1 p-1 rounded opacity-0 transition-all;
+    background-color: var(--color-surface-overlay);
+    color: var(--color-text-secondary);
+    z-index: 3;
+  }
+
+  .thumbnail-card:hover .thumbnail-delete-btn {
+    opacity: 1;
+  }
+
+  .thumbnail-delete-btn:hover {
+    background-color: var(--color-status-error);
+    color: white;
+  }
+
+  /* Preview content area (for images, code, etc.) */
+  .thumbnail-preview {
+    @apply absolute inset-0;
+    z-index: 1;
+  }
+
+  .thumbnail-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Code preview styling */
+  .thumbnail-preview-code {
+    @apply absolute inset-0 overflow-hidden p-1.5 pt-6 text-[8px] leading-tight font-mono;
+    color: var(--color-text-secondary);
+    background-color: var(--color-surface-2);
+  }
+
+  /* Inline code preview (from content-preview.js) */
+  .thumbnail-code-preview,
+  .thumbnail-text-preview {
+    @apply m-0 p-0 text-[7px] leading-[1.2] font-mono whitespace-pre overflow-hidden;
+    color: var(--color-text-secondary);
+    background: transparent;
+    max-height: 100%;
+  }
+
+  /* CSV/Table preview styling */
+  .thumbnail-preview-table {
+    @apply absolute inset-0 overflow-hidden p-1 pt-6;
+  }
+
+  .thumbnail-preview-table table,
+  .thumbnail-csv-table {
+    @apply w-full text-[7px] border-collapse;
+    color: var(--color-text-secondary);
+  }
+
+  .thumbnail-preview-table td,
+  .thumbnail-csv-table td {
+    @apply px-0.5 py-0.5 truncate max-w-[25px] border;
+    border-color: var(--color-border-secondary);
+    background-color: var(--color-surface-overlay);
+  }
+
+  .thumbnail-csv-empty {
+    @apply text-[8px] text-center p-2;
+    color: var(--color-text-secondary);
+  }
+
+  /* Content preview container (for code/text/csv) */
+  .thumbnail-content-preview {
+    @apply absolute inset-0 overflow-hidden p-1.5;
+    padding-top: 24px;
+    /* Space for filename */
+    padding-bottom: 24px;
+    /* Space for badge */
+    background-color: var(--color-surface-2);
+  }
+
+  /* Badge color variations */
+  .thumbnail-badge.badge-image {
+    --badge-bg: var(--color-file-image);
+    --badge-text: white;
+  }
+
+  .thumbnail-badge.badge-code {
+    --badge-bg: var(--color-file-code);
+    --badge-text: black;
+  }
+
+  .thumbnail-badge.badge-document {
+    --badge-bg: var(--color-status-info);
+    --badge-text: white;
+  }
+
+  .thumbnail-badge.badge-spreadsheet {
+    --badge-bg: var(--color-status-success);
+    --badge-text: white;
+  }
+
+  .thumbnail-badge.badge-presentation {
+    --badge-bg: var(--color-status-warning);
+    --badge-text: black;
+  }
+
+  .thumbnail-badge.badge-pdf {
+    --badge-bg: var(--color-status-error);
+    --badge-text: white;
+  }
+
+  .thumbnail-badge.badge-archive {
+    --badge-bg: var(--color-file-archive);
+    --badge-text: white;
+  }
+
+  .thumbnail-badge.badge-audio {
+    --badge-bg: var(--color-file-audio);
+    --badge-text: white;
+  }
+
+  .thumbnail-badge.badge-video {
+    --badge-bg: var(--color-status-error);
+    --badge-text: white;
+  }
+
+  .thumbnail-badge.badge-data {
+    --badge-bg: var(--color-text-secondary);
+    --badge-text: white;
+  }
+
+  .thumbnail-badge.badge-folder {
+    --badge-bg: var(--color-surface-active);
+    --badge-text: var(--color-text-secondary);
+    text-transform: none;
+    font-weight: 500;
+  }
+
+  .thumbnail-folder {
+    cursor: pointer;
+  }
+
+  .thumbnail-folder:hover .thumbnail-icon-wrapper svg {
+    stroke: var(--color-brand-primary);
+  }
+
+  /* Loading skeleton */
+  .thumbnail-skeleton {
+    @apply absolute inset-0 animate-pulse;
+    background: linear-gradient(90deg, var(--color-surface-2) 25%, var(--color-surface-3) 50%, var(--color-surface-2) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s infinite;
+  }
+
+  @keyframes skeleton-shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+
+    100% {
+      background-position: -200% 0;
+    }
+  }
+
+  /* Updated welcome-files-list for grid mode */
+  .welcome-files-list.thumbnail-mode {
+    @apply p-2 max-h-[320px];
+    background-color: transparent;
+    border: none;
+  }
+
   body.view-welcome .chat-panel,
   body.view-welcome .files-panel,
   body.view-welcome #files-toggle-wrapper,

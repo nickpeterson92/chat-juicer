@@ -50,6 +50,7 @@
     "marked-footnote": "^1.4.0",
     "mermaid": "^11.12.0",
     "msgpack-lite": "^0.1.26",
+    "pdfjs-dist": "^4.0.379",
     "shiki": "^3.20.0"
   }
 }

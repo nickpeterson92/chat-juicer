@@ -27,6 +27,7 @@ import {
   MSG_NO_FILE_SELECTED,
   MSG_NO_FILES,
 } from "../config/constants.js";
+import { getFileBadgeInfo } from "../utils/file-icon-colors.js";
 import { formatFileSize, getFileIcon } from "../utils/file-utils.js";
 import { showToast } from "../utils/toast.js";
 
@@ -97,6 +98,7 @@ export function renderFileList(files, container, options = {}) {
     directory = "sources",
     isOutput = false,
     isWelcomePage = false,
+    useThumbnailGrid = false, // Explicit grid mode flag
     isLoading = false,
     error = null,
     onDelete = null,
@@ -137,7 +139,13 @@ export function renderFileList(files, container, options = {}) {
     return;
   }
 
-  // Render files and folders
+  // Use thumbnail grid mode for welcome page OR when explicitly enabled
+  if (isWelcomePage || useThumbnailGrid) {
+    renderThumbnailGrid(files, container, { directory, onDelete, onFolderClick });
+    return;
+  }
+
+  // Render files and folders as list (default mode)
   const fragment = document.createDocumentFragment();
   files.forEach((file) => {
     let fileItem;
@@ -477,5 +485,430 @@ async function handleDeleteFile(filename, directory = "sources", _container = nu
     } else {
       showToast(MSG_FILE_DELETE_ERROR.replace("{filename}", filename), "error", 4000);
     }
+  }
+}
+
+/**
+ * Render files as a thumbnail grid (for welcome page and file panel)
+ * @param {Array<Object>} files - Array of file objects
+ * @param {HTMLElement} container - Container element to render into
+ * @param {Object} options - Render options
+ * @param {string} options.directory - Directory path for file operations
+ * @param {Function} options.onDelete - Callback when file is deleted
+ * @param {Function} options.onFolderClick - Callback when folder is clicked (for navigation)
+ */
+function renderThumbnailGrid(files, container, options = {}) {
+  const { directory, onDelete, onFolderClick } = options;
+
+  // Add thumbnail mode class to container
+  container.classList.add("thumbnail-mode");
+
+  // Create grid container
+  const grid = document.createElement("div");
+  grid.className = "thumbnail-grid";
+
+  // Create thumbnail cards for each file/folder
+  files.forEach((file) => {
+    let card;
+    if (file.type === "folder") {
+      // Create folder tile
+      card = createFolderTile(file, onFolderClick);
+    } else {
+      // Create file thumbnail
+      card = createThumbnailCard(file, directory, onDelete);
+    }
+    grid.appendChild(card);
+  });
+
+  container.appendChild(grid);
+}
+
+/**
+ * Create a folder tile element
+ * @param {Object} folder - Folder object with name, file_count properties
+ * @param {Function} onClick - Callback when folder is clicked
+ * @returns {HTMLElement}
+ */
+function createFolderTile(folder, onClick) {
+  const card = document.createElement("div");
+  card.className = "thumbnail-card thumbnail-folder";
+  card.setAttribute("role", "button");
+  card.setAttribute("tabindex", "0");
+  card.setAttribute("aria-label", `Open ${folder.name} folder, ${folder.file_count || 0} items`);
+  card.title = `${folder.name} (${folder.file_count || 0} items)`;
+
+  // Folder name at top
+  const folderName = document.createElement("div");
+  folderName.className = "thumbnail-filename";
+  folderName.textContent = folder.name;
+
+  // Folder icon (centered)
+  const iconWrapper = document.createElement("div");
+  iconWrapper.className = "thumbnail-icon-wrapper";
+  iconWrapper.innerHTML = getFolderIcon();
+
+  // Item count badge at bottom
+  const badge = document.createElement("div");
+  badge.className = "thumbnail-badge badge-folder";
+  badge.textContent = `${folder.file_count || 0} items`;
+
+  // Click handler
+  const handleClick = () => {
+    if (onClick) {
+      onClick(folder.name);
+    }
+  };
+
+  card.onclick = handleClick;
+  card.onkeydown = (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleClick();
+    }
+  };
+
+  card.appendChild(folderName);
+  card.appendChild(iconWrapper);
+  card.appendChild(badge);
+
+  return card;
+}
+
+/**
+ * Create a thumbnail card element for a file
+ * @param {Object} file - File object with name, size properties
+ * @param {string} directory - Directory path for operations
+ * @param {Function} onDelete - Optional callback after delete
+ * @returns {HTMLElement}
+ */
+function createThumbnailCard(file, directory, onDelete = null) {
+  const card = document.createElement("div");
+  card.className = "thumbnail-card";
+  card.setAttribute("role", "button");
+  card.setAttribute("tabindex", "0");
+  card.setAttribute("aria-label", `Open ${file.name}`);
+  card.title = `${file.name} (${formatFileSize(file.size || 0)})`;
+
+  // Filename at top
+  const filename = document.createElement("div");
+  filename.className = "thumbnail-filename";
+  filename.textContent = file.name;
+
+  // Extension badge at bottom
+  const ext = file.name.split(".").pop()?.toLowerCase() || "";
+  const badgeInfo = getFileBadgeInfo(ext);
+  const badge = document.createElement("div");
+  badge.className = `thumbnail-badge ${badgeInfo.class}`;
+  badge.textContent = badgeInfo.label;
+
+  // Delete button (hidden until hover)
+  const deleteBtn = document.createElement("button");
+  deleteBtn.className = "thumbnail-delete-btn";
+  deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+  </svg>`;
+  deleteBtn.title = "Delete file";
+  deleteBtn.onclick = (e) => {
+    e.stopPropagation();
+    handleDeleteFile(file.name, directory, null, onDelete);
+  };
+
+  // Click handler to open file
+  card.onclick = async () => {
+    try {
+      const result = await window.electronAPI.openFile(directory, file.name);
+      if (!result.success) {
+        showToast(`Failed to open file: ${result.error}`, "error", 4000);
+      }
+    } catch (error) {
+      window.electronAPI?.log("error", "Failed to open file", { filename: file.name, error: error.message });
+      showToast(`Error opening file: ${error.message}`, "error", 4000);
+    }
+  };
+
+  // Keyboard handler
+  card.onkeydown = (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      card.onclick();
+    }
+  };
+
+  // Assemble card
+  card.appendChild(filename);
+  card.appendChild(badge);
+  card.appendChild(deleteBtn);
+
+  // Determine what type of preview this file needs
+  const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico"];
+  const codeExtensions = [
+    "js",
+    "jsx",
+    "ts",
+    "tsx",
+    "py",
+    "java",
+    "c",
+    "cpp",
+    "cs",
+    "go",
+    "rb",
+    "php",
+    "swift",
+    "kt",
+    "rs",
+    "sh",
+    "bash",
+    "sql",
+    "r",
+    "scala",
+    "dart",
+    "lua",
+  ];
+  const textExtensions = ["txt", "md", "html", "xml", "json", "yaml", "yml", "toml", "ini", "log"];
+  const isPdf = ext === "pdf";
+  const isCsv = ext === "csv";
+  const isCode = codeExtensions.includes(ext);
+  const isText = textExtensions.includes(ext);
+  const isImage = imageExtensions.includes(ext);
+  const needsPreview = isImage || isPdf || isCode || isText || isCsv;
+
+  if (needsPreview) {
+    // Add loading skeleton (will be replaced when preview loads)
+    const skeleton = document.createElement("div");
+    skeleton.className = "thumbnail-skeleton";
+    card.appendChild(skeleton);
+
+    // Store preview type info on the card for lazy loading
+    card.dataset.previewType = isImage ? "image" : isPdf ? "pdf" : isCode ? "code" : isCsv ? "csv" : "text";
+    card.dataset.directory = directory;
+    card.dataset.filename = file.name;
+    card.dataset.ext = ext;
+
+    // Use IntersectionObserver for lazy loading
+    observeForLazyLoad(card, skeleton);
+  } else {
+    // Fallback: show icon immediately (no lazy loading needed)
+    const iconWrapper = document.createElement("div");
+    iconWrapper.className = "thumbnail-icon-wrapper";
+    iconWrapper.innerHTML = getFileIcon(file.name);
+    card.appendChild(iconWrapper);
+  }
+
+  return card;
+}
+
+// Shared IntersectionObserver for lazy loading thumbnails
+let thumbnailObserver = null;
+
+/**
+ * Get or create the shared IntersectionObserver for lazy loading
+ * @returns {IntersectionObserver}
+ */
+function getThumbnailObserver() {
+  if (!thumbnailObserver) {
+    thumbnailObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const card = entry.target;
+            const skeleton = card.querySelector(".thumbnail-skeleton");
+            if (skeleton) {
+              loadThumbnailForCard(card, skeleton);
+            }
+            // Stop observing once loaded
+            thumbnailObserver.unobserve(card);
+          }
+        });
+      },
+      {
+        rootMargin: "100px", // Start loading 100px before visible
+        threshold: 0,
+      }
+    );
+  }
+  return thumbnailObserver;
+}
+
+/**
+ * Add a card to the lazy loading observer
+ * @param {HTMLElement} card - Thumbnail card element
+ * @param {HTMLElement} skeleton - Skeleton element to replace
+ */
+function observeForLazyLoad(card, skeleton) {
+  const observer = getThumbnailObserver();
+  observer.observe(card);
+}
+
+/**
+ * Load the appropriate thumbnail for a card based on its data attributes
+ * @param {HTMLElement} card - Thumbnail card element
+ * @param {HTMLElement} skeleton - Skeleton element to replace
+ */
+function loadThumbnailForCard(card, skeleton) {
+  const { previewType, directory, filename, ext } = card.dataset;
+
+  switch (previewType) {
+    case "image":
+      loadImageThumbnail(card, skeleton, directory, filename);
+      break;
+    case "pdf":
+      loadPdfThumbnail(card, skeleton, directory, filename);
+      break;
+    case "code":
+    case "csv":
+    case "text":
+      loadContentPreview(card, skeleton, directory, filename, ext, previewType);
+      break;
+    default:
+      fallbackToIcon(card, skeleton, filename);
+  }
+}
+
+/**
+ * Load image thumbnail asynchronously
+ * @param {HTMLElement} card - Card element to update
+ * @param {HTMLElement} skeleton - Skeleton element to remove on load
+ * @param {string} directory - Directory path
+ * @param {string} filename - File name
+ */
+async function loadImageThumbnail(card, skeleton, directory, filename) {
+  try {
+    const result = await window.electronAPI.getFileContent(directory, filename);
+
+    if (result.success && result.data) {
+      // Create image preview
+      const preview = document.createElement("div");
+      preview.className = "thumbnail-preview";
+
+      const img = document.createElement("img");
+      img.src = `data:${result.mimeType};base64,${result.data}`;
+      img.alt = filename;
+      img.loading = "lazy";
+
+      preview.appendChild(img);
+
+      // Remove skeleton and add image
+      skeleton.remove();
+      // Insert preview before the badge (so badge overlays)
+      const badge = card.querySelector(".thumbnail-badge");
+      card.insertBefore(preview, badge);
+    } else {
+      // On error, fall back to icon
+      skeleton.remove();
+      const iconWrapper = document.createElement("div");
+      iconWrapper.className = "thumbnail-icon-wrapper";
+      iconWrapper.innerHTML = getFileIcon(filename);
+      const badge = card.querySelector(".thumbnail-badge");
+      card.insertBefore(iconWrapper, badge);
+    }
+  } catch (error) {
+    // On error, fall back to icon
+    skeleton.remove();
+    const iconWrapper = document.createElement("div");
+    iconWrapper.className = "thumbnail-icon-wrapper";
+    iconWrapper.innerHTML = getFileIcon(filename);
+    const badge = card.querySelector(".thumbnail-badge");
+    card.insertBefore(iconWrapper, badge);
+  }
+}
+
+/**
+ * Load PDF thumbnail asynchronously
+ * @param {HTMLElement} card - Card element to update
+ * @param {HTMLElement} skeleton - Skeleton element to remove on load
+ * @param {string} directory - Directory path
+ * @param {string} filename - File name
+ */
+async function loadPdfThumbnail(card, skeleton, directory, filename) {
+  try {
+    const result = await window.electronAPI.getFileContent(directory, filename);
+
+    if (result.success && result.data) {
+      // Dynamically import PDF thumbnail utility to avoid loading PDF.js for non-PDF files
+      const { generatePdfThumbnail } = await import("../utils/pdf-thumbnail.js");
+      const thumbnailDataUrl = await generatePdfThumbnail(result.data, 200);
+
+      // Create image preview from PDF thumbnail
+      const preview = document.createElement("div");
+      preview.className = "thumbnail-preview";
+
+      const img = document.createElement("img");
+      img.src = thumbnailDataUrl;
+      img.alt = `${filename} preview`;
+
+      preview.appendChild(img);
+
+      // Remove skeleton and add image
+      skeleton.remove();
+      const badge = card.querySelector(".thumbnail-badge");
+      card.insertBefore(preview, badge);
+    } else {
+      // On error, fall back to icon
+      fallbackToIcon(card, skeleton, filename);
+    }
+  } catch (error) {
+    // On error, fall back to icon
+    fallbackToIcon(card, skeleton, filename);
+  }
+}
+
+/**
+ * Fallback to icon when thumbnail generation fails
+ */
+function fallbackToIcon(card, skeleton, filename) {
+  skeleton.remove();
+  const iconWrapper = document.createElement("div");
+  iconWrapper.className = "thumbnail-icon-wrapper";
+  iconWrapper.innerHTML = getFileIcon(filename);
+  const badge = card.querySelector(".thumbnail-badge");
+  card.insertBefore(iconWrapper, badge);
+}
+
+/**
+ * Load content preview (code, text, or CSV) asynchronously
+ * @param {HTMLElement} card - Card element to update
+ * @param {HTMLElement} skeleton - Skeleton element to remove on load
+ * @param {string} directory - Directory path
+ * @param {string} filename - File name
+ * @param {string} ext - File extension
+ * @param {string} type - Preview type: "code", "text", or "csv"
+ */
+async function loadContentPreview(card, skeleton, directory, filename, ext, type) {
+  try {
+    const result = await window.electronAPI.getFileContent(directory, filename);
+
+    if (result.success && result.data) {
+      // Decode base64 to text
+      const content = atob(result.data);
+
+      // Dynamically import content preview utilities
+      const { generateCodePreview, generateTextPreview, generateCsvPreview } = await import(
+        "../utils/content-preview.js"
+      );
+
+      let previewHtml;
+      if (type === "code") {
+        previewHtml = generateCodePreview(content, ext);
+      } else if (type === "csv") {
+        previewHtml = generateCsvPreview(content);
+      } else {
+        previewHtml = generateTextPreview(content, ext);
+      }
+
+      // Create preview container
+      const preview = document.createElement("div");
+      preview.className = "thumbnail-content-preview";
+      preview.innerHTML = previewHtml;
+
+      // Remove skeleton and add preview
+      skeleton.remove();
+      const badge = card.querySelector(".thumbnail-badge");
+      card.insertBefore(preview, badge);
+    } else {
+      fallbackToIcon(card, skeleton, filename);
+    }
+  } catch (error) {
+    fallbackToIcon(card, skeleton, filename);
   }
 }

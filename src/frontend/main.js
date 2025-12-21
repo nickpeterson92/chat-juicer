@@ -621,6 +621,46 @@ app.whenReady().then(() => {
     }
   });
 
+  // IPC handler for getting file content as base64 (for thumbnails)
+  ipcMain.handle("get-file-content", async (_event, { dirPath, filename }) => {
+    logger.debug("File content requested", { dirPath, filename });
+
+    try {
+      const parsed = parseSessionFolder(dirPath);
+      if (!parsed) {
+        return { success: false, error: "Invalid path" };
+      }
+      const { sessionId, folder } = parsed;
+      const response = await apiRequest(
+        `/api/v1/sessions/${sessionId}/files/${encodeURIComponent(filename)}/path?folder=${encodeURIComponent(folder)}`
+      );
+      const absolutePath = response.path;
+
+      // Read file and convert to base64
+      const buffer = await fs.readFile(absolutePath);
+      const base64 = buffer.toString("base64");
+
+      // Determine mime type from extension
+      const ext = filename.split(".").pop()?.toLowerCase() || "";
+      const mimeTypes = {
+        jpg: "image/jpeg",
+        jpeg: "image/jpeg",
+        png: "image/png",
+        gif: "image/gif",
+        webp: "image/webp",
+        svg: "image/svg+xml",
+        bmp: "image/bmp",
+        ico: "image/x-icon",
+      };
+      const mimeType = mimeTypes[ext] || "application/octet-stream";
+
+      return { success: true, data: base64, mimeType };
+    } catch (error) {
+      logger.error("Failed to get file content", { dirPath, filename, error: error.message });
+      return { success: false, error: error.message };
+    }
+  });
+
   // IPC handler for stream interruption
   ipcMain.handle("interrupt-stream", (_event, payload) => {
     const { session_id } = payload || {};
