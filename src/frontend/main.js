@@ -630,8 +630,19 @@ app.whenReady().then(() => {
         return { success: false, error: "Invalid path" };
       }
 
+      // Security check: ensure path is within project directory
+      const projectRoot = path.join(__dirname, "..");
+      const absolutePath = path.isAbsolute(filePath) ? filePath : path.join(projectRoot, filePath);
+      const normalizedPath = path.normalize(absolutePath);
+      const normalizedRoot = path.normalize(projectRoot);
+
+      if (!normalizedPath.startsWith(normalizedRoot)) {
+        logger.error("Security: Attempted to read file outside project", { path: normalizedPath });
+        return { success: false, error: "Access denied" };
+      }
+
       // Read file and convert to base64
-      const buffer = await fs.readFile(filePath);
+      const buffer = await fs.readFile(normalizedPath);
       const base64 = buffer.toString("base64");
 
       // Determine mime type from extension

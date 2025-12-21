@@ -140,3 +140,21 @@ export function readTextFileChunk(file, size) {
     reader.readAsText(slice);
   });
 }
+
+/**
+ * Convert base64 string to File object
+ * @param {string} base64Data - Base64 encoded string
+ * @param {string} filename - Filename for the created File
+ * @param {string} mimeType - MIME type of the file
+ * @returns {File} File object
+ */
+export function base64ToFile(base64Data, filename, mimeType) {
+  const byteCharacters = atob(base64Data);
+  const byteNumbers = new Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  }
+  const byteArray = new Uint8Array(byteNumbers);
+  const blob = new Blob([byteArray], { type: mimeType });
+  return new File([blob], filename, { type: blob.type });
+}

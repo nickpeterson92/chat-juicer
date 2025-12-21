@@ -16,7 +16,7 @@ import { MessageHandlerPlugin } from "../../plugins/core-plugins.js";
 import { renderEmptySessionList, renderSessionList } from "../../ui/renderers/session-list-renderer.js";
 import { initializeTitlebar } from "../../ui/titlebar.js";
 import { getPreviewType, hasBinaryExtension, hasTextExtension } from "../../utils/content-preview.js";
-import { readTextFileChunk } from "../../utils/file-utils.js";
+import { base64ToFile, readTextFileChunk } from "../../utils/file-utils.js";
 import {
   completeFileUpload,
   finishUploadProgress,
@@ -568,15 +568,8 @@ export async function initializeEventHandlers({
             const fileData = await ipcAdapter.readFile(filePath);
             if (!fileData || !fileData.success) throw new Error(fileData?.error || "Failed to read file");
 
-            // Convert base64 to Blob
-            const byteCharacters = atob(fileData.data);
-            const byteNumbers = new Array(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-              byteNumbers[i] = byteCharacters.charCodeAt(i);
-            }
-            const byteArray = new Uint8Array(byteNumbers);
-            const blob = new Blob([byteArray], { type: fileData.mimeType });
-            const file = new File([blob], fileName, { type: blob.type });
+            // Convert base64 to File
+            const file = base64ToFile(fileData.data, fileName, fileData.mimeType);
 
             if (file.size > MAX_PENDING_FILE_SIZE) {
               showToast(`${fileName} exceeds 50MB limit`, "warning", 3000);
@@ -623,15 +616,8 @@ export async function initializeEventHandlers({
             const fileData = await ipcAdapter.readFile(filePath);
             if (!fileData || !fileData.success) throw new Error(fileData?.error || "Failed to read file");
 
-            // Convert base64 to Blob
-            const byteCharacters = atob(fileData.data);
-            const byteNumbers = new Array(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-              byteNumbers[i] = byteCharacters.charCodeAt(i);
-            }
-            const byteArray = new Uint8Array(byteNumbers);
-            const blob = new Blob([byteArray], { type: fileData.mimeType });
-            const file = new File([blob], fileName, { type: blob.type });
+            // Convert base64 to File
+            const file = base64ToFile(fileData.data, fileName, fileData.mimeType);
 
             const result = await services.fileService.uploadFile(file, sessionService.getCurrentSessionId());
             if (result.success) {
