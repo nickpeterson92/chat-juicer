@@ -35,6 +35,7 @@ export class IPCAdapter {
 
   /**
    * Send message(s) to Python backend
+   * Automatically includes pending image attachments from AppState if present.
    * @param {string|string[]} content - Single message or array of messages
    * @param {string|null} sessionId - Optional session ID for routing
    * @returns {Promise<void>}
@@ -44,7 +45,33 @@ export class IPCAdapter {
       throw new Error("IPC API not available: sendUserInput");
     }
     // Normalize to array format for unified backend handling
-    const messages = Array.isArray(content) ? content : [content];
+    const rawMessages = Array.isArray(content) ? content : [content];
+
+    // Check for pending image attachments in AppState
+    const pendingAttachments = this.appState?.getState("message.pendingAttachments") || [];
+
+    // Transform messages to include attachments if any are pending
+    const messages = rawMessages.map((msg, index) => {
+      // Only attach images to the first message (user typically types one message at a time)
+      if (index === 0 && pendingAttachments.length > 0) {
+        return {
+          content: typeof msg === "string" ? msg : msg.content,
+          attachments: pendingAttachments.map((att) => ({
+            type: "image_ref",
+            filename: att.filename,
+            path: att.path || `sources/${att.filename}`,
+          })),
+        };
+      }
+      // Return string messages as-is for backward compatibility
+      return typeof msg === "string" ? msg : msg.content;
+    });
+
+    // Clear pending attachments after including them
+    if (pendingAttachments.length > 0) {
+      this.appState?.setState("message.pendingAttachments", []);
+    }
+
     return this.api.sendUserInput(messages, sessionId);
   }
 

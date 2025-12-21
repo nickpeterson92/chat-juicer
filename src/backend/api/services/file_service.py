@@ -29,6 +29,8 @@ class FileService(Protocol):
 
     async def get_file_content(self, session_id: str, folder: str, filename: str) -> bytes: ...
 
+    async def read_image_as_base64(self, session_id: str, folder: str, filename: str) -> tuple[str, str] | None: ...
+
     async def delete_file(self, session_id: str, folder: str, filename: str) -> bool: ...
 
     def get_file_path(self, session_id: str, folder: str, filename: str) -> Path: ...
@@ -122,6 +124,55 @@ class LocalFileService:
             raise FileNotFoundError(f"File not found: {filename}")
 
         return file_path.read_bytes()
+
+    async def read_image_as_base64(self, session_id: str, folder: str, filename: str) -> tuple[str, str] | None:
+        """Read image from session workspace and return (mime_type, base64_data).
+
+        Args:
+            session_id: Session identifier
+            folder: Folder within session (e.g., "sources")
+            filename: Image filename
+
+        Returns:
+            Tuple of (mime_type, base64_encoded_data) or None if file doesn't exist
+            or is not a supported image format.
+        """
+        import base64
+        import mimetypes
+
+        file_path = self.get_file_path(session_id, folder, filename)
+
+        if not file_path.exists():
+            logger.warning(f"Image file not found: {file_path}")
+            return None
+
+        # Determine MIME type from extension
+        extension = file_path.suffix.lower()
+        mime_type = mimetypes.guess_type(filename)[0]
+
+        # Fallback for common image types
+        if not mime_type:
+            mime_map = {
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".png": "image/png",
+                ".gif": "image/gif",
+                ".webp": "image/webp",
+            }
+            mime_type = mime_map.get(extension)
+
+        if not mime_type or not mime_type.startswith("image/"):
+            logger.warning(f"Unsupported image format: {extension}")
+            return None
+
+        try:
+            image_bytes = file_path.read_bytes()
+            base64_data = base64.b64encode(image_bytes).decode("utf-8")
+            logger.debug(f"Encoded image {filename} to base64 ({len(base64_data)} chars)")
+            return (mime_type, base64_data)
+        except Exception as e:
+            logger.error(f"Failed to read/encode image {filename}: {e}")
+            return None
 
     async def delete_file(self, session_id: str, folder: str, filename: str) -> bool:
         """Delete file and metadata record."""

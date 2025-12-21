@@ -178,6 +178,32 @@ IMAGE_EXTENSIONS = {
     ".webp",  # WebP images
 }
 
+#: Models that support native vision/image input (can process images directly).
+#: Models not in this set will fall back to MarkItDown text descriptions.
+#: These are prefix matches - "gpt-5" matches "gpt-5", "gpt-5.1", "gpt-5-mini", etc.
+VISION_CAPABLE_MODELS: set[str] = {
+    "gpt-4o",  # GPT-4o supports vision
+    "gpt-4-turbo",  # GPT-4 Turbo supports vision
+    "gpt-4-vision",  # GPT-4 Vision (legacy)
+    "gpt-5",  # GPT-5 family (gpt-5, gpt-5.1, gpt-5.2, gpt-5-mini, etc.)
+    "o1",  # O1 reasoning models
+    "o3",  # O3 reasoning models
+    "o4",  # O4 reasoning models (future)
+}
+
+
+def is_vision_capable(model: str) -> bool:
+    """Check if a model supports native vision/image input.
+
+    Args:
+        model: Model deployment name (e.g., "gpt-5.1", "gpt-4o-mini")
+
+    Returns:
+        True if model can process images natively, False otherwise
+    """
+    return any(model.startswith(prefix) for prefix in VISION_CAPABLE_MODELS)
+
+
 CONVERTIBLE_EXTENSIONS = {
     # Microsoft Office formats
     ".xlsx",

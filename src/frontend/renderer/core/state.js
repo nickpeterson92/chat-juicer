@@ -178,6 +178,7 @@ export class AppState {
       aiThinkingActive: false, // AI thinking indicator state
       welcomeFilesSectionVisible: false, // Welcome files section visibility
       loadingLampVisible: false, // Loading lamp visibility state (set true on streaming start)
+      pendingWelcomeFiles: [], // Buffered files before session creation [{file, previewUrl, name, size, type}]
     };
 
     // Python backend state (for command queuing)

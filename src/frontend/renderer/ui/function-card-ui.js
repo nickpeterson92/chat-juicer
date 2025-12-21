@@ -44,10 +44,9 @@ const pendingArgUpdates = new Map();
 let argUpdateScheduled = false;
 
 // Chevron SVG for expand/collapse indicator
-const CHEVRON_DOWN =
-  '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>';
-const CHEVRON_UP =
-  '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 15l6-6 6 6"/></svg>';
+
+const CHEVRON_RIGHT =
+  '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>';
 
 // SVG icon mapping for functions
 const FUNCTION_ICONS = {
@@ -353,7 +352,7 @@ export function createFunctionCallCard(
 
     const chevronSpan = document.createElement("span");
     chevronSpan.className = "disclosure-chevron";
-    chevronSpan.innerHTML = CHEVRON_DOWN;
+    chevronSpan.innerHTML = CHEVRON_RIGHT;
 
     headerDiv.appendChild(iconSpan);
     headerDiv.appendChild(toolNameSpan);
@@ -415,16 +414,13 @@ export function createFunctionCallCard(
  */
 function toggleFunctionCard(cardElement) {
   const isExpanded = cardElement.dataset.expanded === "true";
-  const chevron = cardElement.querySelector(".disclosure-chevron");
 
   if (isExpanded) {
     cardElement.classList.remove("expanded");
     cardElement.dataset.expanded = "false";
-    if (chevron) chevron.innerHTML = CHEVRON_DOWN;
   } else {
     cardElement.classList.add("expanded");
     cardElement.dataset.expanded = "true";
-    if (chevron) chevron.innerHTML = CHEVRON_UP;
   }
 }
 
@@ -2396,7 +2392,7 @@ export function createCompletedToolCard(chatContainer, toolData) {
   // Show chevron if there's content to expand (args or result)
   // For summarization, always show chevron if there's a result
   chevronSpan.className = `disclosure-chevron${primaryArg || result ? " visible" : ""}`;
-  chevronSpan.innerHTML = CHEVRON_DOWN;
+  chevronSpan.innerHTML = CHEVRON_RIGHT;
 
   headerDiv.appendChild(iconSpan);
   headerDiv.appendChild(toolNameSpan);
@@ -2768,16 +2764,12 @@ export function createCompletedToolCard(chatContainer, toolData) {
   headerDiv.addEventListener("click", (e) => {
     e.stopPropagation();
     const isExpanded = cardDiv.dataset.expanded === "true";
-    const chevron = cardDiv.querySelector(".disclosure-chevron");
-
     if (isExpanded) {
       cardDiv.classList.remove("expanded");
       cardDiv.dataset.expanded = "false";
-      if (chevron) chevron.innerHTML = CHEVRON_DOWN;
     } else {
       cardDiv.classList.add("expanded");
       cardDiv.dataset.expanded = "true";
-      if (chevron) chevron.innerHTML = CHEVRON_UP;
     }
   });
 
