@@ -78,7 +78,7 @@ SessionIdPath = Annotated[
     Path(
         ...,
         description="Session identifier",
-        example="sess_abc123",
+        examples=["sess_abc123"],
     ),
 ]
 
@@ -118,11 +118,11 @@ async def list_messages(
     db: DB,
     offset: Annotated[
         int,
-        Query(ge=0, description="Number of messages to skip (from oldest)", example=0),
+        Query(ge=0, description="Number of messages to skip (from oldest)", examples=[0]),
     ] = 0,
     limit: Annotated[
         int,
-        Query(ge=1, le=100, description="Maximum messages to return", example=50),
+        Query(ge=1, le=100, description="Maximum messages to return", examples=[50]),
     ] = 50,
 ) -> MessageListResponse:
     """List messages with offset/limit pagination."""
