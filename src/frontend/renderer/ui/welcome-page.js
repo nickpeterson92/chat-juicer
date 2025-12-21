@@ -318,6 +318,16 @@ export function showWelcomePage(container, userName = "User") {
         </button>
       `;
       document.body.appendChild(menu);
+      
+      // Store cleanup function to remove menu element
+      if (!container._attachmentCleanup) {
+        container._attachmentCleanup = [];
+      }
+      container._attachmentCleanup.push(() => {
+        if (menu && menu.parentNode) {
+          menu.parentNode.removeChild(menu);
+        }
+      });
       return menu;
     };
 
