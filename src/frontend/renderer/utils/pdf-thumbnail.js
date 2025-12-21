@@ -10,7 +10,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.mi
 
 /**
  * Generate a thumbnail from PDF data
- * @param {string} base64Data - Base64 encoded PDF data
+ * @param {string} inputData - Base64 encoded PDF data or binary data
  * @param {number} maxSize - Maximum width/height of thumbnail (default 200)
  * @returns {Promise<string>} Data URL of the rendered thumbnail (PNG)
  */
