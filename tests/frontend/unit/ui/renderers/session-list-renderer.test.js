@@ -316,5 +316,23 @@ describe("SessionListRenderer", () => {
         updateSessionStreamingIndicator("no-indicator", true);
       }).not.toThrow();
     });
+
+    it("should clean up existing animation when restarting streaming", async () => {
+      // Start streaming to create animation
+      const sessionItem = document.createElement("div");
+      sessionItem.setAttribute("data-session-id", "cleanup-test");
+      const indicator = document.createElement("div");
+      indicator.className = "session-streaming-indicator";
+      sessionItem.appendChild(indicator);
+      document.body.appendChild(sessionItem);
+
+      // Start streaming to create an animation
+      updateSessionStreamingIndicator("cleanup-test", true);
+      expect(initLottieWithColor).toHaveBeenCalled();
+
+      // Start streaming again - should cleanup existing animation first
+      updateSessionStreamingIndicator("cleanup-test", true);
+      expect(initLottieWithColor).toHaveBeenCalledTimes(2);
+    });
   });
 });

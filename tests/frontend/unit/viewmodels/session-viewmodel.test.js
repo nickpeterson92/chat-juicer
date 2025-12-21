@@ -13,6 +13,11 @@ describe("SessionViewModel", () => {
     expect(formatTimestamp("bad")).toBe("Invalid date");
     expect(formatTimestamp(null)).toBe("Unknown");
     expect(formatTimestamp("2025-01-15T11:59:30Z")).toBe("Just now");
+    // Test singular forms
+    expect(formatTimestamp("2025-01-15T11:59:00Z")).toBe("1 minute ago");
+    expect(formatTimestamp("2025-01-15T11:00:00Z")).toBe("1 hour ago");
+    expect(formatTimestamp("2025-01-14T12:00:00Z")).toBe("1 day ago");
+    // Test plural forms
     expect(formatTimestamp("2025-01-15T11:10:00Z")).toBe("50 minutes ago");
     expect(formatTimestamp("2025-01-15T10:00:00Z")).toBe("2 hours ago");
     expect(formatTimestamp("2025-01-13T12:00:00Z")).toBe("2 days ago");
