@@ -392,10 +392,19 @@ export function showWelcomePage(container, userName = "User") {
     });
 
     // Close menu when clicking outside
-    document.addEventListener("click", (e) => {
+    const globalClickHandler = (e) => {
       if (attachmentContextMenu && !attachmentPlusBtn.contains(e.target) && !attachmentContextMenu.contains(e.target)) {
         closeMenu();
       }
+    };
+    document.addEventListener("click", globalClickHandler);
+
+    // Store cleanup function
+    if (!container._attachmentCleanup) {
+      container._attachmentCleanup = [];
+    }
+    container._attachmentCleanup.push(() => {
+      document.removeEventListener("click", globalClickHandler);
     });
   }
 
