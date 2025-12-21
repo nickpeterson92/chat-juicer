@@ -2332,7 +2332,7 @@ The migration uses three development phases to minimize risk and cloud costs:
 **Goal**: FastAPI server running locally with PostgreSQL, files on local disk.
 
 ```yaml
-# docker-compose.local.yml
+# docker/docker-compose.local.yml
 services:
   postgres:
     image: postgres:16
@@ -2351,7 +2351,7 @@ volumes:
 
 ```bash
 # Run Phase 1 stack
-docker-compose -f docker-compose.local.yml up -d
+docker-compose -f docker/docker-compose.local.yml up -d
 uvicorn src.api.main:app --reload --port 8000
 ```
 
@@ -2404,7 +2404,7 @@ Day 5: Integration Testing
 **Goal**: Add MinIO for S3-compatible storage, test presigned URL flow.
 
 ```yaml
-# docker-compose.local.yml (updated)
+# docker/docker-compose.local.yml (updated)
 services:
   postgres:
     # ... same as above
