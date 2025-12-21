@@ -150,7 +150,7 @@ export function setupSessionEventHandlers({
           fullHistoryLength: sessionData.fullHistory?.length,
         });
 
-        chatContainer.setMessages(sessionData.fullHistory || []);
+        chatContainer.setMessages(sessionData.fullHistory || [], { skipAutoScroll: true });
         // Legacy setFiles call (if filePanel doesn't have component API)
         if (filePanel?.setFiles) {
           filePanel.setFiles(sessionData.files || []);
