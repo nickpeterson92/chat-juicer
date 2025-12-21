@@ -575,6 +575,192 @@ function createFolderTile(folder, onClick) {
 }
 
 /**
+ * Render pending (buffered) files as a thumbnail grid
+ * These files exist in memory before session is created
+ * @param {Array<Object>} pendingFiles - Array of {file, previewUrl, name, size, type}
+ * @param {HTMLElement} container - Container element to render into
+ * @param {Object} appState - AppState for managing pending files
+ */
+export function renderPendingFilesGrid(pendingFiles, container, appState) {
+  // Clear container
+  container.innerHTML = "";
+  container.classList.add("thumbnail-mode");
+
+  // Create grid container
+  const grid = document.createElement("div");
+  grid.className = "thumbnail-grid";
+
+  // Create thumbnail cards for each pending file
+  pendingFiles.forEach((pendingFile, index) => {
+    const card = createPendingFileCard(pendingFile, index, appState);
+    grid.appendChild(card);
+  });
+
+  container.appendChild(grid);
+}
+
+/**
+ * Create a thumbnail card for a pending (not yet uploaded) file
+ * @param {Object} pendingFile - {file, previewUrl, name, size, type}
+ * @param {number} index - Index in pending files array
+ * @param {Object} appState - AppState for managing pending files
+ * @returns {HTMLElement}
+ */
+/**
+ * Shared helper to create the base structure of a file card
+ * ensuring consistent styling between pending and persisted files.
+ */
+function createCardStructure(name, size, onDelete) {
+  const ext = name.split(".").pop()?.toLowerCase() || "";
+
+  const card = document.createElement("div");
+  card.className = "thumbnail-card";
+  card.setAttribute("role", "button");
+  card.setAttribute("tabindex", "0");
+  card.title = `${name} (${formatFileSize(size)})`;
+
+  // Filename at top
+  const filename = document.createElement("div");
+  filename.className = "thumbnail-filename";
+  filename.textContent = name;
+
+  // Extension badge at bottom
+  const badgeInfo = getFileBadgeInfo(ext);
+  const badge = document.createElement("div");
+  badge.className = `thumbnail-badge ${badgeInfo.class}`;
+  badge.textContent = badgeInfo.label;
+
+  // Delete button
+  const deleteBtn = document.createElement("button");
+  deleteBtn.className = "thumbnail-delete-btn";
+  deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+  </svg>`;
+  deleteBtn.title = "Remove file";
+  deleteBtn.onclick = (e) => {
+    e.stopPropagation();
+    if (onDelete) onDelete(e);
+  };
+
+  card.appendChild(filename);
+  card.appendChild(badge);
+  card.appendChild(deleteBtn);
+
+  return { card, badge, deleteBtn, ext };
+}
+
+/**
+ * Create a thumbnail card for a pending (not yet uploaded) file
+ * @param {Object} pendingFile - {file, previewUrl, name, size, type}
+ * @param {number} index - Index in pending files array
+ * @param {Object} appState - AppState for managing pending files
+ * @returns {HTMLElement}
+ */
+function createPendingFileCard(pendingFile, index, appState) {
+  const { name, size, type, previewUrl } = pendingFile;
+
+  const handleDelete = () => {
+    // Remove from pending files in AppState
+    const currentPending = appState.getState("ui.pendingWelcomeFiles") || [];
+    const newPending = currentPending.filter((_, i) => i !== index);
+
+    // Revoke object URL to free memory
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    appState.setState("ui.pendingWelcomeFiles", newPending);
+  };
+
+  const { card, badge, ext } = createCardStructure(name, size, handleDelete);
+
+  // Add preview based on file type
+  if (type?.startsWith("image/") && previewUrl) {
+    // Use existing preview URL for images
+    const preview = document.createElement("div");
+    preview.className = "thumbnail-preview";
+    const img = document.createElement("img");
+    img.src = previewUrl;
+    img.alt = name;
+    preview.appendChild(img);
+    card.insertBefore(preview, badge);
+  } else if (pendingFile.previewType === "pdf") {
+    // PDF preview using File object
+    import("../utils/pdf-thumbnail.js").then(({ generatePdfThumbnail }) => {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const dataUrl = await generatePdfThumbnail(e.target.result);
+          const preview = document.createElement("div");
+          preview.className = "thumbnail-preview";
+          const img = document.createElement("img");
+          img.src = dataUrl;
+          img.alt = name;
+          preview.appendChild(img);
+          card.insertBefore(preview, badge);
+
+          // Remove icon fallback
+          const existingIcon = card.querySelector(".thumbnail-icon-wrapper");
+          if (existingIcon) existingIcon.remove();
+        } catch (err) {
+          console.warn("Failed to generate PDF thumbnail for pending file:", name, err);
+        }
+      };
+      reader.onerror = (err) => console.warn("Failed to read PDF file for preview:", err);
+      // Read file as ArrayBuffer for PDF.js
+      reader.readAsArrayBuffer(pendingFile.file);
+    });
+
+    // Add temporary icon while rendering async
+    const iconWrapper = document.createElement("div");
+    iconWrapper.className = "thumbnail-icon-wrapper";
+    iconWrapper.innerHTML = getFileIcon(name);
+    card.insertBefore(iconWrapper, badge);
+  } else if (pendingFile.previewContent) {
+    // Render local preview (code/text/csv)
+    // Dynamic import to avoid circular dependency
+    import("../utils/content-preview.js").then(({ generateCodePreview, generateTextPreview, generateCsvPreview }) => {
+      const previewType = pendingFile.previewType || "text";
+      let html = "";
+
+      try {
+        if (previewType === "code") {
+          html = generateCodePreview(pendingFile.previewContent, ext);
+        } else if (previewType === "csv") {
+          html = generateCsvPreview(pendingFile.previewContent);
+        } else {
+          html = generateTextPreview(pendingFile.previewContent, ext);
+        }
+
+        const preview = document.createElement("div");
+        preview.className = "thumbnail-preview";
+        preview.innerHTML = html;
+        card.insertBefore(preview, badge);
+
+        // Remove icon fallback if present (in case async load was slow)
+        const existingIcon = card.querySelector(".thumbnail-icon-wrapper");
+        if (existingIcon) existingIcon.remove();
+      } catch (err) {
+        console.warn("Failed to generate preview for pending file:", name, err);
+      }
+    });
+
+    // Add temporary icon while rendering async (or if rendering fails)
+    const iconWrapper = document.createElement("div");
+    iconWrapper.className = "thumbnail-icon-wrapper";
+    iconWrapper.innerHTML = getFileIcon(name);
+    card.insertBefore(iconWrapper, badge);
+  } else {
+    // Show icon for non-images
+    const iconWrapper = document.createElement("div");
+    iconWrapper.className = "thumbnail-icon-wrapper";
+    iconWrapper.innerHTML = getFileIcon(name);
+    card.insertBefore(iconWrapper, badge);
+  }
+
+  return card;
+}
+
+/**
  * Create a thumbnail card element for a file
  * @param {Object} file - File object with name, size properties
  * @param {string} directory - Directory path for operations
@@ -582,36 +768,12 @@ function createFolderTile(folder, onClick) {
  * @returns {HTMLElement}
  */
 function createThumbnailCard(file, directory, onDelete = null) {
-  const card = document.createElement("div");
-  card.className = "thumbnail-card";
-  card.setAttribute("role", "button");
-  card.setAttribute("tabindex", "0");
-  card.setAttribute("aria-label", `Open ${file.name}`);
-  card.title = `${file.name} (${formatFileSize(file.size || 0)})`;
-
-  // Filename at top
-  const filename = document.createElement("div");
-  filename.className = "thumbnail-filename";
-  filename.textContent = file.name;
-
-  // Extension badge at bottom
-  const ext = file.name.split(".").pop()?.toLowerCase() || "";
-  const badgeInfo = getFileBadgeInfo(ext);
-  const badge = document.createElement("div");
-  badge.className = `thumbnail-badge ${badgeInfo.class}`;
-  badge.textContent = badgeInfo.label;
-
-  // Delete button (hidden until hover)
-  const deleteBtn = document.createElement("button");
-  deleteBtn.className = "thumbnail-delete-btn";
-  deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-  </svg>`;
-  deleteBtn.title = "Delete file";
-  deleteBtn.onclick = (e) => {
-    e.stopPropagation();
+  const handleDelete = (e) => {
     handleDeleteFile(file.name, directory, null, onDelete);
   };
+
+  const { card, ext } = createCardStructure(file.name, file.size || 0, handleDelete);
+  card.setAttribute("aria-label", `Open ${file.name}`);
 
   // Click handler to open file
   card.onclick = async () => {
@@ -633,11 +795,6 @@ function createThumbnailCard(file, directory, onDelete = null) {
       card.onclick();
     }
   };
-
-  // Assemble card
-  card.appendChild(filename);
-  card.appendChild(badge);
-  card.appendChild(deleteBtn);
 
   // Determine what type of preview this file needs
   const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico"];

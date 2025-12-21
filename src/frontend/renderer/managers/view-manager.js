@@ -172,6 +172,29 @@ export async function showWelcomeView(elements, appState) {
   });
   globalLifecycleManager.addUnsubscriber(viewManagerComponent, unsubscribeWelcomeFiles);
 
+  // DEFERRED SESSION: Subscribe to pending files (before session exists)
+  const unsubscribePendingFiles = appState.subscribe("ui.pendingWelcomeFiles", async (pendingFiles) => {
+    if (appState.getState("ui.currentView") !== "welcome") return;
+
+    const welcomeFilesContainer = document.getElementById("welcome-files-container");
+    if (!welcomeFilesContainer) return;
+
+    // Hide section if no pending files
+    if (!pendingFiles || pendingFiles.length === 0) {
+      // Only hide if also no session files
+      const sessionService = window.app?.services?.sessionService;
+      if (!sessionService?.getCurrentSessionId()) {
+        appState.setState("ui.welcomeFilesSectionVisible", false);
+      }
+      return;
+    }
+
+    // Render pending files as thumbnail grid
+    const { renderPendingFilesGrid } = await import("./file-manager.js");
+    renderPendingFilesGrid(pendingFiles, welcomeFilesContainer, appState);
+  });
+  globalLifecycleManager.addUnsubscriber(viewManagerComponent, unsubscribePendingFiles);
+
   // Initialize ModelSelector with cached config (instant, no waiting)
   if (cachedConfig?.models) {
     // Use requestAnimationFrame to wait for DOM, then initialize async
@@ -508,6 +531,43 @@ function attachWelcomePageListeners(elements, appState) {
           model: modelConfig.model,
           reasoning_effort: modelConfig.reasoning_effort,
         });
+
+        // DEFERRED FILE UPLOAD: Upload any pending welcome files now that session exists
+        const pendingFiles = appState.getState("ui.pendingWelcomeFiles") || [];
+        if (pendingFiles.length > 0) {
+          const fileService = window.app?.services?.fileService;
+          if (fileService) {
+            for (const pendingFile of pendingFiles) {
+              try {
+                await fileService.uploadFile(pendingFile.file, sessionId);
+
+                // Add image files to pending attachments for the message
+                if (pendingFile.type?.startsWith("image/")) {
+                  const currentAttachments = appState.getState("message.pendingAttachments") || [];
+                  appState.setState("message.pendingAttachments", [
+                    ...currentAttachments,
+                    {
+                      type: "image_ref",
+                      filename: pendingFile.name,
+                      path: `sources/${pendingFile.name}`,
+                      mimeType: pendingFile.type,
+                    },
+                  ]);
+                }
+
+                // Revoke object URL to free memory
+                if (pendingFile.previewUrl) {
+                  URL.revokeObjectURL(pendingFile.previewUrl);
+                }
+              } catch (error) {
+                console.error("Failed to upload pending file:", pendingFile.name, error);
+              }
+            }
+
+            // Clear pending files from state
+            appState.setState("ui.pendingWelcomeFiles", []);
+          }
+        }
 
         // Update chat model selector IMMEDIATELY with the config we just created
         // (Don't wait for backend event - that comes after the message completes)

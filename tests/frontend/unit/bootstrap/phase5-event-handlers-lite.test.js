@@ -100,6 +100,7 @@ describe("phase5-event-handlers coverage", () => {
 
   afterEach(() => {
     document.body.innerHTML = "";
+    document.body.className = ""; // Clear body classes too
     vi.clearAllMocks();
   });
 
@@ -110,6 +111,7 @@ describe("phase5-event-handlers coverage", () => {
         bodyViewClass: "view-chat",
         aiThinkingActive: false,
         welcomeFilesSectionVisible: true,
+        pendingWelcomeFiles: [],
       },
       message: {
         currentAssistant: null,
@@ -286,24 +288,61 @@ describe("phase5-event-handlers coverage", () => {
     expect(mockShowToast).toHaveBeenCalledWith(expect.stringContaining("bad.txt"), "error", 3000);
   });
 
-  it("alerts when session creation fails before upload", async () => {
+  it("buffers files in AppState on welcome page drop when no session exists", async () => {
     const deps = createDeps();
-    const alertSpy = vi.fn();
-    global.alert = alertSpy;
+    // Set AppState to welcome view (this ensures body class logic in handlers works correctly)
+    deps.appState.setState("ui.bodyViewClass", "view-welcome");
     deps.services.sessionService.getCurrentSessionId = vi.fn(() => null);
-    deps.services.sessionService.createSession = vi.fn().mockResolvedValue({ success: false, error: "nope" });
     deps.services.fileService.uploadFile = vi.fn();
 
     await initializeEventHandlers(deps);
 
     const drop = new Event("drop", { bubbles: true });
     Object.defineProperty(drop, "dataTransfer", {
-      value: { files: [new File(["x"], "fail.txt")] },
+      value: { files: [new File(["x"], "test.txt")] },
     });
     document.getElementById("file-drop-zone").dispatchEvent(drop);
 
-    await vi.waitFor(() => expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining("nope")));
+    // Wait for async processing
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // Should NOT upload - files should be buffered in AppState instead
     expect(deps.services.fileService.uploadFile).not.toHaveBeenCalled();
+    // Verify files were buffered with preview content
+    const pendingFiles = deps.appState.getState("ui.pendingWelcomeFiles");
+    expect(pendingFiles.length).toBe(1);
+    expect(pendingFiles[0].name).toBe("test.txt");
+    expect(pendingFiles[0].previewContent).toBe("x"); // 'x' was the file content
+    expect(pendingFiles[0].previewType).toBe("code"); // 'txt' maps to code/text
+  });
+
+  it("buffers PDF files with preview URL", async () => {
+    const deps = createDeps();
+    deps.appState.setState("ui.bodyViewClass", "view-welcome");
+    deps.services.sessionService.getCurrentSessionId = vi.fn(() => null);
+    deps.services.fileService.uploadFile = vi.fn();
+
+    // Mock URL.createObjectURL
+    const mockCreateObjectURL = vi.fn(() => "blob:pdf");
+    global.URL.createObjectURL = mockCreateObjectURL;
+
+    await initializeEventHandlers(deps);
+
+    const drop = new Event("drop", { bubbles: true });
+    Object.defineProperty(drop, "dataTransfer", {
+      value: { files: [new File(["%PDF"], "test.pdf", { type: "application/pdf" })] },
+    });
+    document.getElementById("file-drop-zone").dispatchEvent(drop);
+
+    // Wait for async processing
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const pendingFiles = deps.appState.getState("ui.pendingWelcomeFiles");
+    expect(pendingFiles.length).toBe(1);
+    expect(pendingFiles[0].name).toBe("test.pdf");
+    expect(pendingFiles[0].previewType).toBe("pdf");
+    expect(pendingFiles[0].previewUrl).toBeNull();
+    expect(mockCreateObjectURL).not.toHaveBeenCalled();
   });
 
   it("wires IPC error/exit handlers", async () => {
