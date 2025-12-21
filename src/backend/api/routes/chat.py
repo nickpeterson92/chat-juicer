@@ -117,12 +117,16 @@ async def chat_websocket(
                     logger.info(f"Interrupt message received for session {session_id}")
                     # Only interrupt if there's an active task
                     if active_chat_task and not active_chat_task.done():
-                        if active_cancellation_token:
-                            # Cooperative cancellation via token
-                            await active_cancellation_token.cancel(reason="User interrupt")
-                            logger.info(f"Cancellation token triggered for session {session_id}")
-                        # Also notify chat service to send immediate feedback
+                        # First: Use SDK's stream.cancel() for proper cleanup
+                        # This cancels internal tasks, clears queues, and discards incomplete turns
                         await chat_service.interrupt(session_id)
+
+                        # Wait briefly for SDK cancel to propagate, then fall back to token
+                        await asyncio.sleep(0.1)
+                        if active_cancellation_token and not active_chat_task.done():
+                            # Cooperative cancellation fallback
+                            await active_cancellation_token.cancel(reason="User interrupt")
+                            logger.info(f"Cancellation token triggered (fallback) for {session_id}")
                     else:
                         logger.info(f"No active chat task to interrupt for session {session_id}")
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import inspect
 import json
 
@@ -11,6 +12,7 @@ import asyncpg
 
 from agents import Agent, RunConfig, Runner
 from agents.models.openai_provider import OpenAIProvider
+from agents.result import RunResultStreaming
 
 from api.services.file_context import session_file_context
 from api.services.file_service import FileService
@@ -23,6 +25,7 @@ from core.agent import create_agent
 from core.constants import (
     MAX_CONVERSATION_TURNS,
     MSG_TYPE_FUNCTION_COMPLETED,
+    MSG_TYPE_FUNCTION_DETECTED,
     MSG_TYPE_FUNCTION_EXECUTING,
     RAW_RESPONSE_EVENT,
     TEMPLATES_PATH,
@@ -51,6 +54,8 @@ class ChatService:
     # Class-level cancellation tokens (keyed by session_id)
     # Shared across instances to ensure interrupts work with multiple ChatService instances
     _cancellation_tokens: ClassVar[dict[str, CancellationToken]] = {}
+    # Class-level active streams for SDK cancel() support
+    _active_streams: ClassVar[dict[str, RunResultStreaming]] = {}
 
     def __init__(
         self,
@@ -89,7 +94,7 @@ class ChatService:
             self._cancellation_tokens[session_id] = cancellation_token
 
         try:
-            await self._process_chat_inner(session_id, messages, model, reasoning_effort)
+            await self._process_chat_inner(session_id, messages, model, reasoning_effort, cancellation_token)
         finally:
             # Always clean up token to prevent memory leak on early failures
             self._cancellation_tokens.pop(session_id, None)
@@ -100,6 +105,7 @@ class ChatService:
         messages: list[dict[str, Any]],
         model: str | None,
         reasoning_effort: str | None,
+        cancellation_token: CancellationToken | None = None,
     ) -> None:
         """Inner chat processing logic."""
         async with self.pool.acquire() as conn:
@@ -221,6 +227,7 @@ class ChatService:
                             session_uuid,
                             user_messages,
                             model_provider=request_provider,
+                            cancellation_token=cancellation_token,
                         )
                         logger.info(f"[DIAG:{session_id[:8]}] _run_agent_stream completed: {completed_normally}")
                     finally:
@@ -275,6 +282,7 @@ class ChatService:
         session_uuid: UUID,
         user_messages: list[dict[str, Any]],
         model_provider: OpenAIProvider | None = None,
+        cancellation_token: CancellationToken | None = None,
     ) -> bool:
         """Run agent and stream events to clients.
 
@@ -329,66 +337,79 @@ class ChatService:
         stream = await stream_candidate if inspect.isawaitable(stream_candidate) else stream_candidate
         logger.info(f"[DIAG:{session_id[:8]}] Stream ready, entering event loop")
 
+        # Store stream for interrupt access (enables SDK cancel())
+        self._active_streams[session_id] = stream
+
         event_count = 0
 
         try:
-            async for event in stream.stream_events():
-                if event_count == 0:
-                    logger.info(f"[DIAG:{session_id[:8]}] First event received: {event.type}")
-                event_count += 1
+            # Wrap loop in cancellation_scope to reliably break if blocked in generator
+            # When token.cancel() is called, it will task.cancel() the consumer task
+            token_context = cancellation_token.cancellation_scope() if cancellation_token else contextlib.nullcontext()
 
-                # Check cancellation via token
-                token = self._cancellation_tokens.get(session_id)
-                if token is not None and token.is_cancelled:
-                    logger.info(f"Cancellation triggered at event {event_count}: reason={token.cancel_reason}")
-                    interrupted = True
-                    break
+            async with token_context:
+                async for event in stream.stream_events():
+                    if event_count == 0:
+                        logger.info(f"[DIAG:{session_id[:8]}] First event received: {event.type}")
+                    event_count += 1
 
-                # Log every 100 events
-                if event_count % 100 == 0:
-                    logger.info(f"Handled {event_count} events for {session_id}")
+                    # Check cancellation via token
+                    token = self._cancellation_tokens.get(session_id)
+                    if token is not None and token.is_cancelled:
+                        logger.info(f"Cancellation triggered at event {event_count}: reason={token.cancel_reason}")
+                        interrupted = True
+                        break
 
-                # Use the typed event handler registry
-                handler = handlers.get(event.type)
-                if handler:
-                    ipc_msg = handler(event)
-                    if ipc_msg:
-                        # Parse the JSON message from the handler
-                        try:
-                            msg_data = json.loads(ipc_msg)
-                            await self.ws_manager.send(session_id, msg_data)
+                    # Log every 100 events
+                    if event_count % 100 == 0:
+                        logger.info(f"Handled {event_count} events for {session_id}")
 
-                            # Accumulate text for persistence (assistant_delta messages)
-                            if msg_data.get("type") == "assistant_delta":
-                                content = msg_data.get("content", "")
-                                if content:
-                                    accumulated_text += content
+                    # Use the typed event handler registry
+                    handler = handlers.get(event.type)
+                    if handler:
+                        ipc_msg = handler(event)
+                        if ipc_msg:
+                            # Parse the JSON message from the handler
+                            try:
+                                msg_data = json.loads(ipc_msg)
+                                await self.ws_manager.send(session_id, msg_data)
 
-                            # Track tool calls for persistence
-                            msg_type = msg_data.get("type")
-                            if msg_type == MSG_TYPE_FUNCTION_EXECUTING:
-                                call_id = msg_data.get("tool_call_id")
-                                if call_id:
-                                    pending_tool_calls[call_id] = {
-                                        "tool_name": msg_data.get("tool_name", ""),
-                                        "tool_arguments": msg_data.get("tool_arguments"),
-                                    }
+                                # Accumulate text for persistence (assistant_delta messages)
+                                if msg_data.get("type") == "assistant_delta":
+                                    content = msg_data.get("content", "")
+                                    if content:
+                                        accumulated_text += content
 
-                            elif msg_type == MSG_TYPE_FUNCTION_COMPLETED:
-                                call_id = msg_data.get("tool_call_id")
-                                if call_id:
-                                    pending = pending_tool_calls.pop(call_id, {})
-                                    await self._add_tool_call_to_history(
-                                        session_uuid=session_uuid,
-                                        call_id=call_id,
-                                        name=pending.get("tool_name") or msg_data.get("tool_name", ""),
-                                        arguments=pending.get("tool_arguments"),
-                                        result=msg_data.get("tool_result"),
-                                        success=msg_data.get("tool_success", True),
-                                    )
+                                # Track tool calls for persistence
+                                msg_type = msg_data.get("type")
+                                if msg_type in (MSG_TYPE_FUNCTION_DETECTED, MSG_TYPE_FUNCTION_EXECUTING):
+                                    call_id = msg_data.get("tool_call_id")
+                                    if call_id:
+                                        # Don't overwrite existing arguments if we already have them (from EXECUTING)
+                                        # but ensure we have at least an entry from DETECTED
+                                        existing = pending_tool_calls.get(call_id, {})
+                                        pending_tool_calls[call_id] = {
+                                            "tool_name": msg_data.get("tool_name", "") or existing.get("tool_name", ""),
+                                            "tool_arguments": msg_data.get("tool_arguments")
+                                            or existing.get("tool_arguments"),
+                                        }
 
-                        except json.JSONDecodeError:
-                            logger.warning(f"Failed to parse handler result: {ipc_msg[:100]}")
+                                elif msg_type == MSG_TYPE_FUNCTION_COMPLETED:
+                                    call_id = msg_data.get("tool_call_id")
+                                    if call_id:
+                                        pending = pending_tool_calls.pop(call_id, {})
+                                        await self._add_tool_call_to_history(
+                                            session_uuid=session_uuid,
+                                            call_id=call_id,
+                                            name=pending.get("tool_name") or msg_data.get("tool_name", ""),
+                                            arguments=pending.get("tool_arguments"),
+                                            result=msg_data.get("tool_result"),
+                                            success=msg_data.get("tool_success", True),
+                                            interrupted=msg_data.get("interrupted", False),
+                                        )
+
+                            except json.JSONDecodeError:
+                                logger.warning(f"Failed to parse handler result: {ipc_msg[:100]}")
 
                 # Also extract text from raw response events for accumulation
                 # (backup in case handler doesn't emit assistant_delta)
@@ -416,6 +437,13 @@ class ChatService:
             if token is not None and token.is_cancelled:
                 logger.info(f"Cancellation detected post-stream for {session_id}, treating as interrupted")
                 interrupted = True
+            # Also check if SDK cancel() was called (stream.is_complete is set by cancel())
+            elif stream.is_complete and event_count == 0:
+                logger.info(f"SDK cancel detected (is_complete with no events) for {session_id}")
+                interrupted = True
+
+        # Clean up active stream reference
+        self._active_streams.pop(session_id, None)
 
         # Log the interrupt state for debugging
         logger.info(
@@ -449,6 +477,7 @@ class ChatService:
                     arguments=tool_info.get("tool_arguments"),
                     result="[User interrupted execution. Tool was cancelled before returning results.]",
                     success=False,
+                    interrupted=True,
                 )
 
         # Persist accumulated text to both layers
@@ -525,20 +554,25 @@ class ChatService:
         arguments: Any,
         result: Any,
         success: bool,
+        interrupted: bool = False,
     ) -> None:
         """Add tool call to Layer 2 (full history) with rich metadata."""
         # Serialize arguments/result to JSON if needed
         args_json = json.dumps(arguments) if arguments else None
         result_str = str(result) if result is not None else None
 
+        # Store interrupted flag in metadata
+        metadata = {"interrupted": True} if interrupted else {}
+        metadata_json = json.dumps(metadata)
+
         async with self.pool.acquire() as conn:
             await conn.execute(
                 """
                 INSERT INTO messages (
                     session_id, role, content, tool_call_id, tool_name,
-                    tool_arguments, tool_result, tool_success
+                    tool_arguments, tool_result, tool_success, metadata
                 )
-                VALUES ($1, 'tool_call', $2, $3, $4, $5, $6, $7)
+                VALUES ($1, 'tool_call', $2, $3, $4, $5, $6, $7, $8)
                 """,
                 session_uuid,
                 f"Called {name}",  # Human-readable content
@@ -547,6 +581,7 @@ class ChatService:
                 args_json,
                 result_str,
                 success,
+                metadata_json,
             )
             await conn.execute(
                 """
@@ -559,17 +594,26 @@ class ChatService:
         logger.info(f"Persisted tool call {name} (call_id={call_id}, success={success})")
 
     async def interrupt(self, session_id: str) -> None:
-        """Interrupt active chat processing via cancellation token.
+        """Interrupt active chat processing via SDK stream.cancel().
 
-        Cancels the token (if available) and sends immediate feedback to frontend.
-        The stream loop will detect the cancellation and exit cleanly.
+        Uses the official SDK cancel() method which:
+        - Cancels all running tasks
+        - Clears event queues
+        - Discards incomplete turns (not persisted to session)
         """
-        token = self._cancellation_tokens.get(session_id)
-        if token is not None:
-            await token.cancel(reason="User interrupt")
-            logger.info(f"Cancellation token triggered for session {session_id}")
+        # Use SDK's official cancel() method on the active stream
+        stream = self._active_streams.get(session_id)
+        if stream:
+            stream.cancel(mode="immediate")
+            logger.info(f"SDK stream.cancel() called for session {session_id}")
         else:
-            logger.warning(f"No cancellation token found for session {session_id}")
+            # Fallback to cancellation token if no active stream
+            token = self._cancellation_tokens.get(session_id)
+            if token is not None:
+                await token.cancel(reason="User interrupt")
+                logger.info(f"Cancellation token triggered for session {session_id}")
+            else:
+                logger.warning(f"No active stream or token found for session {session_id}")
 
         # Send immediate feedback to frontend (stream loop will send assistant_end when done)
         await self.ws_manager.send(session_id, {"type": "stream_interrupted", "session_id": session_id})

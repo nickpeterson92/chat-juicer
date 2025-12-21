@@ -291,6 +291,10 @@ class MessageResponse(BaseModel):
         default=None,
         description="Whether response was interrupted",
     )
+    metadata: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional metadata for the message",
+    )
 
 
 class FileInfoResponse(BaseModel):
