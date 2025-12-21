@@ -621,6 +621,9 @@ app.whenReady().then(() => {
     }
   });
 
+  // Whitelist of files explicitly authorized by the user via open dialog
+  const allowedExternalFiles = new Set();
+
   // IPC handler for reading local files (used for attachment previews)
   ipcMain.handle("read-file", async (_event, filePath) => {
     logger.debug("Read file requested", { filePath });
@@ -630,14 +633,20 @@ app.whenReady().then(() => {
         return { success: false, error: "Invalid path" };
       }
 
-      // Security check: ensure path is within project directory
+      // Security check: ensure path is within project directory OR explicitly allowed
       const projectRoot = path.join(__dirname, "..");
       const absolutePath = path.isAbsolute(filePath) ? filePath : path.join(projectRoot, filePath);
       const normalizedPath = path.normalize(absolutePath);
       const normalizedRoot = path.normalize(projectRoot);
 
-      if (!normalizedPath.startsWith(normalizedRoot)) {
-        logger.error("Security: Attempted to read file outside project", { path: normalizedPath });
+      // Check if file is inside project root
+      const isInsideProject = normalizedPath.startsWith(normalizedRoot);
+
+      // Check if file was explicitly authorized by user (via open dialog)
+      const isWhitelisted = allowedExternalFiles.has(normalizedPath);
+
+      if (!isInsideProject && !isWhitelisted) {
+        logger.error("Security: Attempted to read unauthorized file", { path: normalizedPath });
         return { success: false, error: "Access denied" };
       }
 
@@ -743,6 +752,12 @@ app.whenReady().then(() => {
       if (result.canceled) {
         return null;
       }
+
+      // Add selected paths to whitelist to allow subsequent reading
+      // irrespective of their location (since user explicitly chose them)
+      result.filePaths.forEach((fp) => {
+        allowedExternalFiles.add(path.normalize(fp));
+      });
 
       return result.filePaths;
     } catch (error) {
