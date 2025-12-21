@@ -44,27 +44,6 @@ export function parseMessageContent(content) {
 }
 
 /**
- * Check if message should be displayed in UI
- * Only user and assistant messages with actual content are shown
- *
- * @param {Object} msg - Message object
- * @param {string} msg.role - Message role (user|assistant|system|...)
- * @param {string|Array|Object} msg.content - Message content
- * @returns {boolean} True if message should be displayed
- *
- * @example
- * shouldDisplayMessage({role: "user", content: "Hello"}) // => true
- * shouldDisplayMessage({role: "system", content: "..."}) // => false
- * shouldDisplayMessage({role: "user", content: ""}) // => false
- */
-export function shouldDisplayMessage(msg) {
-  const role = msg.role || "assistant";
-  const content = parseMessageContent(msg.content);
-
-  return (role === "user" || role === "assistant") && content && content.trim().length > 0;
-}
-
-/**
  * Transform message object to view model for UI rendering
  *
  * @param {Object} msg - Message object from backend
@@ -173,25 +152,4 @@ export function validateMessage(msg) {
   }
 
   return { valid: true, error: null };
-}
-
-/**
- * Truncate long message content for preview display
- *
- * @param {string|Array|Object} content - Message content
- * @param {number} maxLength - Maximum length (default: 100)
- * @returns {string} Truncated content with ellipsis if needed
- *
- * @example
- * truncateMessageContent("A very long message...", 10)
- * // => "A very lon..."
- */
-export function truncateMessageContent(content, maxLength = 100) {
-  const parsed = parseMessageContent(content);
-
-  if (parsed.length <= maxLength) {
-    return parsed;
-  }
-
-  return `${parsed.substring(0, maxLength)}...`;
 }

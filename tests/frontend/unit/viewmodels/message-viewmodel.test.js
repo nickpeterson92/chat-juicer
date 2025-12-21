@@ -4,13 +4,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import {
-  createMessageViewModel,
-  parseMessageContent,
-  shouldDisplayMessage,
-  truncateMessageContent,
-  validateMessage,
-} from "@/viewmodels/message-viewmodel.js";
+import { createMessageViewModel, parseMessageContent, validateMessage } from "@/viewmodels/message-viewmodel.js";
 
 describe("parseMessageContent", () => {
   it("should return string content as-is", () => {
@@ -65,56 +59,6 @@ describe("parseMessageContent", () => {
     const result = parseMessageContent(content);
 
     expect(result).toBe('{"data":"value"}');
-  });
-});
-
-describe("shouldDisplayMessage", () => {
-  it("should display user message with content", () => {
-    const msg = { role: "user", content: "Hello" };
-
-    const result = shouldDisplayMessage(msg);
-
-    expect(result).toBe(true);
-  });
-
-  it("should display assistant message with content", () => {
-    const msg = { role: "assistant", content: "Hi there" };
-
-    const result = shouldDisplayMessage(msg);
-
-    expect(result).toBe(true);
-  });
-
-  it("should not display system messages", () => {
-    const msg = { role: "system", content: "System message" };
-
-    const result = shouldDisplayMessage(msg);
-
-    expect(result).toBe(false);
-  });
-
-  it("should not display messages with empty content", () => {
-    const msg = { role: "user", content: "" };
-
-    const result = shouldDisplayMessage(msg);
-
-    expect(result).toBeFalsy();
-  });
-
-  it("should not display messages with whitespace-only content", () => {
-    const msg = { role: "user", content: "   " };
-
-    const result = shouldDisplayMessage(msg);
-
-    expect(result).toBe(false);
-  });
-
-  it("should default to assistant role if not specified", () => {
-    const msg = { content: "Hello" };
-
-    const result = shouldDisplayMessage(msg);
-
-    expect(result).toBe(true);
   });
 });
 
@@ -386,66 +330,5 @@ describe("validateMessage", () => {
     const result = validateMessage(msg);
 
     expect(result.valid).toBe(true);
-  });
-});
-
-describe("truncateMessageContent", () => {
-  it("should not truncate short content", () => {
-    const result = truncateMessageContent("Short message");
-
-    expect(result).toBe("Short message");
-  });
-
-  it("should truncate long content with default length", () => {
-    const longMessage = "a".repeat(150);
-
-    const result = truncateMessageContent(longMessage);
-
-    expect(result).toBe(`${"a".repeat(100)}...`);
-    expect(result.length).toBe(103); // 100 + "..."
-  });
-
-  it("should truncate with custom maxLength", () => {
-    const longMessage = "Hello world this is a long message";
-
-    const result = truncateMessageContent(longMessage, 10);
-
-    expect(result).toBe("Hello worl...");
-  });
-
-  it("should handle exact maxLength", () => {
-    const message = "a".repeat(100);
-
-    const result = truncateMessageContent(message, 100);
-
-    expect(result).toBe(message);
-  });
-
-  it("should handle array content", () => {
-    const content = [{ text: "a".repeat(150) }];
-
-    const result = truncateMessageContent(content, 50);
-
-    expect(result).toBe(`${"a".repeat(50)}...`);
-  });
-
-  it("should handle object content", () => {
-    const content = { data: "value" };
-
-    const result = truncateMessageContent(content, 10);
-
-    expect(result).toBe('{"data":"v...');
-  });
-
-  it("should handle empty content", () => {
-    const result = truncateMessageContent("");
-
-    expect(result).toBe("");
-  });
-
-  it("should handle content shorter than maxLength", () => {
-    const result = truncateMessageContent("Hi", 100);
-
-    expect(result).toBe("Hi");
   });
 });

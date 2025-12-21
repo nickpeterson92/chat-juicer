@@ -327,11 +327,3 @@ export function clearChat(chatContainer) {
   chatContainer.innerHTML = "";
   messageCache.clear(); // Critical: clear cache to prevent memory leaks
 }
-
-/**
- * Clear the message cache
- * Should be called on session switches and bot restarts
- */
-export function clearMessageCache() {
-  messageCache.clear();
-}
