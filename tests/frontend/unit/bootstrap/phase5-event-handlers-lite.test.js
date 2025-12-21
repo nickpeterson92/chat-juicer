@@ -492,4 +492,57 @@ describe("phase5-event-handlers coverage", () => {
 
     expect(mockRenderSessionList).toHaveBeenCalled();
   });
+
+  it("warns when file exceeds MAX_PENDING_FILE_SIZE", async () => {
+    const deps = createDeps();
+    deps.appState.setState("ui.bodyViewClass", "view-welcome");
+    deps.services.sessionService.getCurrentSessionId = vi.fn(() => null);
+
+    await initializeEventHandlers(deps);
+
+    const drop = new Event("drop", { bubbles: true });
+    // Create a mock large file
+    const largeFile = {
+      name: "large.mov",
+      size: 50 * 1024 * 1024 + 1, // Exceeds limit
+      type: "video/quicktime",
+    };
+    Object.defineProperty(drop, "dataTransfer", {
+      value: { files: [largeFile] },
+    });
+
+    document.getElementById("file-drop-zone").dispatchEvent(drop);
+
+    // Wait for processing
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(mockShowToast).toHaveBeenCalledWith("large.mov exceeds 50MB limit", "warning", 3000);
+    // Should NOT have added to pending files
+    expect(deps.appState.getState("ui.pendingWelcomeFiles")).toEqual([]);
+  });
+
+  it("handles image file types correctly", async () => {
+    const deps = createDeps();
+    deps.appState.setState("ui.bodyViewClass", "view-welcome");
+    deps.services.sessionService.getCurrentSessionId = vi.fn(() => null);
+
+    // Mock URL.createObjectURL
+    const mockUrl = "blob:test";
+    global.URL.createObjectURL = vi.fn(() => mockUrl);
+
+    await initializeEventHandlers(deps);
+
+    const drop = new Event("drop", { bubbles: true });
+    const imageFile = new File(["img"], "pic.png", { type: "image/png" });
+    Object.defineProperty(drop, "dataTransfer", {
+      value: { files: [imageFile] },
+    });
+
+    document.getElementById("file-drop-zone").dispatchEvent(drop);
+    await new Promise((r) => setTimeout(r, 10));
+
+    const pending = deps.appState.getState("ui.pendingWelcomeFiles");
+    expect(pending[0].previewType).toBe("image");
+    expect(pending[0].previewUrl).toBe(mockUrl);
+  });
 });
