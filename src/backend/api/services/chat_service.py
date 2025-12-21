@@ -30,6 +30,7 @@ from core.constants import (
     RAW_RESPONSE_EVENT,
     TEMPLATES_PATH,
     get_settings,
+    is_vision_capable,
 )
 from core.prompts import SESSION_TITLE_GENERATION_PROMPT, SYSTEM_INSTRUCTIONS, build_dynamic_instructions
 from integrations.event_handlers import CallTracker, build_event_handlers
@@ -204,11 +205,27 @@ class ChatService:
                     # Only save to Layer 2 (UI history) which is separate from LLM context
                     user_messages: list[dict[str, Any]] = []
                     for msg in messages:
-                        content = msg.get("content", msg) if isinstance(msg, dict) else msg
+                        # Extract content and attachments from message dict
+                        text_content = msg.get("content", "")
+                        if not isinstance(text_content, str):
+                            text_content = str(text_content) if text_content else ""
+                        attachments = msg.get("attachments")  # List of {type, filename, path}
+
+                        # Build multimodal content if images are attached
+                        content = await self._build_multimodal_content(
+                            text_content=text_content,
+                            attachments=attachments,
+                            session_id=session_id,
+                            model=model,
+                        )
+
                         user_messages.append({"role": "user", "content": content})
                         logger.info(f"Processing user message for session {session_id}")
+
+                        # Save text to Layer 2 (UI history) - serialize content array to JSON if multimodal
+                        history_content = json.dumps(content) if isinstance(content, list) else text_content
                         try:
-                            await self._add_to_full_history(session_uuid, "user", content)
+                            await self._add_to_full_history(session_uuid, "user", history_content)
                             logger.info("Saved to messages table (Layer 2) successfully")
                         except Exception as e:
                             logger.error(f"Failed to save to messages: {e}", exc_info=True)
@@ -498,6 +515,82 @@ class ChatService:
             logger.info(f"No accumulated_text to save for {session_id} (interrupted={interrupted})")
 
         return not interrupted
+
+    async def _build_multimodal_content(
+        self,
+        text_content: str,
+        attachments: list[dict[str, Any]] | None,
+        session_id: str,
+        model: str,
+    ) -> str | list[dict[str, Any]]:
+        """Build multimodal content array if image attachments are present.
+
+        For vision-capable models, inflates image_ref attachments to base64 content parts.
+        For non-vision models, returns text-only content (images handled via MarkItDown).
+
+        Args:
+            text_content: The text message content
+            attachments: Optional list of attachment dicts with type, filename, path
+            session_id: Session identifier for file lookup
+            model: Model deployment name to check vision capability
+
+        Returns:
+            Either plain string content or list of content parts for multimodal input
+        """
+        # If no attachments or not a vision-capable model, return plain text
+        if not attachments:
+            return text_content
+
+        # Filter to image_ref attachments only
+        image_attachments = [a for a in attachments if a.get("type") == "image_ref"]
+        if not image_attachments:
+            return text_content
+
+        # Check if model supports vision
+        if not is_vision_capable(model):
+            logger.info(f"Model {model} does not support vision, skipping image inflation")
+            return text_content
+
+        # Build multimodal content array
+        content_parts: list[dict[str, Any]] = []
+
+        # Add text content first (if non-empty)
+        if text_content and text_content.strip():
+            content_parts.append({"type": "input_text", "text": text_content})
+
+        # Process image attachments
+        for attachment in image_attachments:
+            filename = attachment.get("filename", "")
+            # Path is relative to session workspace (e.g., "sources/image.png")
+            rel_path = attachment.get("path", "")
+
+            # Extract folder and filename from path
+            if "/" in rel_path:
+                folder, file_name = rel_path.rsplit("/", 1)
+            else:
+                folder = "sources"  # Default folder
+                file_name = filename or rel_path
+
+            # Read and encode image
+            result = await self.file_service.read_image_as_base64(session_id, folder, file_name)
+            if result:
+                mime_type, base64_data = result
+                content_parts.append(
+                    {
+                        "type": "input_image",
+                        "image_url": f"data:{mime_type};base64,{base64_data}",
+                    }
+                )
+                logger.info(f"Inflated image {file_name} for multimodal input")
+            else:
+                logger.warning(f"Failed to inflate image attachment: {filename}")
+
+        # If we only have text (all images failed), return plain string
+        if len(content_parts) == 1 and content_parts[0].get("type") == "input_text":
+            return text_content
+
+        # Return content parts array for multimodal message
+        return content_parts if content_parts else text_content
 
     async def _add_to_full_history(
         self,

@@ -247,7 +247,7 @@ describe("InputArea", () => {
 
   describe("updateButtonForStreamingState", () => {
     it("should show send button when streaming with text in input", () => {
-      const inputArea = new InputArea(textarea, sendButton, onSendCallback, {
+      const _inputArea = new InputArea(textarea, sendButton, onSendCallback, {
         appState,
       });
 
@@ -265,7 +265,7 @@ describe("InputArea", () => {
     });
 
     it("should update button during input while streaming", () => {
-      const inputArea = new InputArea(textarea, sendButton, onSendCallback, {
+      const _inputArea = new InputArea(textarea, sendButton, onSendCallback, {
         appState,
       });
 

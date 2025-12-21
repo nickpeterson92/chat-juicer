@@ -70,6 +70,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return await ipcRenderer.invoke("open-external-url", url);
   },
 
+  // Get file content as base64 (for thumbnails)
+  getFileContent: async (dirPath, filename) => {
+    return await ipcRenderer.invoke("get-file-content", { dirPath, filename });
+  },
+
   // Get system username
   getUsername: async () => {
     return await ipcRenderer.invoke("get-username");

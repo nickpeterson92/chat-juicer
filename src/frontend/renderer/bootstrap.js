@@ -96,6 +96,7 @@ export async function bootstrapSimple() {
     const { initializePlugins } = await import("./bootstrap/phases/phase6-plugins.js");
     phaseResults.plugins = await initializePlugins({
       ...phaseResults.adapters,
+      adapters: phaseResults.adapters, // Also pass as object for window.app.adapters access
       ...phaseResults.stateDOM,
       services: phaseResults.services,
       components: phaseResults.components,

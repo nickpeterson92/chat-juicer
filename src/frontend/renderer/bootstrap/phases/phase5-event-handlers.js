@@ -228,9 +228,20 @@ export async function initializeEventHandlers({
 
     // Bind ui.welcomeFilesSectionVisible to DOM
     const updateWelcomeFilesSection = (visible) => {
-      const welcomeFilesSection = document.getElementById("welcome-files-section");
-      if (welcomeFilesSection) {
-        welcomeFilesSection.style.display = visible ? "block" : "none";
+      // Sibling Architecture: Target the drawer by new ID
+      const drawer = document.getElementById("welcome-files-drawer");
+      if (!drawer) return;
+
+      // Find wrapper to toggle state
+      const cardWrapper = drawer.closest(".welcome-input-card");
+      if (!cardWrapper) return;
+
+      if (visible) {
+        // Ensure wrapper is expanded
+        requestAnimationFrame(() => cardWrapper.classList.add("has-files"));
+      } else {
+        // Trigger collapse animation
+        cardWrapper.classList.remove("has-files");
       }
     };
     // Apply initial state immediately
@@ -363,43 +374,69 @@ export async function initializeEventHandlers({
 
       const isOnWelcomePage = document.body.classList.contains("view-welcome");
 
-      // If no session, create one first
-      if (!sessionService.getCurrentSessionId()) {
-        try {
-          // Get model config from welcome page selector (if on welcome page)
-          let sessionOptions = {};
-          if (isOnWelcomePage) {
-            const { getMcpConfig, getModelConfig } = await import("../../ui/welcome-page.js");
-            const mcpConfig = getMcpConfig();
-            const modelConfig = getModelConfig();
-            sessionOptions = {
-              mcpConfig,
-              model: modelConfig.model,
-              reasoningEffort: modelConfig.reasoning_effort,
-            };
+      // DEFERRED SESSION CREATION: On welcome page without session, buffer files in memory
+      // Session will be created when user sends their first message
+      if (isOnWelcomePage && !sessionService.getCurrentSessionId()) {
+        const pendingFiles = appState.getState("ui.pendingWelcomeFiles") || [];
+        const { showToast } = await import("../../utils/toast.js");
+        const MAX_PENDING_FILE_SIZE = 50 * 1024 * 1024; // 50MB per file
+
+        for (const file of files) {
+          // Reject files that are too large for memory buffering
+          if (file.size > MAX_PENDING_FILE_SIZE) {
+            showToast(`${file.name} exceeds 50MB limit`, "warning", 3000);
+            continue;
           }
 
-          const result = await sessionService.createSession(sessionOptions);
+          // Create preview data
+          let previewUrl = null;
+          let previewContent = null;
+          let previewType = null;
 
-          if (result.success) {
-            if (components.filePanel) {
-              components.filePanel.setSession(result.sessionId);
-            }
-
-            // Reload sessions list (AppState subscriptions will update UI)
-            const sessionsResult = await sessionService.loadSessions();
-            if (sessionsResult.success) {
-              updateSessionsList(sessionsResult.sessions || []);
-            }
+          if (file.type?.startsWith("image/")) {
+            previewUrl = URL.createObjectURL(file);
+            previewType = "image";
+          } else if (file.type === "application/pdf") {
+            // PDF preview requires more work (pdf.js), stick to icon for now or implement later
+            previewType = "pdf";
           } else {
-            throw new Error(result.error || "Unknown error creating session");
+            // Check if it's a code/text file based on extension or mime type
+            // IMPORTANT: Exclude known binary formats even if small
+            const isBinaryFile = hasBinaryExtension(file.name);
+            const isTextFile = !isBinaryFile && (file.type?.startsWith("text/") || hasTextExtension(file.name));
+
+            if (isTextFile) {
+              try {
+                // Read first 2KB for preview
+                previewContent = await readTextFileChunk(file, 2048);
+                previewType = getPreviewType(file.name);
+              } catch (err) {
+                console.warn("Failed to read local file for preview:", err);
+              }
+            }
+            // Binary files will have previewType = null, which triggers placeholder icon
           }
-        } catch (error) {
-          console.error("Failed to create session:", error);
-          alert(`Failed to create session for file upload: ${error.message}`);
-          return;
+
+          // Add to pending files buffer
+          pendingFiles.push({
+            file, // Keep original File object for upload later
+            previewUrl,
+            previewContent,
+            previewType, // 'image', 'code', 'text', 'csv'
+            name: file.name,
+            size: file.size,
+            type: file.type,
+          });
         }
+
+        appState.setState("ui.pendingWelcomeFiles", [...pendingFiles]);
+        appState.setState("ui.welcomeFilesSectionVisible", true);
+
+        showToast(`${files.length} file${files.length > 1 ? "s" : ""} ready to attach`, "success", 2000);
+        return;
       }
+
+      // If we have an active session, upload directly (existing behavior)
 
       // Upload each file using FileService with progress tracking
       const { showToast } = await import("../../utils/toast.js");
@@ -422,6 +459,20 @@ export async function initializeEventHandlers({
           if (result.success) {
             uploadedCount++;
             completeFileUpload(file.name, true);
+
+            // Add image files to pending attachments for next message
+            if (file.type?.startsWith("image/")) {
+              const currentAttachments = appState.getState("message.pendingAttachments") || [];
+              appState.setState("message.pendingAttachments", [
+                ...currentAttachments,
+                {
+                  type: "image_ref",
+                  filename: file.name,
+                  path: `sources/${file.name}`,
+                  mimeType: file.type,
+                },
+              ]);
+            }
 
             // Refresh the appropriate file container
             if (sessionService.getCurrentSessionId()) {
@@ -529,6 +580,13 @@ export async function initializeEventHandlers({
           // Clear UI state but do NOT delete database data
           // clearCurrentSession() was incorrectly deleting all messages
           appState.setState("session.current", null);
+
+          // Clean up pending welcome files to prevent memory leaks
+          const pendingFiles = appState.getState("ui.pendingWelcomeFiles") || [];
+          pendingFiles.forEach((f) => {
+            if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+          });
+          appState.setState("ui.pendingWelcomeFiles", []);
 
           if (previousSessionId) {
             const sessionsList = document.getElementById("sessions-list");
@@ -811,4 +869,135 @@ export async function initializeEventHandlers({
     console.error("Phase 5 failed:", error);
     throw new Error(`Event handler initialization failed: ${error.message}`);
   }
+}
+
+// Helper to check for common text extensions
+function hasTextExtension(filename) {
+  const ext = filename.split(".").pop()?.toLowerCase();
+  const textExts = [
+    "js",
+    "jsx",
+    "ts",
+    "tsx",
+    "py",
+    "java",
+    "c",
+    "cpp",
+    "cs",
+    "go",
+    "rb",
+    "php",
+    "swift",
+    "kt",
+    "rs",
+    "sh",
+    "bash",
+    "sql",
+    "r",
+    "scala",
+    "dart",
+    "lua",
+    "txt",
+    "md",
+    "html",
+    "xml",
+    "json",
+    "yaml",
+    "yml",
+    "toml",
+    "ini",
+    "log",
+    "css",
+    "scss",
+    "less",
+    "csv",
+  ];
+  return textExts.includes(ext);
+}
+
+// Helper to check for known binary file extensions that should NEVER be read as text
+function hasBinaryExtension(filename) {
+  const ext = filename.split(".").pop()?.toLowerCase();
+  const binaryExts = [
+    // Microsoft Office
+    "xlsx",
+    "xls",
+    "xlsm",
+    "xlsb",
+    "docx",
+    "doc",
+    "docm",
+    "pptx",
+    "ppt",
+    "pptm",
+    // Archives
+    "zip",
+    "rar",
+    "7z",
+    "tar",
+    "gz",
+    "bz2",
+    "xz",
+    // Executables / Binaries
+    "exe",
+    "dll",
+    "so",
+    "dylib",
+    "bin",
+    "dmg",
+    "iso",
+    "app",
+    // Media (non-image)
+    "mp3",
+    "mp4",
+    "wav",
+    "avi",
+    "mov",
+    "mkv",
+    "flv",
+    "ogg",
+    "webm",
+    // Databases
+    "sqlite",
+    "db",
+    "mdb",
+    "accdb",
+    // Other binary formats
+    "wasm",
+    "class",
+    "pyc",
+    "pyo",
+    "o",
+    "a",
+    // Fonts
+    "ttf",
+    "otf",
+    "woff",
+    "woff2",
+    "eot",
+  ];
+  return binaryExts.includes(ext);
+}
+
+// Helper to determine preview type
+function getPreviewType(filename) {
+  const ext = filename.split(".").pop()?.toLowerCase();
+  if (ext === "csv") return "csv";
+  if (["js", "jsx", "ts", "tsx", "py"].includes(ext)) return "code";
+  // ... maps to existing content-preview.js logic types
+  if (hasTextExtension(filename)) return "code"; // Treat most text as code for syntax highlighting
+  return "text";
+}
+
+// Helper to read a chunk of a file as text
+function readTextFileChunk(file, maxLength) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    const blob = file.slice(0, maxLength); // Read only the first chunk
+
+    reader.onload = (e) => resolve(e.target.result);
+    reader.onerror = (_e) => reject(new Error("File read failed"));
+
+    reader.readAsText(blob);
+  });
 }

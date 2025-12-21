@@ -101,6 +101,7 @@ export class FilePanel {
         renderFileList(files, this.filesContainer, {
           directory: this.getFullOutputPath(),
           isOutput: true,
+          useThumbnailGrid: true, // Enable thumbnail grid mode
           currentPath: this.currentOutputPath,
           onFolderClick: (name) => this.navigateToFolder(name),
           onBreadcrumbClick: (index) => this.navigateToBreadcrumb(index),
@@ -117,6 +118,7 @@ export class FilePanel {
         renderFileList(files, this.filesContainer, {
           directory: `data/files/${this.currentSessionId}/sources`,
           isOutput: false,
+          useThumbnailGrid: true, // Enable thumbnail grid mode
           headerText: "Input",
           onDelete: () => this.refresh(),
         });
