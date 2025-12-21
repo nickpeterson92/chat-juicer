@@ -437,7 +437,6 @@ class ChatService:
             if token is not None and token.is_cancelled:
                 logger.info(f"Cancellation detected post-stream for {session_id}, treating as interrupted")
                 interrupted = True
-            # Also check if SDK cancel() was called (stream.is_complete is set by cancel())
             # Also check if SDK cancel() was called
             elif hasattr(stream, "is_cancelled") and stream.is_cancelled():
                 logger.info(f"SDK cancel detected for {session_id}")

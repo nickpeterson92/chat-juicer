@@ -177,7 +177,7 @@ class TestChatService:
 
         mock_stream = AsyncMock()
         mock_stream.stream_events = mock_stream_events
-        mock_stream.is_cancelled.return_value = False
+        mock_stream.is_cancelled = Mock(return_value=False)
         mock_runner.run_streamed.return_value = mock_stream
 
         # 4. Mock Event Handler System
@@ -401,7 +401,7 @@ class TestChatService:
 
         # We'll simulate 2 events: EXECUTE (start) and COMPLETED (end)
         mock_stream = AsyncMock()
-        mock_stream.is_cancelled.return_value = False
+        mock_stream.is_cancelled = Mock(return_value=False)
 
         async def mock_events() -> AsyncGenerator[Any, None]:
             yield Mock(type="tool_exec")
