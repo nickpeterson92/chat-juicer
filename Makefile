@@ -477,6 +477,7 @@ kill: ## Kill all Chat Juicer processes (nuclear option for when things go wrong
 	@echo "$(YELLOW)→ Killing Vite dev server (port 5173)...$(NC)"
 	@lsof -ti:5173 | xargs kill -9 2>/dev/null && echo "  $(GREEN)✓ Vite killed$(NC)" || echo "  $(YELLOW)○ No Vite process$(NC)"
 	@echo "$(YELLOW)→ Killing Python backend processes...$(NC)"
+	@lsof -ti:8000 | xargs kill -9 2>/dev/null && echo "  $(GREEN)✓ Port 8000 freed$(NC)" || echo "  $(YELLOW)○ Port 8000 clear$(NC)"
 	@pkill -9 -f "python.*main.py" 2>/dev/null && echo "  $(GREEN)✓ Python killed$(NC)" || echo "  $(YELLOW)○ No Python process$(NC)"
 	@echo "$(YELLOW)→ Killing Electron processes...$(NC)"
 	@pkill -9 -f "electron.*main.js" 2>/dev/null && echo "  $(GREEN)✓ Electron killed$(NC)" || echo "  $(YELLOW)○ No Electron process$(NC)"

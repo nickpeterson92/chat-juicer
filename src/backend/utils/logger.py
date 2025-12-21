@@ -18,7 +18,7 @@ import uuid
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from pythonjsonlogger import json as jsonlogger
 
@@ -60,6 +60,98 @@ class ErrorFilter(logging.Filter):
         return record.levelno >= logging.ERROR
 
 
+class ColoredConsoleFormatter(logging.Formatter):
+    """
+    Custom formatter that adds colors to log levels and standardizes format.
+    Format: HH:MM:SS [LEVEL] logger_name - message
+    """
+
+    # ANSI color codes
+    GREY = "\x1b[38;20m"
+    GREEN = "\x1b[32;20m"
+    YELLOW = "\x1b[33;20m"
+    RED = "\x1b[31;20m"
+    BOLD_RED = "\x1b[31;1m"
+    BLUE = "\x1b[34;20m"
+    RESET = "\x1b[0m"
+
+    # We only color the level part: [LEVEL]
+    def format(self, record: logging.LogRecord) -> str:
+        level_fmt = f"[{record.levelname}]"
+
+        if record.levelno == logging.DEBUG:
+            level_fmt = f"{self.GREY}{level_fmt}{self.RESET}"
+        elif record.levelno == logging.INFO:
+            level_fmt = f"{self.GREEN}{level_fmt}{self.RESET}"
+        elif record.levelno == logging.WARNING:
+            level_fmt = f"{self.YELLOW}{level_fmt}{self.RESET}"
+        elif record.levelno == logging.ERROR:
+            level_fmt = f"{self.RED}{level_fmt}{self.RESET}"
+        elif record.levelno == logging.CRITICAL:
+            level_fmt = f"{self.BOLD_RED}{level_fmt}{self.RESET}"
+
+        # Manually formatting to allow for the dynamic level part
+        # Format: TIME [LEVEL] NAME - MESSAGE
+
+        # Format time
+        record.asctime = self.formatTime(record, "%H:%M:%S")
+
+        # Special handling for uvicorn access logs to restore "tasteful" bolding/colors
+        # record.args structure from uvicorn: (client_addr, method, full_path, http_version, status_code)
+        if record.name == "uvicorn.access" and record.args and len(record.args) == 5:
+            client_addr, method, full_path, http_version, status_code = record.args
+
+            # Colorize status code
+            status_code_num = int(cast(Any, status_code))
+            status_code_fmt = str(status_code)
+            if status_code_num < 400:
+                status_code_fmt = f"{self.GREEN}{status_code}{self.RESET}"
+            elif status_code_num < 500:
+                status_code_fmt = f"{self.YELLOW}{status_code}{self.RESET}"
+            else:
+                status_code_fmt = f"{self.RED}{status_code}{self.RESET}"
+
+            # Bold method (using ANSI bold \033[1m)
+            method_fmt = f"\x1b[1m{method}\x1b[0m"
+
+            # Reconstruct message: client - "METHOD /path HTTP/1.1" STATUS
+            message = f'{client_addr} - "{method_fmt} {full_path} HTTP/{http_version}" {status_code_fmt}'
+            return f"{record.asctime} {level_fmt} {record.name} - {message}"
+
+        return f"{record.asctime} {level_fmt} {record.name} - {record.getMessage()}"
+
+
+def configure_uvicorn_logging() -> None:
+    """
+    Configure uvicorn loggers to use our standard colored formatting.
+    This ensures uvicorn logs (access, error) match the application log style.
+    """
+    formatter = ColoredConsoleFormatter()
+
+    # Configure main uvicorn logger
+    main_logger = logging.getLogger("uvicorn")
+    main_logger.handlers = []
+    main_logger.setLevel(logging.INFO)
+
+    # Configure access logger
+    access_logger = logging.getLogger("uvicorn.access")
+    access_logger.handlers = []
+    access_logger.setLevel(logging.INFO)
+    access_handler = logging.StreamHandler(sys.stderr)
+    access_handler.setFormatter(formatter)
+    access_logger.addHandler(access_handler)
+    access_logger.propagate = False
+
+    # Configure error logger
+    error_logger = logging.getLogger("uvicorn.error")
+    error_logger.handlers = []
+    error_logger.setLevel(logging.INFO)
+    error_handler = logging.StreamHandler(sys.stderr)
+    error_handler.setFormatter(formatter)
+    error_logger.addHandler(error_handler)
+    error_logger.propagate = False
+
+
 def setup_logging(name: str = "chat-juicer", debug: bool | None = None) -> logging.Logger:
     """
     Set up professional logging with multiple handlers.
@@ -84,18 +176,11 @@ def setup_logging(name: str = "chat-juicer", debug: bool | None = None) -> loggi
 
     # --- Console Handler (Human-readable) ---
     # Always add console handler to stderr for debugging
-    # This goes to terminal, not Electron (due to stdio configuration)
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setLevel(logging.DEBUG if debug else logging.INFO)
 
-    # Simple format for console
-    console_format = "%(asctime)s [%(levelname)s] %(name)s - %(message)s"
-    console_handler.setFormatter(
-        logging.Formatter(
-            console_format,
-            datefmt="%H:%M:%S",
-        )
-    )
+    # Use our custom colored formatter
+    console_handler.setFormatter(ColoredConsoleFormatter())
     logger.addHandler(console_handler)
 
     # --- Conversation Log Handler (JSON) ---
