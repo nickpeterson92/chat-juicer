@@ -656,6 +656,8 @@ export class ChatContainer {
             : existing.tool_success !== undefined
               ? existing.tool_success
               : undefined,
+        interrupted:
+          msg.interrupted || msg.status === "interrupted" || msg.metadata?.interrupted || existing.interrupted || false,
       });
     }
 
