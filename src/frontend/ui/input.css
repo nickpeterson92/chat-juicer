@@ -1829,24 +1829,109 @@
     backface-visibility: hidden;
   }
 
-  .welcome-input-section {
-    @apply w-full flex flex-col gap-3 rounded-3xl py-5 px-6 transition-all;
+  /* =========================================
+   * SIBLING ARCHITECTURE (Files & Input Decoupled)
+   * ========================================= */
+
+  /* 1. The Wrapper Card (Visual Shell) */
+  .welcome-input-card {
+    @apply w-full flex flex-col rounded-3xl transition-all gap-0;
+    /* Explicit gap-0 */
     background-color: var(--color-surface-1);
     border: 1px solid var(--color-border-secondary);
+
+    /* CRITICAL: Overflow hidden clips children to rounded corners */
+    overflow: hidden;
+    /* Wrapper has NO padding. Siblings manage their own spacing. */
+    padding: 0;
   }
 
-  .welcome-input-section:focus-within {
+  .welcome-input-card:focus-within {
     border-color: var(--color-border-focus);
   }
 
-  /* Compact variant for chat page - absolute minimal padding */
-  .welcome-input-section.compact {
-    @apply gap-0 py-1 px-2 rounded-lg;
-    background-color: var(--color-surface-2);
+  /* 2. Sibling One: Files Drawer */
+  .welcome-files-drawer {
+    /* DEFAULT: Completely removed from layout */
+    display: none;
+    /* Collapsed state is 0fr */
+    grid-template-rows: 0fr;
+    /* ELITE ANIMATION: Animate display property properly */
+    transition:
+      grid-template-rows 300ms cubic-bezier(0.4, 0, 0.2, 1),
+      display 300ms step-end allow-discrete;
+    background: transparent;
+    width: 100%;
+    /* CRITICAL: Ensure child padding doesn't leak */
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+    min-height: 0;
+    /* Ensures grid track can collapse fully to 0 */
+  }
+
+  /* State: Has files (expanded) */
+  .welcome-input-card.has-files .welcome-files-drawer {
+    display: grid;
+    grid-template-rows: 1fr;
+    /* Enter transition: Display snaps to grid immediately */
+    transition:
+      grid-template-rows 300ms cubic-bezier(0.4, 0, 0.2, 1),
+      display 0s step-start allow-discrete;
+  }
+
+  /* Entry Animation Hook */
+  @starting-style {
+    .welcome-input-card.has-files .welcome-files-drawer {
+      grid-template-rows: 0fr;
+    }
+  }
+
+  .welcome-files-list {
+    min-height: 0;
+    /* Default: 0 padding to ensure total collapse */
+    padding: 0;
+    /* CRITICAL for Grid Animation: clip content when 0fr */
+    overflow: hidden;
+    transition: padding 300ms cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* Horizontal scrolling layout for file cards */
+    @apply rounded-lg flex flex-row gap-2 w-full;
+    background-color: transparent;
+    border: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 8px;
+    /* Space for scrollbar */
+    scrollbar-width: thin;
+  }
+
+  /* State: Has files (Add padding to list) */
+  .welcome-input-card.has-files .welcome-files-list {
+    /* Internal spacing: 12px all around (top only, no bottom) */
+    padding: 12px 12px 0 12px;
+  }
+
+  /* 3. Sibling Two: Text Area Wrapper */
+  .welcome-text-area {
+    @apply w-full flex flex-col;
+
+    /* NO TRANSITION: Padding snaps instantly to avoid conflicting with drawer animation */
+    /* The drawer slide is the only visible motion, creating smooth UX */
+
+    /* BASE STATE: Spacious padding (20px all sides) */
+    padding: 20px;
+  }
+
+  /* State: Tighter when files are present */
+  .welcome-input-card.has-files .welcome-text-area {
+    /* Uniform 12px padding */
+    padding: 12px;
   }
 
   .welcome-input-footer {
-    @apply grid grid-cols-[1fr_auto_auto] grid-rows-1 items-center gap-1.5 pt-2;
+    /* Reduce top spacing */
+    @apply grid grid-cols-[1fr_auto_auto] grid-rows-1 items-center gap-1.5 pt-1;
   }
 
   /* Compact variant - simplified layout, controls on right */
@@ -2505,16 +2590,20 @@
     color: var(--color-text-primary);
   }
 
-  .welcome-files-list {
-    @apply rounded-lg p-2 max-h-[200px] overflow-y-auto min-h-[60px];
-    background-color: var(--color-surface-overlay);
-    border: 1px solid var(--color-border-secondary);
+  /* Force thumbnail grid to behave as a flex row when inside welcome files */
+  .welcome-files-list .thumbnail-grid {
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+    grid-template-columns: unset;
+    width: max-content;
   }
 
-  .welcome-files-list:empty::before {
-    @apply block text-center text-sm p-4;
-    color: var(--color-text-secondary);
-    content: "No files uploaded yet";
+  /* Stack files horizontally */
+  .welcome-files-list .thumbnail-card {
+    flex-shrink: 0;
+    width: 100px;
+    height: 100px;
   }
 
   .welcome-files-list .file-item {

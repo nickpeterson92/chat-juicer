@@ -122,21 +122,34 @@ export function renderFileList(files, container, options = {}) {
     return;
   }
 
-  // Clear container
+  // Empty state handling
+  if (!files || files.length === 0) {
+    if (isWelcomePage) {
+      // For welcome page, animate closed without removing content immediately to prevent visual snap
+      updateWelcomeFileVisibility(container, false);
+      return;
+    }
+
+    // For other views, clear and show empty state
+    container.innerHTML = "";
+    // Re-add header if needed (removed by clear)
+    if (isOutput && onBreadcrumbClick) {
+      renderBreadcrumb(currentPath, container, onBreadcrumbClick);
+    } else if (headerText) {
+      renderStaticHeader(headerText, container);
+    }
+    renderEmptyState(container, { directory, isOutput, isWelcomePage });
+    return;
+  }
+
+  // Not empty - clear and render
   container.innerHTML = "";
 
-  // Phase 2: Render breadcrumb for Output tab with explorer mode
+  // Re-add headers after clear
   if (isOutput && onBreadcrumbClick) {
     renderBreadcrumb(currentPath, container, onBreadcrumbClick);
   } else if (headerText) {
-    // Render static header for non-navigable tabs (consistent with breadcrumb style)
     renderStaticHeader(headerText, container);
-  }
-
-  // Empty state
-  if (!files || files.length === 0) {
-    renderEmptyState(container, { directory, isOutput, isWelcomePage });
-    return;
   }
 
   // Use thumbnail grid mode for welcome page OR when explicitly enabled
@@ -521,6 +534,9 @@ function renderThumbnailGrid(files, container, options = {}) {
   });
 
   container.appendChild(grid);
+
+  // Update visibility for welcome page animation
+  updateWelcomeFileVisibility(container, files.length > 0);
 }
 
 /**
@@ -582,7 +598,19 @@ function createFolderTile(folder, onClick) {
  * @param {Object} appState - AppState for managing pending files
  */
 export function renderPendingFilesGrid(pendingFiles, container, appState) {
-  // Clear container
+  // Check empty state before clearing
+  if (!pendingFiles || pendingFiles.length === 0) {
+    // If it's the welcome page container, preserve content for closing animation
+    if (isWelcomeFileContainer(container)) {
+      updateWelcomeFileVisibility(container, false);
+      return;
+    }
+    container.innerHTML = "";
+    // Maybe render empty state here? Or just leave empty.
+    return;
+  }
+
+  // Not empty - clear and render
   container.innerHTML = "";
   container.classList.add("thumbnail-mode");
 
@@ -597,6 +625,77 @@ export function renderPendingFilesGrid(pendingFiles, container, appState) {
   });
 
   container.appendChild(grid);
+
+  // Update visibility for welcome page animation
+  updateWelcomeFileVisibility(container, true);
+}
+
+// WeakMap to store close timeouts per section element (avoids expando properties on DOM)
+const drawerCloseTimeouts = new WeakMap();
+
+// Transition duration must match CSS .welcome-files-drawer transition
+const DRAWER_TRANSITION_MS = 300;
+
+/**
+ * Check if a container is the welcome page file container
+ * @param {HTMLElement} container
+ * @returns {boolean}
+ */
+function isWelcomeFileContainer(container) {
+  return container.id === "welcome-files-container" || container.classList.contains("welcome-files-list");
+}
+
+/**
+ * Helper to manage visibility/animation of welcome page files section
+ * @param {HTMLElement} container - The file list container
+ * @param {boolean} hasFiles - Whether there are files to show
+ */
+function updateWelcomeFileVisibility(container, hasFiles) {
+  // Only apply to welcome page file container
+  if (!isWelcomeFileContainer(container)) return;
+
+  const section = document.getElementById("welcome-files-drawer");
+  if (!section) return;
+
+  // Sibling Architecture: Find the Wrapper Card
+  const cardWrapper = section.closest(".welcome-input-card") || document.querySelector(".welcome-input-card");
+  if (!cardWrapper) return;
+
+  // Sibling Architecture Logic:
+  // Just toggle the state on the parent card.
+  // CSS handles the rest (Drawer expands, Input tightens).
+  if (hasFiles) {
+    const existingTimeout = drawerCloseTimeouts.get(section);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+      drawerCloseTimeouts.delete(section);
+    }
+
+    // Single-Fire Optimization
+    if (cardWrapper.classList.contains("has-files")) {
+      return;
+    }
+
+    // Trigger Expansion
+    requestAnimationFrame(() => {
+      cardWrapper.classList.add("has-files");
+    });
+  } else {
+    // CLOSING sequence
+    cardWrapper.classList.remove("has-files");
+
+    // Cleanup content after transition completes
+    const cleanup = () => {
+      if (!cardWrapper.classList.contains("has-files")) {
+        container.innerHTML = "";
+      }
+      drawerCloseTimeouts.delete(section);
+    };
+
+    const existingTimeout = drawerCloseTimeouts.get(section);
+    if (existingTimeout) clearTimeout(existingTimeout);
+    drawerCloseTimeouts.set(section, setTimeout(cleanup, DRAWER_TRANSITION_MS));
+  }
 }
 
 /**

@@ -185,8 +185,8 @@ generate-model-metadata: ## Generate model-metadata.js from Python MODEL_CONFIGS
 
 ##@ Development & Quality
 
-lint: ## Run ruff linter on Python code
-	@echo "$(BLUE)Running ruff linter...$(NC)"
+lint: ## Run linters (Ruff for Python, Biome for JS)
+	@echo "$(BLUE)Running ruff linter (Python)...$(NC)"
 	@if [ -f ".juicer/bin/ruff" ]; then \
 		.juicer/bin/ruff check src/backend/ tests/ --fix; \
 	else \
@@ -194,6 +194,8 @@ lint: ## Run ruff linter on Python code
 		echo "$(BLUE)Run: make install-dev$(NC)"; \
 		exit 1; \
 	fi
+	@echo "$(BLUE)Running biome linter (JavaScript)...$(NC)"
+	@npm run lint
 
 format: ## Format Python code with black
 	@echo "$(BLUE)Formatting code with black...$(NC)"

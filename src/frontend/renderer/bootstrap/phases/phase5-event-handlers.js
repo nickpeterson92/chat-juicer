@@ -228,9 +228,20 @@ export async function initializeEventHandlers({
 
     // Bind ui.welcomeFilesSectionVisible to DOM
     const updateWelcomeFilesSection = (visible) => {
-      const welcomeFilesSection = document.getElementById("welcome-files-section");
-      if (welcomeFilesSection) {
-        welcomeFilesSection.style.display = visible ? "block" : "none";
+      // Sibling Architecture: Target the drawer by new ID
+      const drawer = document.getElementById("welcome-files-drawer");
+      if (!drawer) return;
+
+      // Find wrapper to toggle state
+      const cardWrapper = drawer.closest(".welcome-input-card");
+      if (!cardWrapper) return;
+
+      if (visible) {
+        // Ensure wrapper is expanded
+        requestAnimationFrame(() => cardWrapper.classList.add("has-files"));
+      } else {
+        // Trigger collapse animation
+        cardWrapper.classList.remove("has-files");
       }
     };
     // Apply initial state immediately
@@ -383,7 +394,11 @@ export async function initializeEventHandlers({
             previewType = "pdf";
           } else {
             // Check if it's a code/text file based on extension or mime type
-            const isTextFile = file.type?.startsWith("text/") || hasTextExtension(file.name) || file.size < 100 * 1024; // Assume small files are text safe
+            // IMPORTANT: Exclude known binary formats even if small
+            const isBinaryFile = hasBinaryExtension(file.name);
+            const isTextFile =
+              !isBinaryFile &&
+              (file.type?.startsWith("text/") || hasTextExtension(file.name) || file.size < 100 * 1024); // Assume small non-binary files are text safe
 
             if (isTextFile) {
               try {
@@ -394,6 +409,7 @@ export async function initializeEventHandlers({
                 console.warn("Failed to read local file for preview:", err);
               }
             }
+            // Binary files will have previewType = null, which triggers placeholder icon
           }
 
           // Add to pending files buffer
@@ -885,6 +901,70 @@ function hasTextExtension(filename) {
     "csv",
   ];
   return textExts.includes(ext);
+}
+
+// Helper to check for known binary file extensions that should NEVER be read as text
+function hasBinaryExtension(filename) {
+  const ext = filename.split(".").pop()?.toLowerCase();
+  const binaryExts = [
+    // Microsoft Office
+    "xlsx",
+    "xls",
+    "xlsm",
+    "xlsb",
+    "docx",
+    "doc",
+    "docm",
+    "pptx",
+    "ppt",
+    "pptm",
+    // Archives
+    "zip",
+    "rar",
+    "7z",
+    "tar",
+    "gz",
+    "bz2",
+    "xz",
+    // Executables / Binaries
+    "exe",
+    "dll",
+    "so",
+    "dylib",
+    "bin",
+    "dmg",
+    "iso",
+    "app",
+    // Media (non-image)
+    "mp3",
+    "mp4",
+    "wav",
+    "avi",
+    "mov",
+    "mkv",
+    "flv",
+    "ogg",
+    "webm",
+    // Databases
+    "sqlite",
+    "db",
+    "mdb",
+    "accdb",
+    // Other binary formats
+    "wasm",
+    "class",
+    "pyc",
+    "pyo",
+    "o",
+    "a",
+    // Fonts
+    "ttf",
+    "otf",
+    "woff",
+    "woff2",
+    "eot",
+  ];
+  return binaryExts.includes(ext);
 }
 
 // Helper to determine preview type

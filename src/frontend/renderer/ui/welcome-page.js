@@ -94,18 +94,27 @@ function createSendButton() {
  */
 function createInputSection() {
   return `
-    <div class="welcome-input-section">
-      <textarea
-        id="welcome-input"
-        class="welcome-input"
-        placeholder="How can I help you today?"
-        rows="1"
-      ></textarea>
-      <div class="welcome-input-footer">
-        ${createMcpToggles()}
-        ${createModelSelector()}
-        ${createSendButton()}
+    <!-- Sibling Architecture: Wrapper Card -->
+    <div class="welcome-input-card">
+
+      <!-- Sibling 1: File Drawer (Animates Height) -->
+      ${createFilesSection()}
+
+      <!-- Sibling 2: Text Area (Animates Padding) -->
+      <div class="welcome-text-area">
+        <textarea
+          id="welcome-input"
+          class="welcome-input"
+          placeholder="How can I help you today?"
+          rows="1"
+        ></textarea>
+        <div class="welcome-input-footer">
+          ${createMcpToggles()}
+          ${createModelSelector()}
+          ${createSendButton()}
+        </div>
       </div>
+
     </div>
   `;
 }
@@ -115,29 +124,10 @@ function createInputSection() {
  */
 function createFilesSection() {
   return `
-    <div class="welcome-files-section" id="welcome-files-section" style="display: none;">
-      <div class="welcome-files-header">
-        <span class="welcome-files-title flex items-center gap-1.5">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-          </svg>
-          Session Files
-        </span>
-        <button id="welcome-files-refresh" class="welcome-files-refresh-btn" title="Refresh files">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M1 4v6h6M23 20v-6h-6"/>
-            <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
-          </svg>
-        </button>
-      </div>
+    <div class="welcome-files-drawer" id="welcome-files-drawer">
       <div id="welcome-files-container" class="welcome-files-list">
-        <div class="welcome-empty-state">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="opacity-30 mb-3">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-          </svg>
-          <p class="text-sm text-gray-500 dark:text-gray-400">Drag and drop files here</p>
-          <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Files will be uploaded to this session</p>
-        </div>
+        <!-- Empty state moved to file-manager.js or handled via CSS if needed,
+             but for horizontal row typically we just show nothing if empty -->
       </div>
     </div>
   `;
@@ -229,7 +219,6 @@ export function createWelcomePage(userName = "User") {
       <div class="welcome-content">
         ${createWelcomeHeader(userName, greeting)}
         ${createInputSection()}
-        ${createFilesSection()}
         ${createSuggestionPills()}
       </div>
     </div>
