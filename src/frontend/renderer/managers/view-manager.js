@@ -571,9 +571,16 @@ function attachWelcomePageListeners(elements, appState) {
       appState.setState("message.currentAssistant", null);
       appState.setState("message.assistantBuffer", "");
 
-      // Send to main process WITH session_id to prevent routing to wrong session
-      // This is critical when another session is actively streaming
-      window.electronAPI.sendUserInput(message, sessionId);
+      // Send to backend via IPCAdapter to include pending attachments
+      // IPCAdapter.sendMessage() auto-includes images from message.pendingAttachments
+      const ipcAdapter = window.app?.adapters?.ipcAdapter;
+      if (ipcAdapter) {
+        await ipcAdapter.sendMessage(message, sessionId);
+      } else {
+        // Fallback to direct call (legacy, won't include attachments)
+        console.warn("[view-manager] ipcAdapter not available, attachments will not be sent");
+        window.electronAPI.sendUserInput(message, sessionId);
+      }
 
       // Session list will be updated automatically via session-created event
     } catch (error) {

@@ -256,7 +256,9 @@ app.whenReady().then(() => {
     }
 
     const ws = ensureWebSocket(targetSession);
-    const messages = messageArray.map((content) => ({ content }));
+    // Normalize messages: strings become {content: str}, objects pass through
+    // This preserves attachment metadata for multimodal support
+    const messages = messageArray.map((msg) => (typeof msg === "string" ? { content: msg } : msg));
 
     ws.once("open", () => {
       sendWebSocketMessage(ws, {

@@ -423,6 +423,20 @@ export async function initializeEventHandlers({
             uploadedCount++;
             completeFileUpload(file.name, true);
 
+            // Add image files to pending attachments for next message
+            if (file.type?.startsWith("image/")) {
+              const currentAttachments = appState.getState("message.pendingAttachments") || [];
+              appState.setState("message.pendingAttachments", [
+                ...currentAttachments,
+                {
+                  type: "image_ref",
+                  filename: file.name,
+                  path: `sources/${file.name}`,
+                  mimeType: file.type,
+                },
+              ]);
+            }
+
             // Refresh the appropriate file container
             if (sessionService.getCurrentSessionId()) {
               const directory = `data/files/${sessionService.getCurrentSessionId()}/sources`;
