@@ -63,8 +63,8 @@ export class IPCAdapter {
           })),
         };
       }
-      // Return string messages as-is for backward compatibility
-      return typeof msg === "string" ? msg : msg.content;
+      // Return messages in consistent format - preserve object structure
+      return msg;
     });
 
     // Clear pending attachments after including them
@@ -254,6 +254,18 @@ export class IPCAdapter {
   }
 
   /**
+   * Read local file from disk
+   * @param {string} filePath - Absolute path to file
+   * @returns {Promise<object>} { success, data (base64), mimeType, error }
+   */
+  async readFile(filePath) {
+    if (!this.api?.readFile) {
+      throw new Error("IPC API not available: readFile");
+    }
+    return this.api.readFile(filePath);
+  }
+
+  /**
    * Show file in system file manager (not implemented in electronAPI)
    * @param {string} filePath - Path to file to show
    * @returns {Promise<void>}
@@ -309,15 +321,18 @@ export class IPCAdapter {
   }
 
   /**
-   * Open file picker dialog (not implemented in electronAPI)
+   * Open file picker dialog
    * @param {object} options - Dialog options
-   * @param {string[]} [options.filters] - File type filters
    * @param {boolean} [options.multiple] - Allow multiple file selection
+   * @param {Array} [options.filters] - File type filters
    * @returns {Promise<string[] | null>} Selected file paths or null if cancelled
    */
-  async openFileDialog(_options = {}) {
-    console.warn("openFileDialog not implemented in electronAPI");
-    return Promise.resolve(null);
+  async openFileDialog(options = {}) {
+    if (!this.api?.openFileDialog) {
+      console.warn("IPC API not available: openFileDialog");
+      return Promise.resolve(null);
+    }
+    return this.api.openFileDialog(options);
   }
 
   /**

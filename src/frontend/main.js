@@ -532,8 +532,9 @@ app.whenReady().then(() => {
       const absolutePath = path.isAbsolute(filePath) ? filePath : path.join(projectRoot, filePath);
       const normalizedPath = path.normalize(absolutePath);
       const normalizedRoot = path.normalize(projectRoot);
+      const rootWithSep = normalizedRoot.endsWith(path.sep) ? normalizedRoot : normalizedRoot + path.sep;
 
-      if (!normalizedPath.startsWith(normalizedRoot)) {
+      if (!normalizedPath.startsWith(rootWithSep)) {
         logger.error("Security: Attempted to download file outside project", { path: normalizedPath });
         return { success: false, error: "Invalid file path" };
       }
@@ -621,6 +622,68 @@ app.whenReady().then(() => {
     }
   });
 
+  // Whitelist of files explicitly authorized by the user via open dialog
+  const allowedExternalFiles = new Set();
+
+  // IPC handler for reading local files (used for attachment previews)
+  ipcMain.handle("read-file", async (_event, filePath) => {
+    logger.debug("Read file requested", { filePath });
+
+    try {
+      if (!filePath || typeof filePath !== "string") {
+        return { success: false, error: "Invalid path" };
+      }
+
+      // Security check: ensure path is within project directory OR explicitly allowed
+      const projectRoot = path.join(__dirname, "..");
+      const absolutePath = path.isAbsolute(filePath) ? filePath : path.join(projectRoot, filePath);
+      const normalizedPath = path.normalize(absolutePath);
+      const normalizedRoot = path.normalize(projectRoot);
+
+      // Check if file is inside project root (prevent partial matches)
+      const rootWithSep = normalizedRoot.endsWith(path.sep) ? normalizedRoot : normalizedRoot + path.sep;
+      const isInsideProject = normalizedPath.startsWith(rootWithSep);
+
+      // Check if file was explicitly authorized by user (via open dialog)
+      const isWhitelisted = allowedExternalFiles.has(normalizedPath);
+
+      if (!isInsideProject && !isWhitelisted) {
+        logger.error("Security: Attempted to read unauthorized file", { path: normalizedPath });
+        return { success: false, error: "Access denied" };
+      }
+
+      // Read file and convert to base64
+      const buffer = await fs.readFile(normalizedPath);
+      const base64 = buffer.toString("base64");
+
+      // Determine mime type from extension
+      const ext = path.extname(filePath).slice(1).toLowerCase();
+      const mimeTypes = {
+        jpg: "image/jpeg",
+        jpeg: "image/jpeg",
+        png: "image/png",
+        gif: "image/gif",
+        webp: "image/webp",
+        svg: "image/svg+xml",
+        bmp: "image/bmp",
+        ico: "image/x-icon",
+        pdf: "application/pdf",
+        txt: "text/plain",
+        md: "text/markdown",
+        js: "text/javascript",
+        json: "application/json",
+        html: "text/html",
+        css: "text/css",
+      };
+      const mimeType = mimeTypes[ext] || "application/octet-stream";
+
+      return { success: true, data: base64, mimeType };
+    } catch (error) {
+      logger.error("Failed to read file", { filePath, error: error.message });
+      return { success: false, error: error.message };
+    }
+  });
+
   // IPC handler for getting file content as base64 (for thumbnails)
   ipcMain.handle("get-file-content", async (_event, { dirPath, filename }) => {
     logger.debug("File content requested", { dirPath, filename });
@@ -671,6 +734,38 @@ app.whenReady().then(() => {
     const ws = ensureWebSocket(targetSession);
     sendWebSocketMessage(ws, { type: "interrupt", session_id: targetSession });
     return { success: true };
+  });
+
+  // IPC handler for opening file picker dialog
+  ipcMain.handle("open-file-dialog", async (_event, options = {}) => {
+    logger.debug("File dialog requested", { options });
+
+    try {
+      const properties = ["openFile"];
+      if (options.multiple) {
+        properties.push("multiSelections");
+      }
+
+      const result = await dialog.showOpenDialog(mainWindow, {
+        properties,
+        filters: options.filters || [{ name: "All Files", extensions: ["*"] }],
+      });
+
+      if (result.canceled) {
+        return null;
+      }
+
+      // Add selected paths to whitelist to allow subsequent reading
+      // irrespective of their location (since user explicitly chose them)
+      result.filePaths.forEach((fp) => {
+        allowedExternalFiles.add(path.normalize(fp));
+      });
+
+      return result.filePaths;
+    } catch (error) {
+      logger.error("Failed to open file dialog", { error: error.message });
+      return null;
+    }
   });
 
   // IPC handler for restart request

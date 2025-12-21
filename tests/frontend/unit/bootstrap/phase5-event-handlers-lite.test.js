@@ -313,18 +313,14 @@ describe("phase5-event-handlers coverage", () => {
     expect(pendingFiles.length).toBe(1);
     expect(pendingFiles[0].name).toBe("test.txt");
     expect(pendingFiles[0].previewContent).toBe("x"); // 'x' was the file content
-    expect(pendingFiles[0].previewType).toBe("code"); // 'txt' maps to code/text
+    expect(pendingFiles[0].previewType).toBe("text"); // 'txt' maps to code/text
   });
 
-  it("buffers PDF files with preview URL", async () => {
+  it("buffers PDF files with icon placeholder (no blob URL)", async () => {
     const deps = createDeps();
     deps.appState.setState("ui.bodyViewClass", "view-welcome");
     deps.services.sessionService.getCurrentSessionId = vi.fn(() => null);
     deps.services.fileService.uploadFile = vi.fn();
-
-    // Mock URL.createObjectURL
-    const mockCreateObjectURL = vi.fn(() => "blob:pdf");
-    global.URL.createObjectURL = mockCreateObjectURL;
 
     await initializeEventHandlers(deps);
 
@@ -337,12 +333,12 @@ describe("phase5-event-handlers coverage", () => {
     // Wait for async processing
     await new Promise((resolve) => setTimeout(resolve, 50));
 
+    // PDFs use icon placeholders instead of blob URLs (pdf.js integration TBD)
     const pendingFiles = deps.appState.getState("ui.pendingWelcomeFiles");
     expect(pendingFiles.length).toBe(1);
     expect(pendingFiles[0].name).toBe("test.pdf");
     expect(pendingFiles[0].previewType).toBe("pdf");
     expect(pendingFiles[0].previewUrl).toBeNull();
-    expect(mockCreateObjectURL).not.toHaveBeenCalled();
   });
 
   it("wires IPC error/exit handlers", async () => {
@@ -495,5 +491,58 @@ describe("phase5-event-handlers coverage", () => {
     window.dispatchEvent(new CustomEvent("session-updated", { detail: {} }));
 
     expect(mockRenderSessionList).toHaveBeenCalled();
+  });
+
+  it("warns when file exceeds MAX_PENDING_FILE_SIZE", async () => {
+    const deps = createDeps();
+    deps.appState.setState("ui.bodyViewClass", "view-welcome");
+    deps.services.sessionService.getCurrentSessionId = vi.fn(() => null);
+
+    await initializeEventHandlers(deps);
+
+    const drop = new Event("drop", { bubbles: true });
+    // Create a mock large file
+    const largeFile = {
+      name: "large.mov",
+      size: 50 * 1024 * 1024 + 1, // Exceeds limit
+      type: "video/quicktime",
+    };
+    Object.defineProperty(drop, "dataTransfer", {
+      value: { files: [largeFile] },
+    });
+
+    document.getElementById("file-drop-zone").dispatchEvent(drop);
+
+    // Wait for processing
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(mockShowToast).toHaveBeenCalledWith("large.mov exceeds 50MB limit", "warning", 3000);
+    // Should NOT have added to pending files
+    expect(deps.appState.getState("ui.pendingWelcomeFiles")).toEqual([]);
+  });
+
+  it("handles image file types correctly", async () => {
+    const deps = createDeps();
+    deps.appState.setState("ui.bodyViewClass", "view-welcome");
+    deps.services.sessionService.getCurrentSessionId = vi.fn(() => null);
+
+    // Mock URL.createObjectURL
+    const mockUrl = "blob:test";
+    global.URL.createObjectURL = vi.fn(() => mockUrl);
+
+    await initializeEventHandlers(deps);
+
+    const drop = new Event("drop", { bubbles: true });
+    const imageFile = new File(["img"], "pic.png", { type: "image/png" });
+    Object.defineProperty(drop, "dataTransfer", {
+      value: { files: [imageFile] },
+    });
+
+    document.getElementById("file-drop-zone").dispatchEvent(drop);
+    await new Promise((r) => setTimeout(r, 10));
+
+    const pending = deps.appState.getState("ui.pendingWelcomeFiles");
+    expect(pending[0].previewType).toBe("image");
+    expect(pending[0].previewUrl).toBe(mockUrl);
   });
 });

@@ -124,3 +124,37 @@ export function formatFileSize(bytes) {
     sizes[i]
   );
 }
+
+/**
+ * Read the first N bytes of a file as text
+ * @param {File} file - File object
+ * @param {number} size - Number of bytes to read
+ * @returns {Promise<string>}
+ */
+export function readTextFileChunk(file, size) {
+  return new Promise((resolve, reject) => {
+    const slice = file.slice(0, size);
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(slice);
+  });
+}
+
+/**
+ * Convert base64 string to File object
+ * @param {string} base64Data - Base64 encoded string
+ * @param {string} filename - Filename for the created File
+ * @param {string} mimeType - MIME type of the file
+ * @returns {File} File object
+ */
+export function base64ToFile(base64Data, filename, mimeType) {
+  const byteCharacters = atob(base64Data);
+  const byteNumbers = new Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  }
+  const byteArray = new Uint8Array(byteNumbers);
+  const blob = new Blob([byteArray], { type: mimeType });
+  return new File([blob], filename, { type: blob.type });
+}
