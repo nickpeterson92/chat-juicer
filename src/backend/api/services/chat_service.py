@@ -556,7 +556,7 @@ class ChatService:
 
         # Add text content first (if non-empty)
         if text_content and text_content.strip():
-            content_parts.append({"type": "input_text", "text": text_content})
+            content_parts.append({"type": "text", "text": text_content})
 
         # Process image attachments
         for attachment in image_attachments:
