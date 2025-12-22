@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from api.dependencies import DB
 from api.middleware.exception_handlers import SessionNotFoundError
 from api.middleware.request_context import update_request_context
-from api.services.message_utils import calculate_tool_status
+from api.services.message_utils import _extract_display_content, calculate_tool_status
 from models.schemas.base import PaginationMeta
 from models.schemas.sessions import MessageResponse
 
@@ -186,7 +186,7 @@ async def list_messages(
             MessageResponse(
                 id=str(row["id"]),
                 role=row["role"],
-                content=row["content"],
+                content=_extract_display_content(row["content"]),
                 created_at=row["created_at"].isoformat() if row["created_at"] else None,
                 tool_call_id=row["tool_call_id"],
                 tool_name=row["tool_name"],
