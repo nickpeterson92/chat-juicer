@@ -664,11 +664,26 @@ export async function initializeEventHandlers({
     const chatAttachmentBtn = document.getElementById("chat-attachment-plus-btn");
     let chatAttachmentMenu = null;
 
-    // Track MCP server states (default: all enabled)
+    // Track MCP server states - will be synced with session config
     const mcpServerStates = {
       sequential: true,
       fetch: true,
       tavily: true,
+    };
+
+    // Sync MCP states with current session config
+    const syncMcpStatesWithSession = () => {
+      const sessionId = sessionService.getCurrentSessionId();
+      if (!sessionId) return;
+      
+      const sessionMeta = sessionService.getSessionMetadata(sessionId);
+      if (sessionMeta?.mcp_config) {
+        // Reset all to false, then enable based on session config
+        Object.keys(mcpServerStates).forEach(key => {
+          mcpServerStates[key] = sessionMeta.mcp_config.includes(key);
+        });
+        updateMenuItemStates();
+      }
     };
 
     // Checkmark SVG for active items
