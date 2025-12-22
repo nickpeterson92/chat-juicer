@@ -1947,22 +1947,17 @@
   }
 
   .welcome-input-footer {
-    /* Reduce top spacing */
     @apply grid grid-cols-[1fr_auto_auto] grid-rows-1 items-center gap-1.5 pt-1;
   }
 
+  /* Chat input footer (compact variant) - + button left, controls right */
   .chat-input-section.compact .chat-input-footer {
-    @apply pt-0 gap-1.5 grid-cols-[1fr_auto_auto] grid-rows-1;
+    @apply flex items-center gap-1.5 pt-1;
   }
 
-  /* Model selector in compact mode goes to column 2 */
-  .chat-input-section.compact .model-config-inline {
-    @apply col-start-2 row-start-1;
-  }
-
-  /* Send button in compact mode goes to column 3 */
-  .chat-input-section.compact .welcome-send-btn {
-    @apply col-start-3 row-start-1;
+  /* Right-side controls wrapper (model selector + send button) */
+  .chat-controls-right {
+    @apply flex items-center gap-1.5 ml-auto;
   }
 
   .mcp-toggle-buttons {
@@ -2306,14 +2301,14 @@
   .attachment-context-menu {
     display: none;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
     padding: 6px;
-    border-radius: 8px;
+    border-radius: 10px;
     z-index: 9999;
     background-color: var(--color-surface-2);
     border: 1px solid var(--color-border-secondary);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-    min-width: 140px;
+    min-width: 180px;
   }
 
   .attachment-context-menu.visible {
@@ -2336,6 +2331,42 @@
 
   .attachment-menu-item svg {
     @apply w-4 h-4 flex-shrink-0;
+  }
+
+  /* Menu divider */
+  .menu-divider {
+    height: 1px;
+    margin: 4px 0;
+    background-color: var(--color-border-secondary);
+  }
+
+  /* MCP Toggle items in context menu */
+  .mcp-toggle-item {
+    @apply justify-between;
+  }
+
+  .mcp-toggle-item .mcp-label {
+    @apply flex-1 text-left;
+  }
+
+  /* Checkmark icon - hidden by default */
+  .mcp-toggle-item .mcp-check {
+    @apply w-4 h-4 flex-shrink-0 opacity-0;
+    color: var(--color-brand-primary);
+    transition: opacity 0.15s ease;
+  }
+
+  /* Active state: blue text + visible checkmark */
+  .mcp-toggle-item.active {
+    color: var(--color-brand-primary);
+  }
+
+  .mcp-toggle-item.active .mcp-check {
+    opacity: 1;
+  }
+
+  .mcp-toggle-item.active:hover {
+    background-color: var(--color-surface-hover);
   }
 
   .welcome-input {
@@ -2401,6 +2432,15 @@
 
   .welcome-send-btn:disabled {
     @apply opacity-100;
+  }
+
+  /* Compact send button (chat container only) - smaller 28x28 with 16x16 icon */
+  .chat-input-section.compact .welcome-send-btn {
+    @apply w-7 h-7;
+  }
+
+  .chat-input-section.compact .welcome-send-btn svg {
+    @apply w-4 h-4;
   }
 
   /* ==========================================
