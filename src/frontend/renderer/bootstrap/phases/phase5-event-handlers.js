@@ -433,8 +433,6 @@ export async function initializeEventHandlers({
 
         appState.setState("ui.pendingWelcomeFiles", [...pendingFiles]);
         appState.setState("ui.welcomeFilesSectionVisible", true);
-
-        showToast(`${files.length} file${files.length > 1 ? "s" : ""} ready to attach`, "success", 2000);
         return;
       }
 
@@ -653,7 +651,6 @@ export async function initializeEventHandlers({
       if (isOnWelcomePage && !sessionService.getCurrentSessionId() && pendingFiles.length > 0) {
         appState.setState("ui.pendingWelcomeFiles", [...pendingFiles]);
         appState.setState("ui.welcomeFilesSectionVisible", true);
-        showToast(`${filePaths.length} file${filePaths.length > 1 ? "s" : ""} ready to attach`, "success", 2000);
       }
     };
 
@@ -758,7 +755,7 @@ export async function initializeEventHandlers({
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
             </svg>
-            Attach file
+            Add files or images
           </button>
           <div class="menu-divider"></div>
           ${mcpItemsHtml}

@@ -314,11 +314,28 @@ export function showWelcomePage(container, userName = "User") {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
           </svg>
-          Attach file
+          Add files or images
         </button>
+        <div class="attachment-menu-item has-submenu" data-action="add-to-project">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/>
+            <path d="M12 22V12"/>
+            <polyline points="3.29 7 12 12 20.71 7"/>
+            <path d="m7.5 4.27 9 5.15"/>
+          </svg>
+          Add to project
+          <svg class="submenu-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6"/>
+          </svg>
+          <div class="attachment-submenu">
+            <button class="attachment-menu-item disabled" data-action="coming-soon">
+              Coming Soon!
+            </button>
+          </div>
+        </div>
       `;
       document.body.appendChild(menu);
-      
+
       // Store cleanup function to remove menu element
       if (!container._attachmentCleanup) {
         container._attachmentCleanup = [];
