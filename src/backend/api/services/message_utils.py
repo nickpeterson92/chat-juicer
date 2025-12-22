@@ -19,6 +19,48 @@ class MessageRow(Protocol):
     def __getitem__(self, key: str) -> Any: ...
 
 
+def _extract_display_content(content: str | None) -> str | None:
+    """Extract displayable text from message content.
+
+    Multimodal messages are stored as JSON arrays like:
+    [{"type": "input_text", "text": "..."}, {"type": "input_image", ...}]
+
+    This extracts just the text portions for UI display.
+
+    Args:
+        content: Raw content from database (may be plain text or JSON)
+
+    Returns:
+        Plain text content for display, or None if content is None
+    """
+    if content is None:
+        return None
+
+    # Check if content looks like a JSON array (multimodal)
+    if isinstance(content, str) and content.startswith("["):
+        try:
+            parsed = json.loads(content)
+            if isinstance(parsed, list):
+                # Extract text from all text-type content parts using list comprehension
+                text_parts = [
+                    item["text"]
+                    for item in parsed
+                    if isinstance(item, dict)
+                    and (
+                        (item.get("type") == "input_text" and "text" in item)
+                        or (item.get("type") == "text" and "text" in item)
+                    )
+                ]
+                if text_parts:
+                    return "\n".join(text_parts)
+                # If no text parts found, return placeholder
+                return "[Image attachment]"
+        except json.JSONDecodeError:
+            pass  # Not valid JSON, return as-is
+
+    return content
+
+
 def row_to_message(row: MessageRow) -> dict[str, Any]:
     """Convert database row to message dict.
 
@@ -47,7 +89,7 @@ def row_to_message(row: MessageRow) -> dict[str, Any]:
     msg: dict[str, Any] = {
         "id": str(row["id"]),
         "role": row["role"],
-        "content": row["content"],
+        "content": _extract_display_content(row["content"]),
         "created_at": row["created_at"].isoformat() if row["created_at"] else None,
         "metadata": metadata,
     }
