@@ -211,13 +211,14 @@ export class SessionService {
       const response = await this.ipc.sendSessionCommand("switch", { session_id: sessionId });
 
       if (response?.session) {
-        this.appState.setState("session.current", sessionId);
-
-        // Update local session to reflect latest metadata without reordering away from pin/created order
+        // Update local session FIRST so subscriptions have fresh data (e.g., mcp_config sync)
         this.updateSession({
           ...response.session,
           session_id: sessionId,
         });
+
+        // Set current AFTER updating session list, so subscriptions see fresh data
+        this.appState.setState("session.current", sessionId);
 
         // NOTE: Stream reconstruction is now handled by the caller (session-list-handlers)
         // AFTER chat is cleared and history is loaded, to avoid being wiped
