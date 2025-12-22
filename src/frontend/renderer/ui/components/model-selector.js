@@ -83,8 +83,8 @@ export class ModelSelector {
       <div class="model-config-inline">
         <button id="model-selector-trigger" class="model-selector-trigger">
           <span id="selected-model-label">GPT-5.2</span>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M4 6L8 10L12 6" stroke-linecap="round" stroke-linejoin="round"/>
+          <svg id="model-selector-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
         <div id="model-selector-dropdown" class="model-selector-dropdown" style="display: none;">
@@ -314,9 +314,12 @@ export class ModelSelector {
         trigger.addEventListener("click", (e) => {
           e.stopPropagation();
           const isVisible = dropdown.style.display !== "none";
+          const chevron = trigger.querySelector("#model-selector-chevron");
 
           if (isVisible) {
             dropdown.style.display = "none";
+            // Reset chevron to point right
+            if (chevron) chevron.style.transform = "rotate(0deg)";
           } else {
             // Intelligent positioning (above or below)
             const triggerRect = trigger.getBoundingClientRect();
@@ -327,21 +330,29 @@ export class ModelSelector {
             const preferredMaxHeight = 500;
             const minHeight = 200;
 
+            let positionedBelow = false;
             if (spaceBelow >= minHeight) {
               // Position below
               const maxHeight = Math.max(minHeight, Math.min(preferredMaxHeight, spaceBelow - 20));
               dropdown.style.maxHeight = `${maxHeight}px`;
               dropdown.style.top = "calc(100% + 4px)";
               dropdown.style.bottom = "auto";
+              positionedBelow = true;
             } else {
               // Position above
               const maxHeight = Math.max(minHeight, Math.min(preferredMaxHeight, spaceAbove - 20));
               dropdown.style.maxHeight = `${maxHeight}px`;
               dropdown.style.bottom = "calc(100% + 4px)";
               dropdown.style.top = "auto";
+              positionedBelow = false;
             }
 
             dropdown.style.display = "block";
+
+            // Rotate chevron: down (90deg) if below, up (-90deg) if above
+            if (chevron) {
+              chevron.style.transform = positionedBelow ? "rotate(90deg)" : "rotate(-90deg)";
+            }
           }
         });
 
@@ -349,6 +360,9 @@ export class ModelSelector {
         const closeOnOutsideClick = (e) => {
           if (!dropdown.contains(e.target) && !trigger.contains(e.target)) {
             dropdown.style.display = "none";
+            // Reset chevron to point right
+            const chevron = trigger.querySelector("#model-selector-chevron");
+            if (chevron) chevron.style.transform = "rotate(0deg)";
           }
         };
         document.addEventListener("click", closeOnOutsideClick);
