@@ -671,21 +671,6 @@ export async function initializeEventHandlers({
       tavily: true,
     };
 
-    // Sync MCP states with current session config
-    const syncMcpStatesWithSession = () => {
-      const sessionId = sessionService.getCurrentSessionId();
-      if (!sessionId) return;
-      
-      const sessionMeta = sessionService.getSessionMetadata(sessionId);
-      if (sessionMeta?.mcp_config) {
-        // Reset all to false, then enable based on session config
-        Object.keys(mcpServerStates).forEach(key => {
-          mcpServerStates[key] = sessionMeta.mcp_config.includes(key);
-        });
-        updateMenuItemStates();
-      }
-    };
-
     // Checkmark SVG for active items
     const checkmarkSvg = `<svg class="mcp-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12l5 5L20 7"/></svg>`;
 
@@ -733,6 +718,21 @@ export async function initializeEventHandlers({
             item.classList.toggle("active", mcpServerStates[key]);
           }
         });
+      };
+
+      // Sync MCP states with current session config
+      const syncMcpStatesWithSession = () => {
+        const sessionId = sessionService.getCurrentSessionId();
+        if (!sessionId) return;
+
+        const sessionMeta = sessionService.getSession(sessionId);
+        if (sessionMeta?.mcp_config) {
+          // Reset all to false, then enable based on session config
+          Object.keys(mcpServerStates).forEach((key) => {
+            mcpServerStates[key] = sessionMeta.mcp_config.includes(key);
+          });
+          updateMenuItemStates();
+        }
       };
 
       const createChatMenu = () => {
@@ -860,6 +860,19 @@ export async function initializeEventHandlers({
         }
       };
       addListener(document, "click", closeChatMenuOnOutsideClick);
+
+      // Subscribe to session changes to sync MCP states
+      appState.subscribe("session.current", (newSessionId) => {
+        if (newSessionId) {
+          syncMcpStatesWithSession();
+        } else {
+          // Reset to defaults when no session (welcome page)
+          Object.keys(mcpServerStates).forEach((key) => {
+            mcpServerStates[key] = true;
+          });
+          updateMenuItemStates();
+        }
+      });
     }
 
     // ======================
