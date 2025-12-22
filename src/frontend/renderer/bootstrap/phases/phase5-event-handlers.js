@@ -660,15 +660,84 @@ export async function initializeEventHandlers({
     window.addEventListener("files-selected-from-dialog", handleFilesFromDialog);
     listeners.push({ element: window, event: "files-selected-from-dialog", handler: handleFilesFromDialog });
 
-    // Setup chat input attachment plus button
+    // Setup chat input attachment plus button with MCP toggles in context menu
     const chatAttachmentBtn = document.getElementById("chat-attachment-plus-btn");
     let chatAttachmentMenu = null;
 
+    // Track MCP server states (default: all enabled)
+    const mcpServerStates = {
+      sequential: true,
+      fetch: true,
+      tavily: true,
+    };
+
+    // Checkmark SVG for active items
+    const checkmarkSvg = `<svg class="mcp-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12l5 5L20 7"/></svg>`;
+
+    // MCP server icons
+    const mcpIcons = {
+      sequential: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg>`,
+      fetch: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.1374 2.73779C13.3942 3.48102 13.0092 4.77646 13.2895 5.7897C13.438 6.32603 13.4622 6.97541 13.0687 7.3689L7.3689 13.0687C6.97541 13.4622 6.32603 13.438 5.7897 13.2895C4.77646 13.0092 3.48101 13.3942 2.73779 14.1374C1.75407 15.1212 1.75407 16.7161 2.73779 17.6998C3.72152 18.6835 5.31646 18.6835 6.30018 17.6998C5.31646 18.6835 5.31645 20.2785 6.30018 21.2622C7.28391 22.2459 8.87884 22.2459 9.86257 21.2622C10.6058 20.519 10.9908 19.2235 10.7105 18.2103C10.562 17.674 10.5378 17.0246 10.9313 16.6311L16.6311 10.9313C17.0246 10.5378 17.674 10.562 18.2103 10.7105C19.2235 10.9908 20.519 10.6058 21.2622 9.86257C22.2459 8.87884 22.2459 7.28391 21.2622 6.30018C20.2785 5.31646 18.6835 5.31646 17.6998 6.30018C18.6835 5.31646 18.6835 3.72152 17.6998 2.73779C16.7161 1.75407 15.1212 1.75407 14.1374 2.73779Z"/></svg>`,
+      tavily: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>`,
+    };
+
+    const mcpLabels = {
+      sequential: "Sequential Thinking",
+      fetch: "Web Fetch",
+      tavily: "Web Search",
+    };
+
     if (chatAttachmentBtn) {
+      let mcpUpdateTimeout = null;
+
+      const updateSessionMcpConfig = async () => {
+        const sessionId = sessionService.getCurrentSessionId();
+        if (!sessionId) return;
+
+        // Collect enabled MCP servers from state
+        const mcpConfig = Object.entries(mcpServerStates)
+          .filter(([_key, enabled]) => enabled)
+          .map(([key]) => key);
+
+        try {
+          await window.electronAPI.sessionCommand("update_config", {
+            session_id: sessionId,
+            mcp_config: mcpConfig,
+          });
+          logger.info(`Updated session config for ${sessionId}: ${mcpConfig.join(", ")}`);
+        } catch (error) {
+          console.error("Failed to update MCP config:", error);
+        }
+      };
+
+      const updateMenuItemStates = () => {
+        if (!chatAttachmentMenu) return;
+        Object.keys(mcpServerStates).forEach((key) => {
+          const item = chatAttachmentMenu.querySelector(`[data-mcp="${key}"]`);
+          if (item) {
+            item.classList.toggle("active", mcpServerStates[key]);
+          }
+        });
+      };
+
       const createChatMenu = () => {
         const menu = document.createElement("div");
         menu.className = "attachment-context-menu";
         menu.id = "chat-attachment-context-menu";
+
+        // Build MCP toggle items HTML
+        const mcpItemsHtml = Object.keys(mcpServerStates)
+          .map(
+            (key) => `
+          <button class="attachment-menu-item mcp-toggle-item${mcpServerStates[key] ? " active" : ""}" data-mcp="${key}">
+            ${mcpIcons[key]}
+            <span class="mcp-label">${mcpLabels[key]}</span>
+            ${checkmarkSvg}
+          </button>
+        `
+          )
+          .join("");
+
         menu.innerHTML = `
           <button class="attachment-menu-item" data-action="attach-file">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -676,6 +745,8 @@ export async function initializeEventHandlers({
             </svg>
             Attach file
           </button>
+          <div class="menu-divider"></div>
+          ${mcpItemsHtml}
         `;
         document.body.appendChild(menu);
         return menu;
@@ -692,6 +763,7 @@ export async function initializeEventHandlers({
         if (!chatAttachmentMenu) {
           chatAttachmentMenu = createChatMenu();
 
+          // Handle attach file click
           const attachMenuItem = chatAttachmentMenu.querySelector('[data-action="attach-file"]');
           if (attachMenuItem) {
             attachMenuItem.addEventListener("click", async (e) => {
@@ -713,6 +785,28 @@ export async function initializeEventHandlers({
               }
             });
           }
+
+          // Handle MCP toggle clicks
+          chatAttachmentMenu.querySelectorAll(".mcp-toggle-item").forEach((item) => {
+            item.addEventListener("click", (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+
+              const mcpKey = item.dataset.mcp;
+              if (mcpKey && mcpKey in mcpServerStates) {
+                // Toggle state
+                mcpServerStates[mcpKey] = !mcpServerStates[mcpKey];
+                item.classList.toggle("active", mcpServerStates[mcpKey]);
+
+                // Debounce config update
+                if (mcpUpdateTimeout) clearTimeout(mcpUpdateTimeout);
+                mcpUpdateTimeout = setTimeout(updateSessionMcpConfig, 300);
+              }
+            });
+          });
+        } else {
+          // Sync menu states with current state
+          updateMenuItemStates();
         }
 
         // Position menu above button with viewport clamping
@@ -722,7 +816,7 @@ export async function initializeEventHandlers({
         chatAttachmentMenu.style.top = `${btnRect.top - 8}px`;
 
         // Calculate left position, ensuring menu stays within viewport
-        const menuWidth = 140; // min-width from CSS
+        const menuWidth = 180; // Wider for MCP labels
         let leftPos = btnRect.left + btnRect.width / 2 - menuWidth / 2;
 
         // Clamp to viewport bounds (8px padding from edges)
@@ -751,64 +845,6 @@ export async function initializeEventHandlers({
         }
       };
       addListener(document, "click", closeChatMenuOnOutsideClick);
-    }
-
-    // Setup chat MCP toggle buttons (scoped to chat-input-section)
-    const chatInputSection = document.querySelector(".chat-input-section");
-    if (chatInputSection) {
-      const chatMcpButtons = chatInputSection.querySelectorAll(".mcp-toggle-btn");
-      let mcpUpdateTimeout = null;
-
-      const updateSessionMcpConfig = async () => {
-        const sessionId = sessionService.getCurrentSessionId();
-        if (!sessionId) return;
-
-        // Collect enabled MCP servers only from the chat input section
-        const mcpConfig = [];
-        chatInputSection.querySelectorAll(".mcp-toggle-btn.active").forEach((btn) => {
-          const mcpType = btn.dataset.mcp;
-          // Map to backend keys
-          if (mcpType === "sequential") mcpConfig.push("sequential");
-          else if (mcpType === "fetch") mcpConfig.push("fetch");
-          else if (mcpType === "tavily") mcpConfig.push("tavily");
-        });
-
-        try {
-          await window.electronAPI.sessionCommand("update_config", {
-            session_id: sessionId,
-            mcp_config: mcpConfig,
-          });
-          logger.info(`Updated session config for ${sessionId}: ${mcpConfig.join(", ")}`);
-        } catch (error) {
-          console.error("Failed to update MCP config:", error);
-        }
-      };
-
-      chatMcpButtons.forEach((btn) => {
-        addListener(btn, "click", () => {
-          // Toggle active state
-          btn.classList.toggle("active");
-
-          // Animation
-          if (btn.classList.contains("active")) {
-            btn.classList.add("animate-on");
-          } else {
-            btn.classList.add("animate-off");
-          }
-
-          btn.addEventListener(
-            "animationend",
-            () => {
-              btn.classList.remove("animate-on", "animate-off");
-            },
-            { once: true }
-          );
-
-          // Debounce update
-          if (mcpUpdateTimeout) clearTimeout(mcpUpdateTimeout);
-          mcpUpdateTimeout = setTimeout(updateSessionMcpConfig, 300);
-        });
-      });
     }
 
     // ======================
