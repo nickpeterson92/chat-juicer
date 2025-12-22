@@ -52,6 +52,13 @@ vi.mock("@/utils/toast.js", () => ({
   showToast: mockShowToast,
 }));
 
+// Mock view-manager to prevent importing chat-ui.js and welcome-page.js (0% coverage files)
+const mockShowWelcomeView = vi.fn().mockResolvedValue();
+vi.mock("@/managers/view-manager.js", () => ({
+  showWelcomeView: mockShowWelcomeView,
+  showChatView: vi.fn().mockResolvedValue(),
+}));
+
 describe("phase5-event-handlers coverage", () => {
   let initializeEventHandlers;
 
@@ -112,6 +119,9 @@ describe("phase5-event-handlers coverage", () => {
         aiThinkingActive: false,
         welcomeFilesSectionVisible: true,
         pendingWelcomeFiles: [],
+      },
+      session: {
+        current: null,
       },
       message: {
         currentAssistant: null,
@@ -544,5 +554,528 @@ describe("phase5-event-handlers coverage", () => {
     const pending = deps.appState.getState("ui.pendingWelcomeFiles");
     expect(pending[0].previewType).toBe("image");
     expect(pending[0].previewUrl).toBe(mockUrl);
+  });
+
+  // =========================================
+  // handleFilesFromDialog tests
+  // =========================================
+
+  it("handles files-selected-from-dialog on welcome page without session", async () => {
+    const deps = createDeps();
+    deps.appState.setState("ui.bodyViewClass", "view-welcome");
+    deps.services.sessionService.getCurrentSessionId = vi.fn(() => null);
+    deps.ipcAdapter.readFile = vi.fn().mockResolvedValue({
+      success: true,
+      data: btoa("file content"),
+      mimeType: "text/plain",
+    });
+
+    global.URL.createObjectURL = vi.fn(() => "blob:test");
+
+    await initializeEventHandlers(deps);
+
+    window.dispatchEvent(
+      new CustomEvent("files-selected-from-dialog", {
+        detail: { filePaths: ["/path/to/test.txt"] },
+      })
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    const pending = deps.appState.getState("ui.pendingWelcomeFiles");
+    expect(pending.length).toBe(1);
+    expect(pending[0].name).toBe("test.txt");
+    expect(deps.ipcAdapter.readFile).toHaveBeenCalledWith("/path/to/test.txt");
+  });
+
+  it("handles files-selected-from-dialog with empty filePaths", async () => {
+    const deps = createDeps();
+    await initializeEventHandlers(deps);
+
+    // Should not throw
+    window.dispatchEvent(
+      new CustomEvent("files-selected-from-dialog", {
+        detail: { filePaths: [] },
+      })
+    );
+
+    await new Promise((r) => setTimeout(r, 10));
+    expect(deps.appState.getState("ui.pendingWelcomeFiles")).toEqual([]);
+  });
+
+  it("handles files-selected-from-dialog with no filePaths", async () => {
+    const deps = createDeps();
+    await initializeEventHandlers(deps);
+
+    window.dispatchEvent(
+      new CustomEvent("files-selected-from-dialog", {
+        detail: {},
+      })
+    );
+
+    await new Promise((r) => setTimeout(r, 10));
+    expect(deps.appState.getState("ui.pendingWelcomeFiles")).toEqual([]);
+  });
+
+  it("handles files-selected-from-dialog upload with active session", async () => {
+    const deps = createDeps();
+    deps.services.sessionService.getCurrentSessionId = vi.fn(() => "sess-active");
+    deps.services.fileService.uploadFile = vi.fn().mockResolvedValue({ success: true });
+    deps.ipcAdapter.readFile = vi.fn().mockResolvedValue({
+      success: true,
+      data: btoa("content"),
+      mimeType: "text/plain",
+    });
+    deps.components.filePanel.refresh = vi.fn().mockResolvedValue();
+
+    await initializeEventHandlers(deps);
+
+    window.dispatchEvent(
+      new CustomEvent("files-selected-from-dialog", {
+        detail: { filePaths: ["/path/to/upload.txt"] },
+      })
+    );
+
+    await vi.waitFor(() => expect(deps.services.fileService.uploadFile).toHaveBeenCalled());
+    expect(deps.components.filePanel.refresh).toHaveBeenCalled();
+  });
+
+  it("handles files-selected-from-dialog upload failure with active session", async () => {
+    const deps = createDeps();
+    deps.services.sessionService.getCurrentSessionId = vi.fn(() => "sess-active");
+    deps.services.fileService.uploadFile = vi.fn().mockResolvedValue({ success: false, error: "fail" });
+    deps.ipcAdapter.readFile = vi.fn().mockResolvedValue({
+      success: true,
+      data: btoa("content"),
+      mimeType: "text/plain",
+    });
+
+    await initializeEventHandlers(deps);
+
+    window.dispatchEvent(
+      new CustomEvent("files-selected-from-dialog", {
+        detail: { filePaths: ["/path/to/fail.txt"] },
+      })
+    );
+
+    await vi.waitFor(() => expect(mockShowToast).toHaveBeenCalledWith("Failed to upload fail.txt", "error", 3000));
+  });
+
+  it("handles files-selected-from-dialog with read file failure", async () => {
+    const deps = createDeps();
+    deps.appState.setState("ui.bodyViewClass", "view-welcome");
+    deps.services.sessionService.getCurrentSessionId = vi.fn(() => null);
+    deps.ipcAdapter.readFile = vi.fn().mockResolvedValue({
+      success: false,
+      error: "Read error",
+    });
+
+    await initializeEventHandlers(deps);
+
+    window.dispatchEvent(
+      new CustomEvent("files-selected-from-dialog", {
+        detail: { filePaths: ["/path/to/bad.txt"] },
+      })
+    );
+
+    await vi.waitFor(() => expect(mockShowToast).toHaveBeenCalledWith("Error processing file", "error", 3000));
+  });
+
+  it("handles files-selected-from-dialog large file rejection on welcome page", async () => {
+    const deps = createDeps();
+    deps.appState.setState("ui.bodyViewClass", "view-welcome");
+    deps.services.sessionService.getCurrentSessionId = vi.fn(() => null);
+
+    // Create a large file response
+    const largeContent = "x".repeat(100);
+    deps.ipcAdapter.readFile = vi.fn().mockResolvedValue({
+      success: true,
+      data: btoa(largeContent),
+      mimeType: "text/plain",
+    });
+
+    await initializeEventHandlers(deps);
+
+    // Mock File constructor to return large size
+    const originalFile = global.File;
+    global.File = class extends originalFile {
+      constructor(parts, name, options) {
+        super(parts, name, options);
+        Object.defineProperty(this, "size", { value: 60 * 1024 * 1024 }); // 60MB
+      }
+    };
+
+    window.dispatchEvent(
+      new CustomEvent("files-selected-from-dialog", {
+        detail: { filePaths: ["/path/to/huge.txt"] },
+      })
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(mockShowToast).toHaveBeenCalledWith("huge.txt exceeds 50MB limit", "warning", 3000);
+
+    global.File = originalFile;
+  });
+
+  it("handles files-selected-from-dialog with image file on welcome page", async () => {
+    const deps = createDeps();
+    deps.appState.setState("ui.bodyViewClass", "view-welcome");
+    deps.services.sessionService.getCurrentSessionId = vi.fn(() => null);
+    deps.ipcAdapter.readFile = vi.fn().mockResolvedValue({
+      success: true,
+      data: btoa("imagedata"),
+      mimeType: "image/png",
+    });
+
+    global.URL.createObjectURL = vi.fn(() => "blob:image-url");
+
+    await initializeEventHandlers(deps);
+
+    window.dispatchEvent(
+      new CustomEvent("files-selected-from-dialog", {
+        detail: { filePaths: ["/path/to/image.png"] },
+      })
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    const pending = deps.appState.getState("ui.pendingWelcomeFiles");
+    expect(pending.length).toBe(1);
+    expect(pending[0].previewType).toBe("image");
+    expect(pending[0].previewUrl).toBe("blob:image-url");
+  });
+
+  it("handles files-selected-from-dialog image upload adds to pending attachments", async () => {
+    const deps = createDeps();
+    deps.services.sessionService.getCurrentSessionId = vi.fn(() => "sess-img");
+    deps.services.fileService.uploadFile = vi.fn().mockResolvedValue({ success: true });
+    deps.ipcAdapter.readFile = vi.fn().mockResolvedValue({
+      success: true,
+      data: btoa("pngdata"),
+      mimeType: "image/png",
+    });
+    deps.components.filePanel.refresh = vi.fn().mockResolvedValue();
+
+    await initializeEventHandlers(deps);
+
+    window.dispatchEvent(
+      new CustomEvent("files-selected-from-dialog", {
+        detail: { filePaths: ["/path/to/photo.png"] },
+      })
+    );
+
+    await vi.waitFor(() => expect(deps.services.fileService.uploadFile).toHaveBeenCalled());
+
+    const attachments = deps.appState.getState("message.pendingAttachments") || [];
+    expect(attachments.length).toBe(1);
+    expect(attachments[0].type).toBe("image_ref");
+    expect(attachments[0].filename).toBe("photo.png");
+  });
+
+  // =========================================
+  // MCP attachment menu tests
+  // =========================================
+
+  it("opens and closes chat attachment menu", async () => {
+    const chatAttachmentBtn = document.createElement("button");
+    chatAttachmentBtn.id = "chat-attachment-plus-btn";
+    document.body.appendChild(chatAttachmentBtn);
+
+    const deps = createDeps();
+    await initializeEventHandlers(deps);
+
+    // Open menu
+    chatAttachmentBtn.click();
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(chatAttachmentBtn.classList.contains("open")).toBe(true);
+    const menu = document.getElementById("chat-attachment-context-menu");
+    expect(menu).not.toBeNull();
+    expect(menu.classList.contains("visible")).toBe(true);
+
+    // Close menu
+    chatAttachmentBtn.click();
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(chatAttachmentBtn.classList.contains("open")).toBe(false);
+    expect(menu.classList.contains("visible")).toBe(false);
+  });
+
+  it("toggles MCP server states in menu", async () => {
+    vi.useFakeTimers();
+    const chatAttachmentBtn = document.createElement("button");
+    chatAttachmentBtn.id = "chat-attachment-plus-btn";
+    document.body.appendChild(chatAttachmentBtn);
+
+    const deps = createDeps();
+    deps.services.sessionService.getCurrentSessionId = vi.fn(() => "mcp-sess");
+
+    // Mock electronAPI
+    window.electronAPI = {
+      sessionCommand: vi.fn().mockResolvedValue({}),
+    };
+
+    await initializeEventHandlers(deps);
+
+    // Open menu
+    chatAttachmentBtn.click();
+    await vi.advanceTimersByTimeAsync(10);
+
+    const menu = document.getElementById("chat-attachment-context-menu");
+    const sequentialToggle = menu.querySelector('[data-mcp="sequential"]');
+
+    expect(sequentialToggle).not.toBeNull();
+    expect(sequentialToggle.classList.contains("active")).toBe(true);
+
+    // Toggle off
+    sequentialToggle.click();
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(sequentialToggle.classList.contains("active")).toBe(false);
+
+    // Wait for debounced config update
+    await vi.advanceTimersByTimeAsync(350);
+
+    expect(window.electronAPI.sessionCommand).toHaveBeenCalledWith(
+      "update_config",
+      expect.objectContaining({
+        session_id: "mcp-sess",
+      })
+    );
+
+    vi.useRealTimers();
+  });
+
+  it("closes menu on outside click", async () => {
+    const chatAttachmentBtn = document.createElement("button");
+    chatAttachmentBtn.id = "chat-attachment-plus-btn";
+    document.body.appendChild(chatAttachmentBtn);
+
+    const deps = createDeps();
+    await initializeEventHandlers(deps);
+
+    // Open menu
+    chatAttachmentBtn.click();
+    await new Promise((r) => setTimeout(r, 10));
+
+    const menu = document.getElementById("chat-attachment-context-menu");
+    expect(menu.classList.contains("visible")).toBe(true);
+
+    // Click outside
+    document.body.click();
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(menu.classList.contains("visible")).toBe(false);
+  });
+
+  it("syncs MCP states on session change", async () => {
+    const chatAttachmentBtn = document.createElement("button");
+    chatAttachmentBtn.id = "chat-attachment-plus-btn";
+    document.body.appendChild(chatAttachmentBtn);
+
+    const deps = createDeps();
+    // Mock getCurrentSessionId to return the current state value
+    deps.services.sessionService.getCurrentSessionId = vi.fn(() => deps.appState.getState("session.current"));
+    deps.services.sessionService.getSession = vi.fn(() => ({
+      session_id: "sess-sync",
+      mcp_config: ["fetch"], // Only fetch enabled
+    }));
+
+    await initializeEventHandlers(deps);
+
+    // Trigger session change - this will call syncMcpStatesWithSession
+    deps.appState.setState("session.current", "sess-sync");
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Open menu to check states - menu was already created and synced
+    chatAttachmentBtn.click();
+    await new Promise((r) => setTimeout(r, 50));
+
+    const menu = document.getElementById("chat-attachment-context-menu");
+    const fetchToggle = menu.querySelector('[data-mcp="fetch"]');
+    const sequentialToggle = menu.querySelector('[data-mcp="sequential"]');
+
+    expect(fetchToggle.classList.contains("active")).toBe(true);
+    expect(sequentialToggle.classList.contains("active")).toBe(false);
+  });
+
+  it("resets MCP states when session cleared", async () => {
+    const chatAttachmentBtn = document.createElement("button");
+    chatAttachmentBtn.id = "chat-attachment-plus-btn";
+    document.body.appendChild(chatAttachmentBtn);
+
+    const deps = createDeps();
+    deps.appState.setState("session.current", "some-session");
+
+    await initializeEventHandlers(deps);
+
+    // Clear session (go to welcome page)
+    deps.appState.setState("session.current", null);
+    await new Promise((r) => setTimeout(r, 10));
+
+    // Open menu
+    chatAttachmentBtn.click();
+    await new Promise((r) => setTimeout(r, 10));
+
+    const menu = document.getElementById("chat-attachment-context-menu");
+    // All should be active (defaults)
+    const toggles = menu.querySelectorAll(".mcp-toggle-item");
+    toggles.forEach((toggle) => {
+      expect(toggle.classList.contains("active")).toBe(true);
+    });
+  });
+
+  it("handles attach file menu item click", async () => {
+    const chatAttachmentBtn = document.createElement("button");
+    chatAttachmentBtn.id = "chat-attachment-plus-btn";
+    document.body.appendChild(chatAttachmentBtn);
+
+    const deps = createDeps();
+    deps.ipcAdapter.openFileDialog = vi.fn().mockResolvedValue(["/selected/file.txt"]);
+
+    await initializeEventHandlers(deps);
+
+    // Open menu
+    chatAttachmentBtn.click();
+    await new Promise((r) => setTimeout(r, 10));
+
+    const menu = document.getElementById("chat-attachment-context-menu");
+    const attachItem = menu.querySelector('[data-action="attach-file"]');
+
+    // Mock window dispatch to capture event
+    const dispatchSpy = vi.spyOn(window, "dispatchEvent");
+
+    attachItem.click();
+    await vi.waitFor(() => expect(deps.ipcAdapter.openFileDialog).toHaveBeenCalled());
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "files-selected-from-dialog",
+      })
+    );
+
+    dispatchSpy.mockRestore();
+  });
+
+  it("handles attach file dialog cancellation", async () => {
+    const chatAttachmentBtn = document.createElement("button");
+    chatAttachmentBtn.id = "chat-attachment-plus-btn";
+    document.body.appendChild(chatAttachmentBtn);
+
+    const deps = createDeps();
+    deps.ipcAdapter.openFileDialog = vi.fn().mockResolvedValue([]);
+
+    await initializeEventHandlers(deps);
+
+    chatAttachmentBtn.click();
+    await new Promise((r) => setTimeout(r, 10));
+
+    const menu = document.getElementById("chat-attachment-context-menu");
+    const attachItem = menu.querySelector('[data-action="attach-file"]');
+
+    const dispatchSpy = vi.spyOn(window, "dispatchEvent");
+    attachItem.click();
+    await vi.waitFor(() => expect(deps.ipcAdapter.openFileDialog).toHaveBeenCalled());
+
+    // Should NOT dispatch event for empty selection
+    expect(dispatchSpy).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "files-selected-from-dialog",
+      })
+    );
+
+    dispatchSpy.mockRestore();
+  });
+
+  // =========================================
+  // Session management button tests
+  // =========================================
+
+  it("handles new session button click", async () => {
+    const newSessionBtn = document.createElement("button");
+    newSessionBtn.id = "new-session-btn";
+    document.body.appendChild(newSessionBtn);
+
+    const deps = createDeps();
+    deps.appState.setState("session.current", "old-session");
+    deps.services.sessionService.getCurrentSessionId = vi.fn(() => "old-session");
+    deps.components.filePanel.clear = vi.fn();
+
+    global.URL.revokeObjectURL = vi.fn();
+
+    await initializeEventHandlers(deps);
+
+    newSessionBtn.click();
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(deps.components.filePanel.setSession).toHaveBeenCalledWith(null);
+    expect(deps.components.filePanel.clear).toHaveBeenCalled();
+    expect(deps.appState.getState("session.current")).toBeNull();
+    expect(deps.components.chatContainer.clear).toHaveBeenCalled();
+  });
+
+  it("handles restart button click", async () => {
+    const restartBtn = document.createElement("button");
+    restartBtn.id = "restart-btn";
+    document.body.appendChild(restartBtn);
+
+    const deps = createDeps();
+    deps.ipcAdapter.restartBot = vi.fn();
+
+    await initializeEventHandlers(deps);
+
+    restartBtn.click();
+    expect(deps.ipcAdapter.restartBot).toHaveBeenCalled();
+  });
+
+  it("handles settings button click", async () => {
+    const settingsBtn = document.createElement("button");
+    settingsBtn.id = "settings-btn";
+    document.body.appendChild(settingsBtn);
+
+    // Define window.alert if not present (jsdom doesn't have it)
+    const originalAlert = window.alert;
+    window.alert = vi.fn();
+
+    const deps = createDeps();
+    await initializeEventHandlers(deps);
+
+    settingsBtn.click();
+    expect(window.alert).toHaveBeenCalledWith("Coming Soon!");
+
+    window.alert = originalAlert;
+  });
+
+  // =========================================
+  // Loading lamp visibility tests
+  // =========================================
+
+  it("updates loading lamp visibility on state change", async () => {
+    const deps = createDeps();
+
+    // Create a streaming message with loading lamp
+    const messageEl = document.createElement("div");
+    messageEl.className = "message";
+    messageEl.dataset.streaming = "true";
+    const loadingLamp = document.createElement("span");
+    loadingLamp.className = "loading-lamp";
+    messageEl.appendChild(loadingLamp);
+    document.body.appendChild(messageEl);
+
+    await initializeEventHandlers(deps);
+
+    // Show lamp
+    deps.appState.setState("ui.loadingLampVisible", true);
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(loadingLamp.style.opacity).toBe("1");
+    expect(loadingLamp.style.display).toBe("inline-block");
+
+    // Hide lamp
+    deps.appState.setState("ui.loadingLampVisible", false);
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(loadingLamp.style.opacity).toBe("0");
   });
 });
