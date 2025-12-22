@@ -1962,6 +1962,13 @@
 
   .mcp-toggle-buttons {
     @apply flex items-center gap-1.5 flex-shrink-0 col-start-1 row-start-1 row-end-3 self-center;
+    /* Pull left to reduce gap between + button and container edge */
+    margin-left: -14px;
+  }
+
+  /* Compact chat variant: adjust for smaller container padding (px-2 = 8px) */
+  .chat-input-section.compact .mcp-toggle-buttons {
+    margin-left: -2px;
   }
 
   /* Wrapper for model selector to enable relative positioning */
@@ -2331,6 +2338,50 @@
 
   .attachment-menu-item svg {
     @apply w-4 h-4 flex-shrink-0;
+  }
+
+  /* Submenu arrow icon */
+  .attachment-menu-item .submenu-arrow {
+    @apply w-3 h-3 ml-auto;
+    opacity: 0.6;
+  }
+
+  /* Menu item with submenu - needs relative positioning */
+  .attachment-menu-item.has-submenu {
+    position: relative;
+  }
+
+  /* Submenu container - positioned to the right */
+  .attachment-submenu {
+    display: none;
+    position: absolute;
+    left: calc(100% + 4px);
+    top: 0;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px;
+    border-radius: 10px;
+    z-index: 10000;
+    background-color: var(--color-surface-2);
+    border: 1px solid var(--color-border-secondary);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    min-width: 140px;
+  }
+
+  /* Show submenu on hover */
+  .attachment-menu-item.has-submenu:hover .attachment-submenu {
+    display: flex;
+  }
+
+  /* Disabled menu item state */
+  .attachment-menu-item.disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .attachment-menu-item.disabled:hover {
+    background-color: transparent;
+    color: var(--color-text-secondary);
   }
 
   /* Menu divider */
