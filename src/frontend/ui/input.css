@@ -1982,7 +1982,6 @@
   }
 
   .model-selector-trigger:hover {
-    background-color: var(--color-surface-hover);
     color: var(--color-text-primary);
   }
 
