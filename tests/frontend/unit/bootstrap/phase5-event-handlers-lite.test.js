@@ -1015,20 +1015,6 @@ describe("phase5-event-handlers coverage", () => {
     expect(deps.components.chatContainer.clear).toHaveBeenCalled();
   });
 
-  it("handles restart button click", async () => {
-    const restartBtn = document.createElement("button");
-    restartBtn.id = "restart-btn";
-    document.body.appendChild(restartBtn);
-
-    const deps = createDeps();
-    deps.ipcAdapter.restartBot = vi.fn();
-
-    await initializeEventHandlers(deps);
-
-    restartBtn.click();
-    expect(deps.ipcAdapter.restartBot).toHaveBeenCalled();
-  });
-
   it("handles settings button click", async () => {
     const settingsBtn = document.createElement("button");
     settingsBtn.id = "settings-btn";

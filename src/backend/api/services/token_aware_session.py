@@ -239,6 +239,9 @@ class PostgresTokenAwareSession(PostgresSession):  # type: ignore[misc]
         """Generate summary using Agent/Runner pattern."""
         logger.info(f"Summarizing {len(items)} messages ({self._total_tokens} tokens)")
 
+        # Sanitize items to extract text from multimodal content (avoid base64 overflow)
+        sanitized_items = self._sanitize_items_for_summary(items)
+
         summary_agent = Agent(
             name="Summarizer",
             model=self.model,
@@ -247,11 +250,103 @@ class PostgresTokenAwareSession(PostgresSession):  # type: ignore[misc]
 
         result = await Runner.run(
             summary_agent,
-            input=items,  # type: ignore[arg-type]  # SDK accepts dict messages
+            input=sanitized_items,  # type: ignore[arg-type]  # SDK accepts dict messages
             session=None,
         )
 
         return result.final_output or ""
+
+    def _sanitize_items_for_summary(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Sanitize conversation items for summarization.
+
+        Extracts text-only content from multimodal messages to avoid
+        context overflow from base64 image data.
+
+        Args:
+            items: Raw conversation items
+
+        Returns:
+            Items with text-only content suitable for summarization
+        """
+        sanitized = []
+        for item in items:
+            role = item.get("role")
+            content = item.get("content")
+
+            if not role:
+                continue
+
+            # Extract text from multimodal content
+            text_content = self._extract_text_from_content(content)
+
+            sanitized.append({"role": role, "content": text_content})
+
+        return sanitized
+
+    def _extract_text_from_content(self, content: Any) -> str:
+        """Extract text from content, handling multimodal formats.
+
+        Args:
+            content: Message content (string, list, or other)
+
+        Returns:
+            Extracted text content
+        """
+        if content is None:
+            return ""
+
+        # Plain string - return as-is
+        if isinstance(content, str):
+            # Check if it's JSON-encoded multimodal content
+            import json
+
+            try:
+                parsed = json.loads(content)
+                if isinstance(parsed, list):
+                    return self._extract_text_from_parts(parsed)
+            except (json.JSONDecodeError, TypeError):
+                pass
+            return content
+
+        # List of content parts (multimodal format)
+        if isinstance(content, list):
+            return self._extract_text_from_parts(content)
+
+        # Fallback for other types
+        return str(content)
+
+    def _extract_text_from_parts(self, parts: list[Any]) -> str:
+        """Extract text from multimodal content parts.
+
+        Args:
+            parts: List of content parts
+
+        Returns:
+            Concatenated text from text parts
+        """
+        text_parts = []
+        has_images = False
+
+        for part in parts:
+            if isinstance(part, dict):
+                part_type = part.get("type", "")
+                # Handle text types
+                if part_type in ("input_text", "text"):
+                    text = part.get("text", "")
+                    if text:
+                        text_parts.append(text)
+                # Track if images were present
+                elif part_type in ("input_image", "image_url", "image"):
+                    has_images = True
+            elif isinstance(part, str):
+                text_parts.append(part)
+
+        result = " ".join(text_parts)
+        if has_images and not result:
+            return "[Image attached]"
+        elif has_images:
+            return f"{result} [with image]"
+        return result
 
     async def summarize_with_agent(self, keep_recent: int = 2, force: bool = False) -> str:
         """Execute summarization workflow with locking.
