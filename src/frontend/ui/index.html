@@ -53,16 +53,17 @@
           <circle cx="12" cy="12" r="3" />
         </svg>
       </button>
-      <!-- Restart Button -->
-      <button
-        class="bg-transparent cursor-pointer p-2 rounded-lg transition-all duration-200 text-gray-600 dark:text-gray-400 hover:bg-surface-hover hover:text-gray-800 dark:hover:text-gray-200"
-        id="restart-btn" title="Restart bot">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-          <path d="M3 3v5h5" />
-        </svg>
-      </button>
+      <!-- Session Name Display (visible when sidebar collapsed AND session active) -->
+      <div class="header-session-display" id="header-session-display">
+        <span class="header-session-name" id="header-session-name" title="Click to rename"></span>
+        <button class="header-session-chevron" id="header-session-chevron" title="Session menu"
+          aria-label="Session menu">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
+      </div>
     </div>
 
     <!-- Sidebar (overlay mode) -->

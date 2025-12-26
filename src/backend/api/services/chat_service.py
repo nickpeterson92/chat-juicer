@@ -743,6 +743,38 @@ class ChatService:
             f"(threshold: {session.trigger_tokens})"
         )
 
+    def _extract_text_for_title(self, content: str) -> str:
+        """Extract text-only content from multimodal message content.
+
+        Multimodal messages are stored as JSON arrays containing text and image parts.
+        For title generation, we only want the text to avoid context overflow from
+        base64 image data.
+
+        Args:
+            content: Message content (plain text or JSON array)
+
+        Returns:
+            Extracted text content suitable for title generation
+        """
+        # Try to parse as JSON (multimodal content is stored as JSON array)
+        try:
+            parsed = json.loads(content)
+            if isinstance(parsed, list):
+                # Extract text from content parts
+                text_parts = []
+                for part in parsed:
+                    # Handle input_text (SDK format) and text types, skip images
+                    if isinstance(part, dict) and part.get("type") in ("input_text", "text"):
+                        text = part.get("text", "")
+                        if text:
+                            text_parts.append(text)
+                return " ".join(text_parts) if text_parts else "[Image attached]"
+            # If parsed but not a list, return as string
+            return str(parsed)
+        except (json.JSONDecodeError, TypeError):
+            # Not JSON, return original content
+            return content
+
     async def _maybe_generate_title(
         self,
         session_id: str,
@@ -776,7 +808,9 @@ class ChatService:
             if len(message_rows) < 2:
                 return
 
-            messages = [{"role": r["role"], "content": r["content"]} for r in message_rows]
+            messages = [
+                {"role": r["role"], "content": self._extract_text_for_title(r["content"])} for r in message_rows
+            ]
 
             # Create lightweight title agent
             title_agent = Agent(
