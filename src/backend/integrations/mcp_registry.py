@@ -83,7 +83,19 @@ async def initialize_mcp_server(server_key: str) -> Any | None:
 
     try:
         # Try transport abstraction first (HTTP if configured)
+        try:
+        # Try transport abstraction first (HTTP if configured)
         from integrations.mcp_transport import create_transport
+
+        transport = await create_transport(server_key, config)
+        server = await transport.connect()
+        return server
+    except ImportError:
+        logger.warning(f"{config['name']} server not available - transport module not found")
+        return None
+    except Exception as e:
+        logger.warning(f"{config['name']} server not available: {e}")
+        return None
 
         transport = await create_transport(server_key, config)
         server = await transport.connect()
