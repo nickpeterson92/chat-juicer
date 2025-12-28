@@ -1,0 +1,68 @@
+# Database Connection Registry
+# Configure database connections for schema fetching tools.
+# Environment variables are supported with ${VAR} or ${VAR:-default} syntax.
+#
+# SECURITY NOTE: Never commit real credentials. Use environment variables
+# for all passwords, especially in production configurations.
+
+databases:
+  # ============================================
+  # LOCAL TEST DATABASES (docker-compose.local.yml)
+  # For schema fetch testing - separate from main app DB
+  # ============================================
+
+  # Test PostgreSQL - port 5434 (separate from main app on 5433)
+  # Run: podman-compose -f docker/docker-compose.local.yml up -d postgres-test
+  test_postgres:
+    type: postgresql
+    host: ${TEST_PG_HOST:-localhost}
+    port: ${TEST_PG_PORT:-5434}
+    database: testdb
+    username: ${TEST_PG_USER:-testuser}
+    password: ${TEST_PG_PASSWORD:-testpass}
+    schema: public
+
+  # Test MySQL - port 3307
+  # Run: podman-compose -f docker/docker-compose.local.yml up -d mysql
+  test_mysql:
+    type: mysql
+    host: ${TEST_MYSQL_HOST:-localhost}
+    port: ${TEST_MYSQL_PORT:-3307}
+    database: testdb
+    username: ${TEST_MYSQL_USER:-chatjuicer}
+    password: ${TEST_MYSQL_PASSWORD:-localdev}
+
+  # Test SQL Server - port 1434
+  # Run: podman-compose -f docker/docker-compose.local.yml up -d sqlserver
+  test_sqlserver:
+    type: sqlserver
+    host: ${TEST_SQLSERVER_HOST:-localhost}
+    port: ${TEST_SQLSERVER_PORT:-1434}
+    database: testdb
+    username: ${TEST_SQLSERVER_USER:-sa}
+    password: ${TEST_SQLSERVER_PASSWORD:-LocalDev123!}
+    schema: dbo
+
+  # Requires simple-salesforce package and environment variables
+  salesforce:
+    type: salesforce
+    host: "login.salesforce.com"  # Placeholder
+    port: 443                     # Placeholder
+    database: "production"        # Placeholder
+    username: ${SF_USER}
+    password: ${SF_PASSWORD}
+    security_token: ${SF_TOKEN}
+    domain: ${SF_DOMAIN:-login}  # use 'login' for prod, 'test' for sandbox
+
+  # ============================================
+  # ADD YOUR DATABASES BELOW
+  # ============================================
+
+  # my_prod_db:
+  #   type: postgresql
+  #   host: ${MY_DB_HOST}
+  #   port: 5432
+  #   database: mydb
+  #   username: ${MY_DB_USER}
+  #   password: ${MY_DB_PASSWORD}
+  #   schema: public

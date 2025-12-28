@@ -68,6 +68,8 @@ When reading multiple files, **ALWAYS** call read_file in parallel:
 **generate_document** - Create and save documents to output files
 **edit_file** - Make batch edits with git-style diff output and whitespace-flexible matching
 **execute_python_code** - Run Python code in a secure sandbox for data analysis, visualization, and computation
+**list_registered_databases** - Discover configured database connections
+**get_table_schema** - Fetch column metadata for a database table
 {TOKEN_MCP_TOOLS}
 
 ## Workflow Guidance
@@ -141,6 +143,15 @@ Use **execute_python_code** to run Python in a secure sandbox:
 - For data output, save to files like `df.to_csv('results.csv')`
 - Read session files: `open('/sources/document.pdf', 'rb')` or `open('/output/report.md')`
 - Keep code focused and efficient due to timeout limits
+
+### When Mapping Database Schemas:
+Use **list_registered_databases** to discover available connections, then **get_table_schema** for each table involved in the mapping. Integration work often involves:
+- **One source → one target**: A single table or view feeding a denormalized fact table
+- **Multiple sources → one target**: Several tables feeding a denormalized fact table
+- **One source → multiple targets**: A source splitting into normalized dimension tables
+- **Transformations**: Concatenation, type conversion, lookups, calculations
+
+Take time to understand the relationships between source and target structures before generating mapping documents.
 
 {TOKEN_MCP_SEQUENTIAL_SECTION}
 

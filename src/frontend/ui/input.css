@@ -1646,6 +1646,177 @@
   }
 
   /* ==========================================
+   * DATABASE LIST: list_registered_databases
+   * ========================================== */
+  .database-list-result {
+    @apply rounded-lg overflow-hidden;
+    border: 1px solid var(--color-border-secondary);
+  }
+
+  .db-list-header {
+    @apply flex items-center gap-2 py-2 px-3;
+    background: var(--color-surface-2);
+  }
+
+  .db-list-icon {
+    @apply flex-shrink-0 w-4 h-4;
+    color: var(--color-text-secondary);
+  }
+
+  .db-list-icon svg {
+    @apply w-full h-full;
+  }
+
+  .db-list-title {
+    @apply text-sm font-medium flex-1;
+    color: var(--color-text-primary);
+  }
+
+  .db-list-count {
+    @apply text-xs;
+    color: var(--color-text-tertiary);
+  }
+
+  .db-list-items {
+    @apply flex flex-wrap gap-2 p-3;
+    background: var(--color-surface-1);
+  }
+
+  .db-list-item {
+    @apply flex items-center gap-2 py-1.5 px-3 rounded-md;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border-secondary);
+  }
+
+  .db-type-icon {
+    @apply text-[10px] font-bold py-0.5 px-1.5 rounded uppercase;
+    background: var(--color-surface-3);
+    color: var(--color-text-secondary);
+  }
+
+  .db-type-postgresql,
+  .db-type-icon.db-type-postgresql {
+    background: rgba(51, 103, 145, 0.2);
+    color: #336791;
+  }
+
+  .db-type-mysql,
+  .db-type-icon.db-type-mysql {
+    background: rgba(0, 117, 143, 0.2);
+    color: #00758F;
+  }
+
+  .db-type-sqlserver,
+  .db-type-icon.db-type-sqlserver {
+    background: rgba(204, 41, 54, 0.2);
+    color: #CC2936;
+  }
+
+  .db-type-salesforce,
+  .db-type-icon.db-type-salesforce {
+    background: rgba(0, 161, 224, 0.2);
+    color: #00A1E0;
+  }
+
+  .db-name {
+    @apply text-sm font-mono;
+    color: var(--color-text-primary);
+  }
+
+  .db-list-empty {
+    @apply p-4 text-center text-sm;
+    color: var(--color-text-tertiary);
+  }
+
+  /* ==========================================
+   * TABLE SCHEMA: get_table_schema
+   * ========================================== */
+  .table-schema-result {
+    @apply rounded-lg overflow-hidden;
+    border: 1px solid var(--color-border-secondary);
+  }
+
+  .schema-header {
+    @apply flex items-center gap-2 py-2 px-3;
+    background: var(--color-surface-2);
+  }
+
+  .schema-icon {
+    @apply flex-shrink-0 w-4 h-4;
+    color: var(--color-text-secondary);
+  }
+
+  .schema-icon svg {
+    @apply w-full h-full;
+  }
+
+  .schema-table-path {
+    @apply text-sm font-medium font-mono flex-1;
+    color: var(--color-text-primary);
+  }
+
+  .schema-col-count {
+    @apply text-xs;
+    color: var(--color-text-tertiary);
+  }
+
+  .schema-table {
+    @apply w-full text-sm;
+    background: var(--color-surface-1);
+    border-collapse: collapse;
+  }
+
+  .schema-table thead {
+    background: var(--color-surface-2);
+  }
+
+  .schema-table th {
+    @apply text-left py-2 px-3 text-xs font-semibold uppercase tracking-wider;
+    color: var(--color-text-secondary);
+    border-bottom: 1px solid var(--color-border-secondary);
+  }
+
+  .schema-table td {
+    @apply py-1.5 px-3;
+    border-bottom: 1px solid var(--color-border-secondary);
+  }
+
+  .schema-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .schema-table tbody tr:hover {
+    background: var(--color-surface-hover);
+  }
+
+  .schema-col-name {
+    @apply font-mono font-medium;
+    color: var(--color-text-primary);
+  }
+
+  .schema-col-type {
+    @apply font-mono text-xs;
+    color: var(--color-brand-primary);
+  }
+
+  .schema-col-nullable {
+    @apply text-xs font-medium;
+  }
+
+  .schema-col-nullable.nullable-yes {
+    color: var(--color-text-tertiary);
+  }
+
+  .schema-col-nullable.nullable-no {
+    color: var(--color-status-success);
+  }
+
+  .schema-empty {
+    @apply p-4 text-center text-sm;
+    color: var(--color-text-tertiary);
+  }
+
+  /* ==========================================
    * BREADCRUMB NAVIGATION (Phase 2)
    * ========================================== */
   .breadcrumb-nav {
