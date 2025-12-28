@@ -235,6 +235,11 @@ async function handleDelete(sessionId, sessionService, updateSessionsList, eleme
     const wasOnWelcomePage = document.body.classList.contains("view-welcome");
     const isDeletingCurrentSession = sessionId === sessionService.getCurrentSessionId();
 
+    if (isDeletingCurrentSession) {
+      // Suppress "Disconnected from backend" toast since we are intentionally closing the WebSocket
+      appState.setState("ui.intentionalDisconnect", true);
+    }
+
     const result = await sessionService.deleteSession(sessionId);
 
     if (result.success) {
@@ -257,6 +262,7 @@ async function handleDelete(sessionId, sessionService, updateSessionsList, eleme
 
         const { showWelcomeView } = await import("../managers/view-manager.js");
         await showWelcomeView(elements, appState);
+        appState.setState("ui.intentionalDisconnect", false);
       }
 
       // Close sidebar after delete (but keep open on welcome page for multi-session management)

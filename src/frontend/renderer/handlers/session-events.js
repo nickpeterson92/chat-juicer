@@ -263,6 +263,10 @@ export function setupSessionEventHandlers({
     if (!confirmed) return;
 
     try {
+      // Suppress "Disconnected from backend" toast since we are intentionally closing the WebSocket
+      if (appState) {
+        appState.setState("ui.intentionalDisconnect", true);
+      }
       await sessionService.deleteSession(sessionId);
 
       // Remove from UI
@@ -280,6 +284,9 @@ export function setupSessionEventHandlers({
           filePanel.setSession(null);
         }
         await handleSessionCreate();
+        if (appState) {
+          appState.setState("ui.intentionalDisconnect", false);
+        }
       }
     } catch (error) {
       console.error("Failed to delete session:", error);

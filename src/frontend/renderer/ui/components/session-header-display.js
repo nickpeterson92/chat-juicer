@@ -341,6 +341,11 @@ async function handleDelete(e) {
   if (!confirmDelete) return;
 
   try {
+    // Suppress "Disconnected from backend" toast since we are intentionally closing the WebSocket
+    if (deps.appState) {
+      deps.appState.setState("ui.intentionalDisconnect", true);
+    }
+
     const result = await deps.sessionService.deleteSession(currentSession.session_id);
     if (result.success) {
       // Clear display
@@ -350,6 +355,10 @@ async function handleDelete(e) {
       const { globalEventBus } = await import("../../core/event-bus.js");
       globalEventBus.emit("session:deleted", { sessionId: currentSession.session_id });
       globalEventBus.emit("sessions:refresh");
+
+      if (deps.appState) {
+        deps.appState.setState("ui.intentionalDisconnect", false);
+      }
     }
   } catch (error) {
     console.error("[SessionHeaderDisplay] Delete failed:", error);
