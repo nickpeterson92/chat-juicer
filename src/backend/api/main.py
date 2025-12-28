@@ -136,7 +136,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 except Exception as e:
                     logger.error(f"Background cleanup failed for session {session_id}: {e}")
                 finally:
-                    app.state.background_tasks.discard(asyncio.current_task())
+                    app.state.background_tasks.discard(task)
 
             task = asyncio.create_task(_cleanup())
             app.state.background_tasks.add(task)
