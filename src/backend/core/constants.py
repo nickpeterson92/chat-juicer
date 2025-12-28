@@ -767,6 +767,20 @@ class Settings(BaseSettings):
     file_storage_path: str = Field(default="data/files", description="Base path for local file storage")
     max_file_size: int = Field(default=10 * 1024 * 1024, description="Maximum upload file size in bytes (default 10MB)")
 
+    # S3 storage settings (Phase 2+)
+    s3_endpoint: str | None = Field(
+        default=None,
+        description="S3 endpoint URL (None = use AWS, 'http://localhost:9000' for MinIO)",
+    )
+    s3_bucket: str = Field(default="chatjuicer-files", description="S3 bucket name for file storage")
+    s3_region: str = Field(default="us-east-1", description="AWS region for S3 (used when endpoint is None)")
+    aws_access_key_id: str | None = Field(default=None, description="AWS access key ID")
+    aws_secret_access_key: str | None = Field(default=None, description="AWS secret access key")
+    s3_presigned_url_expiry: int = Field(
+        default=3600,
+        description="Presigned URL expiry time in seconds (default 1 hour)",
+    )
+
     # API server
     api_port: int = Field(default=8000, description="FastAPI port")
     api_host: str = Field(default="0.0.0.0", description="FastAPI host")

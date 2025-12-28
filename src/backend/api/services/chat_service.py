@@ -165,7 +165,11 @@ class ChatService:
                 session_id=session_id,
                 base_folder="sources",
             ):
-                tools = create_session_aware_tools(session_id, model=model)
+                tools = create_session_aware_tools(
+                    session_id,
+                    model=model,
+                    s3_sync=self.file_service.s3_sync,
+                )
 
                 # Create a fresh client for this request to avoid stream mixing
                 # between concurrent sessions (critical for multi-user cloud)
