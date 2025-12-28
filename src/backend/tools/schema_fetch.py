@@ -363,7 +363,7 @@ async def _fetch_sqlserver_schema(config: DatabaseConfig, table_name: str) -> li
 async def _fetch_salesforce_schema(config: DatabaseConfig, table_name: str) -> list[ColumnInfo]:
     """Fetch schema for a Salesforce object (SObject)."""
     try:
-        from simple_salesforce import Salesforce
+        from simple_salesforce import Salesforce  # type: ignore[attr-defined]
     except ImportError as err:
         raise ImportError("simple-salesforce package is required for Salesforce connections") from err
 
