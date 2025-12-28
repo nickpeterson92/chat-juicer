@@ -548,6 +548,21 @@ export async function initializeEventHandlers({
 
       const isOnWelcomePage = document.body.classList.contains("view-welcome");
 
+      // Bot disconnected event
+      window.electronAPI.onBotDisconnected((status) => {
+        // If it's an intentional idle timeout, don't show an alert
+        // The connection will automatically restore when the user interacts
+        if (status && status.isIdle) {
+          console.log("WebSocket idle timeout - connection closed (will auto-reconnect on activity)");
+          // Optional: Update UI to show "Idle" status specifically if desired
+          // For now, we keep it seamless/invisible as requested
+          return;
+        }
+
+        const { showToast } = require("../../utils/toast.js");
+        showToast("Disconnected from backend", "error");
+        appState.setState("ui.aiThinkingActive", false);
+      });
       // Convert file paths to File-like objects by reading them
       const { showToast } = await import("../../utils/toast.js");
       const pendingFiles = appState.getState("ui.pendingWelcomeFiles") || [];
