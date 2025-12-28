@@ -138,7 +138,7 @@ def create_session_aware_tools(
 
         if s3_sync:
             try:
-                # Robustly check success field
+                # edit_file returns JSON string
                 response_data = json.loads(result)
                 if response_data.get("success"):
                     # Resolve path to get correct folder/filename
@@ -149,10 +149,10 @@ def create_session_aware_tools(
                         if folder in ("output", "sources", "templates"):
                             logger.info(f"Triggering background S3 upload for {folder}/{filename}")
                             s3_sync.upload_to_s3_background(session_id, folder, filename)
-            except json.JSONDecodeError:
-                logger.warning(f"Failed to parse edit response for S3 trigger: {result[:100]}")
+            except (json.JSONDecodeError, Exception) as e:
+                logger.warning(f"Failed to parse edit response for S3 trigger: {e}")
 
-        return str(result)
+        return result  # type: ignore[no-any-return]
 
     # Document Generation - Write tool with session_id injection
     async def wrapped_generate_document(
@@ -176,16 +176,16 @@ def create_session_aware_tools(
 
         if s3_sync:
             try:
-                # Robustly check success field
+                # generate_document returns JSON string
                 response_data = json.loads(result)
                 if response_data.get("success"):
                     # generate_document always writes to output/
                     logger.info(f"Triggering background S3 upload for output/{filename}")
                     s3_sync.upload_to_s3_background(session_id, "output", filename)
-            except json.JSONDecodeError:
-                logger.warning(f"Failed to parse generate_document response for S3 trigger: {result[:100]}")
+            except (json.JSONDecodeError, Exception) as e:
+                logger.warning(f"Failed to parse generate_document response for S3 trigger: {e}")
 
-        return str(result)
+        return result  # type: ignore[no-any-return]
 
     # Code Interpreter - Secure Python execution with session_id injection
     async def wrapped_execute_python_code(code: str) -> str:

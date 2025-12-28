@@ -79,6 +79,8 @@ async def test_lifespan_startup_success() -> None:
             assert mock_app.state.mcp_pool == mock_mcp_pool
             assert hasattr(mock_app.state, "ws_manager")
             assert hasattr(mock_app.state, "shutdown_event")
+            assert hasattr(mock_app.state, "background_tasks")
+            assert isinstance(mock_app.state.background_tasks, set)
 
         # Verify shutdown calls handled in finally
         mock_close_db.assert_called_once()
