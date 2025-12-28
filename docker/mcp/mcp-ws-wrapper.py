@@ -15,7 +15,7 @@ from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 app = FastAPI()
 
 # Get server command from environment
-SERVER_CMD = os.getenv("MCP_SERVER_CMD", "").split()
+SERVER_CMD = os.getenv("MCP_SERVER_CMD", "").split() if os.getenv("MCP_SERVER_CMD") else []
 if not SERVER_CMD:
     print("ERROR: MCP_SERVER_CMD environment variable not set", file=sys.stderr)
     sys.exit(1)
