@@ -781,7 +781,6 @@ class Settings(BaseSettings):
     db_max_inactive_connection_lifetime: float = Field(
         default=300.0, description="Close connections idle longer than this (seconds)"
     )
-    mcp_pool_size: int = Field(default=3, description="MCP server instances per server type")
     mcp_acquire_timeout: float = Field(default=30.0, description="MCP server acquire timeout (seconds)")
 
     # WebSocket connection management

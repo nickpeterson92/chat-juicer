@@ -16,7 +16,6 @@ from typing import Any
 from utils.logger import logger
 
 # Pool configuration is now in Settings (core/constants.py):
-# - mcp_pool_size: instances per server type (default: 3)
 # - mcp_acquire_timeout: acquire timeout in seconds (default: 30.0)
 # Helper functions for PERF203 compliance (avoid try-except in loops)
 
@@ -41,7 +40,6 @@ async def _shutdown_mcp_server(server: Any, server_key: str) -> None:
         logger.warning(f"Error shutting down {server_key}: {e}")
 
 
-DEFAULT_POOL_SIZE = 3  # Fallback; prefer settings.mcp_pool_size
 ACQUIRE_TIMEOUT_SECONDS = 30.0  # Fallback; prefer settings.mcp_acquire_timeout
 
 
@@ -62,13 +60,11 @@ class MCPServerPool:
     async def initialize(
         self,
         server_keys: list[str],
-        pool_size: int = DEFAULT_POOL_SIZE,
     ) -> None:
         """Initialize the manager by connecting to MCP servers.
 
         Args:
             server_keys: List of server keys to connect to
-            pool_size: Ignored (kept for compatibility)
         """
         from integrations.mcp_registry import MCP_SERVER_CONFIGS
 
@@ -186,14 +182,12 @@ def get_mcp_pool(acquire_timeout: float = ACQUIRE_TIMEOUT_SECONDS) -> MCPServerP
 
 async def initialize_mcp_pool(
     server_keys: list[str] | None = None,
-    pool_size: int = DEFAULT_POOL_SIZE,
     acquire_timeout: float = ACQUIRE_TIMEOUT_SECONDS,
 ) -> MCPServerPool:
     """Initialize the global MCP server pool.
 
     Args:
         server_keys: Server types to pool (defaults to all configured)
-        pool_size: Number of instances per server type
         acquire_timeout: Timeout in seconds for acquiring a server from pool
 
     Returns:
@@ -203,7 +197,7 @@ async def initialize_mcp_pool(
 
     pool = get_mcp_pool(acquire_timeout=acquire_timeout)
     keys = server_keys if server_keys is not None else DEFAULT_MCP_SERVERS
-    await pool.initialize(keys, pool_size)
+    await pool.initialize(keys)
     return pool
 
 
