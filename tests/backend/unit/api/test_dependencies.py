@@ -49,7 +49,9 @@ def test_get_mcp_pool() -> None:
 
 def test_get_file_service() -> None:
     mock_db_pool = Mock()
-    service = get_file_service(mock_db_pool)
+    mock_settings = Mock()
+    mock_settings.file_storage = "local"
+    service = get_file_service(mock_db_pool, mock_settings)
     assert isinstance(service, LocalFileService)
     assert service.pool == mock_db_pool
 

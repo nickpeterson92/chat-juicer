@@ -26,6 +26,9 @@ def mock_session_service() -> AsyncMock:
 @pytest.fixture
 def mock_file_service() -> MagicMock:
     service = MagicMock()
+    # Configure _s3_sync.sync_from_s3 to be awaitable
+    service._s3_sync = MagicMock()
+    service._s3_sync.sync_from_s3 = AsyncMock()
     return service
 
 
