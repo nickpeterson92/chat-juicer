@@ -123,9 +123,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Store S3 sync service in app state for access elsewhere
     app.state.s3_sync = s3_sync
 
-    # Store background tasks to prevent garbage collection
-    app.state.background_tasks = set()
-
     # Create cleanup callback for S3 mode
     def on_session_disconnect(session_id: str) -> None:
         logger.info(f"Cleanup callback triggered for session {session_id}")
@@ -139,7 +136,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 except Exception as e:
                     logger.error(f"Background cleanup failed for session {session_id}: {e}")
                 finally:
-                    app.state.background_tasks.discard(task)
+                    app.state.background_tasks.discard(asyncio.current_task())
 
             task = asyncio.create_task(_cleanup())
             app.state.background_tasks.add(task)
