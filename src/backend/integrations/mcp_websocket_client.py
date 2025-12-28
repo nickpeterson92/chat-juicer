@@ -56,6 +56,7 @@ class WebSocketMCPClient:
         # Multiplexing state
         self._pending_requests: dict[int, asyncio.Future[dict[str, Any]]] = {}
         self._listen_task: asyncio.Task[None] | None = None
+        self._write_lock = asyncio.Lock()
 
     async def __aenter__(self) -> "WebSocketMCPClient":
         """Connect and initialize MCP server."""
@@ -171,19 +172,20 @@ class WebSocketMCPClient:
         if not self._ws:
             raise RuntimeError("WebSocket not connected")
 
-        msg_id = self._next_id()
-        future: asyncio.Future[dict[str, Any]] = asyncio.Future()
-        self._pending_requests[msg_id] = future
+        async with self._write_lock:
+            msg_id = self._next_id()
+            future: asyncio.Future[dict[str, Any]] = asyncio.Future()
+            self._pending_requests[msg_id] = future
 
-        req = {
-            "jsonrpc": "2.0",
-            "id": msg_id,
-            "method": method,
-            "params": params,
-        }
+            req = {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "method": method,
+                "params": params,
+            }
+            await self._ws.send(json.dumps(req))
 
         try:
-            await self._ws.send(json.dumps(req))
             return await asyncio.wait_for(future, timeout=timeout)
         except asyncio.TimeoutError:
             self._pending_requests.pop(msg_id, None)

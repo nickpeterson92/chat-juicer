@@ -19,8 +19,6 @@ class MCPServerConfig(TypedDict, total=False):
 
     name: str
     description: str
-    command: str
-    args: list[str]
     env_key: str  # Optional: Settings attribute name for API key (e.g., "tavily_api_key")
     transport: str  # "stdio" or "websocket"
     url: str  # WebSocket URL if transport is websocket
@@ -55,10 +53,7 @@ DEFAULT_MCP_SERVERS = ["sequential", "fetch", "tavily"]
 
 
 async def initialize_mcp_server(server_key: str) -> Any | None:
-    """Initialize a single MCP server using transport abstraction.
-
-    Phase 1: Returns MCPServerStdio via Docker container
-    Phase 2: Will return MCPServerStreamableHttp via HTTP endpoint
+    """Initialize a single MCP server using WebSocket transport.
 
     Args:
         server_key: Key from MCP_SERVER_CONFIGS (e.g., "sequential", "fetch", "tavily")
@@ -82,12 +77,10 @@ async def initialize_mcp_server(server_key: str) -> Any | None:
             return None
 
     try:
-        # Try transport abstraction first (HTTP if configured)
-        try:
-        # Try transport abstraction first (HTTP if configured)
+        # Use transport abstraction (WebSocket)
         from integrations.mcp_transport import create_transport
 
-        transport = await create_transport(server_key, config)
+        transport = await create_transport(config)
         server = await transport.connect()
         return server
     except ImportError:
@@ -97,19 +90,12 @@ async def initialize_mcp_server(server_key: str) -> Any | None:
         logger.warning(f"{config['name']} server not available: {e}")
         return None
 
-        transport = await create_transport(server_key, config)
-        server = await transport.connect()
-        return server
-    except Exception as e:
-        logger.warning(f"{config['name']} server not available: {e}")
-        return None
-
 
 async def initialize_all_mcp_servers() -> dict[str, Any]:
     """Initialize all available MCP servers and return as a dictionary.
 
     Returns:
-        Dictionary mapping server keys to initialized MCPServerStdio instances
+        Dictionary mapping server keys to initialized MCP server instances
     """
     servers: dict[str, Any] = {}
 
@@ -130,7 +116,7 @@ def filter_mcp_servers(all_servers: dict[str, Any], config: list[str] | None = N
         config: List of server keys to include (None = use DEFAULT_MCP_SERVERS)
 
     Returns:
-        List of MCPServerStdio instances matching the configuration
+        List of MCP server client instances matching the configuration
     """
     if config is None:
         config = DEFAULT_MCP_SERVERS

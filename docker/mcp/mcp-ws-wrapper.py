@@ -41,7 +41,7 @@ class MCPBridge:
         self.running = True
 
         # Start bidirectional forwarding
-        await asyncio.gather(self._forward_ws_to_stdio(), self._forward_stdio_to_ws(), return_exceptions=True)
+        await asyncio.gather(self._forward_ws_to_stdio(), self._forward_stdio_to_ws())
 
     async def _forward_ws_to_stdio(self) -> None:
         """Forward messages from WebSocket to stdio."""
