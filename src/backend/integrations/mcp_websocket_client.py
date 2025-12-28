@@ -83,8 +83,7 @@ class WebSocketMCPClient:
 
             # Send initialized notification
             init_notif = {"jsonrpc": "2.0", "method": "notifications/initialized"}
-            if self._ws:
-                await self._ws.send(json.dumps(init_notif))
+            await self._ws.send(json.dumps(init_notif))
 
             self._initialized = True
             return self
