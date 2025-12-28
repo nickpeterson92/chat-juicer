@@ -6,6 +6,7 @@
 import { FUNCTION_CARD_CLEANUP_DELAY } from "../config/constants.js";
 import { safeParse } from "../utils/json-cache.js";
 import { highlightCode, renderMarkdown } from "../utils/markdown-renderer.js";
+import { getToolDisplayName, getToolIcon, hasCustomRenderer } from "./tool-registry.js";
 
 /**
  * Pretty-print and syntax highlight JSON content
@@ -35,6 +36,30 @@ function prettyPrintJson(content) {
   return { html: highlighted, isJson: true };
 }
 
+/**
+ * Create a fallback result section with label and pre content
+ * Reduces duplication across tool result renderers
+ * @param {string} content - Raw content to display
+ * @param {string} label - Section label (default: "Result")
+ * @returns {HTMLElement} Result section element
+ */
+function createFallbackResultSection(content, label = "Result") {
+  const resultSection = document.createElement("div");
+  resultSection.className = "disclosure-result";
+
+  const resultLabel = document.createElement("div");
+  resultLabel.className = "disclosure-section-label";
+  resultLabel.textContent = label;
+  resultSection.appendChild(resultLabel);
+
+  const resultContent = document.createElement("pre");
+  resultContent.className = "disclosure-section-content";
+  resultContent.textContent = content;
+  resultSection.appendChild(resultContent);
+
+  return resultSection;
+}
+
 // Throttled status update queue for batched DOM updates
 const pendingUpdates = new Map();
 let updateScheduled = false;
@@ -48,63 +73,8 @@ let argUpdateScheduled = false;
 const CHEVRON_RIGHT =
   '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>';
 
-// SVG icon mapping for functions
-const FUNCTION_ICONS = {
-  list_directory:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h.01"/><path d="M3 12h.01"/><path d="M3 19h.01"/><path d="M8 5h13"/><path d="M8 12h13"/><path d="M8 19h13"/></svg>',
-  search_files:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
-  read_file:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M16 12h2"/><path d="M16 8h2"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/><path d="M6 12h2"/><path d="M6 8h2"/></svg>',
-  generate_document:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/></svg>',
-  edit_file:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18.226 5.226-2.52-2.52A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-.351"/><path d="M21.378 12.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/><path d="M8 18h1"/></svg>',
-  text_edit:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18.226 5.226-2.52-2.52A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-.351"/><path d="M21.378 12.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/><path d="M8 18h1"/></svg>',
-  regex_edit:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18.226 5.226-2.52-2.52A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-.351"/><path d="M21.378 12.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/><path d="M8 18h1"/></svg>',
-  insert_text:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18.226 5.226-2.52-2.52A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-.351"/><path d="M21.378 12.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/><path d="M8 18h1"/></svg>',
-  sequentialthinking:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg>',
-  fetch:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 10c.7-.7 1.69 0 2.5 0a2.5 2.5 0 1 0 0-5 .5.5 0 0 1-.5-.5 2.5 2.5 0 1 0-5 0c0 .81.7 1.8 0 2.5l-7 7c-.7.7-1.69 0-2.5 0a2.5 2.5 0 0 0 0 5c.28 0 .5.22.5.5a2.5 2.5 0 1 0 5 0c0-.81-.7-1.8 0-2.5Z"/></svg>',
-  // Tavily MCP tools (search, extract, map, crawl)
-  tavily_search:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>',
-  tavily_extract:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3L11 9.999"/><path d="M15.973 4.027A13 13 0 0 0 5.902 2.373c-1.398.342-1.092 2.158.277 2.601a19.9 19.9 0 0 1 5.822 3.024"/><path d="M16.001 11.999a19.9 19.9 0 0 1 3.024 5.824c.444 1.369 2.26 1.676 2.603.278A13 13 0 0 0 20 8.069"/><path d="M18.352 3.352a1.205 1.205 0 0 0-1.704 0l-5.296 5.296a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l5.296-5.296a1.205 1.205 0 0 0 0-1.704z"/></svg>',
-  tavily_map:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3V6z"/><path d="M9 3v15M15 6v15"/></svg>',
-  tavily_crawl:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 12-1.5 3"/><path d="M19.63 18.81 22 20"/><path d="M6.47 8.23a1.68 1.68 0 0 1 2.44 1.93l-.64 2.08a6.76 6.76 0 0 0 10.16 7.67l.42-.27a1 1 0 1 0-2.73-4.21l-.42.27a1.76 1.76 0 0 1-2.63-1.99l.64-2.08A6.66 6.66 0 0 0 3.94 3.9l-.7.4a1 1 0 1 0 2.55 4.34z"/></svg>',
-  // Conversation summarization
-  summarize_conversation:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="m3 21 9-9"/><path d="M12.2 6.2 11 5"/></svg>',
-  // Code interpreter
-  execute_python_code:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>',
-  default:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>',
-};
-
-/**
- * Get SVG icon for a function
- * @param {string} functionName - Function name
- * @returns {string} SVG icon HTML
- */
-function getFunctionIcon(functionName) {
-  const normalizedName = functionName.toLowerCase().replace(/[_-]/g, "");
-
-  for (const [key, icon] of Object.entries(FUNCTION_ICONS)) {
-    if (normalizedName.includes(key.toLowerCase().replace(/[_-]/g, ""))) {
-      return icon;
-    }
-  }
-
-  return FUNCTION_ICONS.default;
-}
+// NOTE: Icons and tool names are now managed in tool-registry.js
+// Use getToolIcon() and getToolDisplayName() instead of the old functions.
 
 /**
  * Extract a value from potentially incomplete JSON using regex
@@ -149,6 +119,8 @@ function extractPrimaryArg(args, _functionName) {
     "name",
     "command",
     "code",
+    "db_name", // Schema fetch
+    "table_name", // Schema fetch
   ];
 
   // If args is a string (streaming JSON), try regex extraction first
@@ -226,57 +198,6 @@ function formatArgValue(val) {
 }
 
 /**
- * Format tool name for display (human-readable)
- * @param {string} functionName - Raw function name
- * @returns {string} Formatted display name
- */
-function formatToolName(functionName) {
-  // Handle MCP server prefixed names like "sequentialthinking"
-  const name = functionName.replace(/^mcp_/, "");
-
-  // Special case mappings
-  const nameMap = {
-    sequentialthinking: "Thought",
-    summarize_conversation: "Summarize",
-    summarizeconversation: "Summarize",
-    read_file: "Read",
-    list_directory: "List",
-    search_files: "File Search",
-    generate_document: "Generate",
-    edit_file: "Edit",
-    text_edit: "Edit",
-    regex_edit: "Regex",
-    insert_text: "Insert",
-    fetch: "Fetch",
-    // Tavily MCP tools
-    tavily_search: "Web Search",
-    tavilysearch: "Web Search",
-    tavily_extract: "Extract",
-    tavilyextract: "Extract",
-    tavily_map: "Map",
-    tavilymap: "Map",
-    tavily_crawl: "Crawl",
-    tavilycrawl: "Crawl",
-    // Code interpreter
-    execute_python_code: "Code",
-    executepythoncode: "Code",
-  };
-
-  const normalized = name.toLowerCase().replace(/[_-]/g, "");
-  for (const [key, display] of Object.entries(nameMap)) {
-    if (normalized.includes(key.replace(/[_-]/g, ""))) {
-      return display;
-    }
-  }
-
-  // Default: capitalize first letter, replace underscores with spaces
-  return name
-    .split(/[_-]/)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
-/**
  * Create or get an inline function call card (Claude Code disclosure style)
  * Collapsed: "ToolName primary_arg ▼"
  * Expanded: Shows full arguments, result, reasoning
@@ -340,11 +261,11 @@ export function createFunctionCallCard(
 
     const iconSpan = document.createElement("span");
     iconSpan.className = "disclosure-icon";
-    iconSpan.innerHTML = getFunctionIcon(functionName);
+    iconSpan.innerHTML = getToolIcon(functionName);
 
     const toolNameSpan = document.createElement("span");
     toolNameSpan.className = "disclosure-tool-name";
-    toolNameSpan.textContent = formatToolName(functionName);
+    toolNameSpan.textContent = getToolDisplayName(functionName);
 
     const argsSpan = document.createElement("span");
     argsSpan.className = "disclosure-args-preview";
@@ -1637,6 +1558,174 @@ function renderSearchFilesResult(result) {
 }
 
 /**
+ * Render list_registered_databases result - shows available databases
+ * @param {Object} result - The database listing result
+ * @returns {HTMLElement} Rendered database listing
+ */
+function renderDatabaseListResult(result) {
+  const container = document.createElement("div");
+  container.className = "database-list-result";
+
+  const databases = result.databases || [];
+
+  // Header
+  const header = document.createElement("div");
+  header.className = "db-list-header";
+
+  const dbIcon = document.createElement("span");
+  dbIcon.className = "db-list-icon";
+  dbIcon.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg>';
+  header.appendChild(dbIcon);
+
+  const title = document.createElement("span");
+  title.className = "db-list-title";
+  title.textContent = "Registered Databases";
+  header.appendChild(title);
+
+  const count = document.createElement("span");
+  count.className = "db-list-count";
+  count.textContent = `${databases.length} database${databases.length !== 1 ? "s" : ""}`;
+  header.appendChild(count);
+
+  container.appendChild(header);
+
+  // Database cards
+  if (databases.length > 0) {
+    const list = document.createElement("div");
+    list.className = "db-list-items";
+
+    for (const db of databases) {
+      const card = document.createElement("div");
+      card.className = "db-list-item";
+
+      const typeIcon = document.createElement("span");
+      typeIcon.className = `db-type-icon db-type-${db.type || "unknown"}`;
+      typeIcon.textContent = getDbTypeLabel(db.type);
+      card.appendChild(typeIcon);
+
+      const name = document.createElement("span");
+      name.className = "db-name";
+      name.textContent = db.name;
+      card.appendChild(name);
+
+      list.appendChild(card);
+    }
+
+    container.appendChild(list);
+  } else {
+    const empty = document.createElement("div");
+    empty.className = "db-list-empty";
+    empty.textContent = "No databases configured";
+    container.appendChild(empty);
+  }
+
+  return container;
+}
+
+/**
+ * Get short label for database type
+ * @param {string} type - Database type
+ * @returns {string} Short label
+ */
+function getDbTypeLabel(type) {
+  const labels = {
+    postgresql: "PG",
+    mysql: "MySQL",
+    sqlserver: "SQL",
+  };
+  return labels[type] || type?.toUpperCase()?.substring(0, 3) || "DB";
+}
+
+/**
+ * Render get_table_schema result - shows column schema as a table
+ * @param {Object} result - The schema result
+ * @returns {HTMLElement} Rendered schema table
+ */
+function renderTableSchemaResult(result) {
+  const container = document.createElement("div");
+  container.className = "table-schema-result";
+
+  const columns = result.columns || [];
+  const tableName = result.table || "Unknown";
+  const dbName = result.database || "";
+  const schemaName = result.schema || "";
+
+  // Header with table name
+  const header = document.createElement("div");
+  header.className = "schema-header";
+
+  const tableIcon = document.createElement("span");
+  tableIcon.className = "schema-icon";
+  tableIcon.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3zM21 9H3M21 15H3M12 3v18"/></svg>';
+  header.appendChild(tableIcon);
+
+  const tablePath = document.createElement("span");
+  tablePath.className = "schema-table-path";
+  const pathParts = [dbName, schemaName, tableName].filter(Boolean);
+  tablePath.textContent = pathParts.join(".");
+  header.appendChild(tablePath);
+
+  const colCount = document.createElement("span");
+  colCount.className = "schema-col-count";
+  colCount.textContent = `${columns.length} column${columns.length !== 1 ? "s" : ""}`;
+  header.appendChild(colCount);
+
+  container.appendChild(header);
+
+  // Column table
+  if (columns.length > 0) {
+    const table = document.createElement("table");
+    table.className = "schema-table";
+
+    // Table header
+    const thead = document.createElement("thead");
+    const headerRow = document.createElement("tr");
+    ["Column", "Type", "Nullable"].forEach((text) => {
+      const th = document.createElement("th");
+      th.textContent = text;
+      headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    // Table body
+    const tbody = document.createElement("tbody");
+    for (const col of columns) {
+      const row = document.createElement("tr");
+
+      const nameCell = document.createElement("td");
+      nameCell.className = "schema-col-name";
+      nameCell.textContent = col.name;
+      row.appendChild(nameCell);
+
+      const typeCell = document.createElement("td");
+      typeCell.className = "schema-col-type";
+      typeCell.textContent = col.type;
+      row.appendChild(typeCell);
+
+      const nullCell = document.createElement("td");
+      nullCell.className = `schema-col-nullable ${col.nullable ? "nullable-yes" : "nullable-no"}`;
+      nullCell.textContent = col.nullable ? "Yes" : "No";
+      row.appendChild(nullCell);
+
+      tbody.appendChild(row);
+    }
+    table.appendChild(tbody);
+
+    container.appendChild(table);
+  } else {
+    const empty = document.createElement("div");
+    empty.className = "schema-empty";
+    empty.textContent = "No columns found";
+    container.appendChild(empty);
+  }
+
+  return container;
+}
+
+/**
  * Download a file from code interpreter output
  * @param {Object} file - File metadata
  */
@@ -1724,29 +1813,7 @@ function flushStatusUpdates(activeCalls) {
     const isSequentialThinking = card.rawName === "sequentialthinking";
 
     // Tools with custom result renderers - skip generic args (info is in the rendered result)
-    const hasCustomResultRenderer = [
-      "read_file",
-      "wrapped_read_file",
-      "edit_file",
-      "wrapped_edit_file",
-      "list_directory",
-      "wrapped_list_directory",
-      "search_files",
-      "wrapped_search_files",
-      "tavily-search",
-      "tavily_search",
-      "tavilysearch",
-      "fetch",
-      "tavily-extract",
-      "tavily_extract",
-      "tavilyextract",
-      "tavily-crawl",
-      "tavily_crawl",
-      "tavilycrawl",
-      "tavily-map",
-      "tavily_map",
-      "tavilymap",
-    ].includes(card.rawName);
+    const hasCustomResultRenderer = hasCustomRenderer(card.rawName);
 
     if (data.tool_arguments && !isSummarization) {
       // Store arguments on card for later access (e.g., for web search query extraction)
@@ -2098,6 +2165,36 @@ function flushStatusUpdates(activeCalls) {
 
           contentDiv.appendChild(resultSection);
         }
+      } else if (card.rawName === "list_registered_databases" || card.rawName === "wrapped_list_registered_databases") {
+        // List databases: Show database cards
+        const parsedResult = safeParse(data.tool_result, null);
+        if (parsedResult?.success && parsedResult?.databases) {
+          const resultSection = document.createElement("div");
+          resultSection.className = "disclosure-result";
+
+          const contentElement = renderDatabaseListResult(parsedResult);
+          resultSection.appendChild(contentElement);
+
+          contentDiv.appendChild(resultSection);
+        } else {
+          // Fallback or error
+          contentDiv.appendChild(createFallbackResultSection(data.tool_result));
+        }
+      } else if (card.rawName === "get_table_schema" || card.rawName === "wrapped_get_table_schema") {
+        // Table schema: Show column table
+        const parsedResult = safeParse(data.tool_result, null);
+        if (parsedResult?.success && parsedResult?.columns) {
+          const resultSection = document.createElement("div");
+          resultSection.className = "disclosure-result";
+
+          const contentElement = renderTableSchemaResult(parsedResult);
+          resultSection.appendChild(contentElement);
+
+          contentDiv.appendChild(resultSection);
+        } else {
+          // Fallback or error
+          contentDiv.appendChild(createFallbackResultSection(data.tool_result));
+        }
       } else {
         // Regular tool: Show with "Result" label and JSON/text formatting
         const resultSection = document.createElement("div");
@@ -2376,11 +2473,11 @@ export function createCompletedToolCard(chatContainer, toolData) {
 
   const iconSpan = document.createElement("span");
   iconSpan.className = "disclosure-icon";
-  iconSpan.innerHTML = getFunctionIcon(tool_name);
+  iconSpan.innerHTML = getToolIcon(tool_name);
 
   const toolNameSpan = document.createElement("span");
   toolNameSpan.className = "disclosure-tool-name";
-  toolNameSpan.textContent = formatToolName(tool_name);
+  toolNameSpan.textContent = getToolDisplayName(tool_name);
 
   const argsSpan = document.createElement("span");
   // Skip args display for summarization (cleaner card like Thought)
@@ -2406,29 +2503,7 @@ export function createCompletedToolCard(chatContainer, toolData) {
 
   // Add arguments section (skip for summarization - cleaner card like Thought)
   // Tools with custom result renderers skip args - info is in the rendered result
-  const hasCustomResultRenderer = [
-    "read_file",
-    "wrapped_read_file",
-    "edit_file",
-    "wrapped_edit_file",
-    "list_directory",
-    "wrapped_list_directory",
-    "search_files",
-    "wrapped_search_files",
-    "tavily-search",
-    "tavily_search",
-    "tavilysearch",
-    "fetch",
-    "tavily-extract",
-    "tavily_extract",
-    "tavilyextract",
-    "tavily-crawl",
-    "tavily_crawl",
-    "tavilycrawl",
-    "tavily-map",
-    "tavily_map",
-    "tavilymap",
-  ].includes(tool_name);
+  const hasCustomResultRenderer = hasCustomRenderer(tool_name);
 
   if (args && !isSummarization && !hasCustomResultRenderer) {
     const isCodeInterpreter = tool_name === "execute_python_code" || tool_name === "wrapped_execute_python_code";
@@ -2723,6 +2798,39 @@ export function createCompletedToolCard(chatContainer, toolData) {
         resultSection.appendChild(resultContent);
 
         contentDiv.appendChild(resultSection);
+      }
+    } else if (
+      (tool_name === "list_registered_databases" || tool_name === "wrapped_list_registered_databases") &&
+      success
+    ) {
+      // List databases: Show database cards
+      const parsedResult = safeParse(result, null);
+      if (parsedResult?.success && parsedResult?.databases) {
+        const resultSection = document.createElement("div");
+        resultSection.className = "disclosure-result";
+
+        const contentElement = renderDatabaseListResult(parsedResult);
+        resultSection.appendChild(contentElement);
+
+        contentDiv.appendChild(resultSection);
+      } else {
+        // Fallback to regular display
+        contentDiv.appendChild(createFallbackResultSection(result));
+      }
+    } else if ((tool_name === "get_table_schema" || tool_name === "wrapped_get_table_schema") && success) {
+      // Table schema: Show column table
+      const parsedResult = safeParse(result, null);
+      if (parsedResult?.success && parsedResult?.columns) {
+        const resultSection = document.createElement("div");
+        resultSection.className = "disclosure-result";
+
+        const contentElement = renderTableSchemaResult(parsedResult);
+        resultSection.appendChild(contentElement);
+
+        contentDiv.appendChild(resultSection);
+      } else {
+        // Fallback to regular display
+        contentDiv.appendChild(createFallbackResultSection(result));
       }
     } else {
       // Regular tool: Show with "Result" label and JSON/text formatting

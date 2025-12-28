@@ -11,6 +11,7 @@ from typing import Any
 from tools.code_interpreter import execute_python_code
 from tools.document_generation import generate_document
 from tools.file_operations import list_directory, read_file, search_files
+from tools.schema_fetch import get_table_schema, list_registered_databases
 from tools.text_editing import edit_file
 
 # Agent/Runner tools - wrap functions with function_tool decorator
@@ -38,6 +39,8 @@ def initialize_tools() -> tuple[list[Any], dict[str, Callable[..., str] | Callab
         generate_document_tool = function_tool(generate_document)
         edit_file_tool = function_tool(edit_file)
         execute_python_code_tool = function_tool(execute_python_code)
+        list_registered_databases_tool = function_tool(list_registered_databases)
+        get_table_schema_tool = function_tool(get_table_schema)
 
         # List of tools for Agent
         agent_tools = [
@@ -47,6 +50,8 @@ def initialize_tools() -> tuple[list[Any], dict[str, Callable[..., str] | Callab
             generate_document_tool,
             edit_file_tool,
             execute_python_code_tool,
+            list_registered_databases_tool,
+            get_table_schema_tool,
         ]
 
         # Function registry for direct execution
@@ -57,6 +62,8 @@ def initialize_tools() -> tuple[list[Any], dict[str, Callable[..., str] | Callab
             "generate_document": generate_document,
             "edit_file": edit_file,
             "execute_python_code": execute_python_code,
+            "list_registered_databases": list_registered_databases,
+            "get_table_schema": get_table_schema,
         }
 
         return agent_tools, function_registry
@@ -222,6 +229,34 @@ be collected and persisted alongside other generated documents.""",
                 },
             },
             "required": ["code"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "list_registered_databases",
+        "description": "List all databases configured in the registry. Use this to discover available database connections before fetching schemas. Returns database names and types (postgresql, mysql, sqlserver).",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "type": "function",
+        "name": "get_table_schema",
+        "description": "Fetch column schema for a database table. Returns column names, types, and nullability. Use list_registered_databases first to see available databases. For data integration workflows, fetch both source and target schemas to build mapping documents.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "db_name": {
+                    "type": "string",
+                    "description": "Database name from registry (e.g., 'sales_db'). Use list_registered_databases to see available names.",
+                },
+                "table_name": {
+                    "type": "string",
+                    "description": "Table name to fetch schema for (e.g., 'customers', 'orders')",
+                },
+            },
+            "required": ["db_name", "table_name"],
         },
     },
 ]
