@@ -31,9 +31,7 @@ if settings.debug:
 
     logger.info(f"Env files: {[f.name for f in _get_env_files()]}")
     logger.info(
-        f"Settings: app_env={settings.app_env}, "
-        f"mcp_pool_size={settings.mcp_pool_size}, "
-        f"db_pool=[{settings.db_pool_min_size},{settings.db_pool_max_size}]"
+        f"Settings: app_env={settings.app_env}, " f"db_pool=[{settings.db_pool_min_size},{settings.db_pool_max_size}]"
     )
 
 # Configure uvicorn logging at module level to ensure workers use it
@@ -114,7 +112,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Initialize MCP server pool
     app.state.mcp_pool = await initialize_mcp_pool(
-        pool_size=settings.mcp_pool_size,
         acquire_timeout=settings.mcp_acquire_timeout,
     )
 
