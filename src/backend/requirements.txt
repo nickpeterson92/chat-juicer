@@ -51,3 +51,6 @@ pydantic-settings>=2.12.0  # Settings management with environment variables
 # Binary Serialization (REQUIRED for IPC Protocol V2)
 msgpack>=1.1.2  # MessagePack serialization for binary IPC protocol
 websockets>=13.1  # Async WebSocket client for MCP transport
+
+# S3 Storage (Phase 2+)
+boto3>=1.35.0  # AWS SDK for S3-compatible storage

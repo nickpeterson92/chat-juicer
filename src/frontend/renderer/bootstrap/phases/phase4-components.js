@@ -51,7 +51,27 @@ export async function initializeComponents({ elements, appState, services, ipcAd
         // Phase 3: Concurrent Sessions - check if CURRENT session is streaming
         // For concurrent sessions, only queue if the same session is busy
         // Different sessions can stream simultaneously (backend enforces MAX_CONCURRENT_STREAMS)
-        const currentSessionId = services.sessionService.getCurrentSessionId();
+        let currentSessionId = services.sessionService.getCurrentSessionId();
+
+        // Auto-create session if sending from welcome page (no active session)
+        if (!currentSessionId) {
+          try {
+            const createResult = await services.sessionService.createSession();
+            if (createResult.success) {
+              currentSessionId = createResult.session.session_id;
+              // Session switch is handled by createSession -> it updates AppState
+            } else {
+              console.error("Failed to auto-create session:", createResult.error);
+              alert(`Failed to start chat: ${createResult.error}`);
+              return;
+            }
+          } catch (error) {
+            console.error("Error auto-creating session:", error);
+            alert(`Failed to start chat: ${error.message}`);
+            return;
+          }
+        }
+
         const isCurrentSessionStreaming = currentSessionId && services.streamManager?.isStreaming(currentSessionId);
 
         if (isCurrentSessionStreaming) {

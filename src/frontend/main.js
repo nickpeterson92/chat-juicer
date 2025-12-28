@@ -154,39 +154,73 @@ function mapWebSocketMessage(message, sessionId) {
 }
 
 function ensureWebSocket(sessionId) {
-  // Return existing WebSocket if already connected for this session
+  logger.debug(`Ensuring WebSocket for session ${sessionId}`);
+  // Return existing WebSocket if already connected or connecting for this session
   if (sessionWebSockets.has(sessionId)) {
     const existing = sessionWebSockets.get(sessionId);
-    if (existing.readyState === 1) {
-      // WebSocket.OPEN
+    // 0 = CONNECTING, 1 = OPEN
+    if (existing.readyState === 1 || existing.readyState === 0) {
       return existing;
     }
     // Clean up stale connection
+    logger.debug(`Cleaning up stale WebSocket connection for ${sessionId}`);
+    try {
+      existing.close();
+    } catch (_e) {
+      // Ignore close errors on stale sockets
+    }
     sessionWebSockets.delete(sessionId);
   }
 
   // Create new WebSocket for this session (don't close others!)
+  logger.debug(`Connecting to WebSocket for session ${sessionId}...`);
   const ws = connectWebSocket(
     sessionId,
     (msg) => {
       const mapped = mapWebSocketMessage(msg, sessionId);
       forwardBotMessage(mapped);
     },
-    () => {
+    (code, reason) => {
       // On close/error, remove from map and notify if it was active session
-      sessionWebSockets.delete(sessionId);
-      if (sessionId === activeSessionId && mainWindow) {
-        mainWindow.webContents.send("bot-disconnected");
+      const isIdleTimeout = code === 4000;
+      logger.info(
+        `WebSocket closed for session ${sessionId} (Code: ${code}, Reason: ${reason}) - ${isIdleTimeout ? "Idle Timeout (No Reconnect)" : "Checking Reconnect"}`
+      );
+
+      // Only delete if this is still the current socket for this session
+      // (Handling race conditions where a newer socket might have replaced it)
+      if (sessionWebSockets.get(sessionId) === ws) {
+        sessionWebSockets.delete(sessionId);
       }
+
+      if (sessionId === activeSessionId && mainWindow) {
+        mainWindow.webContents.send("bot-disconnected", { isIdle: isIdleTimeout });
+      }
+
       if (reconnectTimer) clearTimeout(reconnectTimer);
+
+      // Don't reconnect if it was an intentional idle timeout
+      if (isIdleTimeout) {
+        return;
+      }
+
+      // Backoff if we hit connection limit (code 4503)
+      // 4503 is custom code for "Service unavailable - connection limit reached"
+      const delay = code === 4503 ? RESTART_DELAY * 2 : RESTART_DELAY;
+
       reconnectTimer = setTimeout(() => {
         // Only reconnect if this session is still active
         if (sessionId === activeSessionId) {
+          logger.info(`Attempting auto-reconnect for active session ${sessionId}`);
           ensureWebSocket(sessionId);
         }
-      }, RESTART_DELAY);
+      }, delay);
     }
   );
+
+  ws.on("open", () => {
+    logger.debug(`WebSocket successfully opened for session ${sessionId}`);
+  });
 
   sessionWebSockets.set(sessionId, ws);
   return ws;
@@ -260,19 +294,20 @@ app.whenReady().then(() => {
     // This preserves attachment metadata for multimodal support
     const messages = messageArray.map((msg) => (typeof msg === "string" ? { content: msg } : msg));
 
-    ws.once("open", () => {
+    // 1 = WebSocket.OPEN
+    if (ws.readyState === 1) {
       sendWebSocketMessage(ws, {
         type: "message",
         messages,
         session_id: targetSession,
       });
-    });
-
-    if (ws.readyState === ws.OPEN) {
-      sendWebSocketMessage(ws, {
-        type: "message",
-        messages,
-        session_id: targetSession,
+    } else {
+      ws.once("open", () => {
+        sendWebSocketMessage(ws, {
+          type: "message",
+          messages,
+          session_id: targetSession,
+        });
       });
     }
   });
@@ -299,6 +334,8 @@ app.whenReady().then(() => {
               signal: controller.signal,
             });
             activeSessionId = response.session_id || activeSessionId;
+            // Pre-connect WebSocket to satisfy lifecycle requirements
+            if (activeSessionId) ensureWebSocket(activeSessionId);
             return response;
           }
           case "switch": {
@@ -306,6 +343,8 @@ app.whenReady().then(() => {
             if (!sessionId) return { error: "Missing session_id" };
             const response = await apiRequest(`/api/v1/sessions/${sessionId}`, { signal: controller.signal });
             activeSessionId = sessionId;
+            // Pre-connect WebSocket to satisfy lifecycle requirements
+            ensureWebSocket(sessionId);
             return response;
           }
           case "delete": {
@@ -438,6 +477,10 @@ app.whenReady().then(() => {
       }
 
       const { sessionId, folder } = parsed;
+      if (sessionId) {
+        if (!activeSessionId) activeSessionId = sessionId;
+        ensureWebSocket(sessionId);
+      }
       const response = await apiRequest(`/api/v1/sessions/${sessionId}/files?folder=${encodeURIComponent(folder)}`);
 
       logger.debug("Directory listed successfully", { dirPath, fileCount: response.files?.length || 0 });
@@ -458,6 +501,10 @@ app.whenReady().then(() => {
         return { success: false, error: "Invalid path" };
       }
       const { sessionId, folder } = parsed;
+      if (sessionId) {
+        if (!activeSessionId) activeSessionId = sessionId;
+        ensureWebSocket(sessionId);
+      }
       await apiRequest(
         `/api/v1/sessions/${sessionId}/files/${encodeURIComponent(filename)}?folder=${encodeURIComponent(folder)}`,
         { method: "DELETE" }
@@ -694,6 +741,10 @@ app.whenReady().then(() => {
         return { success: false, error: "Invalid path" };
       }
       const { sessionId, folder } = parsed;
+      if (sessionId) {
+        if (!activeSessionId) activeSessionId = sessionId;
+        ensureWebSocket(sessionId);
+      }
       const response = await apiRequest(
         `/api/v1/sessions/${sessionId}/files/${encodeURIComponent(filename)}/path?folder=${encodeURIComponent(folder)}`
       );

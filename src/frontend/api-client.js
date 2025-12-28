@@ -49,8 +49,8 @@ function connectWebSocket(sessionId, onMessage, onClose) {
   });
 
   if (onClose) {
-    ws.on("close", onClose);
-    ws.on("error", onClose);
+    ws.on("close", (code, reason) => onClose(code, reason));
+    ws.on("error", (err) => onClose(undefined, undefined, err));
   }
 
   return ws;

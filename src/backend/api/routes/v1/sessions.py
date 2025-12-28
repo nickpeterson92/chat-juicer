@@ -202,6 +202,7 @@ async def get_session(
     session_id: SessionIdPath,
     db: DB,
     sessions: Sessions,
+    files: Files,
 ) -> SessionWithHistoryResponse:
     """Get session with message history and files."""
     update_request_context(session_id=session_id)
@@ -211,6 +212,10 @@ async def get_session(
 
     if not result:
         raise SessionNotFoundError(session_id)
+
+    # Sync files from S3 if S3 sync is enabled (Phase 2)
+    if hasattr(files, "_s3_sync") and files._s3_sync:
+        await files._s3_sync.sync_from_s3(session_id)
 
     return SessionWithHistoryResponse(
         session=SessionResponse(**result["session"]),
