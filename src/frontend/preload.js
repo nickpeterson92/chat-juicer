@@ -27,7 +27,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Listen for bot disconnection
   onBotDisconnected: (callback) => {
-    ipcRenderer.on("bot-disconnected", () => callback());
+    ipcRenderer.on("bot-disconnected", (_event, status) => callback(status));
   },
 
   // Listen for bot restart completion

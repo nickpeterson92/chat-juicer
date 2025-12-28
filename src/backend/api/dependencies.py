@@ -35,9 +35,22 @@ async def get_db(request: Request) -> asyncpg.Pool:
     return request.app.state.db_pool
 
 
-def get_file_service(db: Annotated[asyncpg.Pool, Depends(get_db)]) -> FileService:
-    """Provide file service (local filesystem for Phase 1)."""
-    return LocalFileService(base_path=DATA_FILES_PATH, pool=db)
+def get_file_service(
+    db: Annotated[asyncpg.Pool, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
+) -> FileService:
+    """Provide file service with optional S3 sync (Phase 2).
+
+    When FILE_STORAGE=s3, creates S3SyncService for background uploads.
+    Tools still use local files, but writes are synced to S3 in background.
+    """
+    s3_sync = None
+    if settings.file_storage == "s3":
+        from api.services.s3_sync_service import S3SyncService
+
+        s3_sync = S3SyncService(settings=settings, local_base_path=DATA_FILES_PATH)
+
+    return LocalFileService(base_path=DATA_FILES_PATH, pool=db, s3_sync=s3_sync)
 
 
 def get_session_service(db: Annotated[asyncpg.Pool, Depends(get_db)]) -> SessionService:

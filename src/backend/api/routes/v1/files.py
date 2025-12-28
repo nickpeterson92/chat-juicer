@@ -11,10 +11,10 @@ import mimetypes
 
 from typing import Annotated
 
-from fastapi import APIRouter, File as FastAPIFile, Path, Query, UploadFile
+from fastapi import APIRouter, File as FastAPIFile, HTTPException, Path, Query, UploadFile
 from fastapi.responses import Response
 
-from api.dependencies import Files
+from api.dependencies import AppSettings, Files
 from api.middleware.exception_handlers import ApiFileNotFoundError
 from api.middleware.request_context import update_request_context
 from models.schemas.files import (
@@ -23,6 +23,11 @@ from models.schemas.files import (
     FileListResponse,
     FilePathResponse,
     FileUploadResponse,
+)
+from models.schemas.presign import (
+    PresignedDownloadResponse,
+    PresignedUploadRequest,
+    PresignedUploadResponse,
 )
 
 router = APIRouter()
@@ -275,4 +280,94 @@ async def delete_file(
         success=True,
         message="File deleted successfully",
         filename=filename,
+    )
+
+
+# =============================================================================
+# Presigned URL Endpoints (Phase 2 - S3 Storage)
+# =============================================================================
+
+
+@router.post(
+    "/{session_id}/files/presign-upload",
+    response_model=PresignedUploadResponse,
+    summary="Get presigned upload URL",
+    description="Generate a presigned PUT URL for direct S3 upload. Only available when FILE_STORAGE=s3.",
+    responses={
+        200: {
+            "description": "Presigned URL generated",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "upload_url": "https://minio:9000/bucket/sess/sources/file.pdf?...",
+                        "file_key": "sess_123/sources/file.pdf",
+                        "expires_in": 3600,
+                    }
+                }
+            },
+        },
+        400: {"description": "S3 storage not enabled"},
+    },
+)
+async def presign_upload(
+    session_id: SessionIdPath,
+    request: PresignedUploadRequest,
+    files: Files,
+    settings: AppSettings,
+) -> PresignedUploadResponse:
+    """Generate presigned PUT URL for direct S3 upload."""
+    update_request_context(session_id=session_id)
+
+    if settings.file_storage != "s3" or not hasattr(files, "_s3_sync") or not files._s3_sync:
+        raise HTTPException(status_code=400, detail="S3 storage not enabled")
+
+    url, key = files._s3_sync.generate_presigned_upload_url(
+        session_id, request.folder, request.filename, request.content_type
+    )
+
+    return PresignedUploadResponse(
+        upload_url=url,
+        file_key=key,
+        expires_in=settings.s3_presigned_url_expiry,
+    )
+
+
+@router.get(
+    "/{session_id}/files/{filename}/presign-download",
+    response_model=PresignedDownloadResponse,
+    summary="Get presigned download URL",
+    description="Generate a presigned GET URL for direct S3 download. Only available when FILE_STORAGE=s3.",
+    responses={
+        200: {
+            "description": "Presigned URL generated",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "download_url": "https://minio:9000/bucket/sess/sources/file.pdf?...",
+                        "expires_in": 3600,
+                    }
+                }
+            },
+        },
+        400: {"description": "S3 storage not enabled"},
+    },
+)
+async def presign_download(
+    session_id: SessionIdPath,
+    filename: FilenamePath,
+    files: Files,
+    settings: AppSettings,
+    folder: FolderQuery = "sources",
+) -> PresignedDownloadResponse:
+    """Generate presigned GET URL for direct S3 download."""
+    update_request_context(session_id=session_id)
+
+    if settings.file_storage != "s3" or not hasattr(files, "_s3_sync") or not files._s3_sync:
+        raise HTTPException(status_code=400, detail="S3 storage not enabled")
+
+    url = files._s3_sync.generate_presigned_download_url(session_id, folder, filename)
+
+    return PresignedDownloadResponse(
+        download_url=url,
+        expires_in=settings.s3_presigned_url_expiry,
     )

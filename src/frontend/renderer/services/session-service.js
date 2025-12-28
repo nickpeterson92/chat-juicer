@@ -237,6 +237,10 @@ export class SessionService {
         };
       }
 
+      if (response?.error) {
+        return { success: false, error: response.error };
+      }
+
       return { success: false, error: "Invalid response format" };
     } catch (error) {
       return { success: false, error: error.message };
@@ -306,11 +310,13 @@ export class SessionService {
         }
 
         return { success: true };
-      } else if (response?.error) {
-        return { success: false, error: response.error };
-      } else {
-        return { success: false, error: "Unexpected response format" };
       }
+
+      if (response?.error) {
+        return { success: false, error: response.error };
+      }
+
+      return { success: false, error: "Unexpected response format" };
     } catch (error) {
       return { success: false, error: error.message };
     }
@@ -343,11 +349,13 @@ export class SessionService {
         this.appState.setState("session.list", updatedSessions);
 
         return { success: true, title: title.trim() };
-      } else if (response?.error) {
-        return { success: false, error: response.error };
-      } else {
-        return { success: false, error: "Unexpected response format" };
       }
+
+      if (response?.error) {
+        return { success: false, error: response.error };
+      }
+
+      return { success: false, error: "Unexpected response format" };
     } catch (error) {
       return { success: false, error: error.message };
     }
@@ -377,7 +385,11 @@ export class SessionService {
         return { success: true, pinned };
       }
 
-      return { success: false, error: response?.error || "Failed to update pin state" };
+      if (response?.error) {
+        return { success: false, error: response.error };
+      }
+
+      return { success: false, error: "Failed to update pin state" };
     } catch (error) {
       return { success: false, error: error.message };
     }
@@ -404,11 +416,13 @@ export class SessionService {
           new_token_count: response.new_token_count,
           tool_call_id: response.tool_call_id,
         };
-      } else if (response?.error) {
-        return { success: false, error: response.error };
-      } else {
-        return { success: false, error: "Unexpected response format" };
       }
+
+      if (response?.error) {
+        return { success: false, error: response.error };
+      }
+
+      return { success: false, error: "Unexpected response format" };
     } catch (error) {
       return { success: false, error: error.message };
     }

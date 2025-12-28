@@ -7,12 +7,15 @@ import shutil
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 from uuid import UUID
 
 import asyncpg
 
 from utils.logger import logger
+
+if TYPE_CHECKING:
+    from api.services.s3_sync_service import S3SyncService
 
 
 class FileService(Protocol):
@@ -43,9 +46,20 @@ class FileService(Protocol):
 class LocalFileService:
     """Phase 1: local filesystem-backed file service with DB metadata."""
 
-    def __init__(self, base_path: Path | None = None, pool: asyncpg.Pool | None = None):
+    def __init__(
+        self,
+        base_path: Path | None = None,
+        pool: asyncpg.Pool | None = None,
+        s3_sync: S3SyncService | None = None,
+    ):
         self.base_path = base_path or Path("data/files")
         self.pool = pool
+        self._s3_sync = s3_sync
+
+    @property
+    def s3_sync(self) -> S3SyncService | None:
+        """Access the underlying S3 sync service (for triggering manual uploads)."""
+        return self._s3_sync
 
     def _get_dir(self, session_id: str, folder: str) -> Path:
         """Get directory path for session folder."""
@@ -111,12 +125,18 @@ class LocalFileService:
             if session_uuid:
                 await self._upsert_file_record(session_uuid, filename, file_path, folder, content_type, len(content))
 
-        return {
+        result = {
             "name": filename,
             "type": "file",
             "size": len(content),
             "modified": datetime.now().isoformat(),
         }
+
+        # Trigger background S3 upload if sync service is configured
+        if self._s3_sync:
+            self._s3_sync.upload_to_s3_background(session_id, folder, filename)
+
+        return result
 
     async def get_file_content(self, session_id: str, folder: str, filename: str) -> bytes:
         """Get file content."""

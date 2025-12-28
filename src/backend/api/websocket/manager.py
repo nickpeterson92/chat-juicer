@@ -4,11 +4,15 @@ import asyncio
 import contextlib
 import time
 
+from collections.abc import Callable
 from typing import Any
 
 from fastapi import WebSocket
 
 from utils.logger import logger
+
+# Type for session cleanup callback
+SessionCleanupCallback = Callable[[str], None] | None
 
 
 class WebSocketManager:
@@ -19,6 +23,7 @@ class WebSocketManager:
         idle_timeout_seconds: float = 600.0,
         max_connections: int = 100,
         max_connections_per_session: int = 3,
+        on_session_disconnect: SessionCleanupCallback = None,
     ) -> None:
         """Initialize the WebSocket manager.
 
@@ -26,6 +31,7 @@ class WebSocketManager:
             idle_timeout_seconds: Close connections idle longer than this (default 10 min)
             max_connections: Maximum total connections allowed
             max_connections_per_session: Maximum connections per session
+            on_session_disconnect: Optional callback when last connection for session closes
         """
         self.connections: dict[str, set[WebSocket]] = {}
         self.last_activity: dict[WebSocket, float] = {}
@@ -35,6 +41,7 @@ class WebSocketManager:
         self._lock = asyncio.Lock()
         self._idle_checker_task: asyncio.Task[None] | None = None
         self._shutting_down = False
+        self._on_session_disconnect = on_session_disconnect
 
     async def connect(self, websocket: WebSocket, session_id: str) -> bool:
         """Register a WebSocket connection.
@@ -62,6 +69,7 @@ class WebSocketManager:
                 )
                 return False
 
+            logger.info(f"Establishing WebSocket connection for session {session_id}...")
             await websocket.accept()
 
             if session_id not in self.connections:
@@ -77,12 +85,25 @@ class WebSocketManager:
 
     async def disconnect(self, websocket: WebSocket, session_id: str) -> None:
         """Remove a WebSocket connection."""
+        session_empty = False
         async with self._lock:
             if session_id in self.connections:
                 self.connections[session_id].discard(websocket)
+                conn_count = len(self.connections[session_id])
+                logger.info(f"WebSocket disconnected for session {session_id} ({conn_count} remaining)")
                 if not self.connections[session_id]:
                     del self.connections[session_id]
+                    session_empty = True
             self.last_activity.pop(websocket, None)
+
+        # Call cleanup callback when last connection for session closes
+        if session_empty:
+            logger.info(f"Session {session_id} is now empty, triggering cleanup")
+            if self._on_session_disconnect:
+                try:
+                    self._on_session_disconnect(session_id)
+                except Exception as e:
+                    logger.warning(f"Session disconnect callback failed for {session_id}: {e}")
 
     async def touch(self, websocket: WebSocket) -> None:
         """Update last activity time for a connection."""
@@ -140,10 +161,14 @@ class WebSocketManager:
 
         # Close outside the lock to avoid deadlock
         for ws, session_id in to_close:
-            logger.info(f"Closing idle WebSocket for session {session_id}")
-            with contextlib.suppress(Exception):
-                await ws.close(code=4000, reason="Idle timeout")
-            await self.disconnect(ws, session_id)
+            logger.info(f"Closing idle WebSocket for session {session_id} (idle for >{self.idle_timeout}s)")
+            try:
+                # Disconnect first to ensure manager state is updated before closing socket
+                await self.disconnect(ws, session_id)
+                with contextlib.suppress(Exception):
+                    await ws.close(code=4000, reason="Idle timeout")
+            except Exception as e:
+                logger.error(f"Error during idle close for {session_id}: {e}")
 
     async def graceful_shutdown(self, timeout: float = 10.0) -> None:
         """Gracefully shutdown all WebSocket connections.

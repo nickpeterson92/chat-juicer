@@ -41,13 +41,8 @@ async def chat_websocket(
     session_id: str,
     token: str | None = Query(default=None),
 ) -> None:
-    """WebSocket endpoint for chat streaming.
-
-    Features:
-    - Cooperative cancellation via CancellationToken (cleaner than flags)
-    - Proper task cleanup on disconnect
-    - Direct message processing (no queue overhead)
-    """
+    """WebSocket endpoint for chat streaming."""
+    logger.info(f"WebSocket upgrade request received for session {session_id}")
     db = websocket.app.state.db_pool
     ws_manager: WebSocketManager = websocket.app.state.ws_manager
     mcp_pool = websocket.app.state.mcp_pool
@@ -70,10 +65,19 @@ async def chat_websocket(
         await websocket.close(code=4503, reason="Service unavailable - connection limit reached")
         return
 
+    # Ensure files are synced from S3 (Rehydration)
+    # This prevents missing files if the session idled out and was cleaned up
+    try:
+        s3_sync = getattr(websocket.app.state, "s3_sync", None)
+        if s3_sync:
+            await s3_sync.sync_from_s3(session_id)
+    except Exception as e:
+        logger.warning(f"Failed to sync S3 files on connect for {session_id}: {e}")
+
     chat_service = ChatService(
         db,
         ws_manager,
-        file_service=LocalFileService(base_path=DATA_FILES_PATH, pool=db),
+        file_service=LocalFileService(base_path=DATA_FILES_PATH, pool=db, s3_sync=s3_sync),
         mcp_pool=mcp_pool,
     )
 

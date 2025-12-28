@@ -18,17 +18,26 @@ Architecture:
 
 from __future__ import annotations
 
-from typing import Any
+import json
+
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from api.services.s3_sync_service import S3SyncService
 
 from tools.code_interpreter import execute_python_code
 from tools.document_generation import generate_document
 from tools.file_operations import list_directory, read_file, search_files
 from tools.schema_fetch import get_table_schema, list_registered_databases
-from tools.text_editing import EditOperation, edit_file
+from tools.text_editing import EditOperation, edit_file, resolve_edit_path
 from utils.logger import logger
 
 
-def create_session_aware_tools(session_id: str, model: str | None = None) -> list[Any]:
+def create_session_aware_tools(
+    session_id: str,
+    model: str | None = None,
+    s3_sync: S3SyncService | None = None,
+) -> list[Any]:
     """Create tool wrappers that automatically inject session_id and model for workspace isolation.
 
     This function creates wrapped versions of all file operation tools that capture
@@ -121,11 +130,29 @@ def create_session_aware_tools(session_id: str, model: str | None = None) -> lis
         Returns:
             JSON with diff output and edit summary
         """
-        return await edit_file(  # type: ignore[no-any-return]
+        result = await edit_file(
             file_path=file_path,
             edits=edits,
             session_id=session_id,
         )
+
+        if s3_sync:
+            try:
+                # Robustly check success field
+                response_data = json.loads(result)
+                if response_data.get("success"):
+                    # Resolve path to get correct folder/filename
+                    resolved = resolve_edit_path(file_path)
+
+                    if "/" in resolved:
+                        folder, filename = resolved.split("/", 1)
+                        if folder in ("output", "sources", "templates"):
+                            logger.info(f"Triggering background S3 upload for {folder}/{filename}")
+                            s3_sync.upload_to_s3_background(session_id, folder, filename)
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse edit response for S3 trigger: {result[:100]}")
+
+        return str(result)
 
     # Document Generation - Write tool with session_id injection
     async def wrapped_generate_document(
@@ -141,11 +168,24 @@ def create_session_aware_tools(session_id: str, model: str | None = None) -> lis
         Returns:
             JSON with success status
         """
-        return await generate_document(  # type: ignore[no-any-return]
+        result = await generate_document(
             content=content,
             filename=filename,
             session_id=session_id,
         )
+
+        if s3_sync:
+            try:
+                # Robustly check success field
+                response_data = json.loads(result)
+                if response_data.get("success"):
+                    # generate_document always writes to output/
+                    logger.info(f"Triggering background S3 upload for output/{filename}")
+                    s3_sync.upload_to_s3_background(session_id, "output", filename)
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse generate_document response for S3 trigger: {result[:100]}")
+
+        return str(result)
 
     # Code Interpreter - Secure Python execution with session_id injection
     async def wrapped_execute_python_code(code: str) -> str:

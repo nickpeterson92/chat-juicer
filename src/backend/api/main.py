@@ -102,11 +102,53 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         raise RuntimeError("Database connection failed")
     logger.info(f"Database pool healthy: {health}")
 
+    # Create S3 sync service if S3 storage is enabled
+    s3_sync = None
+    if settings.file_storage == "s3":
+        from api.services.s3_sync_service import S3SyncService
+        from core.constants import DATA_FILES_PATH
+
+        s3_sync = S3SyncService(
+            settings=settings,
+            local_base_path=DATA_FILES_PATH,
+        )
+        # Ensure bucket exists on startup (best effort)
+        try:
+            await s3_sync.ensure_bucket_exists()
+            logger.info(f"S3 sync enabled (bucket: {settings.s3_bucket})")
+        except Exception as e:
+            logger.error(f"Failed to initialize S3 bucket: {e}. S3 sync may not work.")
+
+    # Store S3 sync service in app state for access elsewhere
+    app.state.s3_sync = s3_sync
+
+    # Store background tasks to prevent garbage collection
+    background_tasks = set()
+
+    # Create cleanup callback for S3 mode
+    def on_session_disconnect(session_id: str) -> None:
+        logger.info(f"Cleanup callback triggered for session {session_id}")
+        if s3_sync:
+            # Run cleanup in background task to avoid blocking the event loop
+            # cleanup_session_files does blocking I/O (shutil.rmtree)
+            async def _cleanup() -> None:
+                try:
+                    loop = asyncio.get_event_loop()
+                    await loop.run_in_executor(None, s3_sync.cleanup_session_files, session_id)
+                except Exception as e:
+                    logger.error(f"Background cleanup failed for session {session_id}: {e}")
+                finally:
+                    background_tasks.discard(task)
+
+            task = asyncio.create_task(_cleanup())
+            background_tasks.add(task)
+
     # Initialize WebSocket manager with connection limits
     app.state.ws_manager = WebSocketManager(
         idle_timeout_seconds=settings.ws_idle_timeout,
         max_connections=settings.ws_max_connections,
         max_connections_per_session=settings.ws_max_connections_per_session,
+        on_session_disconnect=on_session_disconnect if s3_sync else None,
     )
     await app.state.ws_manager.start_idle_checker()
 
