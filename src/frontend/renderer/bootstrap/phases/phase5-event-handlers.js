@@ -994,6 +994,14 @@ export async function initializeEventHandlers({
         return;
       }
 
+      // If it's an intentional disconnect (e.g., current session deletion), suppress toast
+      if (appState.getState("ui.intentionalDisconnect")) {
+        console.log("Intentional disconnect detected - suppressing toast");
+        appState.setState("ui.intentionalDisconnect", false);
+        appState.setState("ui.aiThinkingActive", false);
+        return;
+      }
+
       const { showToast } = await import("../../utils/toast.js");
       showToast("Disconnected from backend", "error");
       appState.setState("ui.aiThinkingActive", false);
