@@ -7,7 +7,7 @@ RUN pip3 install --no-cache-dir fastapi uvicorn websockets --break-system-packag
 # Install Sequential Thinking MCP server
 RUN npm install -g @modelcontextprotocol/server-sequential-thinking
 
-# Copy SSE wrapper
+# Copy WebSocket wrapper
 COPY mcp-ws-wrapper.py /app/mcp-ws-wrapper.py
 
 # Expose HTTP port
