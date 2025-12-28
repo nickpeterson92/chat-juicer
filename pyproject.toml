@@ -140,7 +140,7 @@ max-statements = 50
 python_version = "3.13"
 
 # Discover Python files in the src and tests/backend directories
-files = ["src/backend/", "tests/backend/"]
+files = ["src/backend/", "tests/backend/", "docker/mcp/"]
 
 # Strict mode options (gradually enable these)
 strict = true  # Enforce comprehensive type checking
@@ -202,6 +202,22 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "integrations.mcp_registry"
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
+module = [
+    "integrations.mcp_websocket_client",
+    "src.backend.integrations.mcp_websocket_client",
+    "backend.integrations.mcp_websocket_client"
+]
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
+module = [
+    "tools.schema_fetch",
+    "src.backend.tools.schema_fetch",
+    "backend.tools.schema_fetch"
+]
 warn_unused_ignores = false
 
 [tool.pytest.ini_options]

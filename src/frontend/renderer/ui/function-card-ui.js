@@ -493,8 +493,49 @@ function renderWebSearchResults(result, query) {
   // Handle MCP response format: {type: "text", text: "...", annotations, meta}
   if (result?.type === "text" && result?.text) {
     results = parseTextSearchResults(result.text);
+  } else if (result?.content && Array.isArray(result.content)) {
+    // Handle standard MCP content list
+    const textItem = result.content.find((item) => item.type === "text");
+    if (textItem && textItem.text) {
+      // Try parsing the text as JSON first
+      const parsed = safeParse(textItem.text, null);
+      if (parsed) {
+        if (Array.isArray(parsed)) results = parsed;
+        else if (parsed.results) results = Array.isArray(parsed.results) ? parsed.results : [parsed.results];
+        else if (parsed.data) results = Array.isArray(parsed.data) ? parsed.data : [parsed.data];
+      }
+
+      // If JSON parsing yielded no results, try text parsing
+      if (results.length === 0) {
+        results = parseTextSearchResults(textItem.text);
+      }
+    }
   } else if (Array.isArray(result)) {
-    results = result;
+    // Check if this is an MCP content list (direct array of {type, text})
+    const firstItem = result[0];
+    if (firstItem && firstItem.type === "text" && firstItem.text) {
+      // It's an MCP content list! Extract all text parts.
+      const combinedText = result
+        .filter((item) => item.type === "text")
+        .map((item) => item.text)
+        .join("\n\n");
+
+      // Try parsing the text as JSON first
+      const parsed = safeParse(combinedText, null);
+      if (parsed) {
+        if (Array.isArray(parsed)) results = parsed;
+        else if (parsed.results) results = Array.isArray(parsed.results) ? parsed.results : [parsed.results];
+        else if (parsed.data) results = Array.isArray(parsed.data) ? parsed.data : [parsed.data];
+      }
+
+      // If JSON parsing yielded no results, try text parsing
+      if (results.length === 0) {
+        results = parseTextSearchResults(combinedText);
+      }
+    } else {
+      // Assume it's already a parsed list of {title, url, ...}
+      results = result;
+    }
   } else if (result?.results && Array.isArray(result.results)) {
     results = result.results;
   } else if (typeof result === "string") {
@@ -681,6 +722,12 @@ function renderWebContentResult(result, url, toolType = "fetch") {
     textContent = result;
   } else if (result?.type === "text" && result?.text) {
     textContent = result.text;
+  } else if (result?.content && Array.isArray(result.content)) {
+    // Handle standard MCP content list (extract all text parts)
+    textContent = result.content
+      .filter((item) => item.type === "text")
+      .map((item) => item.text)
+      .join("\n\n");
   } else if (result?.content) {
     textContent = result.content;
   } else if (result?.text) {

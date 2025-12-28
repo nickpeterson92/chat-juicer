@@ -407,6 +407,17 @@ MSG_TYPE_CONTENT_PART_ADDED = "content_part_added"
 # MCP Server Configuration
 # ============================================================================
 # Note: Tool call delay patches removed - no longer needed with client-side sessions
+#: Connection timeout for MCP servers (seconds)
+MCP_CONNECT_TIMEOUT = 10.0
+
+#: Timeout for listing tools (seconds)
+MCP_LIST_TOOLS_TIMEOUT = 5.0
+
+#: Timeout for calling tools (seconds)
+# Reasoning models can be slow, but basic tools should be fast.
+# Backend logic handles long-running tools separately if needed.
+MCP_CALL_TOOL_TIMEOUT = 30.0
+
 
 # ============================================================================
 # Error Messages
@@ -730,6 +741,20 @@ class Settings(BaseSettings):
 
     # Tavily MCP server API key (optional - enables web search via Tavily)
     tavily_api_key: str | None = Field(default=None, description="Tavily API key for web search MCP server")
+
+    # MCP Server HTTP endpoints (containerized deployment)
+    mcp_sequential_url: str = Field(
+        default="http://localhost:8081",
+        description="Sequential Thinking MCP server HTTP endpoint",
+    )
+    mcp_fetch_url: str = Field(
+        default="http://localhost:8082",
+        description="Fetch MCP server HTTP endpoint",
+    )
+    mcp_tavily_url: str = Field(
+        default="http://localhost:8083",
+        description="Tavily MCP server HTTP endpoint",
+    )
 
     # Database (Phase 1: local PostgreSQL)
     database_url: str = Field(

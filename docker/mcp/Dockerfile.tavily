@@ -1,0 +1,22 @@
+FROM node:20-alpine
+
+# Install python and required packages for WebSocket wrapper
+RUN apk add --no-cache python3 py3-pip
+RUN pip3 install --no-cache-dir fastapi uvicorn websockets --break-system-packages
+
+# Install Tavily MCP server
+RUN npm install -g tavily-mcp
+
+# Copy SSE wrapper
+COPY mcp-ws-wrapper.py /app/mcp-ws-wrapper.py
+
+# Expose HTTP port
+EXPOSE 8080
+
+# Environment variables
+ENV TAVILY_API_KEY=""
+ENV MCP_SERVER_CMD="npx tavily-mcp"
+ENV PORT=8080
+
+# Start WebSocket wrapper
+CMD ["python3", "/app/mcp-ws-wrapper.py"]

@@ -5,11 +5,9 @@ Provides named access to MCP servers and filtering based on user configuration.
 
 from __future__ import annotations
 
-from typing import Any, TypedDict, cast
+from typing import Any, TypedDict
 
-from agents.mcp import MCPServerStdio, MCPServerStdioParams
-
-from core.constants import PROJECT_ROOT, get_settings
+from core.constants import get_settings
 from utils.logger import logger
 
 # MCP server timeout in seconds (default SDK timeout is 5s which is too short)
@@ -24,28 +22,31 @@ class MCPServerConfig(TypedDict, total=False):
     command: str
     args: list[str]
     env_key: str  # Optional: Settings attribute name for API key (e.g., "tavily_api_key")
+    transport: str  # "stdio" or "websocket"
+    url: str  # WebSocket URL if transport is websocket
 
 
 # MCP Server Definitions
+# Using WebSocket transport for containerized servers
 MCP_SERVER_CONFIGS: dict[str, MCPServerConfig] = {
     "sequential": {
         "name": "Sequential Thinking",
         "description": "Advanced reasoning with step-by-step problem solving and hypothesis testing",
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+        "transport": "websocket",  # WebSocket transport
+        "url": "ws://localhost:8081/ws",  # WebSocket endpoint
     },
     "fetch": {
         "name": "Web Fetch",
         "description": "HTTP/HTTPS web content retrieval with HTML to markdown conversion",
-        "command": str(PROJECT_ROOT / ".juicer/bin/python3"),
-        "args": ["-m", "mcp_server_fetch"],
+        "transport": "websocket",  # WebSocket transport
+        "url": "ws://localhost:8082/ws",  # WebSocket endpoint
     },
     "tavily": {
         "name": "Tavily Search",
         "description": "Web search, extraction, and crawling via Tavily API",
-        "command": "npx",
-        "args": ["-y", "tavily-mcp@latest"],
-        "env_key": "tavily_api_key",  # Maps to Settings.tavily_api_key
+        "transport": "websocket",  # WebSocket transport
+        "url": "ws://localhost:8083/ws",  # WebSocket endpoint
+        "env_key": "tavily_api_key",
     },
 }
 
@@ -53,14 +54,17 @@ MCP_SERVER_CONFIGS: dict[str, MCPServerConfig] = {
 DEFAULT_MCP_SERVERS = ["sequential", "fetch", "tavily"]
 
 
-async def initialize_mcp_server(server_key: str) -> MCPServerStdio | None:
-    """Initialize a single MCP server by its registry key.
+async def initialize_mcp_server(server_key: str) -> Any | None:
+    """Initialize a single MCP server using transport abstraction.
+
+    Phase 1: Returns MCPServerStdio via Docker container
+    Phase 2: Will return MCPServerStreamableHttp via HTTP endpoint
 
     Args:
         server_key: Key from MCP_SERVER_CONFIGS (e.g., "sequential", "fetch", "tavily")
 
     Returns:
-        Initialized MCPServerStdio instance or None if initialization failed
+        Initialized MCP server instance or None if initialization failed
     """
     if server_key not in MCP_SERVER_CONFIGS:
         logger.warning(f"Unknown MCP server key: {server_key}")
@@ -68,13 +72,7 @@ async def initialize_mcp_server(server_key: str) -> MCPServerStdio | None:
 
     config = MCP_SERVER_CONFIGS[server_key]
 
-    # Build params dict with command and args
-    params: dict[str, Any] = {
-        "command": config["command"],
-        "args": config["args"],
-    }
-
-    # Handle environment variables for servers requiring API keys
+    # Check for required API keys
     env_key = config.get("env_key")
     if env_key:
         settings = get_settings()
@@ -82,17 +80,13 @@ async def initialize_mcp_server(server_key: str) -> MCPServerStdio | None:
         if not api_key:
             logger.info(f"{config['name']} skipped - {env_key.upper()} not configured")
             return None
-        # Map env_key to expected env var name (e.g., tavily_api_key -> TAVILY_API_KEY)
-        env_var_name = env_key.upper()
-        params["env"] = {env_var_name: api_key}
 
     try:
-        server = MCPServerStdio(
-            params=cast(MCPServerStdioParams, params),
-            client_session_timeout_seconds=MCP_SERVER_TIMEOUT_SECONDS,
-        )
-        await server.__aenter__()  # type: ignore[no-untyped-call]
-        logger.info(f"{config['name']} MCP server initialized (timeout: {MCP_SERVER_TIMEOUT_SECONDS}s)")
+        # Try transport abstraction first (HTTP if configured)
+        from integrations.mcp_transport import create_transport
+
+        transport = await create_transport(server_key, config)
+        server = await transport.connect()
         return server
     except Exception as e:
         logger.warning(f"{config['name']} server not available: {e}")
