@@ -46,29 +46,15 @@ ACQUIRE_TIMEOUT_SECONDS = 30.0  # Fallback; prefer settings.mcp_acquire_timeout
 
 
 class MCPServerPool:
-    """Connection pool for MCP servers.
+    """Singleton Manager for MCP servers.
 
-    Pre-spawns MCP server instances and manages checkout/checkin for concurrent
-    requests. Each server type has its own pool of instances.
-
-    Configuration via environment variables (see Settings in core/constants.py):
-        - MCP_POOL_SIZE: Number of instances per server type (default: 3)
-        - MCP_ACQUIRE_TIMEOUT: Timeout in seconds for acquiring a server (default: 30.0)
-
-    Usage:
-        pool = MCPServerPool(acquire_timeout=30.0)
-        await pool.initialize(["sequential", "fetch", "tavily"], pool_size=3)
-
-        # Acquire servers for a request
-        async with pool.acquire_servers(["sequential", "fetch"]) as servers:
-            # Use servers...
-            pass
-        # Servers automatically returned to pool
+    Manages single shared instances of MCP clients. Since WebSocketMCPClient
+    supports multiplexing, we no longer need a pool of multiple connections.
+    Maintains the 'pool' API for compatibility.
     """
 
     def __init__(self, acquire_timeout: float = ACQUIRE_TIMEOUT_SECONDS) -> None:
-        self._pools: dict[str, asyncio.Queue[Any]] = {}
-        self._all_servers: dict[str, list[Any]] = {}  # Track all servers for cleanup
+        self._servers: dict[str, Any] = {}
         self._initialized = False
         self._lock = asyncio.Lock()
         self._acquire_timeout = acquire_timeout
@@ -78,91 +64,62 @@ class MCPServerPool:
         server_keys: list[str],
         pool_size: int = DEFAULT_POOL_SIZE,
     ) -> None:
-        """Initialize the pool by pre-spawning MCP servers.
+        """Initialize the manager by connecting to MCP servers.
 
         Args:
-            server_keys: List of server keys to initialize (e.g., ["sequential", "fetch"])
-            pool_size: Number of instances per server type
+            server_keys: List of server keys to connect to
+            pool_size: Ignored (kept for compatibility)
         """
         from integrations.mcp_registry import MCP_SERVER_CONFIGS
 
         async with self._lock:
             if self._initialized:
-                logger.warning("MCP pool already initialized, skipping")
+                logger.warning("MCP manager already initialized, skipping")
                 return
 
-            logger.info(f"Initializing MCP server pool: {server_keys} x {pool_size}")
+            logger.info(f"Initializing MCP server manager for: {server_keys}")
 
             for server_key in server_keys:
                 if server_key not in MCP_SERVER_CONFIGS:
                     logger.warning(f"Unknown MCP server key: {server_key}, skipping")
                     continue
 
-                # Create queue for this server type
-                self._pools[server_key] = asyncio.Queue()
-                self._all_servers[server_key] = []
-
-                # Spawn pool_size instances concurrently using helper function
-                spawn_tasks = [_spawn_mcp_server(server_key, i) for i in range(pool_size)]
-                servers = await asyncio.gather(*spawn_tasks)
-
-                # Add successfully spawned servers to pool
-                for server in servers:
-                    if server is not None:
-                        await self._pools[server_key].put(server)
-                        self._all_servers[server_key].append(server)
-
-                spawned = sum(1 for s in servers if s is not None)
-                logger.info(f"Spawned {spawned}/{pool_size} instances of {server_key}")
+                # Spawn single instance
+                server = await _spawn_mcp_server(server_key, 0)
+                if server:
+                    self._servers[server_key] = server
+                    logger.info(f"Connected to {server_key}")
 
             self._initialized = True
-            total = sum(len(servers) for servers in self._all_servers.values())
-            logger.info(f"MCP pool initialized with {total} total server instances")
+            logger.info(f"MCP manager initialized with {len(self._servers)} servers")
 
     async def acquire(self, server_key: str, timeout: float | None = None) -> Any:
-        """Acquire a server from the pool.
-
-        Blocks until a server is available or timeout is reached.
+        """Acquire the shared server instance.
 
         Args:
-            server_key: The server type to acquire (e.g., "sequential")
-            timeout: Maximum time to wait for a server
+            server_key: The server type to acquire
+            timeout: Ignored (immediate return)
 
         Returns:
-            MCPServerStdio instance
+            The shared MCP client instance
 
         Raises:
-            KeyError: If server_key not in pool
-            asyncio.TimeoutError: If no server available within timeout
+            KeyError: If server_key not managed
+            RuntimeError: If server initialization failed
         """
-        if server_key not in self._pools:
-            raise KeyError(f"Server type '{server_key}' not in pool")
+        if server_key not in self._servers:
+            # Check if it was a configuration error or initialization failure
+            from integrations.mcp_registry import MCP_SERVER_CONFIGS
 
-        effective_timeout = timeout if timeout is not None else self._acquire_timeout
-        try:
-            server = await asyncio.wait_for(
-                self._pools[server_key].get(),
-                timeout=effective_timeout,
-            )
-            logger.debug(f"Acquired {server_key} from pool (remaining: {self._pools[server_key].qsize()})")
-            return server
-        except asyncio.TimeoutError:
-            logger.error(f"Timeout acquiring {server_key} from pool after {effective_timeout}s")
-            raise
+            if server_key in MCP_SERVER_CONFIGS:
+                raise RuntimeError(f"Server '{server_key}' failed to initialize")
+            raise KeyError(f"Server type '{server_key}' not configured")
+
+        return self._servers[server_key]
 
     async def release(self, server_key: str, server: Any) -> None:
-        """Return a server to the pool.
-
-        Args:
-            server_key: The server type
-            server: The server instance to return
-        """
-        if server_key not in self._pools:
-            logger.warning(f"Cannot release server - unknown key: {server_key}")
-            return
-
-        await self._pools[server_key].put(server)
-        logger.debug(f"Released {server_key} to pool (available: {self._pools[server_key].qsize()})")
+        """Release the server (no-op for shared instances)."""
+        pass
 
     @asynccontextmanager
     async def acquire_servers(
@@ -170,63 +127,48 @@ class MCPServerPool:
         server_keys: list[str],
         timeout: float | None = None,
     ) -> AsyncGenerator[list[Any], None]:
-        """Context manager to acquire multiple servers and release them on exit.
+        """Context manager to acquire multiple servers.
 
         Args:
             server_keys: List of server types to acquire
-            timeout: Maximum time to wait per server
+            timeout: Ignored
 
         Yields:
-            List of acquired server instances (in same order as server_keys)
+            List of shared server instances
         """
-        acquired: list[tuple[str, Any]] = []
+        servers = []
+        for key in server_keys:
+            if key in self._servers:
+                servers.append(self._servers[key])
+            else:
+                logger.warning(f"Requested server '{key}' not available")
 
-        try:
-            for key in server_keys:
-                if key in self._pools:
-                    server = await self.acquire(key, timeout)
-                    acquired.append((key, server))
-
-            # Yield just the servers (not the keys)
-            yield [server for _, server in acquired]
-
-        finally:
-            # Always release acquired servers
-            for key, server in acquired:
-                await self.release(key, server)
+        yield servers
 
     def get_pool_stats(self) -> dict[str, dict[str, int]]:
-        """Get current pool statistics.
-
-        Returns:
-            Dict mapping server_key to {total, available} counts
-        """
+        """Get current manager statistics."""
         return {
             key: {
-                "total": len(self._all_servers.get(key, [])),
-                "available": self._pools[key].qsize() if key in self._pools else 0,
+                "total": 1,
+                "available": 1,
             }
-            for key in self._pools
+            for key in self._servers
         }
 
     async def shutdown(self) -> None:
-        """Shutdown all pooled servers."""
+        """Shutdown all managed servers."""
         async with self._lock:
-            logger.info("Shutting down MCP server pool")
+            logger.info("Shutting down MCP server manager")
 
-            # Shutdown all servers concurrently using helper function
-            shutdown_tasks = [
-                _shutdown_mcp_server(server, server_key)
-                for server_key, servers in self._all_servers.items()
-                for server in servers
-            ]
-            await asyncio.gather(*shutdown_tasks)
+            # Shutdown all servers concurrently
+            shutdown_tasks = [_shutdown_mcp_server(server, key) for key, server in self._servers.items()]
+            if shutdown_tasks:
+                await asyncio.gather(*shutdown_tasks)
 
-            self._pools.clear()
-            self._all_servers.clear()
+            self._servers.clear()
             self._initialized = False
 
-            logger.info("MCP server pool shutdown complete")
+            logger.info("MCP server manager shutdown complete")
 
 
 # Module-level state holder to avoid global statement (PLW0603)
