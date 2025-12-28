@@ -11,7 +11,7 @@ import os
 import tempfile
 
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -397,25 +397,6 @@ databases:
     username: user
     password: pass
 """
-        mock_columns = [
-            {
-                "column_name": "id",
-                "data_type": "integer",
-                "character_maximum_length": None,
-                "numeric_precision": 32,
-                "numeric_scale": 0,
-                "is_nullable": "NO",
-            },
-            {
-                "column_name": "name",
-                "data_type": "character varying",
-                "character_maximum_length": 255,
-                "numeric_precision": None,
-                "numeric_scale": None,
-                "is_nullable": "YES",
-            },
-        ]
-
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(yaml_content)
             f.flush()
@@ -424,11 +405,15 @@ databases:
                 with patch("tools.schema_fetch.DEFAULT_REGISTRY_PATH", Path(f.name)):
                     reset_registry()
 
-                    # Mock asyncpg connection
-                    mock_conn = AsyncMock()
-                    mock_conn.fetch = AsyncMock(return_value=mock_columns)
+                    # Patch the fetcher registry to use a mock for the tool-level test
+                    # This confirms get_table_schema correctly routes to the fetcher and returns JSON
+                    mock_columns_info = [
+                        ColumnInfo(name="id", type="integer", nullable=False),
+                        ColumnInfo(name="name", type="varchar(255)", nullable=True),
+                    ]
+                    mock_fetcher = AsyncMock(return_value=mock_columns_info)
 
-                    with patch("asyncpg.connect", return_value=mock_conn):
+                    with patch.dict("tools.schema_fetch.SCHEMA_FETCHERS", {"postgresql": mock_fetcher}):
                         result = await get_table_schema("pg_db", "users")
 
                         parsed = json.loads(result)
@@ -448,6 +433,52 @@ databases:
             finally:
                 os.unlink(f.name)
                 reset_registry()
+
+    @pytest.mark.asyncio
+    async def test_fetch_postgres_schema_internals(self) -> None:
+        """Should fetch PostgreSQL schema using internal fetcher directly."""
+        from tools.schema_fetch import DatabaseConfig, _fetch_postgres_schema
+
+        config = DatabaseConfig(
+            name="test",
+            type="postgresql",
+            host="localhost",
+            port=5432,
+            database="db",
+            username="user",
+            password="pass",
+        )
+
+        mock_rows = [
+            {
+                "column_name": "id",
+                "data_type": "integer",
+                "character_maximum_length": None,
+                "numeric_precision": 32,
+                "numeric_scale": 0,
+                "is_nullable": "NO",
+            },
+        ]
+
+        # Connection mock
+        mock_conn = MagicMock()
+        mock_conn.fetch = AsyncMock(return_value=mock_rows)
+        mock_conn.close = AsyncMock()
+
+        # Mock asyncpg module
+        mock_asyncpg = MagicMock()
+        mock_asyncpg.connect = AsyncMock(return_value=mock_conn)
+        # Handle async with asyncpg.connect() -> returns mock_conn
+        mock_asyncpg.connect.return_value.__aenter__.return_value = mock_conn
+        mock_asyncpg.connect.return_value.close = mock_conn.close
+
+        with patch.dict("sys.modules", {"asyncpg": mock_asyncpg}):
+            result = await _fetch_postgres_schema(config, "users")
+
+            assert len(result) == 1
+            assert result[0].name == "id"
+            assert result[0].type == "integer"
+            assert result[0].nullable is False
 
     @pytest.mark.asyncio
     async def test_handles_missing_driver(self) -> None:
@@ -473,9 +504,9 @@ databases:
                     reset_registry()
 
                     # Simulate ImportError for aiomysql
-                    with patch(
-                        "tools.schema_fetch._fetch_mysql_schema", side_effect=ImportError("No module named 'aiomysql'")
-                    ):
+                    # We need to patch the fetcher in the registry since get_table_schema looks it up there
+                    mock_fetcher = AsyncMock(side_effect=ImportError("No module named 'aiomysql'"))
+                    with patch.dict("tools.schema_fetch.SCHEMA_FETCHERS", {"mysql": mock_fetcher}):
                         result = await get_table_schema("mysql_db", "users")
 
                         parsed = json.loads(result)

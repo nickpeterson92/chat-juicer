@@ -82,11 +82,10 @@ class WebSocketTransport(MCPTransport):
                 self._client = None
 
 
-async def create_transport(server_key: str, config: dict[str, Any]) -> MCPTransport:
+async def create_transport(config: dict[str, Any]) -> MCPTransport:
     """Factory function to create appropriate transport based on config.
 
     Args:
-        server_key: Server key from MCP_SERVER_CONFIGS
         config: Server configuration dictionary
 
     Returns:
