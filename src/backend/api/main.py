@@ -117,7 +117,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         pool_size=settings.mcp_pool_size,
         acquire_timeout=settings.mcp_acquire_timeout,
     )
-    logger.info(f"MCP server pool initialized with {settings.mcp_pool_size} instances per server type")
 
     try:
         yield
