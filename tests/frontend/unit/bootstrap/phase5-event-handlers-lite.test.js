@@ -61,6 +61,7 @@ vi.mock("@/managers/view-manager.js", () => ({
 
 describe("phase5-event-handlers coverage", () => {
   let initializeEventHandlers;
+  let cleanupFunc;
 
   beforeEach(async () => {
     vi.resetModules();
@@ -106,6 +107,7 @@ describe("phase5-event-handlers coverage", () => {
   });
 
   afterEach(() => {
+    if (cleanupFunc) cleanupFunc();
     document.body.innerHTML = "";
     document.body.className = ""; // Clear body classes too
     vi.clearAllMocks();
@@ -180,6 +182,7 @@ describe("phase5-event-handlers coverage", () => {
           setSession: vi.fn(),
           closeAllHandles: vi.fn(),
           destroy: vi.fn(),
+          refresh: vi.fn(),
         },
         chatContainer: { clear: vi.fn(), destroy: vi.fn() },
         inputArea: { destroy: vi.fn() },
@@ -201,6 +204,7 @@ describe("phase5-event-handlers coverage", () => {
     const deps = createDeps();
 
     const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     expect(result).toHaveProperty("cleanup");
     expect(result).toHaveProperty("updateSessionsList");
@@ -211,7 +215,9 @@ describe("phase5-event-handlers coverage", () => {
 
   it("updates session list and renders empty state", async () => {
     const deps = createDeps();
-    const { updateSessionsList: updateList } = await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
+    const { updateSessionsList: updateList } = result;
 
     updateList([]);
     expect(mockRenderEmptySessionList).toHaveBeenCalled();
@@ -222,7 +228,9 @@ describe("phase5-event-handlers coverage", () => {
 
   it("cleans up listeners and components", async () => {
     const deps = createDeps();
-    const { cleanup: runCleanup } = await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
+    const { cleanup: runCleanup } = result;
 
     expect(() => runCleanup()).not.toThrow();
   });
@@ -235,7 +243,8 @@ describe("phase5-event-handlers coverage", () => {
     components.filePanel.getPanel = () => panel;
     document.body.appendChild(panel);
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     document.getElementById("sidebar-toggle").click();
     expect(appState.getState("ui.sidebarCollapsed")).toBe(true);
@@ -250,7 +259,8 @@ describe("phase5-event-handlers coverage", () => {
     link.href = "https://example.com";
     document.getElementById("chat-container").appendChild(link);
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     const clickEvent = new MouseEvent("click", { bubbles: true });
     link.dispatchEvent(clickEvent);
@@ -261,7 +271,8 @@ describe("phase5-event-handlers coverage", () => {
   it("handles drag/drop visibility and hiding", async () => {
     vi.useFakeTimers();
     const deps = createDeps();
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     const dropZone = document.getElementById("file-drop-zone");
     const dragEnter = new Event("dragenter");
@@ -286,7 +297,8 @@ describe("phase5-event-handlers coverage", () => {
     deps.services.sessionService.getCurrentSessionId = vi.fn(() => "sess-1");
     deps.services.fileService.uploadFile = vi.fn().mockRejectedValue(new Error("boom"));
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     const drop = new Event("drop", { bubbles: true });
     Object.defineProperty(drop, "dataTransfer", {
@@ -305,7 +317,8 @@ describe("phase5-event-handlers coverage", () => {
     deps.services.sessionService.getCurrentSessionId = vi.fn(() => null);
     deps.services.fileService.uploadFile = vi.fn();
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     const drop = new Event("drop", { bubbles: true });
     Object.defineProperty(drop, "dataTransfer", {
@@ -332,7 +345,8 @@ describe("phase5-event-handlers coverage", () => {
     deps.services.sessionService.getCurrentSessionId = vi.fn(() => null);
     deps.services.fileService.uploadFile = vi.fn();
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     const drop = new Event("drop", { bubbles: true });
     Object.defineProperty(drop, "dataTransfer", {
@@ -353,7 +367,8 @@ describe("phase5-event-handlers coverage", () => {
 
   it("wires IPC error/exit handlers", async () => {
     const deps = createDeps();
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     expect(deps.ipcAdapter.onPythonStderr).toHaveBeenCalled();
     expect(deps.ipcAdapter.onPythonExit).toHaveBeenCalled();
@@ -368,7 +383,7 @@ describe("phase5-event-handlers coverage", () => {
     exitHandler();
 
     expect(consoleErrorSpy).toHaveBeenCalledWith("Bot error:", "bad");
-    expect(consoleWarnSpy).toHaveBeenCalledWith("Bot disconnected");
+    expect(consoleWarnSpy).toHaveBeenCalledWith("Bot disconnected", undefined);
 
     consoleErrorSpy.mockRestore();
     consoleWarnSpy.mockRestore();
@@ -381,7 +396,8 @@ describe("phase5-event-handlers coverage", () => {
     deps.services.fileService.uploadFile = vi.fn().mockResolvedValue({ success: true });
     deps.components.filePanel.refresh = vi.fn().mockResolvedValue();
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     const drop = new Event("drop", { bubbles: true });
     const file = { name: "ok.txt", size: 2 };
@@ -413,7 +429,8 @@ describe("phase5-event-handlers coverage", () => {
       .mockResolvedValueOnce({ success: true })
       .mockResolvedValueOnce({ success: false, error: "x" });
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     const drop = new Event("drop", { bubbles: true });
     const fileA = { name: "a.txt", size: 1 };
@@ -442,7 +459,8 @@ describe("phase5-event-handlers coverage", () => {
     // Remove sidebar and toggle to hit guard branches
     document.getElementById("sidebar")?.remove();
     document.getElementById("sidebar-toggle")?.remove();
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     expect(() => document.body.click()).not.toThrow();
   });
@@ -450,14 +468,17 @@ describe("phase5-event-handlers coverage", () => {
   it("skips session rendering when sessions list element is missing", async () => {
     const deps = createDeps();
     document.getElementById("sessions-list")?.remove();
-    const { updateSessionsList: updateList } = await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
+    const { updateSessionsList: updateList } = result;
 
     expect(() => updateList([{ session_id: "x", title: "X" }])).not.toThrow();
   });
 
   it("handles session-created event and updates services/UI", async () => {
     const deps = createDeps();
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     const session = { session_id: "new1", title: "T" }; // omit model to skip dynamic import branch
     const event = new CustomEvent("session-created", { detail: { session } });
@@ -471,7 +492,8 @@ describe("phase5-event-handlers coverage", () => {
 
   it("invokes chat model updater when session includes model metadata", async () => {
     const deps = createDeps();
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     const session = {
       session_id: "model1",
@@ -496,7 +518,8 @@ describe("phase5-event-handlers coverage", () => {
     ];
     deps.services.sessionService.getSessions = vi.fn().mockReturnValue(sessions);
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     window.dispatchEvent(new CustomEvent("session-updated", { detail: {} }));
 
@@ -508,7 +531,8 @@ describe("phase5-event-handlers coverage", () => {
     deps.appState.setState("ui.bodyViewClass", "view-welcome");
     deps.services.sessionService.getCurrentSessionId = vi.fn(() => null);
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     const drop = new Event("drop", { bubbles: true });
     // Create a mock large file
@@ -540,7 +564,8 @@ describe("phase5-event-handlers coverage", () => {
     const mockUrl = "blob:test";
     global.URL.createObjectURL = vi.fn(() => mockUrl);
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     const drop = new Event("drop", { bubbles: true });
     const imageFile = new File(["img"], "pic.png", { type: "image/png" });
@@ -572,7 +597,8 @@ describe("phase5-event-handlers coverage", () => {
 
     global.URL.createObjectURL = vi.fn(() => "blob:test");
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     window.dispatchEvent(
       new CustomEvent("files-selected-from-dialog", {
@@ -590,7 +616,8 @@ describe("phase5-event-handlers coverage", () => {
 
   it("handles files-selected-from-dialog with empty filePaths", async () => {
     const deps = createDeps();
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     // Should not throw
     window.dispatchEvent(
@@ -605,7 +632,8 @@ describe("phase5-event-handlers coverage", () => {
 
   it("handles files-selected-from-dialog with no filePaths", async () => {
     const deps = createDeps();
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     window.dispatchEvent(
       new CustomEvent("files-selected-from-dialog", {
@@ -628,7 +656,8 @@ describe("phase5-event-handlers coverage", () => {
     });
     deps.components.filePanel.refresh = vi.fn().mockResolvedValue();
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     window.dispatchEvent(
       new CustomEvent("files-selected-from-dialog", {
@@ -650,7 +679,8 @@ describe("phase5-event-handlers coverage", () => {
       mimeType: "text/plain",
     });
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     window.dispatchEvent(
       new CustomEvent("files-selected-from-dialog", {
@@ -670,7 +700,8 @@ describe("phase5-event-handlers coverage", () => {
       error: "Read error",
     });
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     window.dispatchEvent(
       new CustomEvent("files-selected-from-dialog", {
@@ -694,7 +725,8 @@ describe("phase5-event-handlers coverage", () => {
       mimeType: "text/plain",
     });
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     // Mock File constructor to return large size
     const originalFile = global.File;
@@ -730,7 +762,8 @@ describe("phase5-event-handlers coverage", () => {
 
     global.URL.createObjectURL = vi.fn(() => "blob:image-url");
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     window.dispatchEvent(
       new CustomEvent("files-selected-from-dialog", {
@@ -757,7 +790,8 @@ describe("phase5-event-handlers coverage", () => {
     });
     deps.components.filePanel.refresh = vi.fn().mockResolvedValue();
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     window.dispatchEvent(
       new CustomEvent("files-selected-from-dialog", {
@@ -783,7 +817,8 @@ describe("phase5-event-handlers coverage", () => {
     document.body.appendChild(chatAttachmentBtn);
 
     const deps = createDeps();
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     // Open menu
     chatAttachmentBtn.click();
@@ -816,7 +851,8 @@ describe("phase5-event-handlers coverage", () => {
       sessionCommand: vi.fn().mockResolvedValue({}),
     };
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     // Open menu
     chatAttachmentBtn.click();
@@ -853,7 +889,8 @@ describe("phase5-event-handlers coverage", () => {
     document.body.appendChild(chatAttachmentBtn);
 
     const deps = createDeps();
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     // Open menu
     chatAttachmentBtn.click();
@@ -882,7 +919,8 @@ describe("phase5-event-handlers coverage", () => {
       mcp_config: ["fetch"], // Only fetch enabled
     }));
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     // Trigger session change - this will call syncMcpStatesWithSession
     deps.appState.setState("session.current", "sess-sync");
@@ -908,7 +946,8 @@ describe("phase5-event-handlers coverage", () => {
     const deps = createDeps();
     deps.appState.setState("session.current", "some-session");
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     // Clear session (go to welcome page)
     deps.appState.setState("session.current", null);
@@ -934,7 +973,8 @@ describe("phase5-event-handlers coverage", () => {
     const deps = createDeps();
     deps.ipcAdapter.openFileDialog = vi.fn().mockResolvedValue(["/selected/file.txt"]);
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     // Open menu
     chatAttachmentBtn.click();
@@ -966,7 +1006,8 @@ describe("phase5-event-handlers coverage", () => {
     const deps = createDeps();
     deps.ipcAdapter.openFileDialog = vi.fn().mockResolvedValue([]);
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     chatAttachmentBtn.click();
     await new Promise((r) => setTimeout(r, 10));
@@ -1004,7 +1045,8 @@ describe("phase5-event-handlers coverage", () => {
 
     global.URL.revokeObjectURL = vi.fn();
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     newSessionBtn.click();
     await new Promise((r) => setTimeout(r, 50));
@@ -1025,7 +1067,8 @@ describe("phase5-event-handlers coverage", () => {
     window.alert = vi.fn();
 
     const deps = createDeps();
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     settingsBtn.click();
     expect(window.alert).toHaveBeenCalledWith("Coming Soon!");
@@ -1049,7 +1092,8 @@ describe("phase5-event-handlers coverage", () => {
     messageEl.appendChild(loadingLamp);
     document.body.appendChild(messageEl);
 
-    await initializeEventHandlers(deps);
+    const result = await initializeEventHandlers(deps);
+    cleanupFunc = result.cleanup;
 
     // Show lamp
     deps.appState.setState("ui.loadingLampVisible", true);
