@@ -318,10 +318,10 @@ async def presign_upload(
     """Generate presigned PUT URL for direct S3 upload."""
     update_request_context(session_id=session_id)
 
-    if settings.file_storage != "s3" or not hasattr(files, "_s3_sync") or not files._s3_sync:
+    if settings.file_storage != "s3" or not files.s3_sync:
         raise HTTPException(status_code=400, detail="S3 storage not enabled")
 
-    url, key = files._s3_sync.generate_presigned_upload_url(
+    url, key = files.s3_sync.generate_presigned_upload_url(
         session_id, request.folder, request.filename, request.content_type
     )
 
@@ -362,10 +362,10 @@ async def presign_download(
     """Generate presigned GET URL for direct S3 download."""
     update_request_context(session_id=session_id)
 
-    if settings.file_storage != "s3" or not hasattr(files, "_s3_sync") or not files._s3_sync:
+    if settings.file_storage != "s3" or not files.s3_sync:
         raise HTTPException(status_code=400, detail="S3 storage not enabled")
 
-    url = files._s3_sync.generate_presigned_download_url(session_id, folder, filename)
+    url = files.s3_sync.generate_presigned_download_url(session_id, folder, filename)
 
     return PresignedDownloadResponse(
         download_url=url,

@@ -77,6 +77,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Track shutdown state
     shutdown_event = asyncio.Event()
     app.state.shutdown_event = shutdown_event
+    app.state.background_tasks = set()
 
     # Initialize OpenAI client for agents SDK
     _setup_openai_client()
@@ -123,7 +124,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.s3_sync = s3_sync
 
     # Store background tasks to prevent garbage collection
-    background_tasks = set()
+    app.state.background_tasks = set()
 
     # Create cleanup callback for S3 mode
     def on_session_disconnect(session_id: str) -> None:
@@ -138,10 +139,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 except Exception as e:
                     logger.error(f"Background cleanup failed for session {session_id}: {e}")
                 finally:
-                    background_tasks.discard(task)
+                    app.state.background_tasks.discard(task)
 
             task = asyncio.create_task(_cleanup())
-            background_tasks.add(task)
+            app.state.background_tasks.add(task)
 
     # Initialize WebSocket manager with connection limits
     app.state.ws_manager = WebSocketManager(
