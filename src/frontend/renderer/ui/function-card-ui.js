@@ -732,6 +732,12 @@ function renderWebContentResult(result, url, toolType = "fetch") {
     textContent = result.content;
   } else if (result?.text) {
     textContent = result.text;
+  } else if (Array.isArray(result)) {
+    // Handle direct MCP content array (e.g., [{type: "text", text: "..."}])
+    textContent = result
+      .filter((item) => item.type === "text")
+      .map((item) => item.text)
+      .join("\n\n");
   } else if (typeof result === "object") {
     textContent = JSON.stringify(result, null, 2);
   }
@@ -1036,7 +1042,7 @@ function renderMapResults(result) {
 
   // Extract all URLs from the results
   const urls = [];
-  const urlMatches = textContent.matchAll(/https?:\/\/[^\s\n"'\]]+/gi);
+  const urlMatches = textContent.matchAll(/https?:\/\/[^\s\n"'\]\\]+/gi);
   for (const match of urlMatches) {
     const url = match[0].replace(/[,\]}"']$/, ""); // Clean trailing chars
     if (!urls.includes(url) && url !== baseUrl) {
