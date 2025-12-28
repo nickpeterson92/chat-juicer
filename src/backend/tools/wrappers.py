@@ -23,6 +23,7 @@ from typing import Any
 from tools.code_interpreter import execute_python_code
 from tools.document_generation import generate_document
 from tools.file_operations import list_directory, read_file, search_files
+from tools.schema_fetch import get_table_schema, list_registered_databases
 from tools.text_editing import EditOperation, edit_file
 from utils.logger import logger
 
@@ -175,6 +176,35 @@ def create_session_aware_tools(session_id: str, model: str | None = None) -> lis
         """
         return await execute_python_code(code=code, session_id=session_id)  # type: ignore[no-any-return]
 
+    # Schema Fetch - Database schema tools (no session injection needed, uses global registry)
+    async def wrapped_list_registered_databases() -> str:
+        """List all databases configured in the registry.
+
+        Discover available database connections before fetching schemas.
+        Returns database names and types (postgresql, mysql, sqlserver).
+
+        Returns:
+            JSON with list of configured databases
+        """
+        return await list_registered_databases()  # type: ignore[no-any-return]
+
+    async def wrapped_get_table_schema(db_name: str, table_name: str) -> str:
+        """Fetch column schema for a database table.
+
+        Returns column names, types, and nullability. Call this for each table
+        involved in a mapping - sources, targets, or lookup tables. For complex
+        integrations, multiple source tables may feed into one target (denormalization),
+        or one source may split across multiple targets (normalization).
+
+        Args:
+            db_name: Database name from registry (use list_registered_databases to discover)
+            table_name: Table name to fetch schema for
+
+        Returns:
+            JSON with column metadata
+        """
+        return await get_table_schema(db_name=db_name, table_name=table_name)  # type: ignore[no-any-return]
+
     # Create Agent-compatible tool objects with function_tool decorator
     return [
         function_tool(wrapped_list_directory),
@@ -183,4 +213,6 @@ def create_session_aware_tools(session_id: str, model: str | None = None) -> lis
         function_tool(wrapped_edit_file),
         function_tool(wrapped_generate_document),
         function_tool(wrapped_execute_python_code),
+        function_tool(wrapped_list_registered_databases),
+        function_tool(wrapped_get_table_schema),
     ]

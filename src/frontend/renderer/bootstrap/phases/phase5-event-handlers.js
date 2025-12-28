@@ -8,11 +8,13 @@
  */
 
 import { ComponentLifecycle } from "../../core/component-lifecycle.js";
+import { globalEventBus } from "../../core/event-bus.js";
 import { globalLifecycleManager } from "../../core/lifecycle-manager.js";
 import { registerMessageHandlers } from "../../handlers/message-handlers-v2.js";
 import { setupSessionListHandlers } from "../../handlers/session-list-handlers.js";
 import { loadFilesIntoState } from "../../managers/file-manager.js";
 import { MessageHandlerPlugin } from "../../plugins/core-plugins.js";
+import { destroySessionHeaderDisplay, initSessionHeaderDisplay } from "../../ui/components/session-header-display.js";
 import { renderEmptySessionList, renderSessionList } from "../../ui/renderers/session-list-renderer.js";
 import { initializeTitlebar } from "../../ui/titlebar.js";
 import { getPreviewType, hasBinaryExtension, hasTextExtension } from "../../utils/content-preview.js";
@@ -882,14 +884,6 @@ export async function initializeEventHandlers({
     // 4. Session Management
     // ======================
 
-    // Restart bot button
-    const restartBtn = document.getElementById("restart-btn");
-    if (restartBtn) {
-      addListener(restartBtn, "click", () => {
-        ipcAdapter.restartBot();
-      });
-    }
-
     // Settings button (placeholder)
     const settingsBtn = document.getElementById("settings-btn");
     if (settingsBtn) {
@@ -943,6 +937,12 @@ export async function initializeEventHandlers({
         }
       });
     }
+
+    // Initialize session header display (session name in top bar with dropdown)
+    initSessionHeaderDisplay({
+      appState,
+      sessionService,
+    });
 
     // ======================
     // 5. EventBus Message Handlers
@@ -1141,6 +1141,11 @@ export async function initializeEventHandlers({
       updateSessionsList(sessionService.getSessions());
     });
 
+    // Listen for sessions:refresh from EventBus (used by header menu actions)
+    const unsubscribeSessionsRefresh = globalEventBus.on("sessions:refresh", () => {
+      updateSessionsList(sessionService.getSessions());
+    });
+
     // ======================
     // 8. Session List Handlers
     // ======================
@@ -1178,6 +1183,9 @@ export async function initializeEventHandlers({
       }
       stateUnsubscribers.length = 0;
 
+      // Unsubscribe from EventBus
+      unsubscribeSessionsRefresh();
+
       // Destroy component-level subscriptions (AppState)
       const destroyComponent = (component, name) => {
         if (component && typeof component.destroy === "function") {
@@ -1192,6 +1200,9 @@ export async function initializeEventHandlers({
       destroyComponent(components.chatContainer, "ChatContainer");
       destroyComponent(components.filePanel, "FilePanel");
       destroyComponent(components.inputArea, "InputArea");
+
+      // Destroy session header display
+      destroySessionHeaderDisplay();
 
       // Unmount any lifecycle-managed components/timers
       globalLifecycleManager.unmountAll();

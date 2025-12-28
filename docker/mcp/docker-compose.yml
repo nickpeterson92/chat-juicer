@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  mcp-sequential:
+    build:
+      context: .
+      dockerfile: Dockerfile.sequential
+    container_name: chatjuicer-mcp-sequential
+    ports:
+      - "8081:8080"  # HTTP port mapping
+    environment:
+      - PORT=8080
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  mcp-fetch:
+    build:
+      context: .
+      dockerfile: Dockerfile.fetch
+    container_name: chatjuicer-mcp-fetch
+    ports:
+      - "8082:8080"  # HTTP port mapping
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  mcp-tavily:
+    build:
+      context: .
+      dockerfile: Dockerfile.tavily
+    container_name: chatjuicer-mcp-tavily
+    ports:
+      - "8083:8080"  # HTTP port mapping
+    environment:
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+      - PORT=8080
+      - TRANSPORT=sse
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  mcp-network:
+    name: chatjuicer-mcp
+    driver: bridge

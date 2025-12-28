@@ -167,7 +167,7 @@ test-coverage-all: ## Generate coverage reports for both backend and frontend
 
 test-validate: ## Validate Python syntax (compilation check)
 	@echo "$(BLUE)Validating Python syntax...$(NC)"
-	@python3 -m compileall src/backend/ tests/ || python -m compileall src/backend/ tests/
+	@python3 -m compileall src/backend/ tests/ docker/mcp/ || python -m compileall src/backend/ tests/ docker/mcp/
 	@echo "$(GREEN)✓ Syntax validation passed$(NC)"
 
 ##@ Code Generation
@@ -188,7 +188,7 @@ generate-model-metadata: ## Generate model-metadata.js from Python MODEL_CONFIGS
 lint: ## Run linters (Ruff for Python, Biome for JS)
 	@echo "$(BLUE)Running ruff linter (Python)...$(NC)"
 	@if [ -f ".juicer/bin/ruff" ]; then \
-		.juicer/bin/ruff check src/backend/ tests/ --fix; \
+		.juicer/bin/ruff check src/backend/ tests/ docker/mcp/ --fix; \
 	else \
 		echo "$(YELLOW)⚠ Ruff not installed in .juicer venv$(NC)"; \
 		echo "$(BLUE)Run: make install-dev$(NC)"; \
@@ -200,7 +200,7 @@ lint: ## Run linters (Ruff for Python, Biome for JS)
 format: ## Format Python code with black
 	@echo "$(BLUE)Formatting code with black...$(NC)"
 	@if [ -f ".juicer/bin/black" ]; then \
-		.juicer/bin/black src/backend/ tests/; \
+		.juicer/bin/black src/backend/ tests/ docker/mcp/; \
 	else \
 		echo "$(YELLOW)⚠ Black not installed in .juicer venv$(NC)"; \
 		echo "$(BLUE)Run: make install-dev$(NC)"; \
@@ -210,7 +210,7 @@ format: ## Format Python code with black
 typecheck: ## Run mypy type checking
 	@echo "$(BLUE)Running mypy type checker...$(NC)"
 	@if [ -f ".juicer/bin/mypy" ]; then \
-		.juicer/bin/mypy src/backend/ tests/; \
+		.juicer/bin/mypy src/backend/ tests/ docker/mcp/; \
 	else \
 		echo "$(YELLOW)⚠ Mypy not installed in .juicer venv$(NC)"; \
 		echo "$(BLUE)Run: make install-dev$(NC)"; \
@@ -258,14 +258,14 @@ validate: test-validate ## Validate Python code syntax
 fix: ## Auto-fix all fixable issues (format + lint with auto-fix)
 	@echo "$(BLUE)Auto-fixing code issues...$(NC)"
 	@if [ -f ".juicer/bin/black" ]; then \
-		.juicer/bin/black src/backend/ tests/; \
+		.juicer/bin/black src/backend/ tests/ docker/mcp/; \
 	else \
 		echo "$(YELLOW)⚠ Black not installed in .juicer venv$(NC)"; \
 		echo "$(BLUE)Run: make install-dev$(NC)"; \
 		exit 1; \
 	fi
 	@if [ -f ".juicer/bin/ruff" ]; then \
-		.juicer/bin/ruff check src/backend/ tests/ --fix; \
+		.juicer/bin/ruff check src/backend/ tests/ docker/mcp/ --fix; \
 	else \
 		echo "$(YELLOW)⚠ Ruff not installed in .juicer venv$(NC)"; \
 		echo "$(BLUE)Run: make install-dev$(NC)"; \
@@ -277,19 +277,19 @@ check: ## Pre-commit validation gate (format check + lint + typecheck + tests)
 	@echo "$(BLUE)Running pre-commit validation checks...$(NC)"
 	@echo "$(BLUE)→ Checking code format...$(NC)"
 	@if [ -f ".juicer/bin/black" ]; then \
-		.juicer/bin/black --check src/backend/ tests/ || (echo "$(RED)✗ Format check failed. Run: make format$(NC)" && exit 1); \
+		.juicer/bin/black --check src/backend/ tests/ docker/mcp/ || (echo "$(RED)✗ Format check failed. Run: make format$(NC)" && exit 1); \
 	else \
 		echo "$(YELLOW)⚠ Black not installed, skipping format check$(NC)"; \
 	fi
 	@echo "$(BLUE)→ Running linter...$(NC)"
 	@if [ -f ".juicer/bin/ruff" ]; then \
-		.juicer/bin/ruff check src/backend/ tests/ || (echo "$(RED)✗ Lint check failed. Run: make lint$(NC)" && exit 1); \
+		.juicer/bin/ruff check src/backend/ tests/ docker/mcp/ || (echo "$(RED)✗ Lint check failed. Run: make lint$(NC)" && exit 1); \
 	else \
 		echo "$(YELLOW)⚠ Ruff not installed, skipping lint check$(NC)"; \
 	fi
 	@echo "$(BLUE)→ Running type checker...$(NC)"
 	@if [ -f ".juicer/bin/mypy" ]; then \
-		.juicer/bin/mypy src/backend/ tests/ || (echo "$(RED)✗ Type check failed. Run: make typecheck$(NC)" && exit 1); \
+		.juicer/bin/mypy src/backend/ tests/ docker/mcp/ || (echo "$(RED)✗ Type check failed. Run: make typecheck$(NC)" && exit 1); \
 	else \
 		echo "$(YELLOW)⚠ Mypy not installed, skipping type check$(NC)"; \
 	fi

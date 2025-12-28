@@ -13,6 +13,9 @@ uvicorn[standard]>=0.32.0
 # Database
 asyncpg>=0.30.0
 alembic>=1.14.0  # Migrations
+aiomysql>=0.2.0  # MySQL async driver for schema fetch
+aioodbc>=0.5.0   # SQL Server via ODBC for schema fetch
+simple-salesforce>=1.12.5 # Salesforce REST API client
 
 # Auth (Phase 1)
 python-jose[cryptography]>=3.3.0
@@ -43,7 +46,8 @@ pydantic>=2.12.5  # Runtime data validation with type hints
 pydantic-settings>=2.12.0  # Settings management with environment variables
 
 # MCP Servers (REQUIRED for web fetching capabilities)
-mcp-server-fetch>=2025.4.7  # MCP server for HTTP/web content retrieval
+
 
 # Binary Serialization (REQUIRED for IPC Protocol V2)
 msgpack>=1.1.2  # MessagePack serialization for binary IPC protocol
+websockets>=13.1  # Async WebSocket client for MCP transport

@@ -37,7 +37,6 @@ export function initializeElements() {
   elements.chatContainer = document.getElementById("chat-container");
   elements.userInput = document.getElementById("user-input");
   elements.sendBtn = document.getElementById("send-btn");
-  elements.restartBtn = document.getElementById("restart-btn");
   elements.settingsBtn = document.getElementById("settings-btn");
   elements.aiThinking = document.getElementById("ai-thinking");
   elements.filesPanel = document.getElementById("files-panel");

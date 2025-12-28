@@ -1,0 +1,21 @@
+FROM node:20-alpine
+
+# Install python and required packages for WebSocket wrapper
+RUN apk add --no-cache python3 py3-pip
+RUN pip3 install --no-cache-dir fastapi uvicorn websockets --break-system-packages
+
+# Install Sequential Thinking MCP server
+RUN npm install -g @modelcontextprotocol/server-sequential-thinking
+
+# Copy WebSocket wrapper
+COPY mcp-ws-wrapper.py /app/mcp-ws-wrapper.py
+
+# Expose HTTP port
+EXPOSE 8080
+
+# Set server command as env var
+ENV MCP_SERVER_CMD="npx @modelcontextprotocol/server-sequential-thinking"
+ENV PORT=8080
+
+# Start WebSocket wrapper
+CMD ["python3", "/app/mcp-ws-wrapper.py"]
