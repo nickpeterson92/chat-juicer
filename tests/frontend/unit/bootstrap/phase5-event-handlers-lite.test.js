@@ -193,9 +193,13 @@ describe("phase5-event-handlers coverage", () => {
         onBotMessage: vi.fn(),
         onPythonStderr: vi.fn(),
         onPythonExit: vi.fn(),
+        readFile: vi.fn(),
       },
       domAdapter: {},
-      eventBus: { emit: vi.fn() },
+      eventBus: {
+        emit: vi.fn(),
+        on: vi.fn(() => vi.fn()), // returns an unsubscribe function
+      },
       sendMessage: vi.fn(),
     };
   }
