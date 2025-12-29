@@ -3383,6 +3383,72 @@
     line-height: 1.6 !important;
   }
 
+  /* Markdown preview - inherit message-content styles with dark theme */
+  .file-preview-markdown {
+    @apply p-6 overflow-auto;
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--color-text-primary);
+    background-color: transparent;
+    height: 100%;
+  }
+
+  .file-preview-markdown h1,
+  .file-preview-markdown h2,
+  .file-preview-markdown h3,
+  .file-preview-markdown h4 {
+    color: var(--color-text-primary);
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+  }
+
+  .file-preview-markdown h1 {
+    font-size: 1.75em;
+  }
+
+  .file-preview-markdown h2 {
+    font-size: 1.5em;
+  }
+
+  .file-preview-markdown h3 {
+    font-size: 1.25em;
+  }
+
+  .file-preview-markdown p {
+    margin-bottom: 1em;
+  }
+
+  .file-preview-markdown code {
+    @apply px-1.5 py-0.5 rounded text-sm;
+    background-color: var(--color-surface-3);
+    color: var(--color-brand-primary);
+  }
+
+  .file-preview-markdown pre {
+    @apply p-4 rounded-lg overflow-auto my-4;
+    background-color: var(--color-surface-2);
+  }
+
+  .file-preview-markdown pre code {
+    background: transparent;
+    padding: 0;
+  }
+
+  .file-preview-markdown ul,
+  .file-preview-markdown ol {
+    @apply pl-6 mb-4;
+  }
+
+  .file-preview-markdown li {
+    @apply mb-1;
+  }
+
+  .file-preview-markdown blockquote {
+    @apply pl-4 border-l-4 italic my-4;
+    border-color: var(--color-border-secondary);
+    color: var(--color-text-secondary);
+  }
+
   /* Preview content area (for images, code, etc.) */
   .thumbnail-preview {
     @apply absolute inset-0;
