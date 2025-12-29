@@ -8,8 +8,8 @@
  * - Pure render function: renderFileList() → DOM (lines 88-147)
  *
  * REACTIVE PATTERN:
- * 1. Load files into state: `await loadFilesIntoState(appState, directory, 'sources')`
- * 2. Subscribe to changes: `appState.subscribe('files.sourcesList', (files) => { renderFileList(files, container, options) })`
+ * 1. Load files into state: `await loadFilesIntoState(appState, directory, 'input')`
+ * 2. Subscribe to changes: `appState.subscribe('files.inputList', (files) => { renderFileList(files, container, options) })`
  * 3. Render is automatic when state changes
  *
  * LEGACY METHODS REMOVED:
@@ -35,7 +35,7 @@ import { showToast } from "../utils/toast.js";
  * Load files from a directory into AppState
  * @param {Object} appState - AppState instance
  * @param {string} directory - Directory to load files from
- * @param {'sources'|'output'} listType - Type of file list to update
+ * @param {'input'|'output'} listType - Type of file list to update
  * @returns {Promise<{success: boolean, files?: Array, error?: string}>}
  */
 export async function loadFilesIntoState(appState, directory, listType = "input") {
@@ -52,14 +52,14 @@ export async function loadFilesIntoState(appState, directory, listType = "input"
 
     if (!result.success) {
       // Clear the list on error
-      const stateKey = listType === "output" ? "files.outputList" : "files.sourcesList";
+      const stateKey = listType === "output" ? "files.outputList" : "files.inputList";
       appState.setState(stateKey, []);
       appState.setState("files.isLoadingFiles", false);
       return { success: false, error: result.error };
     }
 
     const files = result.files || [];
-    const stateKey = listType === "output" ? "files.outputList" : "files.sourcesList";
+    const stateKey = listType === "output" ? "files.outputList" : "files.inputList";
     appState.setState(stateKey, files);
     appState.setState("files.isLoadingFiles", false);
 
@@ -332,7 +332,7 @@ function renderStaticHeader(headerText, container) {
  */
 function renderEmptyState(container, options = {}) {
   const { directory = "input", isOutput = false, isWelcomePage = false } = options;
-  const dirName = directory.includes("/output") ? "output/" : "sources/";
+  const dirName = directory.includes("/output") ? "output/" : "input/";
   const isChatPage = container.id === "files-container";
 
   if (isWelcomePage) {

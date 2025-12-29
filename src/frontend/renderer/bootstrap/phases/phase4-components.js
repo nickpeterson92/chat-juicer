@@ -137,7 +137,7 @@ export async function initializeComponents({ elements, appState, services, ipcAd
       document.getElementById("open-files-btn"),
       document.getElementById("files-container"),
       document.getElementById("refresh-files-btn"),
-      document.getElementById("tab-sources"),
+      document.getElementById("tab-input"),
       document.getElementById("tab-output"),
       {
         appState,

@@ -13,7 +13,7 @@ export class FilePanel {
    * @param {HTMLElement} toggleButton - Panel toggle button (#open-files-btn)
    * @param {HTMLElement} filesContainer - Files list container (#files-container)
    * @param {HTMLElement} refreshButton - Refresh button (#refresh-files-btn)
-   * @param {HTMLElement} inputTab - Input tab button (#tab-sources)
+   * @param {HTMLElement} inputTab - Input tab button (#tab-input)
    * @param {HTMLElement} outputTab - Output tab button (#tab-output)
    * @param {Object} options - Optional configuration
    * @param {Object} options.appState - AppState instance for reactive state management
@@ -112,11 +112,11 @@ export class FilePanel {
 
     globalLifecycleManager.addUnsubscriber(this, unsubscribeOutput);
 
-    // Subscribe to sources file list changes
+    // Subscribe to input file list changes
     const unsubscribeInput = this.appState.subscribe("files.inputList", (files) => {
       if (this.getActiveTab()?.dataset.directory === "input") {
         renderFileList(files, this.filesContainer, {
-          directory: `data/files/${this.currentSessionId}/sources`,
+          directory: `data/files/${this.currentSessionId}/input`,
           isOutput: false,
           useThumbnailGrid: true, // Enable thumbnail grid mode
           headerText: "Input",
@@ -195,7 +195,7 @@ export class FilePanel {
     // Determine full directory path
     let directory;
     if (dirType === "input") {
-      directory = `data/files/${this.currentSessionId}/sources`;
+      directory = `data/files/${this.currentSessionId}/input`;
     } else if (dirType === "output") {
       directory = `data/files/${this.currentSessionId}/output`;
     }
