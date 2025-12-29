@@ -958,13 +958,15 @@ app.whenReady().then(() => {
         if (!activeSessionId) activeSessionId = sessionId;
         ensureWebSocket(sessionId);
       }
-      const response = await apiRequest(
-        `/api/v1/sessions/${sessionId}/files/${encodeURIComponent(filename)}/path?folder=${encodeURIComponent(folder)}`
-      );
-      const absolutePath = response.path;
 
-      // Read file and convert to base64
-      const buffer = await fs.readFile(absolutePath);
+      // Fetch file content from backend /download endpoint
+      const response = await apiRequest(
+        `/api/v1/sessions/${sessionId}/files/${encodeURIComponent(filename)}/download?folder=${encodeURIComponent(folder)}`,
+        { rawResponse: true }
+      );
+
+      // Convert ArrayBuffer to base64
+      const buffer = Buffer.from(await response.arrayBuffer());
       const base64 = buffer.toString("base64");
 
       // Determine mime type from extension
@@ -978,6 +980,14 @@ app.whenReady().then(() => {
         svg: "image/svg+xml",
         bmp: "image/bmp",
         ico: "image/x-icon",
+        pdf: "application/pdf",
+        txt: "text/plain",
+        md: "text/markdown",
+        json: "application/json",
+        js: "text/javascript",
+        ts: "text/typescript",
+        py: "text/x-python",
+        csv: "text/csv",
       };
       const mimeType = mimeTypes[ext] || "application/octet-stream";
 
