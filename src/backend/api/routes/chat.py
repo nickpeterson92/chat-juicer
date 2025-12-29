@@ -82,12 +82,10 @@ async def chat_websocket(
         )
 
     if not session_owner:
-        await websocket.accept()
         await websocket.close(code=4404, reason="Session not found")
         return
 
     if session_owner != user_id:
-        await websocket.accept()
         await websocket.close(code=4403, reason="Access denied")
         return
 
