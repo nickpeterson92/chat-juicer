@@ -28,7 +28,6 @@ from core.constants import (
     MSG_TYPE_FUNCTION_DETECTED,
     MSG_TYPE_FUNCTION_EXECUTING,
     RAW_RESPONSE_EVENT,
-    TEMPLATES_PATH,
     get_settings,
     is_vision_capable,
 )
@@ -125,7 +124,7 @@ class ChatService:
         reasoning = reasoning_effort or session_row["reasoning_effort"]
 
         # Ensure session workspace exists (defensive - handles old sessions)
-        self.file_service.init_session_workspace(session_id, TEMPLATES_PATH)
+        self.file_service.init_session_workspace(session_id)
 
         # Build system instructions with session file context (Phase 1: local)
         session_files = await self.file_service.list_files(session_id, "sources")
