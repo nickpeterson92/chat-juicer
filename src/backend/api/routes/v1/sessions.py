@@ -19,7 +19,6 @@ from api.dependencies import DB, Files, Sessions
 from api.middleware.auth import get_current_user
 from api.middleware.exception_handlers import SessionNotFoundError
 from api.middleware.request_context import update_request_context
-from core.constants import TEMPLATES_PATH
 from models.api_models import UserInfo
 from models.schemas.base import PaginationMeta
 from models.schemas.sessions import (
@@ -161,8 +160,8 @@ async def create_session(
         reasoning_effort=request.reasoning_effort,
     )
 
-    # Initialize session workspace with templates symlink
-    files.init_session_workspace(created["session_id"], TEMPLATES_PATH)
+    # Initialize session workspace
+    files.init_session_workspace(created["session_id"])
 
     return SessionResponse(**created)
 
