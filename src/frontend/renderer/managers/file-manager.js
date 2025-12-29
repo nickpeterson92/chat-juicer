@@ -154,7 +154,7 @@ export function renderFileList(files, container, options = {}) {
 
   // Use thumbnail grid mode for welcome page OR when explicitly enabled
   if (isWelcomePage || useThumbnailGrid) {
-    renderThumbnailGrid(files, container, { directory, onDelete, onFolderClick });
+    renderThumbnailGrid(files, container, { directory, onDelete, onFolderClick, isOutput });
     return;
   }
 
@@ -538,9 +538,10 @@ async function handleDeleteFile(filename, directory = "sources", _container = nu
  * @param {string} options.directory - Directory path for file operations
  * @param {Function} options.onDelete - Callback when file is deleted
  * @param {Function} options.onFolderClick - Callback when folder is clicked (for navigation)
+ * @param {boolean} options.isOutput - Whether this is the output directory
  */
 function renderThumbnailGrid(files, container, options = {}) {
-  const { directory, onDelete, onFolderClick } = options;
+  const { directory, onDelete, onFolderClick, isOutput = false } = options;
 
   // Add thumbnail mode class to container
   container.classList.add("thumbnail-mode");
@@ -557,7 +558,7 @@ function renderThumbnailGrid(files, container, options = {}) {
       card = createFolderTile(file, onFolderClick);
     } else {
       // Create file thumbnail
-      card = createThumbnailCard(file, directory, onDelete);
+      card = createThumbnailCard(file, directory, onDelete, isOutput, container);
     }
     grid.appendChild(card);
   });
@@ -732,10 +733,12 @@ function updateWelcomeFileVisibility(container, hasFiles) {
  * ensuring consistent styling between pending and persisted files.
  * @param {string} name - File name
  * @param {number} size - File size in bytes
- * @param {Function} onDelete - Delete handler
+ * @param {Function} onDelete - Delete handler (for source files)
  * @param {Function} onDownload - Optional download handler (for persisted files)
+ * @param {Function} onPreview - Optional preview handler (for output files)
+ * @param {boolean} isOutput - Whether this is an output file (shows preview instead of delete)
  */
-function createCardStructure(name, size, onDelete, onDownload = null) {
+function createCardStructure(name, size, onDelete, onDownload = null, onPreview = null, isOutput = false) {
   const ext = name.split(".").pop()?.toLowerCase() || "";
 
   const card = document.createElement("div");
@@ -770,24 +773,44 @@ function createCardStructure(name, size, onDelete, onDownload = null) {
     };
   }
 
-  // Delete button
-  const deleteBtn = document.createElement("button");
-  deleteBtn.className = "thumbnail-delete-btn";
-  deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-  </svg>`;
-  deleteBtn.title = "Remove file";
-  deleteBtn.onclick = (e) => {
-    e.stopPropagation();
-    if (onDelete) onDelete(e);
-  };
+  // Preview button for output files OR Delete button for source files
+  let previewBtn = null;
+  let deleteBtn = null;
+
+  if (isOutput && onPreview) {
+    // Output files: Preview button (eye icon)
+    previewBtn = document.createElement("button");
+    previewBtn.className = "thumbnail-preview-btn";
+    previewBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>`;
+    previewBtn.title = "Preview file";
+    previewBtn.onclick = (e) => {
+      e.stopPropagation();
+      onPreview(e);
+    };
+  } else if (onDelete) {
+    // Source files: Delete button
+    deleteBtn = document.createElement("button");
+    deleteBtn.className = "thumbnail-delete-btn";
+    deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+    </svg>`;
+    deleteBtn.title = "Remove file";
+    deleteBtn.onclick = (e) => {
+      e.stopPropagation();
+      onDelete(e);
+    };
+  }
 
   card.appendChild(filename);
   card.appendChild(badge);
   if (downloadBtn) card.appendChild(downloadBtn);
-  card.appendChild(deleteBtn);
+  if (previewBtn) card.appendChild(previewBtn);
+  if (deleteBtn) card.appendChild(deleteBtn);
 
-  return { card, badge, deleteBtn, downloadBtn, ext };
+  return { card, badge, deleteBtn, downloadBtn, previewBtn, ext };
 }
 
 /**
@@ -906,9 +929,11 @@ function createPendingFileCard(pendingFile, index, appState) {
  * @param {Object} file - File object with name, size properties
  * @param {string} directory - Directory path for operations
  * @param {Function} onDelete - Optional callback after delete
+ * @param {boolean} isOutput - Whether this is an output file (shows preview instead of delete)
+ * @param {HTMLElement} gridContainer - Container element for expanded preview
  * @returns {HTMLElement}
  */
-function createThumbnailCard(file, directory, onDelete = null) {
+function createThumbnailCard(file, directory, onDelete = null, isOutput = false, gridContainer = null) {
   const handleDelete = (_e) => {
     handleDeleteFile(file.name, directory, null, onDelete);
   };
@@ -933,7 +958,19 @@ function createThumbnailCard(file, directory, onDelete = null) {
     }
   };
 
-  const { card, ext } = createCardStructure(file.name, file.size || 0, handleDelete, handleDownload);
+  const handlePreview = async (_e) => {
+    // Create expanded preview overlay
+    showExpandedPreview(file, directory, gridContainer);
+  };
+
+  const { card, ext } = createCardStructure(
+    file.name,
+    file.size || 0,
+    handleDelete,
+    handleDownload,
+    handlePreview,
+    isOutput
+  );
   card.setAttribute("aria-label", `Open ${file.name}`);
 
   // Click handler to open file
@@ -1228,5 +1265,150 @@ async function loadContentPreview(card, skeleton, directory, filename, ext, type
     }
   } catch (_error) {
     fallbackToIcon(card, skeleton, filename);
+  }
+}
+
+/**
+ * Show expanded file preview overlay
+ * @param {Object} file - File object with name, size properties
+ * @param {string} directory - Directory path
+ * @param {HTMLElement} container - Container to attach overlay to
+ */
+async function showExpandedPreview(file, directory, container) {
+  const ext = file.name.split(".").pop()?.toLowerCase() || "";
+
+  // Create overlay
+  const overlay = document.createElement("div");
+  overlay.className = "file-preview-overlay";
+
+  // Create header with filename and close button
+  const header = document.createElement("div");
+  header.className = "file-preview-header";
+
+  const title = document.createElement("span");
+  title.className = "file-preview-title";
+  title.textContent = file.name;
+
+  const downloadBtn = document.createElement("button");
+  downloadBtn.className = "file-preview-download";
+  downloadBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+  </svg>`;
+  downloadBtn.title = "Download file";
+  downloadBtn.onclick = async () => {
+    try {
+      const result = await window.electronAPI.downloadFile(directory, file.name);
+      if (result.success && result.downloadUrl) {
+        const a = document.createElement("a");
+        a.href = result.downloadUrl;
+        a.download = file.name;
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    } catch (err) {
+      showToast(`Download failed: ${err.message}`, "error", 4000);
+    }
+  };
+
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "file-preview-close";
+  closeBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>`;
+  closeBtn.title = "Close preview";
+  closeBtn.onclick = () => overlay.remove();
+
+  header.appendChild(title);
+  header.appendChild(downloadBtn);
+  header.appendChild(closeBtn);
+
+  // Create content area
+  const content = document.createElement("div");
+  content.className = "file-preview-content";
+  content.innerHTML = '<div class="file-preview-loading">Loading...</div>';
+
+  overlay.appendChild(header);
+  overlay.appendChild(content);
+
+  // Add to container (file panel area)
+  const targetContainer = container?.closest(".file-panel-body") || container || document.body;
+  targetContainer.appendChild(overlay);
+
+  // Close on escape key
+  const handleEscape = (e) => {
+    if (e.key === "Escape") {
+      overlay.remove();
+      document.removeEventListener("keydown", handleEscape);
+    }
+  };
+  document.addEventListener("keydown", handleEscape);
+
+  // Fetch and render content
+  try {
+    const result = await window.electronAPI.getFileContent(directory, file.name);
+
+    if (!result.success) {
+      content.innerHTML = `<div class="file-preview-error">Failed to load file: ${result.error}</div>`;
+      return;
+    }
+
+    const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico"];
+    const codeExtensions = [
+      "js",
+      "jsx",
+      "ts",
+      "tsx",
+      "py",
+      "java",
+      "c",
+      "cpp",
+      "cs",
+      "go",
+      "rb",
+      "php",
+      "swift",
+      "kt",
+      "rs",
+      "sh",
+      "bash",
+      "sql",
+      "r",
+      "scala",
+      "dart",
+      "lua",
+    ];
+    const textExtensions = ["txt", "md", "html", "xml", "json", "yaml", "yml", "toml", "ini", "log"];
+
+    if (imageExtensions.includes(ext)) {
+      // Image preview
+      content.innerHTML = `<img class="file-preview-image" src="data:${result.mimeType};base64,${result.data}" alt="${file.name}" />`;
+    } else if (ext === "pdf") {
+      // PDF preview - show in iframe or use PDF.js
+      const blob = new Blob([Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0))], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      content.innerHTML = `<embed class="file-preview-pdf" src="${url}" type="application/pdf" />`;
+    } else if (codeExtensions.includes(ext) || textExtensions.includes(ext) || ext === "csv") {
+      // Text/code preview with syntax highlighting
+      const textContent = atob(result.data);
+      const { generateCodePreview, generateTextPreview, generateCsvPreview } = await import(
+        "../utils/content-preview.js"
+      );
+
+      let previewHtml;
+      if (codeExtensions.includes(ext)) {
+        previewHtml = generateCodePreview(textContent, ext);
+      } else if (ext === "csv") {
+        previewHtml = generateCsvPreview(textContent);
+      } else {
+        previewHtml = generateTextPreview(textContent, ext);
+      }
+      content.innerHTML = `<div class="file-preview-code">${previewHtml}</div>`;
+    } else {
+      content.innerHTML = '<div class="file-preview-error">Preview not available for this file type</div>';
+    }
+  } catch (error) {
+    content.innerHTML = `<div class="file-preview-error">Error loading preview: ${error.message}</div>`;
   }
 }
