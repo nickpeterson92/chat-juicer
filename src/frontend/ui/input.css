@@ -3360,13 +3360,27 @@
   }
 
   .file-preview-code {
-    @apply text-sm font-mono overflow-auto rounded-lg p-4;
+    @apply font-mono overflow-auto rounded-lg p-6;
     background-color: var(--color-surface-2);
-    line-height: 1.5;
+    line-height: 1.6;
+    font-size: 14px !important;
+    height: 100%;
   }
 
-  .file-preview-code pre {
+  .file-preview-code pre,
+  .file-preview-code code,
+  .file-preview-code .thumbnail-code-preview,
+  .file-preview-code .thumbnail-text-preview,
+  .file-preview-code .thumbnail-csv-preview {
     @apply m-0 whitespace-pre-wrap;
+    font-size: 14px !important;
+    line-height: 1.6 !important;
+    color: var(--color-text-primary) !important;
+  }
+
+  .file-preview-code .hljs {
+    font-size: 14px !important;
+    line-height: 1.6 !important;
   }
 
   /* Preview content area (for images, code, etc.) */

@@ -1323,7 +1323,11 @@ async function showExpandedPreview(file, directory, container) {
   const backdrop = document.createElement("div");
   backdrop.className = "file-preview-backdrop";
 
-  const closePreview = () => {
+  const closePreview = (e) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     overlay.remove();
     backdrop.remove();
     document.removeEventListener("keydown", handleEscape);
