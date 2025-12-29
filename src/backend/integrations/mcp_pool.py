@@ -151,6 +151,14 @@ class MCPServerPool:
             for key in self._servers
         }
 
+    def get_stats(self) -> dict[str, Any]:
+        """Get statistics for health check endpoint."""
+        return {
+            "initialized": self._initialized,
+            "servers": list(self._servers.keys()),
+            "pool_stats": self.get_pool_stats(),
+        }
+
     async def shutdown(self) -> None:
         """Shutdown all managed servers."""
         async with self._lock:
