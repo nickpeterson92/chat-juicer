@@ -1989,20 +1989,19 @@
 
   /* Download button (thumbnail view) */
   .thumbnail-download-btn {
-    @apply absolute bg-transparent border-none cursor-pointer p-1.5 rounded-md opacity-0 transition-opacity;
-    bottom: 32px;
-    right: 28px;
-    color: var(--color-text-secondary);
+    @apply absolute bottom-2 right-2 p-1 rounded opacity-0 transition-all;
     background-color: var(--color-surface-overlay);
+    color: var(--color-text-secondary);
+    z-index: 3;
   }
 
   .thumbnail-card:hover .thumbnail-download-btn {
-    @apply opacity-100;
+    opacity: 1;
   }
 
   .thumbnail-download-btn:hover {
-    color: var(--color-brand-primary);
-    background-color: var(--color-surface-2);
+    background-color: var(--color-brand-primary);
+    color: white;
   }
 
   /* Welcome page components */
