@@ -1318,7 +1318,19 @@ async function showExpandedPreview(file, directory, container) {
     <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
   </svg>`;
   closeBtn.title = "Close preview";
-  closeBtn.onclick = () => overlay.remove();
+
+  // Create backdrop
+  const backdrop = document.createElement("div");
+  backdrop.className = "file-preview-backdrop";
+
+  const closePreview = () => {
+    overlay.remove();
+    backdrop.remove();
+    document.removeEventListener("keydown", handleEscape);
+  };
+
+  closeBtn.onclick = closePreview;
+  backdrop.onclick = closePreview;
 
   header.appendChild(title);
   header.appendChild(downloadBtn);
@@ -1332,15 +1344,14 @@ async function showExpandedPreview(file, directory, container) {
   overlay.appendChild(header);
   overlay.appendChild(content);
 
-  // Add to container (file panel area)
-  const targetContainer = container?.closest(".file-panel-body") || container || document.body;
-  targetContainer.appendChild(overlay);
+  // Add to document body for proper fixed positioning
+  document.body.appendChild(backdrop);
+  document.body.appendChild(overlay);
 
   // Close on escape key
   const handleEscape = (e) => {
     if (e.key === "Escape") {
-      overlay.remove();
-      document.removeEventListener("keydown", handleEscape);
+      closePreview();
     }
   };
   document.addEventListener("keydown", handleEscape);
