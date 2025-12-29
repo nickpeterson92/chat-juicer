@@ -3641,7 +3641,10 @@
   }
 
   .skeleton-message-avatar {
-    @apply skeleton w-8 h-8 rounded-full flex-shrink-0;
+    @apply w-8 h-8 rounded-full flex-shrink-0;
+    background: linear-gradient(90deg, var(--color-surface-2) 25%, var(--color-surface-3) 50%, var(--color-surface-2) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s infinite;
   }
 
   .skeleton-message-content {
@@ -3649,7 +3652,11 @@
   }
 
   .skeleton-message-line {
-    @apply skeleton h-4;
+    @apply h-4;
+    background: linear-gradient(90deg, var(--color-surface-2) 25%, var(--color-surface-3) 50%, var(--color-surface-2) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s infinite;
+    border-radius: 8px;
   }
 
   .skeleton-message-line.short {
@@ -3685,7 +3692,10 @@
   }
 
   .skeleton-file-card {
-    @apply skeleton aspect-square rounded-lg;
+    @apply aspect-square rounded-lg;
+    background: linear-gradient(90deg, var(--color-surface-2) 25%, var(--color-surface-3) 50%, var(--color-surface-2) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s infinite;
   }
 
   /* Session loading overlay */
