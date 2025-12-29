@@ -1,0 +1,156 @@
+# --- IAM Role for EC2 ---
+resource "aws_iam_role" "ec2_role" {
+  name = "${var.project_name}-${var.environment}-ec2-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+# Policy to allow S3 Access
+resource "aws_iam_role_policy" "s3_access" {
+  name = "${var.project_name}-${var.environment}-s3-access"
+  role = aws_iam_role.ec2_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket",
+          "s3:GetBucketLocation"
+        ]
+        Resource = var.s3_bucket_arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject",
+          "s3:ListMultipartUploadParts",
+          "s3:AbortMultipartUpload"
+        ]
+        Resource = "${var.s3_bucket_arn}/*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "${var.project_name}-${var.environment}-ec2-profile"
+  role = aws_iam_role.ec2_role.name
+}
+
+# --- Security Group ---
+resource "aws_security_group" "app_sg" {
+  name_prefix = "${var.project_name}-${var.environment}-app-sg"
+  vpc_id      = var.vpc_id
+  description = "Security group for application server"
+
+  # SSH Access
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_cidr_blocks
+    description = "SSH access"
+  }
+
+  # HTTP API Access
+  ingress {
+    from_port   = 8000
+    to_port     = 8000
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_cidr_blocks
+    description = "API access (whitelisted)"
+  }
+
+  # Egress (Allow all outbound)
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-app-sg"
+    # Mandatory for Innovation Lab
+    nukeoptout = "true"
+  }
+}
+
+# --- Key Pair ---
+resource "aws_key_pair" "deployer" {
+  key_name   = "${var.project_name}-${var.environment}-key"
+  public_key = file(var.public_key_path)
+}
+
+# --- EC2 Instance ---
+# Get latest Amazon Linux 2023 AMI
+data "aws_ami" "amazon_linux_2023" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["al2023-ami-2023.*-x86_64"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+resource "aws_instance" "app_server" {
+  ami           = data.aws_ami.amazon_linux_2023.id
+  instance_type = var.instance_type
+  subnet_id     = var.subnet_id
+
+  vpc_security_group_ids = [aws_security_group.app_sg.id]
+  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
+  key_name               = aws_key_pair.deployer.key_name
+
+  user_data = templatefile("${path.module}/user_data.sh.tpl", {
+    github_token          = var.github_token
+    tavily_api_key        = var.tavily_api_key
+    db_password           = var.db_password
+    db_username           = var.db_username
+    db_endpoint           = var.db_endpoint
+    s3_bucket             = var.s3_bucket_name
+    aws_region            = var.aws_region
+    azure_openai_api_key  = var.azure_openai_api_key
+    azure_openai_endpoint = var.azure_openai_endpoint
+    jwt_secret            = var.jwt_secret
+    sf_user               = var.sf_user
+    sf_password           = var.sf_password
+    sf_token              = var.sf_token
+  })
+  user_data_replace_on_change = true
+
+  # Root block device
+  root_block_device {
+    volume_size = 20
+    volume_type = "gp3"
+    tags = {
+      nukeoptout = "true"
+    }
+  }
+
+  tags = {
+    Name       = "${var.project_name}-${var.environment}-app"
+    nukeoptout = "true"
+  }
+}

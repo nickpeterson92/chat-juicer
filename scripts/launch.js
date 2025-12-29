@@ -9,7 +9,20 @@
 
 const { spawn } = require("node:child_process");
 const _path = require("node:path");
+const _fs = require("node:fs");
 const platformConfig = require("./platform-config");
+
+// Load .env.local if it exists
+const envPath = _path.join(process.cwd(), ".env.local");
+if (_fs.existsSync(envPath)) {
+  const envContent = _fs.readFileSync(envPath, "utf8");
+  envContent.split("\n").forEach((line) => {
+    const [key, ...valueParts] = line.split("=");
+    if (key && valueParts.length > 0) {
+      process.env[key.trim()] = valueParts.join("=").trim();
+    }
+  });
+}
 
 async function launch() {
   // Get command line arguments
