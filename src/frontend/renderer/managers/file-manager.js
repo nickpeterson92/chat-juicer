@@ -420,8 +420,14 @@ function createFileItem(file, directory, container, onDelete = null) {
     try {
       const result = await window.electronAPI.downloadFile(directory, file.name);
       if (result.success && result.downloadUrl) {
-        // Open presigned URL in browser to trigger download
-        window.open(result.downloadUrl, "_blank");
+        // Create invisible anchor to trigger download without opening new window
+        const a = document.createElement("a");
+        a.href = result.downloadUrl;
+        a.download = file.name;
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
       } else {
         showToast(`Failed to download: ${result.error}`, "error", 4000);
       }
@@ -911,7 +917,14 @@ function createThumbnailCard(file, directory, onDelete = null) {
     try {
       const result = await window.electronAPI.downloadFile(directory, file.name);
       if (result.success && result.downloadUrl) {
-        window.open(result.downloadUrl, "_blank");
+        // Create invisible anchor to trigger download without opening new window
+        const a = document.createElement("a");
+        a.href = result.downloadUrl;
+        a.download = file.name;
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
       } else {
         showToast(`Failed to download: ${result.error}`, "error", 4000);
       }
