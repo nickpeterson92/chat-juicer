@@ -1247,6 +1247,10 @@ async function loadContentPreview(card, skeleton, directory, filename, ext, type
         previewHtml = generateCodePreview(content, ext);
       } else if (type === "csv") {
         previewHtml = generateCsvPreview(content);
+      } else if (ext === "md") {
+        // Render markdown for thumbnail
+        const { marked } = await import("marked");
+        previewHtml = `<div class="thumbnail-markdown-preview">${marked.parse(content)}</div>`;
       } else {
         previewHtml = generateTextPreview(content, ext);
       }
