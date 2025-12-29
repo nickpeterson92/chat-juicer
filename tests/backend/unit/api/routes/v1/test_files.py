@@ -10,7 +10,7 @@ from api.middleware.exception_handlers import register_exception_handlers
 from api.routes.v1.files import router
 
 SESSION_ID = "sess_123"
-FOLDER = "sources"
+FOLDER = "input"
 
 
 @pytest.fixture

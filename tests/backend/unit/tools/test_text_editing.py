@@ -36,9 +36,9 @@ class TestResolveEditPath:
         """Test that output/ prefix is not doubled."""
         assert resolve_edit_path("output/report.md") == "output/report.md"
 
-    def test_resolve_sources_prefix_unchanged(self) -> None:
-        """Test that sources/ paths remain unchanged."""
-        assert resolve_edit_path("sources/input.txt") == "sources/input.txt"
+    def test_resolve_input_prefix_unchanged(self) -> None:
+        """Test that input/ paths remain unchanged."""
+        assert resolve_edit_path("input/input.txt") == "input/input.txt"
 
     def test_resolve_templates_prefix_unchanged(self) -> None:
         """Test that templates/ paths remain unchanged."""

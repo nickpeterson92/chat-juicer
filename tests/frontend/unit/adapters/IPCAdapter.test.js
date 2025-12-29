@@ -442,6 +442,102 @@ describe("IPCAdapter", () => {
     });
   });
 
+  describe("Auth Operations", () => {
+    beforeEach(() => {
+      // Setup mock returns for auth methods
+      mockAPI.authLogin = vi.fn().mockResolvedValue({ user: { id: 1 }, tokens: {} });
+      mockAPI.authRegister = vi.fn().mockResolvedValue({ user: { id: 1 }, tokens: {} });
+      mockAPI.authRefresh = vi.fn().mockResolvedValue({ accessToken: "new-token" });
+      mockAPI.authLogout = vi.fn().mockResolvedValue({ success: true });
+      mockAPI.authGetTokens = vi.fn().mockResolvedValue({ accessToken: "access", refreshToken: "refresh" });
+      mockAPI.authStoreTokens = vi.fn().mockResolvedValue({ success: true });
+      mockAPI.authGetAccessToken = vi.fn().mockResolvedValue("access-token");
+    });
+
+    it("should login successfully", async () => {
+      const result = await adapter.authLogin("test@example.com", "password");
+      expect(mockAPI.authLogin).toHaveBeenCalledWith("test@example.com", "password");
+      expect(result).toEqual({ user: { id: 1 }, tokens: {} });
+    });
+
+    it("should throw when API not available for login", async () => {
+      const adapterNoAPI = new IPCAdapter({});
+      await expect(adapterNoAPI.authLogin("email", "pass")).rejects.toThrow("IPC API not available: authLogin");
+    });
+
+    it("should register successfully", async () => {
+      const result = await adapter.authRegister("test@example.com", "password", "Test User");
+      expect(mockAPI.authRegister).toHaveBeenCalledWith("test@example.com", "password", "Test User");
+      expect(result).toEqual({ user: { id: 1 }, tokens: {} });
+    });
+
+    it("should throw when API not available for register", async () => {
+      const adapterNoAPI = new IPCAdapter({});
+      await expect(adapterNoAPI.authRegister("email", "pass")).rejects.toThrow("IPC API not available: authRegister");
+    });
+
+    it("should refresh token successfully", async () => {
+      const result = await adapter.authRefresh("refresh-token");
+      expect(mockAPI.authRefresh).toHaveBeenCalledWith("refresh-token");
+      expect(result).toEqual({ accessToken: "new-token" });
+    });
+
+    it("should throw when API not available for refresh", async () => {
+      const adapterNoAPI = new IPCAdapter({});
+      await expect(adapterNoAPI.authRefresh("token")).rejects.toThrow("IPC API not available: authRefresh");
+    });
+
+    it("should logout successfully", async () => {
+      const result = await adapter.authLogout();
+      expect(mockAPI.authLogout).toHaveBeenCalled();
+      expect(result).toEqual({ success: true });
+    });
+
+    it("should throw when API not available for logout", async () => {
+      const adapterNoAPI = new IPCAdapter({});
+      await expect(adapterNoAPI.authLogout()).rejects.toThrow("IPC API not available: authLogout");
+    });
+
+    it("should get stored tokens", async () => {
+      const result = await adapter.authGetTokens();
+      expect(mockAPI.authGetTokens).toHaveBeenCalled();
+      expect(result).toEqual({ accessToken: "access", refreshToken: "refresh" });
+    });
+
+    it("should return null when API not available for get tokens", async () => {
+      const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const adapterNoAPI = new IPCAdapter({});
+      await expect(adapterNoAPI.authGetTokens()).resolves.toBeNull();
+      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("IPC API not available: authGetTokens"));
+      consoleWarnSpy.mockRestore();
+    });
+
+    it("should store tokens successfully", async () => {
+      const result = await adapter.authStoreTokens("access", "refresh", { id: 1 });
+      expect(mockAPI.authStoreTokens).toHaveBeenCalledWith("access", "refresh", { id: 1 });
+      expect(result).toEqual({ success: true });
+    });
+
+    it("should throw when API not available for store tokens", async () => {
+      const adapterNoAPI = new IPCAdapter({});
+      await expect(adapterNoAPI.authStoreTokens("a", "r")).rejects.toThrow("IPC API not available: authStoreTokens");
+    });
+
+    it("should get access token", async () => {
+      const result = await adapter.authGetAccessToken();
+      expect(mockAPI.authGetAccessToken).toHaveBeenCalled();
+      expect(result).toBe("access-token");
+    });
+
+    it("should return null when API not available for get access token", async () => {
+      const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const adapterNoAPI = new IPCAdapter({});
+      await expect(adapterNoAPI.authGetAccessToken()).resolves.toBeNull();
+      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("IPC API not available: authGetAccessToken"));
+      consoleWarnSpy.mockRestore();
+    });
+  });
+
   describe("Generic IPC Methods", () => {
     it("should invoke method via channel", async () => {
       mockAPI.customMethod = vi.fn().mockResolvedValue({ result: "success" });

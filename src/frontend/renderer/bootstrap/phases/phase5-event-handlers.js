@@ -990,7 +990,7 @@ export async function initializeEventHandlers({
 
       // If it's an intentional idle timeout, don't show an alert
       // The connection will automatically restore when the user interacts
-      if (status && status.isIdle) {
+      if (status?.isIdle) {
         console.log("WebSocket idle timeout - connection closed (will auto-reconnect on activity)");
         return;
       }

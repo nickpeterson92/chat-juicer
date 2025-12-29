@@ -37,14 +37,26 @@
     },
     {
       "name": "Keywords",
-      "scope": ["keyword", "keyword.control", "keyword.operator.logical", "keyword.operator.new", "storage.type", "storage.modifier"],
+      "scope": [
+        "keyword",
+        "keyword.control",
+        "keyword.operator.logical",
+        "keyword.operator.new",
+        "storage.type",
+        "storage.modifier"
+      ],
       "settings": {
         "foreground": "#ff6ac1"
       }
     },
     {
       "name": "Operators",
-      "scope": ["keyword.operator", "keyword.operator.assignment", "keyword.operator.arithmetic", "keyword.operator.comparison"],
+      "scope": [
+        "keyword.operator",
+        "keyword.operator.assignment",
+        "keyword.operator.arithmetic",
+        "keyword.operator.comparison"
+      ],
       "settings": {
         "foreground": "#ff6ac1"
       }
@@ -81,7 +93,13 @@
     },
     {
       "name": "Classes and Types - YELLOW",
-      "scope": ["entity.name.class", "entity.name.type", "entity.other.inherited-class", "support.class", "support.type"],
+      "scope": [
+        "entity.name.class",
+        "entity.name.type",
+        "entity.other.inherited-class",
+        "support.class",
+        "support.type"
+      ],
       "settings": {
         "foreground": "#f3f99d"
       }

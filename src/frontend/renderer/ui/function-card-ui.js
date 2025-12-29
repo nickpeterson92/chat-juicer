@@ -496,7 +496,7 @@ function renderWebSearchResults(result, query) {
   } else if (result?.content && Array.isArray(result.content)) {
     // Handle standard MCP content list
     const textItem = result.content.find((item) => item.type === "text");
-    if (textItem && textItem.text) {
+    if (textItem?.text) {
       // Try parsing the text as JSON first
       const parsed = safeParse(textItem.text, null);
       if (parsed) {

@@ -63,6 +63,7 @@ None-shm
 .serena/
 .juicer/
 sources/
+input/
 output/
 src/.mypy_cache/
 

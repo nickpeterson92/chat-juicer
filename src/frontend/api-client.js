@@ -8,7 +8,7 @@ async function apiRequest(endpoint, options = {}) {
   init.headers = { ...(options.headers || {}) };
 
   if (options.token) {
-    init.headers["Authorization"] = `Bearer ${options.token}`;
+    init.headers.Authorization = `Bearer ${options.token}`;
   }
 
   const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;

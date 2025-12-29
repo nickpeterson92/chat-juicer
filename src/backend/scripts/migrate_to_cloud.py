@@ -106,7 +106,7 @@ def migrate_database(local_db_url: str, remote_db_url: str) -> None:
         # Allow dump_proc to receive a SIGPIPE if restore_proc exits
         dump_proc.stdout.close()
 
-        output, errors = restore_proc.communicate()
+        _output, errors = restore_proc.communicate()
 
         if restore_proc.returncode != 0:
             log(f"Database restore failed: {errors.decode()}", "ERROR")

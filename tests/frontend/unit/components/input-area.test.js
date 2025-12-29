@@ -8,7 +8,6 @@ import { globalEventBus } from "@/core/event-bus.js";
 import { globalLifecycleManager } from "@/core/lifecycle-manager.js";
 import { AppState } from "@/core/state.js";
 import { InputArea } from "@/ui/components/input-area.js";
-import { ModelSelector } from "@/ui/components/model-selector.js";
 import * as toast from "@/utils/toast.js";
 
 vi.mock("@/utils/toast.js", () => ({
@@ -633,7 +632,7 @@ describe("InputArea", () => {
     });
 
     it("should trigger auto-summarization when threshold reached", async () => {
-      const inputArea = new InputArea(textarea, sendButton, onSendCallback, {
+      const _inputArea = new InputArea(textarea, sendButton, onSendCallback, {
         appState,
         modelSelectorContainer,
         sessionService: mockSessionService,
@@ -708,7 +707,7 @@ describe("InputArea", () => {
     });
 
     it("should trigger interrupt on Escape key when streaming", () => {
-      const inputArea = new InputArea(textarea, sendButton, onSendCallback, {
+      const _inputArea = new InputArea(textarea, sendButton, onSendCallback, {
         appState,
       });
 

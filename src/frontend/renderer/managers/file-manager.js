@@ -1279,7 +1279,7 @@ async function loadContentPreview(card, skeleton, directory, filename, ext, type
  * @param {string} directory - Directory path
  * @param {HTMLElement} container - Container to attach overlay to
  */
-async function showExpandedPreview(file, directory, container) {
+async function showExpandedPreview(file, directory, _container) {
   const ext = file.name.split(".").pop()?.toLowerCase() || "";
 
   // Create overlay
