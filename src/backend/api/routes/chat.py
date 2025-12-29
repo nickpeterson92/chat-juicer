@@ -12,26 +12,35 @@ from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from api.dependencies import DATA_FILES_PATH
 from api.middleware.auth import get_current_user_from_token
 from api.middleware.request_context import create_websocket_context, get_request_id
+from api.services.auth_service import AuthService
 from api.services.chat_service import ChatService
 from api.services.file_service import LocalFileService
 from api.websocket.errors import WSCloseCode, send_ws_error
 from api.websocket.manager import WebSocketManager
 from api.websocket.task_manager import CancellationToken
 from core.constants import get_settings
+from models.api_models import UserInfo
 from models.error_models import ErrorCode
 from utils.logger import logger
 
 router = APIRouter()
 
 
-async def _get_user_for_websocket(token: str | None, db: asyncpg.Pool) -> Any | None:
+async def _get_user_for_websocket(token: str | None, db: asyncpg.Pool, client_ip: str | None) -> UserInfo | None:
     """Resolve user for WebSocket connections."""
     settings = get_settings()
+
     if token:
         user = await get_current_user_from_token(token, db)
         return user
-    if settings.allow_localhost_noauth:
-        return None
+
+    # Allow localhost connections without auth (for local development)
+    if settings.allow_localhost_noauth and client_ip in {"127.0.0.1", "localhost", "::1"}:
+        auth = AuthService(db)
+        default_user = await auth.get_default_user()
+        if default_user:
+            return UserInfo(**auth.user_payload(default_user))
+
     raise WebSocketDisconnect(code=4401)
 
 
@@ -51,10 +60,35 @@ async def chat_websocket(
     client_ip = websocket.client.host if websocket.client else None
     create_websocket_context(session_id=session_id, client_ip=client_ip)
 
+    # Authenticate user
     try:
-        await _get_user_for_websocket(token, db)
+        user = await _get_user_for_websocket(token, db, client_ip)
     except WebSocketDisconnect:
         await websocket.close(code=WSCloseCode.AUTH_REQUIRED)
+        return
+
+    if not user:
+        await websocket.close(code=WSCloseCode.AUTH_REQUIRED)
+        return
+
+    # Verify session belongs to user
+    from uuid import UUID
+
+    user_id = UUID(user.id)
+    async with db.acquire() as conn:
+        session_owner = await conn.fetchval(
+            "SELECT user_id FROM sessions WHERE session_id = $1",
+            session_id,
+        )
+
+    if not session_owner:
+        await websocket.accept()
+        await websocket.close(code=4404, reason="Session not found")
+        return
+
+    if session_owner != user_id:
+        await websocket.accept()
+        await websocket.close(code=4403, reason="Access denied")
         return
 
     # Connect with limits checking - returns False if connection rejected
