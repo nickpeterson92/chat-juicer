@@ -453,16 +453,6 @@ class SandboxPool:
             ):
                 logger.warning("Failed to copy workspace from container, files may be missing")
 
-            # Copy output directory back (code can write to /output/)
-            if session_files_path:
-                output_path = session_files_path / "output"
-                if output_path.exists() and not await self._container_cp(
-                    f"{self.warm_container_id}:/output/.",
-                    f"{output_path}/",
-                    to_container=False,
-                ):
-                    logger.warning("Failed to copy output from container")
-
             # Clean workspace in container for next execution (security)
             # Use timeout to prevent hanging
             cleanup_proc = await asyncio.create_subprocess_exec(
@@ -538,7 +528,7 @@ class SandboxPool:
             if input_path.exists():
                 cmd_args.extend(["-v", f"{input_path}:/input:ro"])  # Read-only for uploads
             if output_path.exists():
-                cmd_args.extend(["-v", f"{output_path}:/output:rw"])  # Read/write for outputs
+                cmd_args.extend(["-v", f"{output_path}:/output:ro"])  # Read-only access to generated docs
 
         # Add working directory and command
         cmd_args.extend(
@@ -733,7 +723,7 @@ async def execute_python_code(code: str, session_id: str) -> str:
     File Access:
     - /workspace: Read/write for code outputs (default working directory)
     - /input: Read-only access to uploaded source files (session files)
-    - /output: Read/write access to session output files (persistent)
+    - /output: Read-only access to previously generated documents
 
     Limitations:
     - No internet access

@@ -1780,17 +1780,40 @@ function renderTableSchemaResult(result) {
 
 /**
  * Download a file from code interpreter output
- * @param {Object} file - File metadata
+ * @param {Object} file - File metadata (name, path, type, size)
  */
 async function downloadFile(file) {
   try {
-    // Request file download via IPC
-    const result = await window.electronAPI.invoke("download-code-output-file", {
-      path: file.path,
-      name: file.name,
-    });
+    // Extract session_id and relative path from the file path
+    // Path format: /abs/path/data/files/{session_id}/output/... or /abs/path/data/files/{session_id}/output/code/...
+    const pathParts = file.path.split("/");
+    const filesIndex = pathParts.indexOf("files");
 
-    if (!result.success) {
+    if (filesIndex === -1 || filesIndex + 1 >= pathParts.length) {
+      console.error("[function-card-ui] Cannot parse session from path:", file.path);
+      return;
+    }
+
+    const sessionId = pathParts[filesIndex + 1];
+
+    // Find the "output" index and extract everything after it as the relative filename
+    const outputIndex = pathParts.indexOf("output", filesIndex);
+    if (outputIndex === -1) {
+      console.error("[function-card-ui] Cannot find output in path:", file.path);
+      return;
+    }
+
+    // Get relative path after "output/" (could be "code/file.xlsx" or just "file.xlsx")
+    const relativePath = pathParts.slice(outputIndex + 1).join("/");
+    const directory = `data/files/${sessionId}/output`;
+
+    // Use the standard download handler which supports S3 presigned URLs
+    const result = await window.electronAPI.downloadFile(directory, relativePath);
+
+    if (result.success && result.downloadUrl) {
+      // Open S3 presigned URL in browser for download
+      window.open(result.downloadUrl, "_blank");
+    } else if (!result.success) {
       console.error("[function-card-ui] Download failed:", result.error);
     }
   } catch (error) {
