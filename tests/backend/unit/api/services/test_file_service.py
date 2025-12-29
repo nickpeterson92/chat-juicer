@@ -5,7 +5,7 @@ import pytest
 from api.services.file_service import LocalFileService
 
 SESSION_ID = "sess_123"
-FOLDER = "sources"
+FOLDER = "input"
 
 
 @pytest.fixture
@@ -134,16 +134,8 @@ async def test_delete_file(file_service: LocalFileService, tmp_path: MagicMock, 
 
 
 def test_init_session_workspace(file_service: LocalFileService, tmp_path: MagicMock) -> None:
-    templates_src = tmp_path / "global_templates"
-    templates_src.mkdir()
-    (templates_src / "t1.md").write_text("Template")
-
-    file_service.init_session_workspace(SESSION_ID, templates_path=templates_src)
+    file_service.init_session_workspace(SESSION_ID)
 
     session_dir = tmp_path / SESSION_ID
-    assert (session_dir / "sources").exists()
+    assert (session_dir / "input").exists()
     assert (session_dir / "output").exists()
-    assert (session_dir / "templates").exists()
-    # Check if templates is symlink or copy (depends on OS but usually symlink in test env)
-    # Just check content
-    assert (session_dir / "templates" / "t1.md").exists()

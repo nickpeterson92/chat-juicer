@@ -46,31 +46,6 @@ def test_build_dynamic_instructions_empty_list() -> None:
     assert result == base
 
 
-def test_build_dynamic_instructions_with_templates_only() -> None:
-    """Append templates section when only templates provided."""
-    base = "BASE"
-    templates = ["t1.md", "t2.md"]
-
-    result = build_dynamic_instructions(base, session_templates=templates)
-
-    assert base in result
-    assert "Available Templates" in result
-    for name in templates:
-        assert name in result
-
-
-def test_build_dynamic_instructions_with_files_and_templates() -> None:
-    """Append both sections when both are provided."""
-    base = "BASE"
-    files = ["a.txt"]
-    templates = ["t1.md"]
-
-    result = build_dynamic_instructions(base, session_files=files, session_templates=templates)
-
-    assert "Current Session Files" in result
-    assert "Available Templates" in result
-
-
 def test_build_dynamic_instructions_keeps_mcp_sections_when_all_enabled() -> None:
     """Retain MCP guidance when all servers are enabled."""
     result = build_dynamic_instructions(

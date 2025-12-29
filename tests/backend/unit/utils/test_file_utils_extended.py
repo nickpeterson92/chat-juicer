@@ -212,14 +212,14 @@ class TestFileOperation:
         monkeypatch.chdir(session_workspace.parent.parent.parent)
 
         # Create test file in session workspace
-        test_file = session_workspace / "sources" / "test.txt"
+        test_file = session_workspace / "input" / "test.txt"
         test_file.parent.mkdir(parents=True, exist_ok=True)
         test_file.write_text("test content")
 
         def noop_operation(content: str) -> tuple[str, dict[str, str]]:
             return content, {"operation": "noop"}
 
-        result = await file_operation("sources/test.txt", noop_operation, session_id=session_id)
+        result = await file_operation("input/test.txt", noop_operation, session_id=session_id)
 
         assert "success" in result
 
@@ -315,7 +315,7 @@ class TestSaveUploadedFileExtended:
         monkeypatch.setattr(utils.file_utils, "DATA_FILES_PATH", temp_dir / "data" / "files")
 
         session_id = "chat_test123"
-        session_workspace = temp_dir / "data" / "files" / session_id / "sources"
+        session_workspace = temp_dir / "data" / "files" / session_id / "input"
         session_workspace.mkdir(parents=True, exist_ok=True)
 
         # Create existing file
@@ -359,7 +359,7 @@ class TestSaveUploadedFileExtended:
         monkeypatch.setattr(utils.file_utils, "DATA_FILES_PATH", temp_dir / "data" / "files")
 
         session_id = "chat_test123"
-        session_workspace = temp_dir / "data" / "files" / session_id / "sources"
+        session_workspace = temp_dir / "data" / "files" / session_id / "input"
         session_workspace.mkdir(parents=True, exist_ok=True)
 
         # Create large data (1MB)
@@ -383,7 +383,7 @@ class TestSaveUploadedFileExtended:
         monkeypatch.setattr(utils.file_utils, "DATA_FILES_PATH", temp_dir / "data" / "files")
 
         session_id = "chat_test123"
-        session_workspace = temp_dir / "data" / "files" / session_id / "sources"
+        session_workspace = temp_dir / "data" / "files" / session_id / "input"
         session_workspace.mkdir(parents=True, exist_ok=True)
 
         result = save_uploaded_file(
@@ -394,15 +394,15 @@ class TestSaveUploadedFileExtended:
 
         assert result["success"] is True
         # Path should be relative to jail root (data/files/{session_id}/)
-        # So result should be sources/test.txt, not absolute and not containing data/files
+        # So result should be input/test.txt, not absolute and not containing data/files
         assert not result["file_path"].startswith("/")
-        assert result["file_path"] == "sources/test.txt"
+        assert result["file_path"] == "input/test.txt"
 
     def test_save_file_with_special_characters_in_name(self, temp_dir: Path) -> None:
         """Test saving file with special characters in filename."""
         with patch("pathlib.Path.cwd", return_value=temp_dir):
             session_id = "chat_test123"
-            session_workspace = temp_dir / "data" / "files" / session_id / "sources"
+            session_workspace = temp_dir / "data" / "files" / session_id / "input"
             session_workspace.mkdir(parents=True, exist_ok=True)
 
             result = save_uploaded_file(
@@ -448,7 +448,7 @@ class TestValidateSessionPathEdgeCases:
         session_id = session_workspace.name
         monkeypatch.chdir(session_workspace.parent.parent.parent)
 
-        _resolved, error = validate_session_path("./sources/file.txt", session_id)
+        _resolved, error = validate_session_path("./input/file.txt", session_id)
         assert error is None
 
     def test_session_path_strips_session_prefix(self, session_workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -457,7 +457,7 @@ class TestValidateSessionPathEdgeCases:
         monkeypatch.chdir(session_workspace.parent.parent.parent)
 
         # Pass path with session prefix
-        prefixed_path = f"data/files/{session_id}/sources/test.txt"
+        prefixed_path = f"data/files/{session_id}/input/test.txt"
         _resolved, error = validate_session_path(prefixed_path, session_id)
         assert error is None
 

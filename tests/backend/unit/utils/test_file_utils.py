@@ -13,7 +13,6 @@ import pytest
 from utils.file_utils import (
     get_relative_path,
     get_session_files,
-    get_session_templates,
     read_file_content,
     save_uploaded_file,
     validate_directory_path,
@@ -53,9 +52,9 @@ class TestGetSessionFiles:
 
     @pytest.mark.asyncio
     async def test_get_session_files_returns_sorted_list(self, isolated_filesystem: Path) -> None:
-        """Return sorted filenames from session sources directory."""
+        """Return sorted filenames from session input directory."""
         session_id = "chat_test123"
-        session_dir = isolated_filesystem / "data" / "files" / session_id / "sources"
+        session_dir = isolated_filesystem / "data" / "files" / session_id / "input"
         session_dir.mkdir(parents=True, exist_ok=True)
         (session_dir / "b.txt").write_text("b")
         (session_dir / "a.txt").write_text("a")
@@ -73,7 +72,7 @@ class TestGetSessionFiles:
     async def test_get_session_files_filters_hidden_files(self, isolated_filesystem: Path) -> None:
         """Exclude hidden files from results."""
         session_id = "chat_test123"
-        session_dir = isolated_filesystem / "data" / "files" / session_id / "sources"
+        session_dir = isolated_filesystem / "data" / "files" / session_id / "input"
         session_dir.mkdir(parents=True, exist_ok=True)
         (session_dir / ".hidden.txt").write_text("hidden")
         (session_dir / "visible.txt").write_text("visible")
@@ -82,38 +81,16 @@ class TestGetSessionFiles:
         assert files == ["visible.txt"]
 
 
-class TestGetSessionTemplates:
-    """Tests for get_session_templates function."""
-
-    @pytest.mark.asyncio
-    async def test_get_session_templates_returns_sorted_list(self, isolated_filesystem: Path) -> None:
-        """Return sorted template filenames."""
-        session_id = "chat_templates"
-        templates_dir = isolated_filesystem / "data" / "files" / session_id / "templates"
-        templates_dir.mkdir(parents=True, exist_ok=True)
-        (templates_dir / "b.md").write_text("# b")
-        (templates_dir / "a.md").write_text("# a")
-
-        templates = await get_session_templates(session_id)
-        assert templates == ["a.md", "b.md"]
-
-    @pytest.mark.asyncio
-    async def test_get_session_templates_missing_dir_returns_empty(self, isolated_filesystem: Path) -> None:
-        """Return empty list when templates directory missing."""
-        templates = await get_session_templates("missing_session")
-        assert templates == []
-
-
 class TestValidateSessionPath:
     """Tests for validate_session_path function."""
 
-    def test_valid_path_in_sources(self, session_workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test valid path in sources directory."""
+    def test_valid_path_in_input(self, session_workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test valid path in input directory."""
         session_id = session_workspace.name
         # Change to the actual directory so Path.cwd() and resolve() work correctly
         monkeypatch.chdir(session_workspace.parent.parent.parent)
 
-        resolved, error = validate_session_path("sources/test.txt", session_id)
+        resolved, error = validate_session_path("input/test.txt", session_id)
         assert error is None
         assert resolved.is_absolute()
 
@@ -130,7 +107,7 @@ class TestValidateSessionPath:
         resolved, error = validate_session_path("/etc/passwd", "chat_test123")
         assert error is None  # No error - path is sandboxed
         assert "chat_test123" in str(resolved)  # Confined to session
-        assert "sources" in str(resolved)  # Defaulted to sources/
+        assert "input" in str(resolved)  # Defaulted to input/
 
     def test_null_byte_blocked(self) -> None:
         """Test that null bytes are blocked."""
@@ -143,12 +120,12 @@ class TestValidateSessionPath:
         malicious_paths = [
             "../../etc/passwd",
             "../../../etc/shadow",
-            "sources/../../etc/hosts",
-            "sources/../../../etc/passwd",
-            "sources/./../../etc/passwd",
-            "sources/./../../../etc/passwd",
+            "input/../../etc/hosts",
+            "input/../../../etc/passwd",
+            "input/./../../etc/passwd",
+            "input/./../../../etc/passwd",
             "./../../../etc/passwd",
-            "sources/....//....//etc/passwd",  # URL-encoded variant
+            "input/....//....//etc/passwd",  # URL-encoded variant
         ]
 
         for malicious_path in malicious_paths:
@@ -162,7 +139,7 @@ class TestValidateSessionPath:
         """Test various null byte injection techniques."""
         malicious_paths = [
             "file.txt\x00.jpg",
-            "sources/evil\x00.txt",
+            "input/evil\x00.txt",
             "test\x00/etc/passwd",
             "normal.txt\x00",
         ]
@@ -262,15 +239,15 @@ class TestValidateSessionPath:
         _resolved, error = validate_session_path("templates/template.md", session_id)
         assert error is None
 
-    def test_implicit_sources_directory(self, session_workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test that files without explicit directory go to sources."""
+    def test_implicit_input_directory(self, session_workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that files without explicit directory go to input."""
         session_id = session_workspace.name
         monkeypatch.chdir(session_workspace.parent.parent.parent)
 
         resolved, error = validate_session_path("file.txt", session_id)
         assert error is None
-        # Should resolve to sources/file.txt
-        assert "sources" in str(resolved)
+        # Should resolve to input/file.txt
+        assert "input" in str(resolved)
 
 
 class TestValidateFilePath:
@@ -317,7 +294,7 @@ class TestValidateFilePath:
         monkeypatch.chdir(session_workspace.parent.parent.parent)
 
         _resolved, error = validate_file_path(
-            "sources/test.txt",
+            "input/test.txt",
             session_id=session_id,
             check_exists=False,
         )
@@ -359,8 +336,11 @@ class TestValidateDirectoryPath:
         session_id = session_workspace.name
         monkeypatch.chdir(session_workspace.parent.parent.parent)
 
+        # Create input directory
+        (session_workspace / "input").mkdir(parents=True, exist_ok=True)
+
         _resolved, error = validate_directory_path(
-            "sources",
+            "input",
             session_id=session_id,
             check_exists=True,
         )
@@ -432,7 +412,7 @@ class TestSaveUploadedFile:
         with patch("pathlib.Path.cwd", return_value=temp_dir):
             # Create session workspace
             session_id = "chat_test123"
-            session_workspace = temp_dir / "data" / "files" / session_id / "sources"
+            session_workspace = temp_dir / "data" / "files" / session_id / "input"
             session_workspace.mkdir(parents=True, exist_ok=True)
 
             # Data should be list of byte values (0-255)
@@ -451,9 +431,9 @@ class TestSaveUploadedFile:
     def test_save_file_without_session(self, temp_dir: Path) -> None:
         """Test saving file without session_id (global sources)."""
         with patch("pathlib.Path.cwd", return_value=temp_dir):
-            # Create global sources directory
-            sources_dir = temp_dir / "data" / "sources"
-            sources_dir.mkdir(parents=True, exist_ok=True)
+            # Create global input directory
+            input_dir = temp_dir / "data" / "input"
+            input_dir.mkdir(parents=True, exist_ok=True)
 
             result = save_uploaded_file(
                 filename="test.txt",
@@ -468,7 +448,7 @@ class TestSaveUploadedFile:
         """Test saving file with invalid base64 data."""
         with patch("pathlib.Path.cwd", return_value=temp_dir):
             session_id = "chat_test123"
-            session_workspace = temp_dir / "data" / "files" / session_id / "sources"
+            session_workspace = temp_dir / "data" / "files" / session_id / "input"
             session_workspace.mkdir(parents=True, exist_ok=True)
 
             # Test with invalid data type (should still work with list)

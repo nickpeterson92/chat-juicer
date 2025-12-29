@@ -34,7 +34,7 @@ describe("SessionHeaderDisplay", () => {
 
     // Mock appState
     mockAppState = {
-      subscribe: vi.fn((path, callback) => {
+      subscribe: vi.fn((_path, callback) => {
         mockAppState._callback = callback;
         return vi.fn(); // unsubscribe
       }),

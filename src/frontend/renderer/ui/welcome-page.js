@@ -341,7 +341,7 @@ export function showWelcomePage(container, userName = "User") {
         container._attachmentCleanup = [];
       }
       container._attachmentCleanup.push(() => {
-        if (menu && menu.parentNode) {
+        if (menu?.parentNode) {
           menu.parentNode.removeChild(menu);
         }
       });

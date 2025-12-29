@@ -85,22 +85,22 @@ describe("AppState - Phase 1 Extensions", () => {
         isUploading: false,
         uploadProgress: null,
         activeDirectory: null,
-        sourcesList: [],
+        inputList: [],
         outputList: [],
         isLoadingFiles: false,
       });
     });
 
-    it("should update files.sourcesList", () => {
+    it("should update files.inputList", () => {
       const sources = [
         { name: "doc1.pdf", size: 10240 },
         { name: "doc2.txt", size: 2048 },
       ];
 
-      appState.setState("files.sourcesList", sources);
+      appState.setState("files.inputList", sources);
 
-      expect(appState.files.sourcesList).toEqual(sources);
-      expect(appState.files.sourcesList).toHaveLength(2);
+      expect(appState.files.inputList).toEqual(sources);
+      expect(appState.files.inputList).toHaveLength(2);
     });
 
     it("should update files.outputList", () => {

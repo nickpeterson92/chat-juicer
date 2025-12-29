@@ -84,7 +84,7 @@ async function readStoredTokens() {
 // Initial token load
 readStoredTokens()
   .then((tokens) => {
-    if (tokens && tokens.accessToken) {
+    if (tokens?.accessToken) {
       cachedAccessToken = tokens.accessToken;
       logger.info("Restored auth session from storage");
     }
