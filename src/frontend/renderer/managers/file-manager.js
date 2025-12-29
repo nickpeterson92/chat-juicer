@@ -1234,8 +1234,9 @@ async function loadContentPreview(card, skeleton, directory, filename, ext, type
     const result = await window.electronAPI.getFileContent(directory, filename);
 
     if (result.success && result.data) {
-      // Decode base64 to text
-      const content = atob(result.data);
+      // Decode base64 to text with proper UTF-8 handling
+      const bytes = Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0));
+      const content = new TextDecoder("utf-8").decode(bytes);
 
       // Dynamically import content preview utilities
       const { generateCodePreview, generateTextPreview, generateCsvPreview } = await import(
@@ -1414,14 +1415,16 @@ async function showExpandedPreview(file, directory, container) {
       const url = URL.createObjectURL(blob);
       content.innerHTML = `<embed class="file-preview-pdf" src="${url}" type="application/pdf" />`;
     } else if (ext === "md") {
-      // Markdown preview - render as formatted HTML
-      const textContent = atob(result.data);
+      // Markdown preview - render as formatted HTML (with proper UTF-8 decoding)
+      const bytes = Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0));
+      const textContent = new TextDecoder("utf-8").decode(bytes);
       const { marked } = await import("marked");
       const renderedHtml = marked.parse(textContent);
       content.innerHTML = `<div class="file-preview-markdown message-content">${renderedHtml}</div>`;
     } else if (codeExtensions.includes(ext) || textExtensions.includes(ext) || ext === "csv") {
-      // Text/code preview with syntax highlighting
-      const textContent = atob(result.data);
+      // Text/code preview with syntax highlighting (with proper UTF-8 decoding)
+      const bytes = Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0));
+      const textContent = new TextDecoder("utf-8").decode(bytes);
       const { generateCodePreview, generateTextPreview, generateCsvPreview } = await import(
         "../utils/content-preview.js"
       );
