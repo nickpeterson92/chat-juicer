@@ -214,7 +214,22 @@ def create_session_aware_tools(
         Returns:
             JSON with stdout, files generated, and execution metadata
         """
-        return await execute_python_code(code=code, session_id=session_id)  # type: ignore[no-any-return]
+        result = await execute_python_code(code=code, session_id=session_id)
+
+        # Trigger S3 sync for generated files
+        if s3_sync:
+            try:
+                response_data = json.loads(result)
+                if response_data.get("success") and response_data.get("files"):
+                    for file_info in response_data["files"]:
+                        # Files are in output/code/ directory
+                        filename = f"code/{file_info['name']}"
+                        logger.info(f"Triggering background S3 upload for output/{filename}")
+                        s3_sync.upload_to_s3_background(session_id, "output", filename)
+            except (json.JSONDecodeError, Exception) as e:
+                logger.warning(f"Failed to parse execute_python_code response for S3 trigger: {e}")
+
+        return result  # type: ignore[no-any-return]
 
     # Schema Fetch - Database schema tools (no session injection needed, uses global registry)
     async def wrapped_list_registered_databases() -> str:
