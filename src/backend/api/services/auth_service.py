@@ -5,9 +5,9 @@ from typing import Any
 from uuid import UUID
 
 import asyncpg
+import bcrypt
 
 from jose import JWTError, jwt
-from passlib.hash import bcrypt
 
 from core.constants import Settings, get_settings
 
@@ -22,9 +22,43 @@ class AuthService:
     async def login(self, email: str, password: str) -> dict[str, Any]:
         """Validate credentials and return access/refresh tokens."""
         user = await self.get_user_by_email(email)
-        if not user or not bcrypt.verify(password, user["password_hash"]):
+        if not user or not bcrypt.checkpw(password.encode(), user["password_hash"].encode()):
             raise ValueError("Invalid credentials")
 
+        tokens = self._issue_tokens(user)
+        return {
+            "access_token": tokens["access"],
+            "refresh_token": tokens["refresh"],
+            "user": self.user_payload(user),
+        }
+
+    async def register(self, email: str, password: str, display_name: str | None = None) -> dict[str, Any]:
+        """Register a new user and return access/refresh tokens."""
+        # Check if email already exists
+        existing = await self.get_user_by_email(email)
+        if existing:
+            raise ValueError("Email already registered")
+
+        # Hash password
+        password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+        # Insert new user
+        async with self.pool.acquire() as conn:
+            user = await conn.fetchrow(
+                """
+                INSERT INTO users (email, password_hash, display_name)
+                VALUES ($1, $2, $3)
+                RETURNING *
+                """,
+                email,
+                password_hash,
+                display_name,
+            )
+
+        if not user:
+            raise ValueError("Failed to create user")
+
+        # Issue tokens for immediate login
         tokens = self._issue_tokens(user)
         return {
             "access_token": tokens["access"],

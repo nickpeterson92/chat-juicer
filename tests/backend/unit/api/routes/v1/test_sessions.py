@@ -1,4 +1,3 @@
-from collections.abc import Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID
 
@@ -8,8 +7,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from api.dependencies import get_db, get_file_service, get_session_service
+from api.middleware.auth import get_current_user
 from api.middleware.exception_handlers import register_exception_handlers
 from api.routes.v1.sessions import router
+from models.api_models import UserInfo
 
 # Test Data
 USER_ID = UUID("00000000-0000-0000-0000-000000000001")
@@ -64,9 +65,14 @@ def app(mock_session_service: AsyncMock, mock_file_service: MagicMock, mock_db_p
     register_exception_handlers(app)  # Add handlers so AppExceptions get converted to JSON
     app.include_router(router, prefix="/api/v1/sessions")
 
+    # Mock authenticated user
+    def mock_current_user() -> UserInfo:
+        return UserInfo(id=str(USER_ID), email="test@example.com", display_name="Test User")
+
     app.dependency_overrides[get_session_service] = lambda: mock_session_service
     app.dependency_overrides[get_file_service] = lambda: mock_file_service
     app.dependency_overrides[get_db] = lambda: mock_db_pool
+    app.dependency_overrides[get_current_user] = mock_current_user
 
     return app
 
@@ -76,14 +82,7 @@ def client(app: FastAPI) -> TestClient:
     return TestClient(app, raise_server_exceptions=False)
 
 
-@pytest.fixture
-def mock_user_id() -> Generator[AsyncMock, None, None]:
-    with patch("api.routes.v1.sessions.get_default_user_id", new_callable=AsyncMock) as mock:
-        mock.return_value = USER_ID
-        yield mock
-
-
-def test_list_sessions(client: TestClient, mock_session_service: AsyncMock, mock_user_id: AsyncMock) -> None:
+def test_list_sessions(client: TestClient, mock_session_service: AsyncMock) -> None:
     mock_session_service.list_sessions.return_value = {
         "sessions": [
             {
@@ -111,8 +110,7 @@ def test_list_sessions(client: TestClient, mock_session_service: AsyncMock, mock
     assert data["sessions"][0]["session_id"] == SESSION_ID
     assert data["pagination"]["total_count"] == 1
 
-    # Verify default user ID was used
-    mock_user_id.assert_called_once()
+    # Verify user ID from mock was used
     mock_session_service.list_sessions.assert_called_with(USER_ID, 0, 50)
 
 
@@ -120,7 +118,6 @@ def test_create_session(
     client: TestClient,
     mock_session_service: AsyncMock,
     mock_file_service: MagicMock,
-    mock_user_id: AsyncMock,
 ) -> None:
     mock_session_service.create_session.return_value = {
         "id": str(SESSION_UUID),
@@ -151,7 +148,7 @@ def test_create_session(
     mock_file_service.init_session_workspace.assert_called_once()
 
 
-def test_get_session(client: TestClient, mock_session_service: AsyncMock, mock_user_id: AsyncMock) -> None:
+def test_get_session(client: TestClient, mock_session_service: AsyncMock) -> None:
     mock_session_service.get_session_with_history.return_value = {
         "session": {
             "id": str(SESSION_UUID),
@@ -181,7 +178,7 @@ def test_get_session(client: TestClient, mock_session_service: AsyncMock, mock_u
     mock_session_service.get_session_with_history.assert_called_with(USER_ID, SESSION_ID)
 
 
-def test_get_session_not_found(client: TestClient, mock_session_service: AsyncMock, mock_user_id: AsyncMock) -> None:
+def test_get_session_not_found(client: TestClient, mock_session_service: AsyncMock) -> None:
     mock_session_service.get_session_with_history.return_value = None
 
     response = client.get(f"/api/v1/sessions/{SESSION_ID}")
@@ -190,7 +187,7 @@ def test_get_session_not_found(client: TestClient, mock_session_service: AsyncMo
     assert response.json()["error"]["code"] == "SES_4001"  # SESSION_NOT_FOUND
 
 
-def test_update_session(client: TestClient, mock_session_service: AsyncMock, mock_user_id: AsyncMock) -> None:
+def test_update_session(client: TestClient, mock_session_service: AsyncMock) -> None:
     mock_session_service.update_session.return_value = {
         "id": str(SESSION_UUID),
         "session_id": SESSION_ID,
@@ -215,7 +212,7 @@ def test_update_session(client: TestClient, mock_session_service: AsyncMock, moc
     )
 
 
-def test_delete_session(client: TestClient, mock_session_service: AsyncMock, mock_user_id: AsyncMock) -> None:
+def test_delete_session(client: TestClient, mock_session_service: AsyncMock) -> None:
     mock_session_service.delete_session.return_value = True
 
     response = client.delete(f"/api/v1/sessions/{SESSION_ID}")

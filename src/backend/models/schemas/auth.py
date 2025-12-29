@@ -38,6 +38,40 @@ class LoginRequest(BaseModel):
     )
 
 
+class RegisterRequest(BaseModel):
+    """User registration request."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "email": "user@example.com",
+                "password": "secure_password_123",
+                "display_name": "John Doe",
+            }
+        }
+    )
+
+    email: str = Field(
+        ...,
+        description="User email address",
+        pattern=r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$",
+        json_schema_extra={"example": "user@example.com"},
+    )
+    password: str = Field(
+        ...,
+        min_length=8,
+        max_length=128,
+        description="User password (minimum 8 characters)",
+        json_schema_extra={"example": "secure_password_123"},
+    )
+    display_name: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Optional display name",
+        json_schema_extra={"example": "John Doe"},
+    )
+
+
 class RefreshRequest(BaseModel):
     """Token refresh request."""
 

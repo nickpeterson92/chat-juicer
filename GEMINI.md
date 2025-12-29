@@ -43,9 +43,6 @@ chat-juicer/
 │   │   ├── logger.js     # Centralized structured logging with IPC forwarding
 │   │   ├── config/
 │   │   │   └── main-constants.js     # Main process configuration constants
-│   │   ├── utils/        # Main process utilities
-│   │   │   ├── binary-message-parser.js  # Binary protocol message parsing
-│   │   │   └── ipc-v2-protocol.js        # IPC v2 protocol implementation
 │   │   ├── ui/           # Frontend static assets
 │   │   │   ├── index.html    # Main chat UI
 │   │   │   └── input.css     # Tailwind CSS source
@@ -59,14 +56,14 @@ chat-juicer/
 │   │       │   └── validators.js     # Bootstrap validators
 │   │       ├── adapters/             # DOM, IPC, Storage adapters
 │   │       ├── config/               # constants, colors, model-metadata
-│   │       ├── core/                 # AppState + EventBus
-│   │       ├── managers/             # DOM + view + file managers
+│   │       ├── core/                 # AppState, EventBus, lifecycle management
+│   │       ├── managers/             # DOM, file, view managers
 │   │       ├── services/             # Business logic (AppState-backed)
 │   │       ├── handlers/             # Event handlers
 │   │       ├── plugins/              # Plugin registry
-│   │       ├── ui/                   # UI components and renderers
+│   │       ├── ui/                   # UI components, renderers, tool-registry
 │   │       ├── viewmodels/           # Data transformation
-│   │       └── utils/                # Utility modules
+│   │       └── utils/                # Utility modules + analytics
 │   └── backend/       # Python FastAPI backend
 │       ├── api/          # FastAPI application
 │       │   ├── main.py           # FastAPI app with lifespan, routes, CORS
@@ -84,6 +81,11 @@ chat-juicer/
 │       │   │   ├── chat_service.py       # Chat streaming with Agent/Runner
 │       │   │   ├── session_service.py    # Session management
 │       │   │   ├── file_service.py       # File operations
+│       │   │   ├── file_context.py       # File context management
+│       │   │   ├── s3_sync_service.py    # S3 file synchronization
+│       │   │   ├── token_aware_session.py # Token-aware session management
+│       │   │   ├── postgres_session.py   # PostgreSQL session storage
+│       │   │   ├── message_utils.py      # Message utilities
 │       │   │   └── auth_service.py       # Authentication
 │       │   ├── middleware/       # FastAPI middleware
 │       │   │   ├── auth.py               # Authentication middleware
@@ -93,6 +95,8 @@ chat-juicer/
 │       │       ├── manager.py        # WebSocket connection tracking
 │       │       ├── errors.py         # WebSocket error handling
 │       │       └── task_manager.py   # Async task/cancellation management
+│       ├── config/       # Configuration files
+│       │   └── db_registry.yaml  # Database schema registry
 │       ├── core/         # Core business logic
 │       │   ├── agent.py          # Agent/Runner implementation with MCP
 │       │   ├── prompts.py        # System instruction prompts
@@ -102,6 +106,7 @@ chat-juicer/
 │       │   ├── event_models.py   # WebSocket event models
 │       │   ├── error_models.py   # Error response models
 │       │   ├── ipc_models.py     # IPC message models
+│       │   ├── mcp_models.py     # MCP protocol models
 │       │   ├── sdk_models.py     # SDK integration models
 │       │   ├── session_models.py # Session metadata models
 │       │   └── schemas/          # Response schema models
@@ -110,18 +115,21 @@ chat-juicer/
 │       │       ├── config.py     # Config response schemas
 │       │       ├── files.py      # File response schemas
 │       │       ├── health.py     # Health response schemas
+│       │       ├── presign.py    # Presigned URL schemas
 │       │       └── sessions.py   # Session response schemas
 │       ├── tools/        # Function calling tools (async)
 │       │   ├── file_operations.py    # File reading, directory listing
 │       │   ├── document_generation.py # Document generation
 │       │   ├── text_editing.py       # Text editing operations
 │       │   ├── code_interpreter.py   # Sandboxed code execution
+│       │   ├── schema_fetch.py       # Database schema introspection
 │       │   ├── wrappers.py           # Session-aware tool wrappers
 │       │   └── registry.py           # Tool registration
 │       ├── integrations/ # External integrations
-│       │   ├── mcp_servers.py       # MCP server setup
 │       │   ├── mcp_pool.py          # MCP server connection pool
 │       │   ├── mcp_registry.py      # MCP server registry
+│       │   ├── mcp_transport.py     # MCP transport layer
+│       │   ├── mcp_websocket_client.py # MCP WebSocket client
 │       │   ├── sdk_token_tracker.py # Token tracking
 │       │   └── event_handlers/      # Streaming event handlers
 │       │       ├── agent_events.py      # Agent event handlers
