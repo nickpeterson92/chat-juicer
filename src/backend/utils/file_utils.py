@@ -92,12 +92,12 @@ def get_jail_relative_path(path: Path, session_id: str | None = None) -> str:
         return str(get_relative_path(path))
 
 
-async def get_session_files(session_id: str, subdir: str = "sources") -> list[str]:
+async def get_session_files(session_id: str, subdir: str = "input") -> list[str]:
     """List filenames in a session subdirectory, excluding hidden files.
 
     Args:
         session_id: Session identifier
-        subdir: Subdirectory to scan (default: "sources")
+        subdir: Subdirectory to scan (default: "input")
 
     Returns:
         Sorted list of filenames (no paths). Returns empty list if the directory
@@ -171,13 +171,13 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
             requested_path = Path(sanitized_path)
 
             # Default to sources/ when no top-level directory explicitly provided
-            allowed_roots = {"sources", "output"}
+            allowed_roots = {"input", "output"}
             if not requested_path.parts:
                 relative_request = Path(".")
             elif requested_path.parts[0] in allowed_roots:
                 relative_request = requested_path
             else:
-                relative_request = Path("sources") / requested_path
+                relative_request = Path("input") / requested_path
 
             # Build full path within session workspace (DON'T resolve yet)
             session_dir = DATA_FILES_PATH / session_id
@@ -473,7 +473,7 @@ def save_uploaded_file(
     filename: str,
     data: list[int] | str,
     session_id: str | None = None,
-    target_dir: str = "sources",
+    target_dir: str = "input",
     encoding: str = "array",
 ) -> UploadResult:
     """Save uploaded file data to session-specific or general directory.
@@ -482,7 +482,7 @@ def save_uploaded_file(
         filename: Name of the file to save
         data: List of byte values (0-255) or base64 encoded string
         session_id: Optional session ID for session-specific storage
-        target_dir: Target directory if no session_id (default: "sources")
+        target_dir: Target directory if no session_id (default: "input")
         encoding: Data encoding - "array" for list[int], "base64" for base64 string
 
     Returns:
@@ -497,7 +497,7 @@ def save_uploaded_file(
 
         # Determine target directory based on session_id
         # Session-specific storage: data/files/{session_id}/sources/ or general storage: sources/
-        target_path = DATA_FILES_PATH / session_id / "sources" if session_id else PROJECT_ROOT / target_dir
+        target_path = DATA_FILES_PATH / session_id / "input" if session_id else PROJECT_ROOT / target_dir
 
         # Create directory if it doesn't exist
         target_path.mkdir(parents=True, exist_ok=True)

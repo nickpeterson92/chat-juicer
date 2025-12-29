@@ -16,7 +16,7 @@ class SessionFileContext:
         self,
         file_service: FileService,
         session_id: str,
-        base_folder: str = "sources",
+        base_folder: str = "input",
     ):
         self.file_service = file_service
         self.session_id = session_id
@@ -63,7 +63,7 @@ class SessionFileContext:
 async def session_file_context(
     file_service: FileService,
     session_id: str,
-    base_folder: str = "sources",
+    base_folder: str = "input",
 ) -> AsyncIterator[SessionFileContext]:
     """Async context manager that yields a SessionFileContext."""
     ctx = SessionFileContext(

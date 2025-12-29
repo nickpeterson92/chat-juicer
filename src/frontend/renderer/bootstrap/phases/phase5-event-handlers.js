@@ -470,7 +470,7 @@ export async function initializeEventHandlers({
                 {
                   type: "image_ref",
                   filename: file.name,
-                  path: `sources/${file.name}`,
+                  path: `input/${file.name}`,
                   mimeType: file.type,
                 },
               ]);
@@ -486,7 +486,7 @@ export async function initializeEventHandlers({
                 // Load files into AppState (rendering happens via subscription in view-manager)
                 window.setTimeout(async () => {
                   try {
-                    await loadFilesIntoState(appState, directory, "sources");
+                    await loadFilesIntoState(appState, directory, "input");
                   } catch (error) {
                     console.error("Failed to load files after upload", error);
                   }
@@ -629,7 +629,7 @@ export async function initializeEventHandlers({
                   {
                     type: "image_ref",
                     filename: file.name,
-                    path: `sources/${file.name}`,
+                    path: `input/${file.name}`,
                     mimeType: file.type,
                   },
                 ]);

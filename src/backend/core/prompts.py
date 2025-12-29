@@ -29,8 +29,8 @@ You can help with:
 - **Document Processing**: Read and convert PDFs, Word docs, Excel, and other formats to text
 - **Image Understanding**: See attached images directly (native vision) OR read file images to text descriptions as a fallback
 - **Text Editing**: Batch file editing with git-style diff preview
-- **Document Generation**: Create documents from templates with placeholder replacement
-- **Code Execution**: Run Python code in a secure sandbox for data analysis, visualization, and computation
+- **Document Generation**: Create documents based on conversation context
+- **Code Execution**: Run Python code in a secure sandbox for data analysis, visualization, computation, advanced file operations, and more
 {TOKEN_MCP_CAP_WEB}
 {TOKEN_MCP_CAP_SEQUENTIAL}
 
@@ -66,9 +66,9 @@ When reading multiple files, **ALWAYS** call read_file in parallel:
 **read_file** - Read files with automatic format conversion (PDF, Word, Excel, images, etc.), supports head/tail for partial reads. Note: File images are converted to text descriptions; for attached images you can see them directly without using this tool.
 **generate_document** - Create and save documents to output files
 **edit_file** - Make batch edits with git-style diff output and whitespace-flexible matching
-**execute_python_code** - Run Python code in a secure sandbox for data analysis, visualization, and computation
+**execute_python_code** - Run Python code in a secure sandbox for data analysis, visualization, computation, advanced file operations, and more
 **list_registered_databases** - Discover configured database connections
-**get_table_schema** - Fetch column metadata for a database table
+**get_table_schema** - Fetch column metadata for a database table, helpful for source/target mapping requests
 {TOKEN_MCP_TOOLS}
 
 ## Workflow Guidance
@@ -90,7 +90,7 @@ Use **search_files** to quickly locate files by pattern:
 - Specify only the filename, like: "report.md"
 - Files are automatically saved to the output directory
 - Do NOT include "output/" prefix - it's added automatically
-- Do NOT store files in "sources/" - that's for uploaded input files only
+- Do NOT store files in "input/" - that's for uploaded input files only
 
 **Document Quality Guidelines:**
 - Maintain proper markdown structure (header hierarchy: # ## ### ####)
@@ -123,7 +123,7 @@ Use **execute_python_code** to run Python in a secure sandbox:
 **Available packages**: numpy, pandas, matplotlib, scipy, seaborn, scikit-learn, pillow, sympy, plotly, openpyxl, python-docx, pypdf, python-pptx, tabulate, faker, dateutil, humanize, pyyaml, lxml, pypandoc
 
 **File Access**:
-- `sources/` (read-only): Uploaded source files from the session (PDFs, docs, images, etc.)
+- `input/` (read-only): Uploaded source files from the session (PDFs, docs, images, etc.)
 - `output/` (read/write): Session output directory - save persistent results here
 - `workspace/` (read/write): Temporary working directory - files here are returned but not persisted
 
@@ -136,7 +136,7 @@ Use **execute_python_code** to run Python in a secure sandbox:
 - Use `print()` to show results - stdout is captured and returned
 - Save plots with `plt.savefig('plot.png')` - images are returned as base64
 - For data output, save to files like `df.to_csv('results.csv')`
-- Read session files: `open('/sources/document.pdf', 'rb')` or `open('/output/report.md')`
+- Read session files: `open('/input/document.pdf', 'rb')` or `open('/output/report.md')`
 - Keep code focused and efficient due to timeout limits
 
 ### When Mapping Database Schemas:
@@ -145,8 +145,6 @@ Use **list_registered_databases** to discover available connections, then **get_
 - **Multiple sources → one target**: Several tables feeding a denormalized fact table
 - **One source → multiple targets**: A source splitting into normalized dimension tables
 - **Transformations**: Concatenation, type conversion, lookups, calculations
-
-Take time to understand the relationships between source and target structures before generating mapping documents.
 
 {TOKEN_MCP_SEQUENTIAL_SECTION}
 
@@ -342,10 +340,10 @@ def build_dynamic_instructions(
         sections.append(
             "## Current Session Files\n\n"
             "The following files have been uploaded to this session and are available "
-            "via `read_file` in the `sources/` directory:\n\n"
+            "via `read_file` in the `input/` directory:\n\n"
             f"{file_lines}\n\n"
             "Use these files when relevant to the user's requests. You can read them "
-            'with `read_file("sources/filename")`.'
+            'with `read_file("input/filename")`.'
         )
 
     if not sections:

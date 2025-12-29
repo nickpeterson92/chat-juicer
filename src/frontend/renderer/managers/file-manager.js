@@ -38,7 +38,7 @@ import { showToast } from "../utils/toast.js";
  * @param {'sources'|'output'} listType - Type of file list to update
  * @returns {Promise<{success: boolean, files?: Array, error?: string}>}
  */
-export async function loadFilesIntoState(appState, directory, listType = "sources") {
+export async function loadFilesIntoState(appState, directory, listType = "input") {
   if (!appState) {
     console.error("[FileManager] loadFilesIntoState: appState is required");
     return { success: false, error: "appState is required" };
@@ -95,7 +95,7 @@ export function renderFileList(files, container, options = {}) {
   }
 
   const {
-    directory = "sources",
+    directory = "input",
     isOutput = false,
     isWelcomePage = false,
     useThumbnailGrid = false, // Explicit grid mode flag
@@ -331,7 +331,7 @@ function renderStaticHeader(headerText, container) {
  * @param {Object} options - Options for empty state display
  */
 function renderEmptyState(container, options = {}) {
-  const { directory = "sources", isOutput = false, isWelcomePage = false } = options;
+  const { directory = "input", isOutput = false, isWelcomePage = false } = options;
   const dirName = directory.includes("/output") ? "output/" : "sources/";
   const isChatPage = container.id === "files-container";
 
@@ -477,7 +477,7 @@ function createFileItem(file, directory, container, onDelete = null) {
  * @param {HTMLElement} container - Container element to refresh after deletion
  * @param {Function} onDelete - Optional callback after successful delete
  */
-async function handleDeleteFile(filename, directory = "sources", _container = null, onDelete = null) {
+async function handleDeleteFile(filename, directory = "input", _container = null, onDelete = null) {
   if (!filename) {
     showToast(MSG_NO_FILE_SELECTED, "error", 3000);
     return;

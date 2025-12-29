@@ -403,11 +403,11 @@ class SandboxPool:
 
             # Copy session files (sources/output) for read access
             if session_files_path:
-                sources_path = session_files_path / "sources"
+                input_path = session_files_path / "input"
                 output_path = session_files_path / "output"
                 # Non-critical: log warning but continue if copy fails
-                if sources_path.exists() and not await self._container_cp(
-                    f"{sources_path}/.",
+                if input_path.exists() and not await self._container_cp(
+                    f"{input_path}/.",
                     f"{self.warm_container_id}:/sources/",
                     to_container=True,
                 ):
@@ -533,10 +533,10 @@ class SandboxPool:
 
         # Add session file mounts if available
         if session_files_path:
-            sources_path = session_files_path / "sources"
+            input_path = session_files_path / "input"
             output_path = session_files_path / "output"
-            if sources_path.exists():
-                cmd_args.extend(["-v", f"{sources_path}:/sources:ro"])  # Read-only for uploads
+            if input_path.exists():
+                cmd_args.extend(["-v", f"{input_path}:/sources:ro"])  # Read-only for uploads
             if output_path.exists():
                 cmd_args.extend(["-v", f"{output_path}:/output:rw"])  # Read/write for outputs
 
