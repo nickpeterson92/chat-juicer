@@ -514,8 +514,11 @@ function attachWelcomePageListeners(elements, appState) {
       let sessionId = sessionService.getCurrentSessionId();
 
       if (!sessionId) {
+        // Use message snippet as initial title (will be replaced by LLM-generated title later)
+        const snippetTitle = message.length > 30 ? message.slice(0, 30).trim() + "..." : message;
+
         const result = await sessionService.createSession({
-          title: null,
+          title: snippetTitle,
           mcpConfig,
           model: modelConfig.model,
           reasoningEffort: modelConfig.reasoning_effort,
@@ -578,7 +581,7 @@ function attachWelcomePageListeners(elements, appState) {
         // (Don't wait for backend event - that comes after the message completes)
         const sessionData = {
           session_id: sessionId,
-          title: result.title || null,
+          title: result.title || snippetTitle,
           model: modelConfig.model,
           reasoning_effort: modelConfig.reasoning_effort,
           mcp_config: mcpConfig,
@@ -590,7 +593,7 @@ function attachWelcomePageListeners(elements, appState) {
             detail: {
               session: sessionData, // Include full session data
               session_id: sessionId,
-              title: result.title || null,
+              title: result.title || snippetTitle,
               source: "welcome_page",
             },
           })

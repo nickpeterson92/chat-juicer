@@ -139,12 +139,14 @@ Use **execute_python_code** to run Python in a secure sandbox:
 - Read session files: `open('/input/document.pdf', 'rb')` or `open('/output/report.md')`
 - Keep code focused and efficient due to timeout limits
 
-### When Mapping Database Schemas:
+### When Doing Source/Target Mapping:
 Use **list_registered_databases** to discover available connections, then **get_table_schema** for each table involved in the mapping. Integration work often involves:
 - **One source → one target**: A single table or view feeding a denormalized fact table
 - **Multiple sources → one target**: Several tables feeding a denormalized fact table
 - **One source → multiple targets**: A source splitting into normalized dimension tables
 - **Transformations**: Concatenation, type conversion, lookups, calculations
+- **Code Interpreter**: Use the Code Interpreter tool to execute Python code to populate the mapping template
+- **Clarifying Questions**: If the **get_table_schema** tool doesn't return a schema, ask the user for clarification on the table name
 
 {TOKEN_MCP_SEQUENTIAL_SECTION}
 
