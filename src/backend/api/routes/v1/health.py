@@ -81,9 +81,10 @@ async def health_check(db: DB, request: Request) -> HealthResponse:
     mcp_pool = request.app.state.mcp_pool
     if mcp_pool:
         stats = mcp_pool.get_stats()
-        total = sum(s["total"] for s in stats.values())
-        available = sum(s["available"] for s in stats.values())
-        mcp_health = MCPHealth(initialized=True, pool_size=total, available=available)
+        pool_stats = stats.get("pool_stats", {})
+        total = sum(s["total"] for s in pool_stats.values())
+        available = sum(s["available"] for s in pool_stats.values())
+        mcp_health = MCPHealth(initialized=stats.get("initialized", True), pool_size=total, available=available)
     else:
         mcp_health = MCPHealth(initialized=False, pool_size=0, available=0)
 
