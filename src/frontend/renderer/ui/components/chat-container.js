@@ -547,11 +547,7 @@ export class ChatContainer {
       const message = document.createElement("div");
       message.className = `skeleton-message ${type === "user" ? "user" : ""}`;
 
-      // Avatar placeholder
-      const avatar = document.createElement("div");
-      avatar.className = "skeleton-message-avatar";
-
-      // Content lines
+      // Content lines (no avatar - our UI doesn't use avatars)
       const content = document.createElement("div");
       content.className = "skeleton-message-content";
 
@@ -561,7 +557,6 @@ export class ChatContainer {
         content.appendChild(line);
       });
 
-      message.appendChild(avatar);
       message.appendChild(content);
       skeleton.appendChild(message);
     });
