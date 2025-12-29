@@ -38,10 +38,15 @@ class S3SyncService:
 
             client_kwargs: dict[str, Any] = {
                 "service_name": "s3",
-                "aws_access_key_id": self.settings.aws_access_key_id,
-                "aws_secret_access_key": self.settings.aws_secret_access_key,
                 "region_name": self.settings.s3_region,
             }
+
+            # Only pass explicit credentials if configured (allows fallback to AWS profile/SSO)
+            if self.settings.aws_access_key_id:
+                client_kwargs["aws_access_key_id"] = self.settings.aws_access_key_id
+            if self.settings.aws_secret_access_key:
+                client_kwargs["aws_secret_access_key"] = self.settings.aws_secret_access_key
+
             if self.settings.s3_endpoint:
                 client_kwargs["endpoint_url"] = self.settings.s3_endpoint
 

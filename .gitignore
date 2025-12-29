@@ -71,3 +71,14 @@ docs/_build/
 
 # Claude
 claudedocs/
+
+# Terraform
+infra/terraform.tfstate
+infra/terraform.tfstate.backup
+infra/.terraform
+infra/bootstrap/terraform.tfstate
+infra/bootstrap/terraform.tfstate.backup
+infra/bootstrap/.terraform
+infra/.terraform.lock.hcl
+infra/bootstrap/.terraform.lock.hcl
+*.tfvars

@@ -54,7 +54,7 @@ This specification outlines migrating **only the Python backend** to a cloud-hos
    - 7.4 [Chat Service Integration](#74-chat-service-integration)
    - 7.5 [System Prompt - Unchanged](#75-system-prompt---unchanged)
    - 7.6 [Summary: What Changes](#76-summary-what-changes-for-s3)
-8. [Infrastructure](#8-infrastructure)
+8. [Infrastructure (Terraform)](#8-infrastructure-terraform)
 9. [Migration Plan](#9-migration-plan)
 10. [Testing Strategy](#10-testing-strategy)
 
@@ -128,6 +128,32 @@ This specification outlines migrating **only the Python backend** to a cloud-hos
 | Pydantic models | **REUSED** - `src/models/*.py` extended for API |
 
 > **Key insight**: Tools and prompts don't know about S3. A thin wrapper layer downloads files to a temp directory upon opening a WS connection for a session, tools operate on local paths, and writes are synced back to S3. See [Section 7.2](#72-session-file-context-s3-abstraction-layer) for details.
+
+### 1.4 Phase 2.5: Hybrid Architecture (Stateless Client)
+
+This intermediate phase moves authoritative data storage to the cloud while keeping compute local.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     LOCAL MACHINE (Stateless)                   │
+│  • Electron App (UI)                                            │
+│  • Python Backend (Compute)                                     │
+│  • Local Files (CACHE ONLY - data/files/ is ephemeral)          │
+└──────────────┬───────────────────────────────┬──────────────────┘
+               │                               │
+       Config changed to:             Config changed to:
+       FILE_STORAGE=s3               DATABASE_URL=postgres://...
+               │                               │
+┌──────────────▼────────────────┐ ┌────────────▼──────────────────┐
+│           AWS S3              │ │      AWS RDS Postgres         │
+│     (Source of Truth)         │ │      (Source of Truth)        │
+└───────────────────────────────┘ └───────────────────────────────┘
+```
+
+**Benefits**:
+- **Data Safety**: Local machine built/destroyed without data loss.
+- **Multi-Device**: Switch computers and pick up session exactly where left off.
+- **Migration Validation**: Proves latency and network patterns before moving compute.
 
 ---
 
@@ -2714,4 +2740,49 @@ Phase 3 (Future): Enterprise
 ---
 
 *End of Specification*
+
+## 8. Infrastructure (Terraform)
+
+We use Terraform to provision immutable, reproducible infrastructure in the `infra/` directory.
+
+### 8.1 Critical Compliance: Anti-Nuke Tagging
+
+To prevent automated deletion by the AWS Innovation Lab cleanup process, **ALL** resources must be tagged.
+
+```hcl
+# infra/locals.tf
+locals {
+  common_tags = {
+    Project     = "chat-juicer"
+    Environment = var.environment
+    nukeoptout  = "true"  # CRITICAL: Prevents automated deletion (Jan 1st 2026)
+  }
+}
+```
+
+### 8.2 Modules
+
+-   **`networking`**: VPC, Public/Private Subnets, Internet Gateway.
+-   **`storage`**: S3 Buckets, IAM Policies, CORS (for direct browser upload/download capability).
+-   **`database`**: RDS Postgres instance, Security Groups (whitelisting local IP or VPN).
+
+---
+
+## 9. Migration Plan
+
+### 9.1 Phase 2.5: Hybrid Data Migration
+
+**Goal**: Move data to cloud, keep app local.
+
+1.  **Provision**: Apply Terraform to create S3 and RDS.
+2.  **Validation**: Verify connectivity to new cloud resources.
+3.  **Migration Scripts** (`scripts/migrate_to_cloud.py`):
+    *   **Files**: Copy from **Local MinIO** (Source) → **AWS S3** (Dest).
+    *   **Database**: Dump **Local Docker** (Source) → Pipe to **Remote RDS** (Dest).
+4.  **Switch**: Update `.env` to point to Cloud S3 and RDS.
+5.  **Verify**: Restart app, check history and files.
+
+### 9.2 Phase 3: Full Cloud Deployment
+
+(FastAPI deployed to EC2/Fargate - see original plan)
 

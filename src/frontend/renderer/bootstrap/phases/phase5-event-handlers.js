@@ -907,6 +907,7 @@ export async function initializeEventHandlers({
           // Clear UI state but do NOT delete database data
           // clearCurrentSession() was incorrectly deleting all messages
           appState.setState("session.current", null);
+          appState.setState("ui.bodyViewClass", "view-welcome");
 
           // Clean up pending welcome files to prevent memory leaks
           const pendingFiles = appState.getState("ui.pendingWelcomeFiles") || [];
