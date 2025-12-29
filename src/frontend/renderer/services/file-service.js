@@ -217,7 +217,7 @@ export class FileService {
 
       // Phase 3: IPC transfer (80-100%)
       if (progressCallback) progressCallback(80);
-      const filePath = `data/files/${sessionId}/sources/${file.name}`;
+      const filePath = `data/files/${sessionId}/input/${file.name}`;
       const result = await this.ipc.uploadFile(
         filePath,
         base64Data,

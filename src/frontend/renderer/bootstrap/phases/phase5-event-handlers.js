@@ -478,7 +478,7 @@ export async function initializeEventHandlers({
 
             // Refresh the appropriate file container
             if (sessionService.getCurrentSessionId()) {
-              const directory = `data/files/${sessionService.getCurrentSessionId()}/sources`;
+              const directory = `data/files/${sessionService.getCurrentSessionId()}/input`;
 
               if (isOnWelcomePage) {
                 appState.setState("ui.welcomeFilesSectionVisible", true);

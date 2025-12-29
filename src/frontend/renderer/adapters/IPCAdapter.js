@@ -59,7 +59,7 @@ export class IPCAdapter {
           attachments: pendingAttachments.map((att) => ({
             type: "image_ref",
             filename: att.filename,
-            path: att.path || `sources/${att.filename}`,
+            path: att.path || `input/${att.filename}`,
           })),
         };
       }

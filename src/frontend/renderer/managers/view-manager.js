@@ -81,7 +81,7 @@ async function renderWelcomeFiles(appState) {
     }
 
     const { renderFileList, loadFilesIntoState } = await import("./file-manager.js");
-    const directory = `data/files/${currentSessionId}/sources`;
+    const directory = `data/files/${currentSessionId}/input`;
     renderFileList(files, welcomeFilesContainer, {
       directory,
       isWelcomePage: true,
@@ -162,8 +162,8 @@ export async function showWelcomeView(elements, appState) {
     ComponentLifecycle.mount(viewManagerComponent, "ViewManager", globalLifecycleManager);
   }
 
-  // Setup subscription to render welcome page files when sources list changes
-  const unsubscribeWelcomeFiles = appState.subscribe("files.sourcesList", (files) => {
+  // Setup subscription to render welcome page files when input list changes
+  const unsubscribeWelcomeFiles = appState.subscribe("files.inputList", (files) => {
     // Only render if we're on welcome page
     if (appState.getState("ui.currentView") === "welcome") {
       // Hide section if no files
@@ -232,7 +232,7 @@ export async function showWelcomeView(elements, appState) {
 
         // Then load the files (will show placeholder if empty)
         import("../managers/file-manager.js").then(async ({ loadFilesIntoState }) => {
-          const directory = `data/files/${currentSessionId}/sources`;
+          const directory = `data/files/${currentSessionId}/input`;
           await loadFilesIntoState(appState, directory, "input");
         });
       }
@@ -387,7 +387,7 @@ function attachWelcomePageListeners(elements, appState) {
 
       if (sessionId) {
         // Load session-specific files using AppState pattern
-        const directory = `data/files/${sessionId}/sources`;
+        const directory = `data/files/${sessionId}/input`;
         import("./file-manager.js").then(({ loadFilesIntoState }) => {
           loadFilesIntoState(appState, directory, "input");
         });
@@ -554,7 +554,7 @@ function attachWelcomePageListeners(elements, appState) {
                     {
                       type: "image_ref",
                       filename: pendingFile.name,
-                      path: `sources/${pendingFile.name}`,
+                      path: `input/${pendingFile.name}`,
                       mimeType: pendingFile.type,
                     },
                   ]);
