@@ -118,12 +118,16 @@ export async function showWelcomeView(elements, appState) {
   // Clear any previous welcome model config (start fresh)
   appState.setState("ui.welcomeModelConfig", null);
 
-  // Get system username
-  let userName = "User"; // Fallback
-  try {
-    userName = await window.electronAPI.getUsername();
-  } catch (error) {
-    window.electronAPI.log("error", "Failed to get username", { error: error.message });
+  // Get authenticated user's display name, falling back to system username
+  let userName = appState.getState("auth.user.displayName") || appState.getState("auth.user.email")?.split("@")[0];
+
+  if (!userName) {
+    try {
+      userName = await window.electronAPI.getUsername();
+    } catch (error) {
+      window.electronAPI.log("error", "Failed to get username", { error: error.message });
+      userName = "User"; // Absolute fallback
+    }
   }
 
   // Show welcome page

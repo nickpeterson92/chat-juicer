@@ -26,6 +26,7 @@
  * - StreamManager({ appState }) - concurrent session streaming
  */
 
+export { AuthService } from "./auth-service.js";
 export { FileService } from "./file-service.js";
 export { CallStatus, FunctionCallService } from "./function-call-service.js";
 export {

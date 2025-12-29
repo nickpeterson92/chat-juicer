@@ -211,6 +211,13 @@ export class AppState {
       toolInProgress: false, // boolean - tool execution in progress (defer cancel)
     };
 
+    // Authentication state
+    this.auth = {
+      isAuthenticated: false, // boolean - user is logged in
+      user: null, // { id, email, displayName } | null
+      isLoading: true, // boolean - auth check in progress
+    };
+
     // Per-session streaming state (Phase 2: Concurrent Session Processing)
     // Map of session_id -> SessionStreamState for multi-session support
     this.sessionStreams = new Map();

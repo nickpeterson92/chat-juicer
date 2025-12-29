@@ -52,11 +52,11 @@ async def test_login_success(auth_service: AuthService, mock_db_pool: MagicMock)
     mock_user = {"id": USER_ID, "email": EMAIL, "password_hash": HASHED_PASSWORD, "display_name": "Test User"}
     conn.fetchrow.return_value = mock_user
 
-    # Mock verify to avoid actual heavy BCrypt
-    with patch("passlib.hash.bcrypt.verify", return_value=True) as mock_verify:
+    # Mock checkpw to avoid actual heavy BCrypt
+    with patch("bcrypt.checkpw", return_value=True) as mock_checkpw:
         result = await auth_service.login(EMAIL, PASSWORD)
 
-        assert mock_verify.called
+        assert mock_checkpw.called
         assert "access_token" in result
         assert "refresh_token" in result
         assert result["user"]["email"] == EMAIL
@@ -72,10 +72,9 @@ async def test_login_invalid_credentials(auth_service: AuthService, mock_db_pool
         await auth_service.login(EMAIL, PASSWORD)
 
     # Case 2: Wrong password
-    # Case 2: Wrong password
-    conn.fetchrow.return_value = {"id": USER_ID, "password_hash": HASHED_PASSWORD}
+    conn.fetchrow.return_value = {"id": USER_ID, "password_hash": HASHED_PASSWORD, "email": EMAIL}
     with (
-        patch("passlib.hash.bcrypt.verify", return_value=False),
+        patch("bcrypt.checkpw", return_value=False),
         pytest.raises(ValueError, match="Invalid credentials"),
     ):
         await auth_service.login(EMAIL, PASSWORD)

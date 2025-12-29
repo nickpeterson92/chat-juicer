@@ -1,10 +1,19 @@
-const { app, BrowserWindow, ipcMain, shell, dialog } = require("electron");
+const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const { fileURLToPath } = require("node:url");
 const Logger = require("./logger");
-const { apiRequest, connectWebSocket, sendWebSocketMessage, closeWebSocket } = require("./api-client");
+const { apiRequest: rawApiRequest, connectWebSocket, sendWebSocketMessage, closeWebSocket } = require("./api-client");
+
+/**
+ * Wrapper for apiRequest that automatically adds the authentication token
+ */
+async function apiRequest(endpoint, options = {}) {
+  const token = options.token || cachedAccessToken;
+  return rawApiRequest(endpoint, { ...options, token });
+}
+
 const {
   RESTART_DELAY,
   RESTART_CALLBACK_DELAY,
@@ -23,6 +32,102 @@ let activeSessionId = null;
 // Map of sessionId -> WebSocket for concurrent session support
 const sessionWebSockets = new Map();
 let reconnectTimer = null;
+
+// Auth token storage
+const TOKEN_FILE = path.join(app.getPath("userData"), "auth-tokens.json");
+let cachedAccessToken = null;
+
+/**
+ * Read stored auth tokens (encrypted at rest)
+ */
+async function readStoredTokens() {
+  try {
+    if (
+      !(await fs
+        .access(TOKEN_FILE)
+        .then(() => true)
+        .catch(() => false))
+    ) {
+      return null;
+    }
+    const data = await fs.readFile(TOKEN_FILE, "utf8");
+    if (!data) return null;
+
+    const stored = JSON.parse(data);
+
+    // Check if we need to decrypt
+    // If it was stored as encrypted, it will likely be in base64 format and we expect objects
+    if (stored.accessToken && safeStorage.isEncryptionAvailable()) {
+      try {
+        const accessToken = safeStorage.decryptString(Buffer.from(stored.accessToken, "base64")).toString();
+        const refreshToken = safeStorage.decryptString(Buffer.from(stored.refreshToken, "base64")).toString();
+        return {
+          accessToken,
+          refreshToken,
+          user: stored.user,
+        };
+      } catch (decryptError) {
+        logger.warn("Failed to decrypt stored tokens, might be unencrypted", { error: decryptError.message });
+        // Fallback to returning them as is if decryption failed but they look like tokens
+        return stored;
+      }
+    }
+
+    // Fallback for unencrypted or if safeStorage is not available
+    return stored;
+  } catch (error) {
+    logger.error("Failed to read stored tokens", { error: error.message });
+    return null;
+  }
+}
+
+// Initial token load
+readStoredTokens()
+  .then((tokens) => {
+    if (tokens && tokens.accessToken) {
+      cachedAccessToken = tokens.accessToken;
+      logger.info("Restored auth session from storage");
+    }
+  })
+  .catch((err) => {
+    logger.error("Error during initial token load", { error: err.message });
+  });
+
+/**
+ * Store auth tokens (encrypted at rest)
+ */
+async function storeTokens(accessToken, refreshToken, user = null) {
+  try {
+    if (!safeStorage.isEncryptionAvailable()) {
+      logger.warn("safeStorage encryption not available, storing tokens unencrypted");
+      await fs.writeFile(TOKEN_FILE, JSON.stringify({ accessToken, refreshToken, user }));
+    } else {
+      const encrypted = {
+        accessToken: safeStorage.encryptString(accessToken).toString("base64"),
+        refreshToken: safeStorage.encryptString(refreshToken).toString("base64"),
+        user,
+      };
+      await fs.writeFile(TOKEN_FILE, JSON.stringify(encrypted));
+    }
+    cachedAccessToken = accessToken;
+    return true;
+  } catch (error) {
+    logger.error("Failed to store tokens", { error: error.message });
+    return false;
+  }
+}
+
+/**
+ * Clear stored auth tokens
+ */
+async function clearTokens() {
+  try {
+    await fs.unlink(TOKEN_FILE);
+    cachedAccessToken = null;
+  } catch {
+    // File may not exist
+  }
+}
 
 function createWindow() {
   // Platform detection for cross-platform borderless window support
@@ -215,7 +320,8 @@ function ensureWebSocket(sessionId) {
           ensureWebSocket(sessionId);
         }
       }, delay);
-    }
+    },
+    cachedAccessToken // Pass auth token to WebSocket
   );
 
   ws.on("open", () => {
@@ -273,6 +379,85 @@ app.whenReady().then(() => {
 
   ipcMain.handle("window-is-maximized", () => {
     return mainWindow ? mainWindow.isMaximized() : false;
+  });
+
+  // ==========================================
+  // Auth IPC Handlers
+  // ==========================================
+
+  ipcMain.handle("auth-login", async (_event, { email, password }) => {
+    logger.info("Auth login requested", { email });
+    try {
+      const result = await apiRequest("/api/v1/auth/login", {
+        method: "POST",
+        body: { email, password },
+      });
+      if (result.access_token) {
+        await storeTokens(result.access_token, result.refresh_token, result.user);
+      }
+      return result;
+    } catch (error) {
+      logger.error("Auth login failed", { error: error.message });
+      return { error: error.message };
+    }
+  });
+
+  ipcMain.handle("auth-register", async (_event, { email, password, displayName }) => {
+    logger.info("Auth register requested", { email });
+    try {
+      const result = await apiRequest("/api/v1/auth/register", {
+        method: "POST",
+        body: { email, password, display_name: displayName },
+      });
+      if (result.access_token) {
+        await storeTokens(result.access_token, result.refresh_token, result.user);
+      }
+      return result;
+    } catch (error) {
+      logger.error("Auth register failed", { error: error.message });
+      return { error: error.message };
+    }
+  });
+
+  ipcMain.handle("auth-refresh", async (_event, { refreshToken }) => {
+    logger.debug("Auth refresh requested");
+    try {
+      const result = await apiRequest("/api/v1/auth/refresh", {
+        method: "POST",
+        body: { refresh_token: refreshToken },
+      });
+      if (result.access_token) {
+        await storeTokens(result.access_token, result.refresh_token || refreshToken, result.user);
+      }
+      return result;
+    } catch (error) {
+      logger.error("Auth refresh failed", { error: error.message });
+      return { error: error.message };
+    }
+  });
+
+  ipcMain.handle("auth-logout", async () => {
+    logger.info("Auth logout requested");
+    await clearTokens();
+    return { success: true };
+  });
+
+  ipcMain.handle("auth-get-tokens", async () => {
+    const tokens = await readStoredTokens();
+    return tokens;
+  });
+
+  ipcMain.handle("auth-store-tokens", async (_event, { accessToken, refreshToken, user }) => {
+    const success = await storeTokens(accessToken, refreshToken, user);
+    return { success };
+  });
+
+  ipcMain.handle("auth-get-access-token", async () => {
+    // Quick access for WebSocket token injection
+    if (cachedAccessToken) return cachedAccessToken;
+    const tokens = await readStoredTokens();
+    cachedAccessToken = tokens?.accessToken || null;
+    return cachedAccessToken;
   });
 
   // IPC handler for user input (Binary V2)

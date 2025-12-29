@@ -64,6 +64,23 @@ export async function bootstrapSimple() {
     });
 
     // ==========================================
+    // Phase 3.5: Authentication Gate
+    // ==========================================
+    const { initializeAuth } = await import("./bootstrap/phases/phase3-5-auth.js");
+    phaseResults.auth = await initializeAuth({
+      ...phaseResults.adapters,
+      appState: phaseResults.stateDOM.appState,
+    });
+
+    // If not authenticated, show modal and wait for login
+    if (!phaseResults.auth.isAuthenticated) {
+      await phaseResults.auth.waitForAuth();
+    }
+
+    // Add authService to global services object for subsequent phases
+    phaseResults.services.authService = phaseResults.auth.authService;
+
+    // ==========================================
     // Phase 4: Components (UI Layer)
     // ==========================================
     const { initializeComponents } = await import("./bootstrap/phases/phase4-components.js");
