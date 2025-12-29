@@ -559,7 +559,7 @@ class ChatService:
         # Process image attachments
         for attachment in image_attachments:
             filename = attachment.get("filename", "")
-            # Path is relative to session workspace (e.g., "sources/image.png")
+            # Path is relative to session workspace (e.g., "input/image.png")
             rel_path = attachment.get("path", "")
 
             # Extract folder and filename from path

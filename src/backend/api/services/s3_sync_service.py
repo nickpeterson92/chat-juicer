@@ -159,7 +159,7 @@ class S3SyncService:
 
         Args:
             session_id: Session identifier
-            folder: Folder within session (sources, output)
+            folder: Folder within session (input, output)
             filename: File name
         """
         task = asyncio.create_task(
@@ -252,7 +252,7 @@ class S3SyncService:
 
         Args:
             session_id: Session identifier
-            folder: Folder within session (sources, output)
+            folder: Folder within session (input, output)
             filename: File name
             content_type: Optional MIME type
 
@@ -281,7 +281,7 @@ class S3SyncService:
 
         Args:
             session_id: Session identifier
-            folder: Folder within session (sources, output)
+            folder: Folder within session (input, output)
             filename: File name
 
         Returns:

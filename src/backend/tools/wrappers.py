@@ -10,7 +10,7 @@ to tools, so we create wrapped versions that capture session_id and model at age
 creation time and inject them into every tool call.
 
 Architecture:
-- Agent works with relative paths (e.g., "sources/file.pdf")
+- Agent works with relative paths (e.g., "input/file.pdf")
 - Wrapper injects session_id and model before calling the actual tool
 - Tool validates path is within session workspace (data/files/{session_id}/)
 - Security: Path traversal attacks blocked, workspace boundaries enforced
@@ -56,9 +56,9 @@ def create_session_aware_tools(
         session_tools = create_session_aware_tools("chat_abc123", model="gpt-5")
         agent = Agent(model="gpt-5", tools=session_tools)
 
-        # Agent calls: read_file("sources/doc.pdf")
-        # Wrapper injects: read_file("sources/doc.pdf", session_id="chat_abc123", model="gpt-5")
-        # Tool resolves to: data/files/chat_abc123/sources/doc.pdf
+        # Agent calls: read_file("input/doc.pdf")
+        # Wrapper injects: read_file("input/doc.pdf", session_id="chat_abc123", model="gpt-5")
+        # Tool resolves to: data/files/chat_abc123/input/doc.pdf
         ```
     """
     from agents import function_tool
@@ -247,7 +247,7 @@ def create_session_aware_tools(
         """Fetch column schema for a database table.
 
         Returns column names, types, and nullability. Call this for each table
-        involved in a mapping - sources, targets, or lookup tables. For complex
+        involved in a mapping - input, targets, or lookup tables. For complex
         integrations, multiple source tables may feed into one target (denormalization),
         or one source may split across multiple targets (normalization).
 

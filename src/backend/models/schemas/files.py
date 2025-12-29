@@ -116,7 +116,7 @@ class FileUploadResponse(BaseModel):
                 "size": 102400,
                 "modified": "2025-01-15T10:30:00Z",
                 "extension": ".pdf",
-                "path": "sources/document.pdf",
+                "path": "input/document.pdf",
             }
         }
     )
@@ -129,7 +129,7 @@ class FileUploadResponse(BaseModel):
     path: str = Field(
         ...,
         description="Relative path within session",
-        json_schema_extra={"example": "sources/document.pdf"},
+        json_schema_extra={"example": "input/document.pdf"},
     )
 
 
@@ -139,7 +139,7 @@ class FilePathResponse(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "path": "/Users/user/chat-juicer/data/files/sess_123/sources/doc.pdf",
+                "path": "/Users/user/chat-juicer/data/files/sess_123/input/doc.pdf",
                 "exists": True,
             }
         }
@@ -148,7 +148,7 @@ class FilePathResponse(BaseModel):
     path: str = Field(
         ...,
         description="Absolute file path",
-        json_schema_extra={"example": "/data/files/sess_123/sources/doc.pdf"},
+        json_schema_extra={"example": "/data/files/sess_123/input/doc.pdf"},
     )
     exists: bool = Field(
         default=True,

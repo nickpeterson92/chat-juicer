@@ -58,7 +58,7 @@ FilenamePath = Annotated[
 FolderQuery = Annotated[
     str,
     Query(
-        description="Folder within session (sources, outputs, templates)",
+        description="Folder within session (input, outputs, templates)",
         examples=["input"],
     ),
 ]
@@ -129,7 +129,7 @@ async def list_files(
                         "type": "file",
                         "size": 102400,
                         "extension": ".pdf",
-                        "path": "sources/document.pdf",
+                        "path": "input/document.pdf",
                     }
                 }
             },
@@ -212,7 +212,7 @@ async def download_file(
             "content": {
                 "application/json": {
                     "example": {
-                        "path": "/data/files/sess_123/sources/doc.pdf",
+                        "path": "/data/files/sess_123/input/doc.pdf",
                         "exists": True,
                     }
                 }
@@ -299,8 +299,8 @@ async def delete_file(
             "content": {
                 "application/json": {
                     "example": {
-                        "upload_url": "https://minio:9000/bucket/sess/sources/file.pdf?...",
-                        "file_key": "sess_123/sources/file.pdf",
+                        "upload_url": "https://minio:9000/bucket/sess/input/file.pdf?...",
+                        "file_key": "sess_123/input/file.pdf",
                         "expires_in": 3600,
                     }
                 }
@@ -343,7 +343,7 @@ async def presign_upload(
             "content": {
                 "application/json": {
                     "example": {
-                        "download_url": "https://minio:9000/bucket/sess/sources/file.pdf?...",
+                        "download_url": "https://minio:9000/bucket/sess/input/file.pdf?...",
                         "expires_in": 3600,
                     }
                 }

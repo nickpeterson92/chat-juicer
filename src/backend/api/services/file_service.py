@@ -258,14 +258,14 @@ class LocalFileService:
             )
 
     def init_session_workspace(self, session_id: str) -> None:
-        """Initialize session workspace with sources/ and output/ directories.
+        """Initialize session workspace with input/ and output/ directories.
 
         Creates the directory structure for a new session:
-        - sources/: uploaded files
+        - input/: uploaded files
         - output/: generated files
         """
         session_dir = self.base_path / session_id
 
-        # Create sources and output directories
+        # Create input and output directories
         (session_dir / "input").mkdir(parents=True, exist_ok=True)
         (session_dir / "output").mkdir(parents=True, exist_ok=True)
