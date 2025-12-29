@@ -110,6 +110,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return await ipcRenderer.invoke("window-is-maximized");
   },
 
+  // Auth methods
+  authLogin: async (email, password) => ipcRenderer.invoke("auth-login", { email, password }),
+  authRegister: async (email, password, displayName) =>
+    ipcRenderer.invoke("auth-register", { email, password, displayName }),
+  authRefresh: async (refreshToken) => ipcRenderer.invoke("auth-refresh", { refreshToken }),
+  authLogout: async () => ipcRenderer.invoke("auth-logout"),
+  authGetTokens: async () => ipcRenderer.invoke("auth-get-tokens"),
+  authStoreTokens: async (accessToken, refreshToken, user) =>
+    ipcRenderer.invoke("auth-store-tokens", { accessToken, refreshToken, user }),
+  authGetAccessToken: async () => ipcRenderer.invoke("auth-get-access-token"),
+
   // Platform detection
   platform: process.platform,
 

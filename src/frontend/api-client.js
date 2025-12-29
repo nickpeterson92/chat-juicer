@@ -7,6 +7,10 @@ async function apiRequest(endpoint, options = {}) {
   const init = { ...options };
   init.headers = { ...(options.headers || {}) };
 
+  if (options.token) {
+    init.headers["Authorization"] = `Bearer ${options.token}`;
+  }
+
   const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   if (options.body && !isFormData) {
     if (!init.headers["Content-Type"]) {
@@ -34,8 +38,11 @@ async function apiRequest(endpoint, options = {}) {
   return response.text();
 }
 
-function connectWebSocket(sessionId, onMessage, onClose) {
-  const wsUrl = `${API_BASE.replace(/^http/, "ws")}/ws/chat/${sessionId}`;
+function connectWebSocket(sessionId, onMessage, onClose, token = null) {
+  let wsUrl = `${API_BASE.replace(/^http/, "ws")}/ws/chat/${sessionId}`;
+  if (token) {
+    wsUrl += `?token=${encodeURIComponent(token)}`;
+  }
   const ws = new WebSocket(wsUrl);
 
   ws.on("message", (data) => {

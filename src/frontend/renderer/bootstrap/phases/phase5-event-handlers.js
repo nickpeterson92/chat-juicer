@@ -1182,6 +1182,24 @@ export async function initializeEventHandlers({
       });
     }
 
+    // Logout button
+    const logoutBtn = document.getElementById("logout-btn");
+    if (logoutBtn) {
+      addListener(logoutBtn, "click", async () => {
+        if (confirm("Are you sure you want to logout?")) {
+          const authService = services.authService;
+          if (authService) {
+            await authService.logout();
+          }
+        }
+      });
+    }
+
+    // Auth logout event listener
+    const unsubscribeAuthLogout = eventBus.on("auth:logout", () => {
+      window.location.reload();
+    });
+
     // Cleanup function
     const cleanup = () => {
       if (hasCleanedUp) return;
@@ -1204,6 +1222,7 @@ export async function initializeEventHandlers({
 
       // Unsubscribe from EventBus
       unsubscribeSessionsRefresh();
+      unsubscribeAuthLogout();
 
       // Destroy component-level subscriptions (AppState)
       const destroyComponent = (component, name) => {
