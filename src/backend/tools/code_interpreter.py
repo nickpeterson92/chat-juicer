@@ -42,7 +42,7 @@ TMP_SIZE = "64m"
 # Output settings
 CODE_OUTPUT_SUBDIR = "code"
 MAX_OUTPUT_SIZE = 10 * 1024 * 1024  # 10MB max output
-ALLOWED_OUTPUT_EXTENSIONS = {".png", ".jpg", ".svg", ".csv", ".json", ".txt", ".html", ".pdf"}
+ALLOWED_OUTPUT_EXTENSIONS = {".png", ".jpg", ".svg", ".csv", ".json", ".txt", ".html", ".pdf", ".xlsx", ".docx"}
 MAX_FILES_RETURNED = 10
 
 # Image formats (require base64 encoding in response)
@@ -295,7 +295,7 @@ class SandboxPool:
             "--tmpfs",
             "/workspace:size=64m",  # Writable workspace for warm container
             "--tmpfs",
-            "/sources:size=64m",  # Session source files (read via copy)
+            "/input:size=64m",  # Session source files (read via copy)
             "--tmpfs",
             "/output:size=64m",  # Session output files (read via copy)
             "-w",
@@ -326,7 +326,7 @@ class SandboxPool:
             "-R",
             "1000:1000",
             "/workspace",
-            "/sources",
+            "/input",
             "/output",
             "/tmp",
             stdout=asyncio.subprocess.DEVNULL,
@@ -349,7 +349,7 @@ class SandboxPool:
         Args:
             code: Python code to execute
             workspace_path: Host path for workspace (code input + outputs)
-            session_files_path: Optional path to session files (sources/, output/) for read access
+            session_files_path: Optional path to session files (input/, output/) for read access
 
         Returns:
             ExecutionResult with stdout, stderr, files, and metadata
@@ -401,17 +401,17 @@ class SandboxPool:
                 logger.warning("Failed to copy workspace to warm container, falling back to cold start")
                 return await self._execute_cold(code, workspace_path, session_files_path)
 
-            # Copy session files (sources/output) for read access
+            # Copy session files (input/output) for read access
             if session_files_path:
-                sources_path = session_files_path / "sources"
+                input_path = session_files_path / "input"
                 output_path = session_files_path / "output"
                 # Non-critical: log warning but continue if copy fails
-                if sources_path.exists() and not await self._container_cp(
-                    f"{sources_path}/.",
-                    f"{self.warm_container_id}:/sources/",
+                if input_path.exists() and not await self._container_cp(
+                    f"{input_path}/.",
+                    f"{self.warm_container_id}:/input/",
                     to_container=True,
                 ):
-                    logger.warning("Failed to copy sources to container")
+                    logger.warning("Failed to copy input to container")
                 if output_path.exists() and not await self._container_cp(
                     f"{output_path}/.",
                     f"{self.warm_container_id}:/output/",
@@ -533,10 +533,10 @@ class SandboxPool:
 
         # Add session file mounts if available
         if session_files_path:
-            sources_path = session_files_path / "sources"
+            input_path = session_files_path / "input"
             output_path = session_files_path / "output"
-            if sources_path.exists():
-                cmd_args.extend(["-v", f"{sources_path}:/sources:ro"])  # Read-only for uploads
+            if input_path.exists():
+                cmd_args.extend(["-v", f"{input_path}:/input:ro"])  # Read-only for uploads
             if output_path.exists():
                 cmd_args.extend(["-v", f"{output_path}:/output:rw"])  # Read/write for outputs
 
@@ -652,6 +652,8 @@ class SandboxPool:
                 ".txt": "text/plain",
                 ".html": "text/html",
                 ".pdf": "application/pdf",
+                ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             }
 
             file_info: dict[str, Any] = {
@@ -730,7 +732,7 @@ async def execute_python_code(code: str, session_id: str) -> str:
 
     File Access:
     - /workspace: Read/write for code outputs (default working directory)
-    - /sources: Read-only access to uploaded source files (session files)
+    - /input: Read-only access to uploaded source files (session files)
     - /output: Read/write access to session output files (persistent)
 
     Limitations:
@@ -768,7 +770,7 @@ async def execute_python_code(code: str, session_id: str) -> str:
     workspace_base = (DATA_FILES_PATH / session_id / "output" / CODE_OUTPUT_SUBDIR).resolve()
     workspace_base.mkdir(parents=True, exist_ok=True)
 
-    # Session files path (sources/ and output/ for read access)
+    # Session files path (input/ and output/ for read access)
     session_files_path = (DATA_FILES_PATH / session_id).resolve()
 
     # Get sandbox pool and execute

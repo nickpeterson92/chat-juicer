@@ -28,7 +28,6 @@ from core.constants import (
     MSG_TYPE_FUNCTION_DETECTED,
     MSG_TYPE_FUNCTION_EXECUTING,
     RAW_RESPONSE_EVENT,
-    TEMPLATES_PATH,
     get_settings,
     is_vision_capable,
 )
@@ -39,7 +38,6 @@ from integrations.mcp_registry import DEFAULT_MCP_SERVERS
 from integrations.sdk_token_tracker import connect_session, disconnect_session
 from tools.wrappers import create_session_aware_tools
 from utils.client_factory import create_openai_client
-from utils.file_utils import get_session_templates
 from utils.logger import logger
 
 
@@ -126,14 +124,11 @@ class ChatService:
         reasoning = reasoning_effort or session_row["reasoning_effort"]
 
         # Ensure session workspace exists (defensive - handles old sessions)
-        self.file_service.init_session_workspace(session_id, TEMPLATES_PATH)
+        self.file_service.init_session_workspace(session_id)
 
         # Build system instructions with session file context (Phase 1: local)
-        session_files = await self.file_service.list_files(session_id, "sources")
+        session_files = await self.file_service.list_files(session_id, "input")
         file_names = [f["name"] for f in session_files if f.get("type") == "file"]
-
-        # Load templates available to this session (from templates/ symlink)
-        template_names = await get_session_templates(session_id)
 
         # Parse mcp_config from JSON string (stored as JSONB in PostgreSQL)
         mcp_config_raw = session_row.get("mcp_config")
@@ -142,7 +137,6 @@ class ChatService:
         instructions = build_dynamic_instructions(
             base_instructions=SYSTEM_INSTRUCTIONS,
             session_files=file_names,
-            session_templates=template_names,
             mcp_servers=session_mcp_config,
         )
 
@@ -163,7 +157,7 @@ class ChatService:
             async with session_file_context(
                 file_service=self.file_service,
                 session_id=session_id,
-                base_folder="sources",
+                base_folder="input",
             ):
                 tools = create_session_aware_tools(
                     session_id,
@@ -565,14 +559,14 @@ class ChatService:
         # Process image attachments
         for attachment in image_attachments:
             filename = attachment.get("filename", "")
-            # Path is relative to session workspace (e.g., "sources/image.png")
+            # Path is relative to session workspace (e.g., "input/image.png")
             rel_path = attachment.get("path", "")
 
             # Extract folder and filename from path
             if "/" in rel_path:
                 folder, file_name = rel_path.rsplit("/", 1)
             else:
-                folder = "sources"  # Default folder
+                folder = "input"  # Default folder
                 file_name = filename or rel_path
 
             # Read and encode image

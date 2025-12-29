@@ -23,7 +23,7 @@ describe("FilePanel", () => {
   let toggleButton;
   let filesContainer;
   let refreshButton;
-  let sourcesTab;
+  let inputTab;
   let outputTab;
   let appState;
 
@@ -41,10 +41,10 @@ describe("FilePanel", () => {
     refreshButton = document.createElement("button");
     refreshButton.id = "refresh-files-btn";
 
-    sourcesTab = document.createElement("button");
-    sourcesTab.id = "tab-sources";
-    sourcesTab.dataset.directory = "sources";
-    sourcesTab.classList.add("active");
+    inputTab = document.createElement("button");
+    inputTab.id = "tab-input";
+    inputTab.dataset.directory = "input";
+    inputTab.classList.add("active");
 
     outputTab = document.createElement("button");
     outputTab.id = "tab-output";
@@ -64,7 +64,7 @@ describe("FilePanel", () => {
 
   describe("constructor", () => {
     it("should initialize without appState (backwards compatibility)", () => {
-      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, sourcesTab, outputTab);
+      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab);
 
       expect(filePanel.panel).toBe(panelElement);
       expect(filePanel.appState).toBeNull();
@@ -76,15 +76,9 @@ describe("FilePanel", () => {
     });
 
     it("should initialize with appState", () => {
-      const filePanel = new FilePanel(
-        panelElement,
-        toggleButton,
-        filesContainer,
-        refreshButton,
-        sourcesTab,
-        outputTab,
-        { appState }
-      );
+      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab, {
+        appState,
+      });
 
       expect(filePanel.appState).toBe(appState);
       const snapshot = globalLifecycleManager.getDebugSnapshot();
@@ -94,7 +88,7 @@ describe("FilePanel", () => {
     });
 
     it("should throw error without required elements", () => {
-      expect(() => new FilePanel(null, toggleButton, filesContainer, refreshButton, sourcesTab, outputTab)).toThrow(
+      expect(() => new FilePanel(null, toggleButton, filesContainer, refreshButton, inputTab, outputTab)).toThrow(
         "FilePanel requires panel and container elements"
       );
     });
@@ -102,15 +96,9 @@ describe("FilePanel", () => {
 
   describe("AppState integration", () => {
     it("should subscribe to session.current", () => {
-      const filePanel = new FilePanel(
-        panelElement,
-        toggleButton,
-        filesContainer,
-        refreshButton,
-        sourcesTab,
-        outputTab,
-        { appState }
-      );
+      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab, {
+        appState,
+      });
 
       const setSessionSpy = vi.spyOn(filePanel, "setSession");
 
@@ -121,15 +109,9 @@ describe("FilePanel", () => {
     });
 
     it("should read getCurrentSession from AppState", () => {
-      const filePanel = new FilePanel(
-        panelElement,
-        toggleButton,
-        filesContainer,
-        refreshButton,
-        sourcesTab,
-        outputTab,
-        { appState }
-      );
+      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab, {
+        appState,
+      });
 
       appState.setState("session.current", "session-from-appstate");
 
@@ -137,7 +119,7 @@ describe("FilePanel", () => {
     });
 
     it("should fall back to internal state without appState", () => {
-      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, sourcesTab, outputTab);
+      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab);
 
       filePanel.setSession("internal-session");
 
@@ -147,7 +129,7 @@ describe("FilePanel", () => {
 
   describe("setSession", () => {
     it("should update currentSessionId", () => {
-      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, sourcesTab, outputTab);
+      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab);
 
       filePanel.setSession("test-session");
 
@@ -155,7 +137,7 @@ describe("FilePanel", () => {
     });
 
     it("should clear session when null", () => {
-      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, sourcesTab, outputTab);
+      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab);
 
       filePanel.setSession("test-session");
       filePanel.setSession(null);
@@ -166,7 +148,7 @@ describe("FilePanel", () => {
 
   describe("toggle", () => {
     it("should toggle collapsed class", () => {
-      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, sourcesTab, outputTab);
+      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab);
 
       filePanel.toggle();
       expect(panelElement.classList.contains("collapsed")).toBe(true);
@@ -178,7 +160,7 @@ describe("FilePanel", () => {
 
   describe("show/hide", () => {
     it("should show panel", () => {
-      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, sourcesTab, outputTab);
+      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab);
 
       panelElement.classList.add("collapsed");
 
@@ -188,7 +170,7 @@ describe("FilePanel", () => {
     });
 
     it("should hide panel", () => {
-      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, sourcesTab, outputTab);
+      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab);
 
       filePanel.hide();
 
@@ -198,15 +180,9 @@ describe("FilePanel", () => {
 
   describe("destroy", () => {
     it("should clean up AppState subscriptions", () => {
-      const filePanel = new FilePanel(
-        panelElement,
-        toggleButton,
-        filesContainer,
-        refreshButton,
-        sourcesTab,
-        outputTab,
-        { appState }
-      );
+      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab, {
+        appState,
+      });
 
       const snapshotBefore = globalLifecycleManager.getDebugSnapshot();
       const entryBefore = snapshotBefore.components.find((c) => c.name === "FilePanel");
@@ -221,7 +197,7 @@ describe("FilePanel", () => {
     });
 
     it("should call closeAllHandles", () => {
-      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, sourcesTab, outputTab);
+      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab);
 
       const closeHandlesSpy = vi.spyOn(filePanel, "closeAllHandles");
 
@@ -231,7 +207,7 @@ describe("FilePanel", () => {
     });
 
     it("should work without appState", () => {
-      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, sourcesTab, outputTab);
+      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab);
 
       expect(() => filePanel.destroy()).not.toThrow();
     });
@@ -239,7 +215,7 @@ describe("FilePanel", () => {
 
   describe("closeAllHandles", () => {
     it("should remove file preview elements", () => {
-      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, sourcesTab, outputTab);
+      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab);
 
       // Add mock file preview
       const preview = document.createElement("div");
@@ -254,15 +230,9 @@ describe("FilePanel", () => {
 
   describe("refresh", () => {
     it("should load files into state for the active tab", async () => {
-      const filePanel = new FilePanel(
-        panelElement,
-        toggleButton,
-        filesContainer,
-        refreshButton,
-        sourcesTab,
-        outputTab,
-        { appState }
-      );
+      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab, {
+        appState,
+      });
 
       filePanel.setSession("session-123");
       loadFilesIntoStateMock.mockClear();
@@ -270,11 +240,11 @@ describe("FilePanel", () => {
 
       await filePanel.refresh();
 
-      expect(loadFilesIntoStateMock).toHaveBeenCalledWith(appState, "data/files/session-123/sources", "sources");
+      expect(loadFilesIntoStateMock).toHaveBeenCalledWith(appState, "data/files/session-123/input", "input");
     });
 
     it("should resolve immediately when no session is set", async () => {
-      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, sourcesTab, outputTab);
+      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab);
 
       await filePanel.refresh();
 
@@ -282,15 +252,9 @@ describe("FilePanel", () => {
     });
 
     it("should propagate errors from loadFilesIntoState", async () => {
-      const filePanel = new FilePanel(
-        panelElement,
-        toggleButton,
-        filesContainer,
-        refreshButton,
-        sourcesTab,
-        outputTab,
-        { appState }
-      );
+      const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab, {
+        appState,
+      });
       filePanel.setSession("session-err");
       loadFilesIntoStateMock.mockClear();
       loadFilesIntoStateMock.mockRejectedValueOnce(new Error("load failed"));
@@ -302,14 +266,7 @@ describe("FilePanel", () => {
   describe("Phase 1: Folder Navigation", () => {
     describe("currentOutputPath state", () => {
       it("should initialize to empty string", () => {
-        const filePanel = new FilePanel(
-          panelElement,
-          toggleButton,
-          filesContainer,
-          refreshButton,
-          sourcesTab,
-          outputTab
-        );
+        const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab);
 
         expect(filePanel.currentOutputPath).toBe("");
       });
@@ -320,7 +277,7 @@ describe("FilePanel", () => {
           toggleButton,
           filesContainer,
           refreshButton,
-          sourcesTab,
+          inputTab,
           outputTab,
           { appState }
         );
@@ -337,13 +294,13 @@ describe("FilePanel", () => {
         expect(loadFilesIntoStateMock).toHaveBeenCalledWith(appState, "data/files/session-123/output", "output");
       });
 
-      it("should reset when switching to sources tab", async () => {
+      it("should reset when switching to input tab", async () => {
         const filePanel = new FilePanel(
           panelElement,
           toggleButton,
           filesContainer,
           refreshButton,
-          sourcesTab,
+          inputTab,
           outputTab,
           { appState }
         );
@@ -352,12 +309,12 @@ describe("FilePanel", () => {
         // Navigate into a folder
         filePanel.currentOutputPath = "code/python";
 
-        // Switch to sources tab
+        // Switch to input tab
         loadFilesIntoStateMock.mockClear();
-        await filePanel.switchTab(sourcesTab);
+        await filePanel.switchTab(inputTab);
 
         expect(filePanel.currentOutputPath).toBe("");
-        expect(loadFilesIntoStateMock).toHaveBeenCalledWith(appState, "data/files/session-123/sources", "sources");
+        expect(loadFilesIntoStateMock).toHaveBeenCalledWith(appState, "data/files/session-123/input", "input");
       });
     });
 
@@ -368,7 +325,7 @@ describe("FilePanel", () => {
           toggleButton,
           filesContainer,
           refreshButton,
-          sourcesTab,
+          inputTab,
           outputTab,
           { appState }
         );
@@ -376,7 +333,7 @@ describe("FilePanel", () => {
 
         // Switch to output tab first
         outputTab.classList.add("active");
-        sourcesTab.classList.remove("active");
+        inputTab.classList.remove("active");
 
         loadFilesIntoStateMock.mockClear();
         await filePanel.navigateToFolder("code");
@@ -391,7 +348,7 @@ describe("FilePanel", () => {
           toggleButton,
           filesContainer,
           refreshButton,
-          sourcesTab,
+          inputTab,
           outputTab,
           { appState }
         );
@@ -399,7 +356,7 @@ describe("FilePanel", () => {
 
         // Switch to output tab
         outputTab.classList.add("active");
-        sourcesTab.classList.remove("active");
+        inputTab.classList.remove("active");
 
         // Navigate to first level
         loadFilesIntoStateMock.mockClear();
@@ -433,7 +390,7 @@ describe("FilePanel", () => {
           toggleButton,
           filesContainer,
           refreshButton,
-          sourcesTab,
+          inputTab,
           outputTab,
           { appState }
         );
@@ -453,7 +410,7 @@ describe("FilePanel", () => {
           toggleButton,
           filesContainer,
           refreshButton,
-          sourcesTab,
+          inputTab,
           outputTab,
           { appState }
         );
@@ -473,7 +430,7 @@ describe("FilePanel", () => {
           toggleButton,
           filesContainer,
           refreshButton,
-          sourcesTab,
+          inputTab,
           outputTab,
           { appState }
         );
@@ -481,7 +438,7 @@ describe("FilePanel", () => {
 
         // Switch to output tab
         outputTab.classList.add("active");
-        sourcesTab.classList.remove("active");
+        inputTab.classList.remove("active");
 
         const refreshSpy = vi.spyOn(filePanel, "refresh");
 
@@ -498,7 +455,7 @@ describe("FilePanel", () => {
           toggleButton,
           filesContainer,
           refreshButton,
-          sourcesTab,
+          inputTab,
           outputTab,
           { appState }
         );
@@ -507,7 +464,7 @@ describe("FilePanel", () => {
 
         // Switch to output tab
         outputTab.classList.add("active");
-        sourcesTab.classList.remove("active");
+        inputTab.classList.remove("active");
 
         loadFilesIntoStateMock.mockClear();
         await filePanel.navigateToBreadcrumb(0);
@@ -522,7 +479,7 @@ describe("FilePanel", () => {
           toggleButton,
           filesContainer,
           refreshButton,
-          sourcesTab,
+          inputTab,
           outputTab,
           { appState }
         );
@@ -531,7 +488,7 @@ describe("FilePanel", () => {
 
         // Switch to output tab
         outputTab.classList.add("active");
-        sourcesTab.classList.remove("active");
+        inputTab.classList.remove("active");
 
         // Navigate to "code" (index 1)
         loadFilesIntoStateMock.mockClear();
@@ -559,7 +516,7 @@ describe("FilePanel", () => {
           toggleButton,
           filesContainer,
           refreshButton,
-          sourcesTab,
+          inputTab,
           outputTab,
           { appState }
         );
@@ -568,7 +525,7 @@ describe("FilePanel", () => {
 
         // Switch to output tab
         outputTab.classList.add("active");
-        sourcesTab.classList.remove("active");
+        inputTab.classList.remove("active");
 
         loadFilesIntoStateMock.mockClear();
         await filePanel.navigateToBreadcrumb(-1);
@@ -585,7 +542,7 @@ describe("FilePanel", () => {
           toggleButton,
           filesContainer,
           refreshButton,
-          sourcesTab,
+          inputTab,
           outputTab,
           { appState }
         );
@@ -594,7 +551,7 @@ describe("FilePanel", () => {
 
         // Switch to output tab
         outputTab.classList.add("active");
-        sourcesTab.classList.remove("active");
+        inputTab.classList.remove("active");
 
         loadFilesIntoStateMock.mockClear();
         await filePanel.navigateToBreadcrumb(5);
@@ -607,14 +564,7 @@ describe("FilePanel", () => {
 
     describe("getFullOutputPath", () => {
       it("should return base path when at root", () => {
-        const filePanel = new FilePanel(
-          panelElement,
-          toggleButton,
-          filesContainer,
-          refreshButton,
-          sourcesTab,
-          outputTab
-        );
+        const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab);
         filePanel.setSession("session-123");
         filePanel.currentOutputPath = "";
 
@@ -622,14 +572,7 @@ describe("FilePanel", () => {
       });
 
       it("should append subdirectory to base path", () => {
-        const filePanel = new FilePanel(
-          panelElement,
-          toggleButton,
-          filesContainer,
-          refreshButton,
-          sourcesTab,
-          outputTab
-        );
+        const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab);
         filePanel.setSession("session-123");
         filePanel.currentOutputPath = "code";
 
@@ -637,14 +580,7 @@ describe("FilePanel", () => {
       });
 
       it("should handle nested paths correctly", () => {
-        const filePanel = new FilePanel(
-          panelElement,
-          toggleButton,
-          filesContainer,
-          refreshButton,
-          sourcesTab,
-          outputTab
-        );
+        const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab);
         filePanel.setSession("session-123");
         filePanel.currentOutputPath = "code/python/scripts";
 
@@ -652,14 +588,7 @@ describe("FilePanel", () => {
       });
 
       it("should work with different session IDs", () => {
-        const filePanel = new FilePanel(
-          panelElement,
-          toggleButton,
-          filesContainer,
-          refreshButton,
-          sourcesTab,
-          outputTab
-        );
+        const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab);
         filePanel.setSession("different-session");
         filePanel.currentOutputPath = "docs";
 
@@ -669,42 +598,21 @@ describe("FilePanel", () => {
 
     describe("getBreadcrumbSegments", () => {
       it("should return empty array at root", () => {
-        const filePanel = new FilePanel(
-          panelElement,
-          toggleButton,
-          filesContainer,
-          refreshButton,
-          sourcesTab,
-          outputTab
-        );
+        const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab);
         filePanel.currentOutputPath = "";
 
         expect(filePanel.getBreadcrumbSegments()).toEqual([]);
       });
 
       it("should split path into segments", () => {
-        const filePanel = new FilePanel(
-          panelElement,
-          toggleButton,
-          filesContainer,
-          refreshButton,
-          sourcesTab,
-          outputTab
-        );
+        const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab);
         filePanel.currentOutputPath = "code/python";
 
         expect(filePanel.getBreadcrumbSegments()).toEqual(["code", "python"]);
       });
 
       it("should filter empty segments", () => {
-        const filePanel = new FilePanel(
-          panelElement,
-          toggleButton,
-          filesContainer,
-          refreshButton,
-          sourcesTab,
-          outputTab
-        );
+        const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab);
         filePanel.currentOutputPath = "code//python///scripts";
 
         // filter(Boolean) removes empty strings
@@ -712,28 +620,14 @@ describe("FilePanel", () => {
       });
 
       it("should handle single-level path", () => {
-        const filePanel = new FilePanel(
-          panelElement,
-          toggleButton,
-          filesContainer,
-          refreshButton,
-          sourcesTab,
-          outputTab
-        );
+        const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab);
         filePanel.currentOutputPath = "code";
 
         expect(filePanel.getBreadcrumbSegments()).toEqual(["code"]);
       });
 
       it("should handle deeply nested paths", () => {
-        const filePanel = new FilePanel(
-          panelElement,
-          toggleButton,
-          filesContainer,
-          refreshButton,
-          sourcesTab,
-          outputTab
-        );
+        const filePanel = new FilePanel(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab);
         filePanel.currentOutputPath = "a/b/c/d/e/f";
 
         expect(filePanel.getBreadcrumbSegments()).toEqual(["a", "b", "c", "d", "e", "f"]);
@@ -747,7 +641,7 @@ describe("FilePanel", () => {
           toggleButton,
           filesContainer,
           refreshButton,
-          sourcesTab,
+          inputTab,
           outputTab,
           { appState }
         );
@@ -756,7 +650,7 @@ describe("FilePanel", () => {
 
         // Switch to output tab
         outputTab.classList.add("active");
-        sourcesTab.classList.remove("active");
+        inputTab.classList.remove("active");
 
         loadFilesIntoStateMock.mockClear();
         await filePanel.navigateUp();
@@ -771,7 +665,7 @@ describe("FilePanel", () => {
           toggleButton,
           filesContainer,
           refreshButton,
-          sourcesTab,
+          inputTab,
           outputTab,
           { appState }
         );
@@ -791,7 +685,7 @@ describe("FilePanel", () => {
           toggleButton,
           filesContainer,
           refreshButton,
-          sourcesTab,
+          inputTab,
           outputTab,
           { appState }
         );
@@ -800,7 +694,7 @@ describe("FilePanel", () => {
 
         // Switch to output tab
         outputTab.classList.add("active");
-        sourcesTab.classList.remove("active");
+        inputTab.classList.remove("active");
 
         loadFilesIntoStateMock.mockClear();
         await filePanel.navigateUp();
@@ -815,7 +709,7 @@ describe("FilePanel", () => {
           toggleButton,
           filesContainer,
           refreshButton,
-          sourcesTab,
+          inputTab,
           outputTab,
           { appState }
         );
@@ -824,7 +718,7 @@ describe("FilePanel", () => {
 
         // Switch to output tab
         outputTab.classList.add("active");
-        sourcesTab.classList.remove("active");
+        inputTab.classList.remove("active");
 
         loadFilesIntoStateMock.mockClear();
         await filePanel.navigateUp();
@@ -843,7 +737,7 @@ describe("FilePanel", () => {
           toggleButton,
           filesContainer,
           refreshButton,
-          sourcesTab,
+          inputTab,
           outputTab,
           { appState }
         );
@@ -852,7 +746,7 @@ describe("FilePanel", () => {
 
         // Switch to output tab
         outputTab.classList.add("active");
-        sourcesTab.classList.remove("active");
+        inputTab.classList.remove("active");
 
         const refreshSpy = vi.spyOn(filePanel, "refresh");
 
@@ -869,7 +763,7 @@ describe("FilePanel", () => {
           toggleButton,
           filesContainer,
           refreshButton,
-          sourcesTab,
+          inputTab,
           outputTab,
           { appState }
         );
@@ -878,7 +772,7 @@ describe("FilePanel", () => {
 
         // Switch to output tab
         outputTab.classList.add("active");
-        sourcesTab.classList.remove("active");
+        inputTab.classList.remove("active");
 
         loadFilesIntoStateMock.mockClear();
         await filePanel.refresh();
@@ -890,28 +784,28 @@ describe("FilePanel", () => {
         );
       });
 
-      it("should not use currentOutputPath for sources tab", async () => {
+      it("should not use currentOutputPath for input tab", async () => {
         const filePanel = new FilePanel(
           panelElement,
           toggleButton,
           filesContainer,
           refreshButton,
-          sourcesTab,
+          inputTab,
           outputTab,
           { appState }
         );
         filePanel.setSession("session-123");
         filePanel.currentOutputPath = "code/python";
 
-        // Sources tab is active by default
-        sourcesTab.classList.add("active");
+        // Input tab is active by default
+        inputTab.classList.add("active");
         outputTab.classList.remove("active");
 
         loadFilesIntoStateMock.mockClear();
         await filePanel.refresh();
 
         // Should ignore currentOutputPath for sources
-        expect(loadFilesIntoStateMock).toHaveBeenCalledWith(appState, "data/files/session-123/sources", "sources");
+        expect(loadFilesIntoStateMock).toHaveBeenCalledWith(appState, "data/files/session-123/input", "input");
       });
     });
   });

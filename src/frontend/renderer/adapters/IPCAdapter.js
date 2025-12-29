@@ -59,7 +59,7 @@ export class IPCAdapter {
           attachments: pendingAttachments.map((att) => ({
             type: "image_ref",
             filename: att.filename,
-            path: att.path || `sources/${att.filename}`,
+            path: att.path || `input/${att.filename}`,
           })),
         };
       }
@@ -403,6 +403,98 @@ export class IPCAdapter {
    */
   getRawAPI() {
     return this.api;
+  }
+
+  // ==========================================
+  // Auth Methods
+  // ==========================================
+
+  /**
+   * Login with email and password
+   * @param {string} email - User email
+   * @param {string} password - User password
+   * @returns {Promise<object>} Auth result with tokens and user
+   */
+  async authLogin(email, password) {
+    if (!this.api?.authLogin) {
+      throw new Error("IPC API not available: authLogin");
+    }
+    return this.api.authLogin(email, password);
+  }
+
+  /**
+   * Register new account
+   * @param {string} email - User email
+   * @param {string} password - User password
+   * @param {string} [displayName] - Optional display name
+   * @returns {Promise<object>} Auth result with tokens and user
+   */
+  async authRegister(email, password, displayName) {
+    if (!this.api?.authRegister) {
+      throw new Error("IPC API not available: authRegister");
+    }
+    return this.api.authRegister(email, password, displayName);
+  }
+
+  /**
+   * Refresh access token
+   * @param {string} refreshToken - Refresh token
+   * @returns {Promise<object>} New access token
+   */
+  async authRefresh(refreshToken) {
+    if (!this.api?.authRefresh) {
+      throw new Error("IPC API not available: authRefresh");
+    }
+    return this.api.authRefresh(refreshToken);
+  }
+
+  /**
+   * Logout - clear stored tokens
+   * @returns {Promise<object>} Success status
+   */
+  async authLogout() {
+    if (!this.api?.authLogout) {
+      throw new Error("IPC API not available: authLogout");
+    }
+    return this.api.authLogout();
+  }
+
+  /**
+   * Get stored auth tokens
+   * @returns {Promise<object | null>} Stored tokens or null
+   */
+  async authGetTokens() {
+    if (!this.api?.authGetTokens) {
+      console.warn("IPC API not available: authGetTokens");
+      return null;
+    }
+    return this.api.authGetTokens();
+  }
+
+  /**
+   * Store auth tokens securely
+   * @param {string} accessToken - Access token
+   * @param {string} refreshToken - Refresh token
+   * @param {object} [user] - User info
+   * @returns {Promise<object>} Success status
+   */
+  async authStoreTokens(accessToken, refreshToken, user) {
+    if (!this.api?.authStoreTokens) {
+      throw new Error("IPC API not available: authStoreTokens");
+    }
+    return this.api.authStoreTokens(accessToken, refreshToken, user);
+  }
+
+  /**
+   * Get current access token (cached in main process)
+   * @returns {Promise<string | null>} Access token or null
+   */
+  async authGetAccessToken() {
+    if (!this.api?.authGetAccessToken) {
+      console.warn("IPC API not available: authGetAccessToken");
+      return null;
+    }
+    return this.api.authGetAccessToken();
   }
 }
 

@@ -364,7 +364,7 @@ MSG_TYPE_SESSION_RESPONSE = "session_response"
 MSG_TYPE_SESSION_UPDATED = "session_updated"
 
 #: Message type for file upload responses.
-#: Contains success/error data for file upload operations to sources directory.
+#: Contains success/error data for file upload operations to input directory.
 MSG_TYPE_UPLOAD_RESPONSE = "upload_response"
 
 #: Message type for agent configuration update notifications.

@@ -109,7 +109,7 @@ export class BoundedMap extends Map {
  * @property {boolean} isUploading - Upload in progress
  * @property {number|null} uploadProgress - Upload progress (0-100 or null)
  * @property {string|null} activeDirectory - Currently active directory path
- * @property {Array<Object>} sourcesList - Source files for current session
+ * @property {Array<Object>} inputList - Source files for current session
  * @property {Array<Object>} outputList - Output files for current session
  * @property {boolean} isLoadingFiles - File list loading state
  *
@@ -194,7 +194,7 @@ export class AppState {
       isUploading: false, // Upload in progress
       uploadProgress: null, // Upload progress (0-100 or null)
       activeDirectory: null, // Currently active directory path
-      sourcesList: [], // Source files for current session
+      inputList: [], // Source files for current session
       outputList: [], // Output files for current session
       isLoadingFiles: false, // File list loading state
     };
@@ -209,6 +209,13 @@ export class AppState {
     this.stream = {
       interrupted: false, // boolean - interrupt was requested
       toolInProgress: false, // boolean - tool execution in progress (defer cancel)
+    };
+
+    // Authentication state
+    this.auth = {
+      isAuthenticated: false, // boolean - user is logged in
+      user: null, // { id, email, displayName } | null
+      isLoading: true, // boolean - auth check in progress
     };
 
     // Per-session streaming state (Phase 2: Concurrent Session Processing)

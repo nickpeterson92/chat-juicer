@@ -470,7 +470,7 @@ export async function initializeEventHandlers({
                 {
                   type: "image_ref",
                   filename: file.name,
-                  path: `sources/${file.name}`,
+                  path: `input/${file.name}`,
                   mimeType: file.type,
                 },
               ]);
@@ -478,7 +478,7 @@ export async function initializeEventHandlers({
 
             // Refresh the appropriate file container
             if (sessionService.getCurrentSessionId()) {
-              const directory = `data/files/${sessionService.getCurrentSessionId()}/sources`;
+              const directory = `data/files/${sessionService.getCurrentSessionId()}/input`;
 
               if (isOnWelcomePage) {
                 appState.setState("ui.welcomeFilesSectionVisible", true);
@@ -486,7 +486,7 @@ export async function initializeEventHandlers({
                 // Load files into AppState (rendering happens via subscription in view-manager)
                 window.setTimeout(async () => {
                   try {
-                    await loadFilesIntoState(appState, directory, "sources");
+                    await loadFilesIntoState(appState, directory, "input");
                   } catch (error) {
                     console.error("Failed to load files after upload", error);
                   }
@@ -629,7 +629,7 @@ export async function initializeEventHandlers({
                   {
                     type: "image_ref",
                     filename: file.name,
-                    path: `sources/${file.name}`,
+                    path: `input/${file.name}`,
                     mimeType: file.type,
                   },
                 ]);
@@ -907,6 +907,7 @@ export async function initializeEventHandlers({
           // Clear UI state but do NOT delete database data
           // clearCurrentSession() was incorrectly deleting all messages
           appState.setState("session.current", null);
+          appState.setState("ui.bodyViewClass", "view-welcome");
 
           // Clean up pending welcome files to prevent memory leaks
           const pendingFiles = appState.getState("ui.pendingWelcomeFiles") || [];
@@ -989,7 +990,7 @@ export async function initializeEventHandlers({
 
       // If it's an intentional idle timeout, don't show an alert
       // The connection will automatically restore when the user interacts
-      if (status && status.isIdle) {
+      if (status?.isIdle) {
         console.log("WebSocket idle timeout - connection closed (will auto-reconnect on activity)");
         return;
       }
@@ -1182,6 +1183,24 @@ export async function initializeEventHandlers({
       });
     }
 
+    // Logout button
+    const logoutBtn = document.getElementById("logout-btn");
+    if (logoutBtn) {
+      addListener(logoutBtn, "click", async () => {
+        if (confirm("Are you sure you want to logout?")) {
+          const authService = services.authService;
+          if (authService) {
+            await authService.logout();
+          }
+        }
+      });
+    }
+
+    // Auth logout event listener
+    const unsubscribeAuthLogout = eventBus.on("auth:logout", () => {
+      window.location.reload();
+    });
+
     // Cleanup function
     const cleanup = () => {
       if (hasCleanedUp) return;
@@ -1204,6 +1223,7 @@ export async function initializeEventHandlers({
 
       // Unsubscribe from EventBus
       unsubscribeSessionsRefresh();
+      unsubscribeAuthLogout();
 
       // Destroy component-level subscriptions (AppState)
       const destroyComponent = (component, name) => {

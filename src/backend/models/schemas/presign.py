@@ -27,4 +27,4 @@ class PresignedUploadRequest(BaseModel):
 
     filename: str = Field(..., description="Name of the file to upload")
     content_type: str | None = Field(None, description="MIME type of the file")
-    folder: str = Field(default="sources", description="Folder within session (sources, output)")
+    folder: str = Field(default="input", description="Folder within session (input, output)")

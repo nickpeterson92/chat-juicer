@@ -361,9 +361,6 @@ chat-juicer/
 │   │   ├── logger.js     # Structured logging with IPC forwarding
 │   │   ├── config/
 │   │   │   └── main-constants.js
-│   │   ├── utils/        # Main process utilities
-│   │   │   ├── binary-message-parser.js  # Binary protocol message parsing
-│   │   │   └── ipc-v2-protocol.js        # IPC v2 protocol implementation
 │   │   ├── ui/           # Frontend static assets
 │   │   │   ├── index.html    # Main chat UI
 │   │   │   └── input.css     # Tailwind CSS source
@@ -377,14 +374,14 @@ chat-juicer/
 │   │       │   └── validators.js     # Bootstrap validators
 │   │       ├── adapters/             # DOM, IPC, Storage adapters
 │   │       ├── config/               # constants, colors, model-metadata
-│   │       ├── core/                 # AppState + EventBus
+│   │       ├── core/                 # AppState, EventBus, lifecycle management
 │   │       ├── managers/             # DOM, file, view managers
 │   │       ├── services/             # Business logic (AppState-backed)
 │   │       ├── handlers/             # Event handlers
 │   │       ├── plugins/              # Plugin registry
-│   │       ├── ui/                   # UI components and renderers
+│   │       ├── ui/                   # UI components, renderers, tool-registry
 │   │       ├── viewmodels/           # Data transformation
-│   │       └── utils/                # Utility modules
+│   │       └── utils/                # Utility modules + analytics
 │   └── backend/       # Python FastAPI backend
 │       ├── api/          # FastAPI application
 │       │   ├── main.py           # FastAPI app with lifespan, routes, CORS
@@ -402,6 +399,11 @@ chat-juicer/
 │       │   │   ├── chat_service.py       # Chat streaming with Agent/Runner
 │       │   │   ├── session_service.py    # Session management
 │       │   │   ├── file_service.py       # File operations
+│       │   │   ├── file_context.py       # File context management
+│       │   │   ├── s3_sync_service.py    # S3 file synchronization
+│       │   │   ├── token_aware_session.py # Token-aware session management
+│       │   │   ├── postgres_session.py   # PostgreSQL session storage
+│       │   │   ├── message_utils.py      # Message utilities
 │       │   │   └── auth_service.py       # Authentication
 │       │   ├── middleware/       # FastAPI middleware
 │       │   │   ├── auth.py               # Authentication middleware
@@ -411,6 +413,8 @@ chat-juicer/
 │       │       ├── manager.py        # WebSocket connection tracking
 │       │       ├── errors.py         # WebSocket error handling
 │       │       └── task_manager.py   # Async task/cancellation management
+│       ├── config/       # Configuration files
+│       │   └── db_registry.yaml  # Database schema registry
 │       ├── core/         # Core business logic
 │       │   ├── agent.py          # Agent/Runner with MCP support
 │       │   ├── prompts.py        # System instruction prompts
@@ -420,6 +424,7 @@ chat-juicer/
 │       │   ├── event_models.py   # WebSocket event models
 │       │   ├── error_models.py   # Error response models
 │       │   ├── ipc_models.py     # IPC message models
+│       │   ├── mcp_models.py     # MCP protocol models
 │       │   ├── sdk_models.py     # SDK integration models
 │       │   ├── session_models.py # Session metadata models
 │       │   └── schemas/          # Response schema models
@@ -428,18 +433,21 @@ chat-juicer/
 │       │       ├── config.py     # Config response schemas
 │       │       ├── files.py      # File response schemas
 │       │       ├── health.py     # Health response schemas
+│       │       ├── presign.py    # Presigned URL schemas
 │       │       └── sessions.py   # Session response schemas
 │       ├── tools/        # Function calling tools (async)
 │       │   ├── file_operations.py    # File reading, directory listing
 │       │   ├── document_generation.py # Document generation
 │       │   ├── text_editing.py       # Text editing operations
 │       │   ├── code_interpreter.py   # Sandboxed code execution
+│       │   ├── schema_fetch.py       # Database schema introspection
 │       │   ├── wrappers.py           # Session-aware tool wrappers
 │       │   └── registry.py           # Tool registration
 │       ├── integrations/ # External integrations
-│       │   ├── mcp_servers.py       # MCP server setup
 │       │   ├── mcp_pool.py          # MCP server connection pool
 │       │   ├── mcp_registry.py      # MCP server registry
+│       │   ├── mcp_transport.py     # MCP transport layer
+│       │   ├── mcp_websocket_client.py # MCP WebSocket client
 │       │   ├── sdk_token_tracker.py # Token tracking
 │       │   └── event_handlers/      # Streaming event handlers
 │       │       ├── agent_events.py      # Agent event handlers
@@ -649,13 +657,22 @@ The application supports both native functions and MCP server tools:
 - **edit_file**: Batch text edits with git-style diff output and whitespace-flexible matching (auto-prefixes `output/` unless scoped)
 - **generate_document**: Save generated content to `output/` with optional backups and session sandboxing
 - **code_interpreter**: Sandboxed code execution with guarded environment
+- **schema_fetch**: Database schema introspection supporting PostgreSQL and SQLite, with column types, constraints, and relationship detection
 - **Session-aware wrappers**: All file/doc tools are wrapped to `data/files/{session_id}` via `wrappers.py`
 
 ### MCP Server Integration
-- **Sequential Thinking** (Node.js): Advanced multi-step reasoning with revision capabilities and hypothesis testing
-- **Fetch Server** (Python): HTTP/HTTPS web content retrieval with automatic format handling
-- **Tavily Search** (Node.js): Optional web search MCP server when `TAVILY_API_KEY` is configured
-- Extensible via `integrations/mcp_registry.py`
+
+MCP servers communicate via **WebSocket** connections to a centralized MCP gateway, enabling:
+- **Connection pooling**: Pre-spawned server instances for concurrent request handling
+- **Automatic reconnection**: Client handles disconnections with exponential backoff
+- **Thread-safe access**: Concurrent tool calls via `asyncio.Lock` protection
+
+**Available MCP Servers:**
+- **Sequential Thinking**: Advanced multi-step reasoning with revision capabilities and hypothesis testing
+- **Fetch**: HTTP/HTTPS web content retrieval with automatic format handling
+- **Tavily Search**: Optional web search when `TAVILY_API_KEY` is configured
+
+Extensible via `integrations/mcp_registry.py` with WebSocket transport in `mcp_websocket_client.py`
 
 ### Features
 - Session-aware tool wrappers (`tools/wrappers.py`) enforce workspace isolation (data/files/{session_id})
@@ -667,6 +684,23 @@ Add new functions by:
 1. Implementing in the appropriate `src/backend/tools/*.py` module
 2. Registering in `tools/registry.py` (`AGENT_TOOLS` + `FUNCTION_REGISTRY`)
 3. If session-scoped, exposing a wrapped version via `create_session_aware_tools()` so session_id is injected automatically
+
+### S3 File Synchronization
+
+Session files are automatically synchronized with S3 for persistence across idle timeouts:
+
+```
+Upload Flow:  Local file → S3SyncService.upload_to_s3_background() → s3://{bucket}/{session_id}/
+Download Flow: Session reconnect → S3SyncService.rehydrate_session() → Local files restored
+```
+
+**Key behaviors:**
+- **Automatic upload**: Files created via `generate_document` or `edit_file` are synced to S3
+- **Idle cleanup**: Local files are deleted after WebSocket idle timeout (configurable)
+- **Transparent rehydration**: On reconnect, files are restored from S3 before chat resumes
+- **Presigned URLs**: Direct S3 download links via `/api/v1/files/{session_id}/presign/{filename}`
+
+Requires `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `S3_BUCKET_NAME` environment variables.
 
 ## Logging
 

@@ -19,11 +19,68 @@ from models.error_models import ErrorCode
 from models.schemas.auth import (
     LoginRequest,
     RefreshRequest,
+    RegisterRequest,
     TokenResponse,
     UserInfo,
 )
 
 router = APIRouter()
+
+
+@router.post(
+    "/register",
+    response_model=TokenResponse,
+    status_code=201,
+    summary="Register",
+    description="Create a new user account and receive access tokens.",
+    responses={
+        201: {
+            "description": "Registration successful",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                        "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                        "token_type": "bearer",
+                        "expires_in": 3600,
+                        "user": {
+                            "id": "550e8400-e29b-41d4-a716-446655440000",
+                            "email": "user@example.com",
+                            "display_name": "John Doe",
+                        },
+                    }
+                }
+            },
+        },
+        409: {"description": "Email already registered"},
+    },
+)
+async def register(body: RegisterRequest, db: DB) -> TokenResponse:
+    """Register new user and issue tokens."""
+    auth = AuthService(db)
+    try:
+        result = await auth.register(body.email, body.password, body.display_name)
+        return TokenResponse(
+            access_token=result["access_token"],
+            refresh_token=result["refresh_token"],
+            expires_in=result.get("expires_in", 3600),
+            user=(
+                UserInfo(
+                    id=result["user"]["id"],
+                    email=result["user"]["email"],
+                    display_name=result["user"].get("display_name"),
+                )
+                if "user" in result
+                else None
+            ),
+        )
+    except ValueError as exc:
+        from api.middleware.exception_handlers import AppException
+
+        raise AppException(
+            code=ErrorCode.RESOURCE_ALREADY_EXISTS,
+            message=str(exc),
+        ) from exc
 
 
 @router.post(
@@ -103,10 +160,19 @@ async def refresh(body: RefreshRequest, db: DB) -> TokenResponse:
     """Refresh access token."""
     auth = AuthService(db)
     try:
-        tokens = await auth.refresh(body.refresh_token)
+        result = await auth.refresh(body.refresh_token)
         return TokenResponse(
-            access_token=tokens["access"],
-            refresh_token=tokens["refresh"],
+            access_token=result["access"],
+            refresh_token=result["refresh"],
+            user=(
+                UserInfo(
+                    id=result["user"]["id"],
+                    email=result["user"]["email"],
+                    display_name=result["user"].get("display_name"),
+                )
+                if "user" in result
+                else None
+            ),
         )
     except ValueError as exc:
         raise AuthenticationError(

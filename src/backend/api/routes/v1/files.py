@@ -58,8 +58,8 @@ FilenamePath = Annotated[
 FolderQuery = Annotated[
     str,
     Query(
-        description="Folder within session (sources, outputs, templates)",
-        examples=["sources"],
+        description="Folder within session (input, outputs, templates)",
+        examples=["input"],
     ),
 ]
 
@@ -88,7 +88,7 @@ FolderQuery = Annotated[
                                 "extension": ".pdf",
                             }
                         ],
-                        "folder": "sources",
+                        "folder": "input",
                         "count": 1,
                     }
                 }
@@ -99,7 +99,7 @@ FolderQuery = Annotated[
 async def list_files(
     session_id: SessionIdPath,
     files: Files,
-    folder: FolderQuery = "sources",
+    folder: FolderQuery = "input",
 ) -> FileListResponse:
     """List files in session folder."""
     update_request_context(session_id=session_id)
@@ -129,7 +129,7 @@ async def list_files(
                         "type": "file",
                         "size": 102400,
                         "extension": ".pdf",
-                        "path": "sources/document.pdf",
+                        "path": "input/document.pdf",
                     }
                 }
             },
@@ -142,7 +142,7 @@ async def upload_file(
     session_id: SessionIdPath,
     files: Files,
     file: Annotated[UploadFile, FastAPIFile(description="File to upload")],
-    folder: FolderQuery = "sources",
+    folder: FolderQuery = "input",
 ) -> FileUploadResponse:
     """Upload file to session folder."""
     update_request_context(session_id=session_id)
@@ -182,7 +182,7 @@ async def download_file(
     session_id: SessionIdPath,
     filename: FilenamePath,
     files: Files,
-    folder: FolderQuery = "sources",
+    folder: FolderQuery = "input",
 ) -> Response:
     """Download file content."""
     update_request_context(session_id=session_id)
@@ -212,7 +212,7 @@ async def download_file(
             "content": {
                 "application/json": {
                     "example": {
-                        "path": "/data/files/sess_123/sources/doc.pdf",
+                        "path": "/data/files/sess_123/input/doc.pdf",
                         "exists": True,
                     }
                 }
@@ -225,7 +225,7 @@ async def get_file_path(
     session_id: SessionIdPath,
     filename: FilenamePath,
     files: Files,
-    folder: FolderQuery = "sources",
+    folder: FolderQuery = "input",
 ) -> FilePathResponse:
     """Get local file path for shell.openPath."""
     update_request_context(session_id=session_id)
@@ -266,7 +266,7 @@ async def delete_file(
     session_id: SessionIdPath,
     filename: FilenamePath,
     files: Files,
-    folder: FolderQuery = "sources",
+    folder: FolderQuery = "input",
 ) -> DeleteFileResponse:
     """Delete a file from session folder."""
     update_request_context(session_id=session_id)
@@ -299,8 +299,8 @@ async def delete_file(
             "content": {
                 "application/json": {
                     "example": {
-                        "upload_url": "https://minio:9000/bucket/sess/sources/file.pdf?...",
-                        "file_key": "sess_123/sources/file.pdf",
+                        "upload_url": "https://minio:9000/bucket/sess/input/file.pdf?...",
+                        "file_key": "sess_123/input/file.pdf",
                         "expires_in": 3600,
                     }
                 }
@@ -343,7 +343,7 @@ async def presign_upload(
             "content": {
                 "application/json": {
                     "example": {
-                        "download_url": "https://minio:9000/bucket/sess/sources/file.pdf?...",
+                        "download_url": "https://minio:9000/bucket/sess/input/file.pdf?...",
                         "expires_in": 3600,
                     }
                 }
@@ -357,7 +357,7 @@ async def presign_download(
     filename: FilenamePath,
     files: Files,
     settings: AppSettings,
-    folder: FolderQuery = "sources",
+    folder: FolderQuery = "input",
 ) -> PresignedDownloadResponse:
     """Generate presigned GET URL for direct S3 download."""
     update_request_context(session_id=session_id)

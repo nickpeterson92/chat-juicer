@@ -18,7 +18,7 @@ def resolve_edit_path(file_path: str) -> str:
     """Resolve edit path with smart output/ prepending for consistency with generate_document.
 
     Rules:
-    - If path starts with output/, sources/, templates/, or is absolute → use as-is
+    - If path starts with output/, input/, templates/, or is absolute → use as-is
     - Otherwise → prepend output/ for consistency with document generation workflow
 
     Args:
@@ -31,12 +31,12 @@ def resolve_edit_path(file_path: str) -> str:
         "report.md" → "output/report.md"
         "drafts/v2.md" → "output/drafts/v2.md"
         "output/report.md" → "output/report.md" (no double prepend)
-        "sources/input.txt" → "sources/input.txt"
+        "input/input.txt" → "input/input.txt"
         "templates/base.md" → "templates/base.md"
         "/absolute/path.md" → "/absolute/path.md"
     """
     # Don't prepend if path already has a directory prefix or is absolute
-    if file_path.startswith(("output/", "sources/", "templates/", "/", "../")):
+    if file_path.startswith(("output/", "input/", "templates/", "/", "../")):
         return file_path
     # Default: prepend output/ for consistency with generate_document
     return f"output/{file_path}"
@@ -143,11 +143,11 @@ async def edit_file(
     Security: When session_id is provided, path is restricted to session workspace.
 
     Path Resolution: For consistency with generate_document, paths are auto-prefixed
-    with output/ unless they explicitly start with output/, sources/, templates/,
+    with output/ unless they explicitly start with output/, input/, templates/,
     or are absolute paths. Examples:
     - "report.md" → "output/report.md"
     - "output/report.md" → "output/report.md" (no double prepend)
-    - "sources/data.txt" → "sources/data.txt"
+    - "input/data.txt" → "input/data.txt"
 
     Features:
     - Batch multiple edits in one operation
@@ -158,7 +158,7 @@ async def edit_file(
 
     Args:
         file_path: Path to file to edit. Auto-prepends output/ unless path starts
-                  with output/, sources/, templates/, or is absolute.
+                  with output/, input/, templates/, or is absolute.
         edits: List of edit operations, each with {"oldText": "...", "newText": "..."}
         session_id: Session ID for workspace isolation (enforces chroot jail)
 

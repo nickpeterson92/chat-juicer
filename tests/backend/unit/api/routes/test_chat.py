@@ -10,6 +10,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from api.routes.chat import chat_websocket
 from api.services.chat_service import ChatService
 from api.websocket.manager import WebSocketManager
+from models.api_models import UserInfo
 
 
 @pytest.fixture
@@ -20,13 +21,23 @@ def mock_websocket() -> Mock:
     ws.accept = AsyncMock()
     ws.close = AsyncMock()
     ws.client_state = Mock(state=1)
+    ws.client = Mock(host="127.0.0.1")  # For localhost check
 
     # Mock app state
     ws.app.state.db_pool = Mock()
     ws.app.state.ws_manager = AsyncMock(spec=WebSocketManager)
     ws.app.state.mcp_pool = Mock()
 
-    # Define a simple async iterator mock for iter_json
+    # Mock db.acquire() context manager for session ownership check
+    from uuid import UUID
+
+    mock_conn = AsyncMock()
+    mock_conn.fetchval.return_value = UUID("00000000-0000-0000-0000-000000000001")  # Session owner = user
+    mock_cm = AsyncMock()
+    mock_cm.__aenter__.return_value = mock_conn
+    mock_cm.__aexit__.return_value = None
+    ws.app.state.db_pool.acquire.return_value = mock_cm
+
     # Define a simple async iterator mock for iter_json
     async def mock_iter_json() -> Any:
         for _ in []:
@@ -50,8 +61,9 @@ async def test_chat_websocket_connection_success(
 ) -> None:
     """Test successful WebSocket connection and message flow."""
     # 1. Setup Mocks
-    # Mock auth check
-    monkeypatch.setattr("api.routes.chat.get_current_user_from_token", AsyncMock(return_value={"id": "user1"}))
+    # Mock auth check to return UserInfo
+    mock_user = UserInfo(id="00000000-0000-0000-0000-000000000001", email="test@example.com")
+    monkeypatch.setattr("api.routes.chat.get_current_user_from_token", AsyncMock(return_value=mock_user))
 
     # Mock ChatService instantiation
     monkeypatch.setattr("api.routes.chat.ChatService", Mock(return_value=mock_chat_service))
@@ -88,7 +100,8 @@ async def test_chat_websocket_connection_success(
 @pytest.mark.asyncio
 async def test_chat_websocket_connection_rejected(mock_websocket: Mock, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test connection rejection by manager."""
-    monkeypatch.setattr("api.routes.chat.get_current_user_from_token", AsyncMock(return_value={"id": "u1"}))
+    mock_user = UserInfo(id="00000000-0000-0000-0000-000000000001", email="test@example.com")
+    monkeypatch.setattr("api.routes.chat.get_current_user_from_token", AsyncMock(return_value=mock_user))
 
     # Manager rejects connection
     mock_websocket.app.state.ws_manager.connect.return_value = False
@@ -115,7 +128,8 @@ async def test_chat_websocket_interrupt_message(
     # note: mock_websocket is already AsyncMock but we need it to be behave
     mock_websocket.iter_json = mock_iter_interrupt
 
-    monkeypatch.setattr("api.routes.chat.get_current_user_from_token", AsyncMock(return_value={"id": "u1"}))
+    mock_user = UserInfo(id="00000000-0000-0000-0000-000000000001", email="test@example.com")
+    monkeypatch.setattr("api.routes.chat.get_current_user_from_token", AsyncMock(return_value=mock_user))
     monkeypatch.setattr("api.routes.chat.ChatService", Mock(return_value=mock_chat_service))
     monkeypatch.setattr("api.routes.chat.LocalFileService", Mock())
     mock_websocket.app.state.ws_manager.connect.return_value = True

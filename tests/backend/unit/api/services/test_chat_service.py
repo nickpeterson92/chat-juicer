@@ -2,7 +2,7 @@ import json
 
 from collections.abc import AsyncGenerator
 from typing import Any
-from unittest.mock import ANY, AsyncMock, MagicMock, Mock
+from unittest.mock import AsyncMock, MagicMock, Mock
 from uuid import uuid4
 
 import pytest
@@ -129,10 +129,6 @@ class TestChatService:
 
         # 2. Mock Dependency Functions
         monkeypatch.setattr(
-            "api.services.chat_service.get_session_templates",
-            AsyncMock(return_value=[]),
-        )
-        monkeypatch.setattr(
             "api.services.chat_service.create_session_aware_tools",
             Mock(return_value=[]),
         )
@@ -193,7 +189,7 @@ class TestChatService:
         )
 
         # 6. Verifications
-        mock_file_service.init_session_workspace.assert_called_with(session_id, ANY)
+        mock_file_service.init_session_workspace.assert_called_with(session_id)
 
         assert any(
             c[0][1].get("type") == "assistant_start" for c in mock_ws_manager.send.call_args_list
@@ -292,7 +288,6 @@ class TestChatService:
         }
 
         # Mock dependencies
-        monkeypatch.setattr("api.services.chat_service.get_session_templates", AsyncMock(return_value=[]))
         monkeypatch.setattr(
             "api.services.chat_service.create_session_aware_tools",
             Mock(return_value=[]),
@@ -369,11 +364,6 @@ class TestChatService:
             "reasoning_effort": "medium",
             "mcp_config": None,
         }
-
-        monkeypatch.setattr("api.services.chat_service.get_session_templates", AsyncMock(return_value=[]))
-        monkeypatch.setattr("api.services.chat_service.get_settings", Mock())
-        monkeypatch.setattr("api.services.chat_service.create_openai_client", Mock())
-        monkeypatch.setattr("api.services.chat_service.create_agent", Mock())
 
         monkeypatch.setattr(
             "api.services.chat_service.create_session_aware_tools",

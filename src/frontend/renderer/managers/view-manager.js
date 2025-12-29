@@ -11,11 +11,11 @@
  *
  */
 
-import { ComponentLifecycle } from "../core/component-lifecycle.js";
-import { globalLifecycleManager } from "../core/lifecycle-manager.js";
-import { addMessage } from "../ui/chat-ui.js";
-import { ModelSelector } from "../ui/components/model-selector.js";
-import { getSuggestionPrompt, hideWelcomePage, showWelcomePage } from "../ui/welcome-page.js";
+import { ComponentLifecycle } from "@/core/component-lifecycle.js";
+import { globalLifecycleManager } from "@/core/lifecycle-manager.js";
+import { addMessage } from "@/ui/chat-ui.js";
+import { ModelSelector } from "@/ui/components/model-selector.js";
+import { getSuggestionPrompt, hideWelcomePage, showWelcomePage } from "@/ui/welcome-page.js";
 
 // View manager component for lifecycle management
 const viewManagerComponent = {};
@@ -80,13 +80,13 @@ async function renderWelcomeFiles(appState) {
       return;
     }
 
-    const { renderFileList, loadFilesIntoState } = await import("./file-manager.js");
-    const directory = `data/files/${currentSessionId}/sources`;
+    const { renderFileList, loadFilesIntoState } = await import("@/managers/file-manager.js");
+    const directory = `data/files/${currentSessionId}/input`;
     renderFileList(files, welcomeFilesContainer, {
       directory,
       isWelcomePage: true,
       onDelete: async () => {
-        const result = await loadFilesIntoState(appState, directory, "sources");
+        const result = await loadFilesIntoState(appState, directory, "input");
         if (!result.files || result.files.length === 0) {
           appState.setState("ui.welcomeFilesSectionVisible", false);
         }
@@ -118,12 +118,17 @@ export async function showWelcomeView(elements, appState) {
   // Clear any previous welcome model config (start fresh)
   appState.setState("ui.welcomeModelConfig", null);
 
-  // Get system username
-  let userName = "User"; // Fallback
-  try {
-    userName = await window.electronAPI.getUsername();
-  } catch (error) {
-    window.electronAPI.log("error", "Failed to get username", { error: error.message });
+  // Get authenticated user's display name, falling back to system username
+  const authUser = appState.getState("auth.user");
+  let userName = authUser?.displayName || authUser?.email?.split("@")[0];
+
+  if (!userName) {
+    try {
+      userName = await window.electronAPI.getUsername();
+    } catch (error) {
+      window.electronAPI.log("error", "Failed to get username", { error: error.message });
+      userName = "User"; // Absolute fallback
+    }
   }
 
   // Show welcome page
@@ -157,8 +162,8 @@ export async function showWelcomeView(elements, appState) {
     ComponentLifecycle.mount(viewManagerComponent, "ViewManager", globalLifecycleManager);
   }
 
-  // Setup subscription to render welcome page files when sources list changes
-  const unsubscribeWelcomeFiles = appState.subscribe("files.sourcesList", (files) => {
+  // Setup subscription to render welcome page files when input list changes
+  const unsubscribeWelcomeFiles = appState.subscribe("files.inputList", (files) => {
     // Only render if we're on welcome page
     if (appState.getState("ui.currentView") === "welcome") {
       // Hide section if no files
@@ -190,7 +195,7 @@ export async function showWelcomeView(elements, appState) {
     }
 
     // Render pending files as thumbnail grid
-    const { renderPendingFilesGrid } = await import("./file-manager.js");
+    const { renderPendingFilesGrid } = await import("@/managers/file-manager.js");
     renderPendingFilesGrid(pendingFiles, welcomeFilesContainer, appState);
   });
   globalLifecycleManager.addUnsubscriber(viewManagerComponent, unsubscribePendingFiles);
@@ -226,9 +231,9 @@ export async function showWelcomeView(elements, appState) {
         appState.setState("ui.welcomeFilesSectionVisible", true);
 
         // Then load the files (will show placeholder if empty)
-        import("../managers/file-manager.js").then(async ({ loadFilesIntoState }) => {
-          const directory = `data/files/${currentSessionId}/sources`;
-          await loadFilesIntoState(appState, directory, "sources");
+        import("@/managers/file-manager.js").then(async ({ loadFilesIntoState }) => {
+          const directory = `data/files/${currentSessionId}/input`;
+          await loadFilesIntoState(appState, directory, "input");
         });
       }
     }
@@ -382,9 +387,9 @@ function attachWelcomePageListeners(elements, appState) {
 
       if (sessionId) {
         // Load session-specific files using AppState pattern
-        const directory = `data/files/${sessionId}/sources`;
-        import("./file-manager.js").then(({ loadFilesIntoState }) => {
-          loadFilesIntoState(appState, directory, "sources");
+        const directory = `data/files/${sessionId}/input`;
+        import("@/managers/file-manager.js").then(({ loadFilesIntoState }) => {
+          loadFilesIntoState(appState, directory, "input");
         });
       }
     };
@@ -411,7 +416,7 @@ function attachWelcomePageListeners(elements, appState) {
     }
 
     // Get new config
-    const { getMcpConfig, getModelConfig } = await import("../ui/welcome-page.js");
+    const { getMcpConfig, getModelConfig } = await import("@/ui/welcome-page.js");
     const mcpConfig = getMcpConfig();
     const modelConfig = getModelConfig();
 
@@ -493,7 +498,7 @@ function attachWelcomePageListeners(elements, appState) {
 
     try {
       // Get MCP config from checkboxes
-      const { getMcpConfig, getModelConfig } = await import("../ui/welcome-page.js");
+      const { getMcpConfig, getModelConfig } = await import("@/ui/welcome-page.js");
       const mcpConfig = getMcpConfig();
       const modelConfig = getModelConfig();
 
@@ -549,7 +554,7 @@ function attachWelcomePageListeners(elements, appState) {
                     {
                       type: "image_ref",
                       filename: pendingFile.name,
-                      path: `sources/${pendingFile.name}`,
+                      path: `input/${pendingFile.name}`,
                       mimeType: pendingFile.type,
                     },
                   ]);
@@ -605,7 +610,7 @@ function attachWelcomePageListeners(elements, appState) {
           mcp_config: mcpConfig,
         };
 
-        const { updateChatModelSelector } = await import("../utils/chat-model-updater.js");
+        const { updateChatModelSelector } = await import("@/utils/chat-model-updater.js");
         updateChatModelSelector(sessionData);
         window.electronAPI.log("info", "Chat model selector updated for existing session");
       }

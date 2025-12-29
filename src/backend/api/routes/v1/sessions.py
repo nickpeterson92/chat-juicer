@@ -13,12 +13,13 @@ import secrets
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, Depends, Path, Query
 
 from api.dependencies import DB, Files, Sessions
+from api.middleware.auth import get_current_user
 from api.middleware.exception_handlers import SessionNotFoundError
 from api.middleware.request_context import update_request_context
-from core.constants import TEMPLATES_PATH, get_settings
+from models.api_models import UserInfo
 from models.schemas.base import PaginationMeta
 from models.schemas.sessions import (
     CreateSessionRequest,
@@ -33,6 +34,9 @@ from models.schemas.sessions import (
 )
 
 router = APIRouter()
+
+# Type alias for authenticated user dependency
+CurrentUser = Annotated[UserInfo, Depends(get_current_user)]
 
 
 # =============================================================================
@@ -49,32 +53,6 @@ SessionIdPath = Annotated[
         max_length=100,
     ),
 ]
-
-
-# =============================================================================
-# Helper Functions
-# =============================================================================
-
-
-async def get_default_user_id(db: DB) -> UUID:
-    """Get default user ID for Phase 1 (single user mode)."""
-    from api.middleware.exception_handlers import AppException
-    from models.error_models import ErrorCode
-
-    settings = get_settings()
-    async with db.acquire() as conn:
-        user_id = await conn.fetchval(
-            "SELECT id FROM users WHERE email = $1",
-            settings.default_user_email,
-        )
-    if not user_id:
-        raise AppException(
-            code=ErrorCode.AUTH_USER_NOT_FOUND,
-            message="Default user not found",
-            details={"email": settings.default_user_email},
-        )
-    return UUID(str(user_id))
-
 
 # =============================================================================
 # Endpoints
@@ -114,7 +92,7 @@ async def get_default_user_id(db: DB) -> UUID:
     },
 )
 async def list_sessions(
-    db: DB,
+    user: CurrentUser,
     sessions: Sessions,
     offset: Annotated[
         int,
@@ -126,7 +104,7 @@ async def list_sessions(
     ] = 50,
 ) -> SessionListResponse:
     """List all sessions with pagination."""
-    user_id = await get_default_user_id(db)
+    user_id = UUID(user.id)
 
     data = await sessions.list_sessions(user_id, offset, limit)
 
@@ -167,12 +145,12 @@ async def list_sessions(
 )
 async def create_session(
     request: CreateSessionRequest,
-    db: DB,
+    user: CurrentUser,
     sessions: Sessions,
     files: Files,
 ) -> SessionResponse:
     """Create a new chat session."""
-    user_id = await get_default_user_id(db)
+    user_id = UUID(user.id)
 
     created = await sessions.create_session(
         user_id=user_id,
@@ -182,8 +160,8 @@ async def create_session(
         reasoning_effort=request.reasoning_effort,
     )
 
-    # Initialize session workspace with templates symlink
-    files.init_session_workspace(created["session_id"], TEMPLATES_PATH)
+    # Initialize session workspace
+    files.init_session_workspace(created["session_id"])
 
     return SessionResponse(**created)
 
@@ -200,14 +178,14 @@ async def create_session(
 )
 async def get_session(
     session_id: SessionIdPath,
-    db: DB,
+    user: CurrentUser,
     sessions: Sessions,
     files: Files,
 ) -> SessionWithHistoryResponse:
     """Get session with message history and files."""
     update_request_context(session_id=session_id)
 
-    user_id = await get_default_user_id(db)
+    user_id = UUID(user.id)
     result = await sessions.get_session_with_history(user_id, session_id)
 
     if not result:
@@ -240,13 +218,13 @@ async def get_session(
 async def update_session(
     session_id: SessionIdPath,
     request: UpdateSessionRequest,
-    db: DB,
+    user: CurrentUser,
     sessions: Sessions,
 ) -> SessionResponse:
     """Update session properties."""
     update_request_context(session_id=session_id)
 
-    user_id = await get_default_user_id(db)
+    user_id = UUID(user.id)
     result = await sessions.update_session(
         user_id=user_id,
         session_id=session_id,
@@ -282,13 +260,13 @@ async def update_session(
 )
 async def delete_session(
     session_id: SessionIdPath,
-    db: DB,
+    user: CurrentUser,
     sessions: Sessions,
 ) -> DeleteSessionResponse:
     """Delete a session permanently."""
     update_request_context(session_id=session_id)
 
-    user_id = await get_default_user_id(db)
+    user_id = UUID(user.id)
     success = await sessions.delete_session(user_id, session_id)
 
     if not success:
@@ -327,6 +305,7 @@ async def delete_session(
 )
 async def summarize_session(
     session_id: SessionIdPath,
+    user: CurrentUser,
     db: DB,
 ) -> SummarizeResponse:
     """Force summarization of session conversation."""
@@ -335,12 +314,14 @@ async def summarize_session(
     from api.services.token_aware_session import PostgresTokenAwareSession
 
     update_request_context(session_id=session_id)
+    user_id = UUID(user.id)
 
-    # Get session from database
+    # Get session from database - verify ownership
     async with db.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, model FROM sessions WHERE session_id = $1",
+            "SELECT id, model FROM sessions WHERE session_id = $1 AND user_id = $2",
             session_id,
+            user_id,
         )
 
     if not row:

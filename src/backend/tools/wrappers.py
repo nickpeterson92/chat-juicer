@@ -10,7 +10,7 @@ to tools, so we create wrapped versions that capture session_id and model at age
 creation time and inject them into every tool call.
 
 Architecture:
-- Agent works with relative paths (e.g., "sources/file.pdf")
+- Agent works with relative paths (e.g., "input/file.pdf")
 - Wrapper injects session_id and model before calling the actual tool
 - Tool validates path is within session workspace (data/files/{session_id}/)
 - Security: Path traversal attacks blocked, workspace boundaries enforced
@@ -56,9 +56,9 @@ def create_session_aware_tools(
         session_tools = create_session_aware_tools("chat_abc123", model="gpt-5")
         agent = Agent(model="gpt-5", tools=session_tools)
 
-        # Agent calls: read_file("sources/doc.pdf")
-        # Wrapper injects: read_file("sources/doc.pdf", session_id="chat_abc123", model="gpt-5")
-        # Tool resolves to: data/files/chat_abc123/sources/doc.pdf
+        # Agent calls: read_file("input/doc.pdf")
+        # Wrapper injects: read_file("input/doc.pdf", session_id="chat_abc123", model="gpt-5")
+        # Tool resolves to: data/files/chat_abc123/input/doc.pdf
         ```
     """
     from agents import function_tool
@@ -146,7 +146,7 @@ def create_session_aware_tools(
 
                     if "/" in resolved:
                         folder, filename = resolved.split("/", 1)
-                        if folder in ("output", "sources", "templates"):
+                        if folder in ("output", "input", "templates"):
                             logger.info(f"Triggering background S3 upload for {folder}/{filename}")
                             s3_sync.upload_to_s3_background(session_id, folder, filename)
             except (json.JSONDecodeError, Exception) as e:
@@ -214,7 +214,22 @@ def create_session_aware_tools(
         Returns:
             JSON with stdout, files generated, and execution metadata
         """
-        return await execute_python_code(code=code, session_id=session_id)  # type: ignore[no-any-return]
+        result = await execute_python_code(code=code, session_id=session_id)
+
+        # Trigger S3 sync for generated files
+        if s3_sync:
+            try:
+                response_data = json.loads(result)
+                if response_data.get("success") and response_data.get("files"):
+                    for file_info in response_data["files"]:
+                        # Files are in output/code/ directory
+                        filename = f"code/{file_info['name']}"
+                        logger.info(f"Triggering background S3 upload for output/{filename}")
+                        s3_sync.upload_to_s3_background(session_id, "output", filename)
+            except (json.JSONDecodeError, Exception) as e:
+                logger.warning(f"Failed to parse execute_python_code response for S3 trigger: {e}")
+
+        return result  # type: ignore[no-any-return]
 
     # Schema Fetch - Database schema tools (no session injection needed, uses global registry)
     async def wrapped_list_registered_databases() -> str:
@@ -232,7 +247,7 @@ def create_session_aware_tools(
         """Fetch column schema for a database table.
 
         Returns column names, types, and nullability. Call this for each table
-        involved in a mapping - sources, targets, or lookup tables. For complex
+        involved in a mapping - input, targets, or lookup tables. For complex
         integrations, multiple source tables may feed into one target (denormalization),
         or one source may split across multiple targets (normalization).
 

@@ -258,6 +258,7 @@ async function handlePin(e) {
     }
   } catch (error) {
     console.error("[SessionHeaderDisplay] Pin failed:", error);
+    // alert(`Failed to update pin: ${error.message}`);
   }
 }
 
@@ -312,6 +313,7 @@ function startInlineRename() {
         }
       } catch (error) {
         console.error("[SessionHeaderDisplay] Rename failed:", error);
+        // alert(`Failed to rename session: ${error.message}`);
       }
     }
   };
@@ -348,12 +350,15 @@ async function handleDelete(e) {
 
     const result = await deps.sessionService.deleteSession(currentSession.session_id);
     if (result.success) {
+      // Cache ID before clearing display (which nulls currentSession)
+      const cachedSessionId = currentSession.session_id;
+
       // Clear display
       updateDisplay(null);
 
       // Emit event for view transition
       const { globalEventBus } = await import("../../core/event-bus.js");
-      globalEventBus.emit("session:deleted", { sessionId: currentSession.session_id });
+      globalEventBus.emit("session:deleted", { sessionId: cachedSessionId });
       globalEventBus.emit("sessions:refresh");
 
       if (deps.appState) {
@@ -362,7 +367,8 @@ async function handleDelete(e) {
     }
   } catch (error) {
     console.error("[SessionHeaderDisplay] Delete failed:", error);
-    alert(`Failed to delete session: ${error.message}`);
+    // Alert removed for better UX/testing flow
+    // alert(`Failed to delete session: ${error.message}`);
   }
 }
 

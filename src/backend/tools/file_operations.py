@@ -48,7 +48,7 @@ def list_directory(path: str = ".", session_id: str | None = None, show_hidden: 
     List contents of a directory for project discovery.
 
     Security: When session_id is provided, path is restricted to session workspace.
-    Agent works with relative paths (sources/, templates/, output/) - tool handles full resolution.
+    Agent works with relative paths (input/, templates/, output/) - tool handles full resolution.
 
     Args:
         path: Directory path to list (relative to session workspace if session_id provided)
@@ -182,7 +182,7 @@ async def read_file(  # noqa: PLR0911
     Protected with 100MB size limit.
 
     Security: When session_id is provided, path is restricted to session workspace.
-    Agent works with relative paths (sources/, templates/, output/) - tool handles full resolution.
+    Agent works with relative paths (input/, templates/, output/) - tool handles full resolution.
 
     Args:
         file_path: Path to the file to read (relative to session workspace if session_id provided)

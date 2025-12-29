@@ -66,8 +66,8 @@ def get_jail_relative_path(path: Path, session_id: str | None = None) -> str:
 
     Examples:
         # With session_id, paths are relative to jail root:
-        >>> get_jail_relative_path(Path("/project/data/files/abc123/sources/doc.pdf"), "abc123")
-        "sources/doc.pdf"
+        >>> get_jail_relative_path(Path("/project/data/files/abc123/input/doc.pdf"), "abc123")
+        "input/doc.pdf"
 
         # Without session_id, falls back to cwd-relative:
         >>> get_jail_relative_path(Path("/project/some/file.txt"), None)
@@ -92,12 +92,12 @@ def get_jail_relative_path(path: Path, session_id: str | None = None) -> str:
         return str(get_relative_path(path))
 
 
-async def get_session_files(session_id: str, subdir: str = "sources") -> list[str]:
+async def get_session_files(session_id: str, subdir: str = "input") -> list[str]:
     """List filenames in a session subdirectory, excluding hidden files.
 
     Args:
         session_id: Session identifier
-        subdir: Subdirectory to scan (default: "sources")
+        subdir: Subdirectory to scan (default: "input")
 
     Returns:
         Sorted list of filenames (no paths). Returns empty list if the directory
@@ -118,21 +118,6 @@ async def get_session_files(session_id: str, subdir: str = "sources") -> list[st
         return []
 
 
-async def get_session_templates(session_id: str) -> list[str]:
-    """List template filenames for a session (read-only).
-
-    Uses the session's templates symlink/copy created at session bootstrap. Filters
-    hidden files and returns a sorted list of filenames.
-
-    Args:
-        session_id: Session identifier
-
-    Returns:
-        Sorted list of template filenames. Empty if missing or on error.
-    """
-    return await get_session_files(session_id, subdir="templates")
-
-
 def validate_session_path(file_path: str, session_id: str | None = None) -> tuple[Path, str | None]:  # noqa: PLR0911
     """
     Validate a path within session workspace boundaries.
@@ -141,7 +126,7 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
     but cannot escape to parent directories or absolute paths.
 
     Session workspace structure:
-    - sources/: Uploaded files
+    - input/: Uploaded files
     - templates/: Global templates (symlink)
     - output/: Generated documents (symlink to global output/{session_id}/)
     - Agent can create any additional directories/files as needed
@@ -172,7 +157,7 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
         # If session_id provided, enforce workspace boundaries
         # The sandbox is the security boundary - paths are confined to session dir
         if session_id:
-            # Normalize and strip leading / (agent may use /sources/ as convention)
+            # Normalize and strip leading / (agent may use /input/ as convention)
             sanitized_path = file_path.replace("\\", "/").lstrip("/")
             session_prefix = f"data/files/{session_id}/"
             if sanitized_path.startswith(session_prefix):
@@ -185,14 +170,14 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
 
             requested_path = Path(sanitized_path)
 
-            # Default to sources/ when no top-level directory explicitly provided
-            allowed_roots = {"sources", "templates", "output"}
+            # Default to input/ when no top-level directory explicitly provided
+            allowed_roots = {"input", "output"}
             if not requested_path.parts:
                 relative_request = Path(".")
             elif requested_path.parts[0] in allowed_roots:
                 relative_request = requested_path
             else:
-                relative_request = Path("sources") / requested_path
+                relative_request = Path("input") / requested_path
 
             # Build full path within session workspace (DON'T resolve yet)
             session_dir = DATA_FILES_PATH / session_id
@@ -210,7 +195,7 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
 
             # Whitelist of allowed symlinks that can resolve outside session workspace
             # These are legitimate symlinks created by the application
-            allowed_symlinks = {"templates", "output"}
+            allowed_symlinks = {"output"}
 
             # Get first component of file_path to check if it's an allowed symlink
             first_component = relative_request.parts[0] if relative_request.parts else ""
@@ -488,7 +473,7 @@ def save_uploaded_file(
     filename: str,
     data: list[int] | str,
     session_id: str | None = None,
-    target_dir: str = "sources",
+    target_dir: str = "input",
     encoding: str = "array",
 ) -> UploadResult:
     """Save uploaded file data to session-specific or general directory.
@@ -497,7 +482,7 @@ def save_uploaded_file(
         filename: Name of the file to save
         data: List of byte values (0-255) or base64 encoded string
         session_id: Optional session ID for session-specific storage
-        target_dir: Target directory if no session_id (default: "sources")
+        target_dir: Target directory if no session_id (default: "input")
         encoding: Data encoding - "array" for list[int], "base64" for base64 string
 
     Returns:
@@ -511,8 +496,8 @@ def save_uploaded_file(
             return {"success": False, "error": "Invalid filename: path separators not allowed"}
 
         # Determine target directory based on session_id
-        # Session-specific storage: data/files/{session_id}/sources/ or general storage: sources/
-        target_path = DATA_FILES_PATH / session_id / "sources" if session_id else PROJECT_ROOT / target_dir
+        # Session-specific storage: data/files/{session_id}/input/ or general storage: input/
+        target_path = DATA_FILES_PATH / session_id / "input" if session_id else PROJECT_ROOT / target_dir
 
         # Create directory if it doesn't exist
         target_path.mkdir(parents=True, exist_ok=True)

@@ -8,8 +8,8 @@
  * - Pure render function: renderFileList() → DOM (lines 88-147)
  *
  * REACTIVE PATTERN:
- * 1. Load files into state: `await loadFilesIntoState(appState, directory, 'sources')`
- * 2. Subscribe to changes: `appState.subscribe('files.sourcesList', (files) => { renderFileList(files, container, options) })`
+ * 1. Load files into state: `await loadFilesIntoState(appState, directory, 'input')`
+ * 2. Subscribe to changes: `appState.subscribe('files.inputList', (files) => { renderFileList(files, container, options) })`
  * 3. Render is automatic when state changes
  *
  * LEGACY METHODS REMOVED:
@@ -35,10 +35,10 @@ import { showToast } from "../utils/toast.js";
  * Load files from a directory into AppState
  * @param {Object} appState - AppState instance
  * @param {string} directory - Directory to load files from
- * @param {'sources'|'output'} listType - Type of file list to update
+ * @param {'input'|'output'} listType - Type of file list to update
  * @returns {Promise<{success: boolean, files?: Array, error?: string}>}
  */
-export async function loadFilesIntoState(appState, directory, listType = "sources") {
+export async function loadFilesIntoState(appState, directory, listType = "input") {
   if (!appState) {
     console.error("[FileManager] loadFilesIntoState: appState is required");
     return { success: false, error: "appState is required" };
@@ -52,14 +52,14 @@ export async function loadFilesIntoState(appState, directory, listType = "source
 
     if (!result.success) {
       // Clear the list on error
-      const stateKey = listType === "output" ? "files.outputList" : "files.sourcesList";
+      const stateKey = listType === "output" ? "files.outputList" : "files.inputList";
       appState.setState(stateKey, []);
       appState.setState("files.isLoadingFiles", false);
       return { success: false, error: result.error };
     }
 
     const files = result.files || [];
-    const stateKey = listType === "output" ? "files.outputList" : "files.sourcesList";
+    const stateKey = listType === "output" ? "files.outputList" : "files.inputList";
     appState.setState(stateKey, files);
     appState.setState("files.isLoadingFiles", false);
 
@@ -95,7 +95,7 @@ export function renderFileList(files, container, options = {}) {
   }
 
   const {
-    directory = "sources",
+    directory = "input",
     isOutput = false,
     isWelcomePage = false,
     useThumbnailGrid = false, // Explicit grid mode flag
@@ -154,7 +154,7 @@ export function renderFileList(files, container, options = {}) {
 
   // Use thumbnail grid mode for welcome page OR when explicitly enabled
   if (isWelcomePage || useThumbnailGrid) {
-    renderThumbnailGrid(files, container, { directory, onDelete, onFolderClick });
+    renderThumbnailGrid(files, container, { directory, onDelete, onFolderClick, isOutput });
     return;
   }
 
@@ -331,8 +331,8 @@ function renderStaticHeader(headerText, container) {
  * @param {Object} options - Options for empty state display
  */
 function renderEmptyState(container, options = {}) {
-  const { directory = "sources", isOutput = false, isWelcomePage = false } = options;
-  const dirName = directory.includes("/output") ? "output/" : "sources/";
+  const { directory = "input", isOutput = false, isWelcomePage = false } = options;
+  const dirName = directory.includes("/output") ? "output/" : "input/";
   const isChatPage = container.id === "files-container";
 
   if (isWelcomePage) {
@@ -408,6 +408,34 @@ function createFileItem(file, directory, container, onDelete = null) {
   fileSize.className = "file-size";
   fileSize.textContent = formatFileSize(file.size || 0);
 
+  // Download button
+  const downloadBtn = document.createElement("button");
+  downloadBtn.className = "file-download-btn";
+  downloadBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+  </svg>`;
+  downloadBtn.title = "Download file";
+  downloadBtn.onclick = async (e) => {
+    e.stopPropagation();
+    try {
+      const result = await window.electronAPI.downloadFile(directory, file.name);
+      if (result.success && result.downloadUrl) {
+        // Create invisible anchor to trigger download without opening new window
+        const a = document.createElement("a");
+        a.href = result.downloadUrl;
+        a.download = file.name;
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } else {
+        showToast(`Failed to download: ${result.error}`, "error", 4000);
+      }
+    } catch (error) {
+      showToast(`Error downloading file: ${error.message}`, "error", 4000);
+    }
+  };
+
   // Delete button
   const deleteBtn = document.createElement("button");
   deleteBtn.className = "file-delete-btn";
@@ -436,6 +464,7 @@ function createFileItem(file, directory, container, onDelete = null) {
   fileItem.appendChild(fileIcon);
   fileItem.appendChild(fileName);
   fileItem.appendChild(fileSize);
+  fileItem.appendChild(downloadBtn);
   fileItem.appendChild(deleteBtn);
 
   return fileItem;
@@ -448,7 +477,7 @@ function createFileItem(file, directory, container, onDelete = null) {
  * @param {HTMLElement} container - Container element to refresh after deletion
  * @param {Function} onDelete - Optional callback after successful delete
  */
-async function handleDeleteFile(filename, directory = "sources", _container = null, onDelete = null) {
+async function handleDeleteFile(filename, directory = "input", _container = null, onDelete = null) {
   if (!filename) {
     showToast(MSG_NO_FILE_SELECTED, "error", 3000);
     return;
@@ -509,9 +538,10 @@ async function handleDeleteFile(filename, directory = "sources", _container = nu
  * @param {string} options.directory - Directory path for file operations
  * @param {Function} options.onDelete - Callback when file is deleted
  * @param {Function} options.onFolderClick - Callback when folder is clicked (for navigation)
+ * @param {boolean} options.isOutput - Whether this is the output directory
  */
 function renderThumbnailGrid(files, container, options = {}) {
-  const { directory, onDelete, onFolderClick } = options;
+  const { directory, onDelete, onFolderClick, isOutput = false } = options;
 
   // Add thumbnail mode class to container
   container.classList.add("thumbnail-mode");
@@ -528,7 +558,7 @@ function renderThumbnailGrid(files, container, options = {}) {
       card = createFolderTile(file, onFolderClick);
     } else {
       // Create file thumbnail
-      card = createThumbnailCard(file, directory, onDelete);
+      card = createThumbnailCard(file, directory, onDelete, isOutput, container);
     }
     grid.appendChild(card);
   });
@@ -701,8 +731,14 @@ function updateWelcomeFileVisibility(container, hasFiles) {
 /**
  * Shared helper to create the base structure of a file card
  * ensuring consistent styling between pending and persisted files.
+ * @param {string} name - File name
+ * @param {number} size - File size in bytes
+ * @param {Function} onDelete - Delete handler (for source files)
+ * @param {Function} onDownload - Optional download handler (for persisted files)
+ * @param {Function} onPreview - Optional preview handler (for output files)
+ * @param {boolean} isOutput - Whether this is an output file (shows preview instead of delete)
  */
-function createCardStructure(name, size, onDelete) {
+function createCardStructure(name, size, onDelete, onDownload = null, onPreview = null, isOutput = false) {
   const ext = name.split(".").pop()?.toLowerCase() || "";
 
   const card = document.createElement("div");
@@ -722,23 +758,59 @@ function createCardStructure(name, size, onDelete) {
   badge.className = `thumbnail-badge ${badgeInfo.class}`;
   badge.textContent = badgeInfo.label;
 
-  // Delete button
-  const deleteBtn = document.createElement("button");
-  deleteBtn.className = "thumbnail-delete-btn";
-  deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-  </svg>`;
-  deleteBtn.title = "Remove file";
-  deleteBtn.onclick = (e) => {
-    e.stopPropagation();
-    if (onDelete) onDelete(e);
-  };
+  // Download button (only for persisted files)
+  let downloadBtn = null;
+  if (onDownload) {
+    downloadBtn = document.createElement("button");
+    downloadBtn.className = "thumbnail-download-btn";
+    downloadBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+    </svg>`;
+    downloadBtn.title = "Download file";
+    downloadBtn.onclick = (e) => {
+      e.stopPropagation();
+      onDownload(e);
+    };
+  }
+
+  // Preview button for output files OR Delete button for source files
+  let previewBtn = null;
+  let deleteBtn = null;
+
+  if (isOutput && onPreview) {
+    // Output files: Preview button (eye icon)
+    previewBtn = document.createElement("button");
+    previewBtn.className = "thumbnail-preview-btn";
+    previewBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>`;
+    previewBtn.title = "Preview file";
+    previewBtn.onclick = (e) => {
+      e.stopPropagation();
+      onPreview(e);
+    };
+  } else if (onDelete) {
+    // Source files: Delete button
+    deleteBtn = document.createElement("button");
+    deleteBtn.className = "thumbnail-delete-btn";
+    deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+    </svg>`;
+    deleteBtn.title = "Remove file";
+    deleteBtn.onclick = (e) => {
+      e.stopPropagation();
+      onDelete(e);
+    };
+  }
 
   card.appendChild(filename);
   card.appendChild(badge);
-  card.appendChild(deleteBtn);
+  if (downloadBtn) card.appendChild(downloadBtn);
+  if (previewBtn) card.appendChild(previewBtn);
+  if (deleteBtn) card.appendChild(deleteBtn);
 
-  return { card, badge, deleteBtn, ext };
+  return { card, badge, deleteBtn, downloadBtn, previewBtn, ext };
 }
 
 /**
@@ -857,14 +929,48 @@ function createPendingFileCard(pendingFile, index, appState) {
  * @param {Object} file - File object with name, size properties
  * @param {string} directory - Directory path for operations
  * @param {Function} onDelete - Optional callback after delete
+ * @param {boolean} isOutput - Whether this is an output file (shows preview instead of delete)
+ * @param {HTMLElement} gridContainer - Container element for expanded preview
  * @returns {HTMLElement}
  */
-function createThumbnailCard(file, directory, onDelete = null) {
+function createThumbnailCard(file, directory, onDelete = null, isOutput = false, gridContainer = null) {
   const handleDelete = (_e) => {
     handleDeleteFile(file.name, directory, null, onDelete);
   };
 
-  const { card, ext } = createCardStructure(file.name, file.size || 0, handleDelete);
+  const handleDownload = async (_e) => {
+    try {
+      const result = await window.electronAPI.downloadFile(directory, file.name);
+      if (result.success && result.downloadUrl) {
+        // Create invisible anchor to trigger download without opening new window
+        const a = document.createElement("a");
+        a.href = result.downloadUrl;
+        a.download = file.name;
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } else {
+        showToast(`Failed to download: ${result.error}`, "error", 4000);
+      }
+    } catch (error) {
+      showToast(`Error downloading file: ${error.message}`, "error", 4000);
+    }
+  };
+
+  const handlePreview = async (_e) => {
+    // Create expanded preview overlay
+    showExpandedPreview(file, directory, gridContainer);
+  };
+
+  const { card, ext } = createCardStructure(
+    file.name,
+    file.size || 0,
+    handleDelete,
+    handleDownload,
+    handlePreview,
+    isOutput
+  );
   card.setAttribute("aria-label", `Open ${file.name}`);
 
   // Click handler to open file
@@ -1128,8 +1234,9 @@ async function loadContentPreview(card, skeleton, directory, filename, ext, type
     const result = await window.electronAPI.getFileContent(directory, filename);
 
     if (result.success && result.data) {
-      // Decode base64 to text
-      const content = atob(result.data);
+      // Decode base64 to text with proper UTF-8 handling
+      const bytes = Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0));
+      const content = new TextDecoder("utf-8").decode(bytes);
 
       // Dynamically import content preview utilities
       const { generateCodePreview, generateTextPreview, generateCsvPreview } = await import(
@@ -1141,6 +1248,10 @@ async function loadContentPreview(card, skeleton, directory, filename, ext, type
         previewHtml = generateCodePreview(content, ext);
       } else if (type === "csv") {
         previewHtml = generateCsvPreview(content);
+      } else if (ext === "md") {
+        // Render markdown for thumbnail
+        const { marked } = await import("marked");
+        previewHtml = `<div class="thumbnail-markdown-preview">${marked.parse(content)}</div>`;
       } else {
         previewHtml = generateTextPreview(content, ext);
       }
@@ -1159,5 +1270,178 @@ async function loadContentPreview(card, skeleton, directory, filename, ext, type
     }
   } catch (_error) {
     fallbackToIcon(card, skeleton, filename);
+  }
+}
+
+/**
+ * Show expanded file preview overlay
+ * @param {Object} file - File object with name, size properties
+ * @param {string} directory - Directory path
+ * @param {HTMLElement} container - Container to attach overlay to
+ */
+async function showExpandedPreview(file, directory, _container) {
+  const ext = file.name.split(".").pop()?.toLowerCase() || "";
+
+  // Create overlay
+  const overlay = document.createElement("div");
+  overlay.className = "file-preview-overlay";
+
+  // Stop all events from bubbling to parent elements (prevents file panel close)
+  overlay.onclick = (e) => e.stopPropagation();
+  overlay.onmousedown = (e) => e.stopPropagation();
+  overlay.onmouseup = (e) => e.stopPropagation();
+
+  // Create header with filename and close button
+  const header = document.createElement("div");
+  header.className = "file-preview-header";
+
+  const title = document.createElement("span");
+  title.className = "file-preview-title";
+  title.textContent = file.name;
+
+  const downloadBtn = document.createElement("button");
+  downloadBtn.className = "file-preview-download";
+  downloadBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+  </svg>`;
+  downloadBtn.title = "Download file";
+  downloadBtn.onclick = async () => {
+    try {
+      const result = await window.electronAPI.downloadFile(directory, file.name);
+      if (result.success && result.downloadUrl) {
+        const a = document.createElement("a");
+        a.href = result.downloadUrl;
+        a.download = file.name;
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    } catch (err) {
+      showToast(`Download failed: ${err.message}`, "error", 4000);
+    }
+  };
+
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "file-preview-close";
+  closeBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>`;
+  closeBtn.title = "Close preview";
+
+  // Create backdrop
+  const backdrop = document.createElement("div");
+  backdrop.className = "file-preview-backdrop";
+
+  const closePreview = (e) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    overlay.remove();
+    backdrop.remove();
+    document.removeEventListener("keydown", handleEscape);
+  };
+
+  closeBtn.onclick = closePreview;
+  backdrop.onclick = closePreview;
+
+  header.appendChild(title);
+  header.appendChild(downloadBtn);
+  header.appendChild(closeBtn);
+
+  // Create content area
+  const content = document.createElement("div");
+  content.className = "file-preview-content";
+  content.innerHTML = '<div class="file-preview-loading">Loading...</div>';
+
+  overlay.appendChild(header);
+  overlay.appendChild(content);
+
+  // Add to document body for proper fixed positioning
+  document.body.appendChild(backdrop);
+  document.body.appendChild(overlay);
+
+  // Close on escape key
+  const handleEscape = (e) => {
+    if (e.key === "Escape") {
+      closePreview();
+    }
+  };
+  document.addEventListener("keydown", handleEscape);
+
+  // Fetch and render content
+  try {
+    const result = await window.electronAPI.getFileContent(directory, file.name);
+
+    if (!result.success) {
+      content.innerHTML = `<div class="file-preview-error">Failed to load file: ${result.error}</div>`;
+      return;
+    }
+
+    const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico"];
+    const codeExtensions = [
+      "js",
+      "jsx",
+      "ts",
+      "tsx",
+      "py",
+      "java",
+      "c",
+      "cpp",
+      "cs",
+      "go",
+      "rb",
+      "php",
+      "swift",
+      "kt",
+      "rs",
+      "sh",
+      "bash",
+      "sql",
+      "r",
+      "scala",
+      "dart",
+      "lua",
+    ];
+    const textExtensions = ["txt", "html", "xml", "json", "yaml", "yml", "toml", "ini", "log"];
+
+    if (imageExtensions.includes(ext)) {
+      // Image preview
+      content.innerHTML = `<img class="file-preview-image" src="data:${result.mimeType};base64,${result.data}" alt="${file.name}" />`;
+    } else if (ext === "pdf") {
+      // PDF preview - show in iframe or use PDF.js
+      const blob = new Blob([Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0))], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      content.innerHTML = `<embed class="file-preview-pdf" src="${url}" type="application/pdf" />`;
+    } else if (ext === "md") {
+      // Markdown preview - render as formatted HTML (with proper UTF-8 decoding)
+      const bytes = Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0));
+      const textContent = new TextDecoder("utf-8").decode(bytes);
+      const { marked } = await import("marked");
+      const renderedHtml = marked.parse(textContent);
+      content.innerHTML = `<div class="file-preview-markdown message-content">${renderedHtml}</div>`;
+    } else if (codeExtensions.includes(ext) || textExtensions.includes(ext) || ext === "csv") {
+      // Text/code preview with syntax highlighting (with proper UTF-8 decoding)
+      const bytes = Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0));
+      const textContent = new TextDecoder("utf-8").decode(bytes);
+      const { generateCodePreview, generateTextPreview, generateCsvPreview } = await import(
+        "../utils/content-preview.js"
+      );
+
+      let previewHtml;
+      if (codeExtensions.includes(ext)) {
+        previewHtml = generateCodePreview(textContent, ext);
+      } else if (ext === "csv") {
+        previewHtml = generateCsvPreview(textContent);
+      } else {
+        previewHtml = generateTextPreview(textContent, ext);
+      }
+      content.innerHTML = `<div class="file-preview-code">${previewHtml}</div>`;
+    } else {
+      content.innerHTML = '<div class="file-preview-error">Preview not available for this file type</div>';
+    }
+  } catch (error) {
+    content.innerHTML = `<div class="file-preview-error">Error loading preview: ${error.message}</div>`;
   }
 }
