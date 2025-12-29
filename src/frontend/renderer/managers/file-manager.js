@@ -1281,6 +1281,11 @@ async function showExpandedPreview(file, directory, container) {
   const overlay = document.createElement("div");
   overlay.className = "file-preview-overlay";
 
+  // Stop all events from bubbling to parent elements (prevents file panel close)
+  overlay.onclick = (e) => e.stopPropagation();
+  overlay.onmousedown = (e) => e.stopPropagation();
+  overlay.onmouseup = (e) => e.stopPropagation();
+
   // Create header with filename and close button
   const header = document.createElement("div");
   header.className = "file-preview-header";
