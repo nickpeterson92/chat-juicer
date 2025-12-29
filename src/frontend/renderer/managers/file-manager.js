@@ -1399,7 +1399,7 @@ async function showExpandedPreview(file, directory, container) {
       "dart",
       "lua",
     ];
-    const textExtensions = ["txt", "md", "html", "xml", "json", "yaml", "yml", "toml", "ini", "log"];
+    const textExtensions = ["txt", "html", "xml", "json", "yaml", "yml", "toml", "ini", "log"];
 
     if (imageExtensions.includes(ext)) {
       // Image preview
@@ -1409,6 +1409,12 @@ async function showExpandedPreview(file, directory, container) {
       const blob = new Blob([Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0))], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       content.innerHTML = `<embed class="file-preview-pdf" src="${url}" type="application/pdf" />`;
+    } else if (ext === "md") {
+      // Markdown preview - render as formatted HTML
+      const textContent = atob(result.data);
+      const { marked } = await import("marked");
+      const renderedHtml = marked.parse(textContent);
+      content.innerHTML = `<div class="file-preview-markdown message-content">${renderedHtml}</div>`;
     } else if (codeExtensions.includes(ext) || textExtensions.includes(ext) || ext === "csv") {
       // Text/code preview with syntax highlighting
       const textContent = atob(result.data);
