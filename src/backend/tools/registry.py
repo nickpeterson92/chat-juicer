@@ -88,7 +88,7 @@ TOOLS: list[dict[str, Any]] = [
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "Directory path to list. Leave empty for current directory. Example: 'sources/' or 'templates/'",
+                    "description": "Directory path to list. Leave empty for current directory. Example: 'input/' or 'templates/'",
                 },
                 "show_hidden": {
                     "type": "boolean",
@@ -106,7 +106,7 @@ TOOLS: list[dict[str, Any]] = [
             "properties": {
                 "file_path": {
                     "type": "string",
-                    "description": "Path to the file. Examples: 'document.txt', 'sources/report.pdf', 'data.xlsx'",
+                    "description": "Path to the file. Examples: 'document.txt', 'input/report.pdf', 'data.xlsx'",
                 },
                 "head": {
                     "type": "integer",
@@ -133,7 +133,7 @@ TOOLS: list[dict[str, Any]] = [
                 },
                 "base_path": {
                     "type": "string",
-                    "description": "Directory to start search from. Default is current directory ('.'). Examples: 'sources/', 'output/', 'data/processed/'",
+                    "description": "Directory to start search from. Default is current directory ('.'). Examples: 'input/', 'output/', 'data/processed/'",
                 },
                 "recursive": {
                     "type": "boolean",
@@ -169,13 +169,13 @@ TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "name": "edit_file",
-        "description": "Make line-based edits to a text file. Each edit replaces exact line sequences with new content. Returns a git-style diff showing the changes made. Supports batch operations and whitespace-flexible matching. For consistency with generate_document, paths are auto-prefixed with output/ unless they start with output/, sources/, templates/, or are absolute paths.",
+        "description": "Make line-based edits to a text file. Each edit replaces exact line sequences with new content. Returns a git-style diff showing the changes made. Supports batch operations and whitespace-flexible matching. For consistency with generate_document, paths are auto-prefixed with output/ unless they start with output/, input/, templates/, or are absolute paths.",
         "parameters": {
             "type": "object",
             "properties": {
                 "file_path": {
                     "type": "string",
-                    "description": "Path to file to edit. Auto-prepends output/ unless path starts with output/, sources/, templates/, or is absolute. Examples: 'report.md' → 'output/report.md', 'output/report.txt' (no prepend), 'sources/data.txt' (no prepend).",
+                    "description": "Path to file to edit. Auto-prepends output/ unless path starts with output/, input/, templates/, or is absolute. Examples: 'report.md' → 'output/report.md', 'output/report.txt' (no prepend), 'input/data.txt' (no prepend).",
                 },
                 "edits": {
                     "type": "array",

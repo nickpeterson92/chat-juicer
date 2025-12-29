@@ -66,8 +66,8 @@ def get_jail_relative_path(path: Path, session_id: str | None = None) -> str:
 
     Examples:
         # With session_id, paths are relative to jail root:
-        >>> get_jail_relative_path(Path("/project/data/files/abc123/sources/doc.pdf"), "abc123")
-        "sources/doc.pdf"
+        >>> get_jail_relative_path(Path("/project/data/files/abc123/input/doc.pdf"), "abc123")
+        "input/doc.pdf"
 
         # Without session_id, falls back to cwd-relative:
         >>> get_jail_relative_path(Path("/project/some/file.txt"), None)
@@ -126,7 +126,7 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
     but cannot escape to parent directories or absolute paths.
 
     Session workspace structure:
-    - sources/: Uploaded files
+    - input/: Uploaded files
     - templates/: Global templates (symlink)
     - output/: Generated documents (symlink to global output/{session_id}/)
     - Agent can create any additional directories/files as needed
@@ -157,7 +157,7 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
         # If session_id provided, enforce workspace boundaries
         # The sandbox is the security boundary - paths are confined to session dir
         if session_id:
-            # Normalize and strip leading / (agent may use /sources/ as convention)
+            # Normalize and strip leading / (agent may use /input/ as convention)
             sanitized_path = file_path.replace("\\", "/").lstrip("/")
             session_prefix = f"data/files/{session_id}/"
             if sanitized_path.startswith(session_prefix):
@@ -170,7 +170,7 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
 
             requested_path = Path(sanitized_path)
 
-            # Default to sources/ when no top-level directory explicitly provided
+            # Default to input/ when no top-level directory explicitly provided
             allowed_roots = {"input", "output"}
             if not requested_path.parts:
                 relative_request = Path(".")
@@ -496,7 +496,7 @@ def save_uploaded_file(
             return {"success": False, "error": "Invalid filename: path separators not allowed"}
 
         # Determine target directory based on session_id
-        # Session-specific storage: data/files/{session_id}/sources/ or general storage: sources/
+        # Session-specific storage: data/files/{session_id}/input/ or general storage: input/
         target_path = DATA_FILES_PATH / session_id / "input" if session_id else PROJECT_ROOT / target_dir
 
         # Create directory if it doesn't exist

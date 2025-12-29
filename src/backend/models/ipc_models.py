@@ -21,7 +21,7 @@ class UploadSuccess(TypedDict):
     """Successful file upload response.
 
     Returned when a file is successfully saved to the session workspace or
-    general sources directory. Includes metadata about the saved file.
+    general input directory. Includes metadata about the saved file.
 
     Attributes:
         success: Always True for successful uploads

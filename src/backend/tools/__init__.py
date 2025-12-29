@@ -70,7 +70,7 @@ Example:
         result = await list_directory(path="templates/")
 
         # Read source file (auto-converts to markdown)
-        content = await read_file(file_path="sources/report.pdf")
+        content = await read_file(file_path="input/report.pdf")
 
         # Generate document (auto-saved to output/)
         output = await generate_document(
