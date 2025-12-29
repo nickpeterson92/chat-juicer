@@ -86,7 +86,7 @@ async function renderWelcomeFiles(appState) {
       directory,
       isWelcomePage: true,
       onDelete: async () => {
-        const result = await loadFilesIntoState(appState, directory, "sources");
+        const result = await loadFilesIntoState(appState, directory, "input");
         if (!result.files || result.files.length === 0) {
           appState.setState("ui.welcomeFilesSectionVisible", false);
         }
@@ -233,7 +233,7 @@ export async function showWelcomeView(elements, appState) {
         // Then load the files (will show placeholder if empty)
         import("../managers/file-manager.js").then(async ({ loadFilesIntoState }) => {
           const directory = `data/files/${currentSessionId}/sources`;
-          await loadFilesIntoState(appState, directory, "sources");
+          await loadFilesIntoState(appState, directory, "input");
         });
       }
     }
@@ -389,7 +389,7 @@ function attachWelcomePageListeners(elements, appState) {
         // Load session-specific files using AppState pattern
         const directory = `data/files/${sessionId}/sources`;
         import("./file-manager.js").then(({ loadFilesIntoState }) => {
-          loadFilesIntoState(appState, directory, "sources");
+          loadFilesIntoState(appState, directory, "input");
         });
       }
     };

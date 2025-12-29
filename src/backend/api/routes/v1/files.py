@@ -59,7 +59,7 @@ FolderQuery = Annotated[
     str,
     Query(
         description="Folder within session (sources, outputs, templates)",
-        examples=["sources"],
+        examples=["input"],
     ),
 ]
 
@@ -88,7 +88,7 @@ FolderQuery = Annotated[
                                 "extension": ".pdf",
                             }
                         ],
-                        "folder": "sources",
+                        "folder": "input",
                         "count": 1,
                     }
                 }
@@ -99,7 +99,7 @@ FolderQuery = Annotated[
 async def list_files(
     session_id: SessionIdPath,
     files: Files,
-    folder: FolderQuery = "sources",
+    folder: FolderQuery = "input",
 ) -> FileListResponse:
     """List files in session folder."""
     update_request_context(session_id=session_id)
@@ -142,7 +142,7 @@ async def upload_file(
     session_id: SessionIdPath,
     files: Files,
     file: Annotated[UploadFile, FastAPIFile(description="File to upload")],
-    folder: FolderQuery = "sources",
+    folder: FolderQuery = "input",
 ) -> FileUploadResponse:
     """Upload file to session folder."""
     update_request_context(session_id=session_id)
@@ -182,7 +182,7 @@ async def download_file(
     session_id: SessionIdPath,
     filename: FilenamePath,
     files: Files,
-    folder: FolderQuery = "sources",
+    folder: FolderQuery = "input",
 ) -> Response:
     """Download file content."""
     update_request_context(session_id=session_id)
@@ -225,7 +225,7 @@ async def get_file_path(
     session_id: SessionIdPath,
     filename: FilenamePath,
     files: Files,
-    folder: FolderQuery = "sources",
+    folder: FolderQuery = "input",
 ) -> FilePathResponse:
     """Get local file path for shell.openPath."""
     update_request_context(session_id=session_id)
@@ -266,7 +266,7 @@ async def delete_file(
     session_id: SessionIdPath,
     filename: FilenamePath,
     files: Files,
-    folder: FolderQuery = "sources",
+    folder: FolderQuery = "input",
 ) -> DeleteFileResponse:
     """Delete a file from session folder."""
     update_request_context(session_id=session_id)
@@ -357,7 +357,7 @@ async def presign_download(
     filename: FilenamePath,
     files: Files,
     settings: AppSettings,
-    folder: FolderQuery = "sources",
+    folder: FolderQuery = "input",
 ) -> PresignedDownloadResponse:
     """Generate presigned GET URL for direct S3 download."""
     update_request_context(session_id=session_id)

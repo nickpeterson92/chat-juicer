@@ -153,7 +153,7 @@ class LocalFileService:
 
         Args:
             session_id: Session identifier
-            folder: Folder within session (e.g., "sources")
+            folder: Folder within session (e.g., "input")
             filename: Image filename
 
         Returns:
@@ -267,5 +267,5 @@ class LocalFileService:
         session_dir = self.base_path / session_id
 
         # Create sources and output directories
-        (session_dir / "sources").mkdir(parents=True, exist_ok=True)
+        (session_dir / "input").mkdir(parents=True, exist_ok=True)
         (session_dir / "output").mkdir(parents=True, exist_ok=True)

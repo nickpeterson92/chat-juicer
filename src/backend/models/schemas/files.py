@@ -82,7 +82,7 @@ class FileListResponse(BaseModel):
                         "extension": ".csv",
                     },
                 ],
-                "folder": "sources",
+                "folder": "input",
                 "count": 2,
             }
         }
@@ -93,9 +93,9 @@ class FileListResponse(BaseModel):
         description="List of files in the folder",
     )
     folder: str = Field(
-        default="sources",
+        default="input",
         description="Folder name within session",
-        json_schema_extra={"example": "sources"},
+        json_schema_extra={"example": "input"},
     )
     count: int = Field(
         default=0,

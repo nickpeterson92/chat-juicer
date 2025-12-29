@@ -13,12 +13,12 @@ export class FilePanel {
    * @param {HTMLElement} toggleButton - Panel toggle button (#open-files-btn)
    * @param {HTMLElement} filesContainer - Files list container (#files-container)
    * @param {HTMLElement} refreshButton - Refresh button (#refresh-files-btn)
-   * @param {HTMLElement} sourcesTab - Input tab button (#tab-sources)
+   * @param {HTMLElement} inputTab - Input tab button (#tab-sources)
    * @param {HTMLElement} outputTab - Output tab button (#tab-output)
    * @param {Object} options - Optional configuration
    * @param {Object} options.appState - AppState instance for reactive state management
    */
-  constructor(panelElement, toggleButton, filesContainer, refreshButton, sourcesTab, outputTab, options = {}) {
+  constructor(panelElement, toggleButton, filesContainer, refreshButton, inputTab, outputTab, options = {}) {
     if (!panelElement || !filesContainer) {
       throw new Error("FilePanel requires panel and container elements");
     }
@@ -27,7 +27,7 @@ export class FilePanel {
     this.toggleButton = toggleButton;
     this.filesContainer = filesContainer;
     this.refreshButton = refreshButton;
-    this.sourcesTab = sourcesTab;
+    this.inputTab = inputTab;
     this.outputTab = outputTab;
     this.currentSessionId = null;
 
@@ -75,7 +75,7 @@ export class FilePanel {
     }
 
     // Tab switching
-    const tabs = [this.sourcesTab, this.outputTab].filter(Boolean);
+    const tabs = [this.inputTab, this.outputTab].filter(Boolean);
     for (const tab of tabs) {
       addDOMListener(tab, "click", () => this.switchTab(tab));
     }
@@ -113,8 +113,8 @@ export class FilePanel {
     globalLifecycleManager.addUnsubscriber(this, unsubscribeOutput);
 
     // Subscribe to sources file list changes
-    const unsubscribeSources = this.appState.subscribe("files.sourcesList", (files) => {
-      if (this.getActiveTab()?.dataset.directory === "sources") {
+    const unsubscribeInput = this.appState.subscribe("files.inputList", (files) => {
+      if (this.getActiveTab()?.dataset.directory === "input") {
         renderFileList(files, this.filesContainer, {
           directory: `data/files/${this.currentSessionId}/sources`,
           isOutput: false,
@@ -125,7 +125,7 @@ export class FilePanel {
       }
     });
 
-    globalLifecycleManager.addUnsubscriber(this, unsubscribeSources);
+    globalLifecycleManager.addUnsubscriber(this, unsubscribeInput);
   }
 
   /**
@@ -169,13 +169,13 @@ export class FilePanel {
   }
 
   /**
-   * Switch tab (sources/output)
+   * Switch tab (input/output)
    * MODIFIED Phase 1: Reset currentOutputPath when switching tabs
    *
    * @param {HTMLElement} tab - Tab element to activate
    */
   async switchTab(tab) {
-    const tabs = [this.sourcesTab, this.outputTab].filter(Boolean);
+    const tabs = [this.inputTab, this.outputTab].filter(Boolean);
     const dirType = tab.dataset.directory;
 
     // Update active tab styling
@@ -194,14 +194,14 @@ export class FilePanel {
 
     // Determine full directory path
     let directory;
-    if (dirType === "sources") {
+    if (dirType === "input") {
       directory = `data/files/${this.currentSessionId}/sources`;
     } else if (dirType === "output") {
       directory = `data/files/${this.currentSessionId}/output`;
     }
 
     // Load files into AppState (rendering happens via subscription)
-    const listType = dirType === "output" ? "output" : "sources";
+    const listType = dirType === "output" ? "output" : "input";
     try {
       await loadFilesIntoState(this.appState, directory, listType);
     } catch (error) {
@@ -233,7 +233,7 @@ export class FilePanel {
    * @returns {HTMLElement|null} Active tab element
    */
   getActiveTab() {
-    return [this.sourcesTab, this.outputTab].find((tab) => tab?.classList.contains("active")) || this.sourcesTab;
+    return [this.inputTab, this.outputTab].find((tab) => tab?.classList.contains("active")) || this.inputTab;
   }
 
   /**
@@ -322,7 +322,7 @@ export class FilePanel {
     if (!this.currentSessionId) return;
 
     const activeTab = this.getActiveTab();
-    const dirType = activeTab?.dataset.directory || "sources";
+    const dirType = activeTab?.dataset.directory || "input";
 
     // Phase 1: Use getFullOutputPath() for output tab to support subdirectory navigation
     let directory;
@@ -333,7 +333,7 @@ export class FilePanel {
     }
 
     // Load files into AppState (rendering happens via subscription)
-    const listType = dirType === "output" ? "output" : "sources";
+    const listType = dirType === "output" ? "output" : "input";
     try {
       return await loadFilesIntoState(this.appState, directory, listType);
     } catch (error) {
@@ -350,11 +350,11 @@ export class FilePanel {
     if (!this.currentSessionId) return;
 
     const activeTab = this.getActiveTab();
-    const dirType = activeTab?.dataset.directory || "sources";
+    const dirType = activeTab?.dataset.directory || "input";
 
     // Determine directory and list type
     let directory;
-    const listType = dirType === "output" ? "output" : "sources";
+    const listType = dirType === "output" ? "output" : "input";
 
     if (dirType === "output") {
       directory = this.getFullOutputPath();

@@ -127,7 +127,7 @@ class ChatService:
         self.file_service.init_session_workspace(session_id)
 
         # Build system instructions with session file context (Phase 1: local)
-        session_files = await self.file_service.list_files(session_id, "sources")
+        session_files = await self.file_service.list_files(session_id, "input")
         file_names = [f["name"] for f in session_files if f.get("type") == "file"]
 
         # Parse mcp_config from JSON string (stored as JSONB in PostgreSQL)
@@ -157,7 +157,7 @@ class ChatService:
             async with session_file_context(
                 file_service=self.file_service,
                 session_id=session_id,
-                base_folder="sources",
+                base_folder="input",
             ):
                 tools = create_session_aware_tools(
                     session_id,
@@ -566,7 +566,7 @@ class ChatService:
             if "/" in rel_path:
                 folder, file_name = rel_path.rsplit("/", 1)
             else:
-                folder = "sources"  # Default folder
+                folder = "input"  # Default folder
                 file_name = filename or rel_path
 
             # Read and encode image

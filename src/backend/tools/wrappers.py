@@ -146,7 +146,7 @@ def create_session_aware_tools(
 
                     if "/" in resolved:
                         folder, filename = resolved.split("/", 1)
-                        if folder in ("output", "sources", "templates"):
+                        if folder in ("output", "input", "templates"):
                             logger.info(f"Triggering background S3 upload for {folder}/{filename}")
                             s3_sync.upload_to_s3_background(session_id, folder, filename)
             except (json.JSONDecodeError, Exception) as e:

@@ -205,7 +205,7 @@ class S3SyncService:
             return 0
 
         uploaded = 0
-        for folder in ["sources", "output"]:
+        for folder in ["input", "output"]:
             folder_path = session_path / folder
             if not folder_path.exists():
                 continue
