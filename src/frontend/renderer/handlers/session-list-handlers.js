@@ -293,15 +293,28 @@ async function handleSwitch(sessionId, sessionService, streamManager, updateSess
   try {
     const wasOnWelcomePage = document.body.classList.contains("view-welcome");
 
+    // === IMMEDIATE VISUAL FEEDBACK ===
+    // 1. Close sidebar immediately for instant response feel
+    const sidebar = document.getElementById("sidebar");
+    if (sidebar && !sidebar.classList.contains("collapsed")) {
+      sidebar.classList.add("collapsed");
+    }
+
+    // 2. Switch to chat view immediately (before API call)
+    if (wasOnWelcomePage) {
+      const { showChatView } = await import("../managers/view-manager.js");
+      await showChatView(elements, appState);
+    }
+
+    // 3. Show chat skeleton immediately
+    if (window.components?.chatContainer) {
+      window.components.chatContainer.showSkeleton();
+    }
+
+    // === NOW FETCH DATA ===
     const result = await sessionService.switchSession(sessionId, streamManager);
 
     if (result.success) {
-      // Close sidebar after successful switch
-      const sidebar = document.getElementById("sidebar");
-      if (sidebar && !sidebar.classList.contains("collapsed")) {
-        sidebar.classList.add("collapsed");
-      }
-
       // Update chat model selector
       if (result.session) {
         import("../utils/chat-model-updater.js").then(({ updateChatModelSelector }) => {
@@ -309,13 +322,7 @@ async function handleSwitch(sessionId, sessionService, streamManager, updateSess
         });
       }
 
-      // If coming from welcome, switch the view BEFORE heavy rendering to match session-to-session flow
-      if (wasOnWelcomePage) {
-        const { showChatView } = await import("../managers/view-manager.js");
-        await showChatView(elements, appState);
-      }
-
-      // Clear current chat UI
+      // Clear skeleton and render real messages
       if (window.components?.chatContainer) {
         window.components.chatContainer.clear();
       }

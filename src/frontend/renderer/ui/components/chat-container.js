@@ -527,6 +527,49 @@ export class ChatContainer {
   }
 
   /**
+   * Show skeleton loading placeholders while session data loads
+   * Creates animated placeholder messages for instant visual feedback
+   */
+  showSkeleton() {
+    // Clear any existing content first
+    this.clear();
+
+    // Create skeleton container
+    const skeleton = document.createElement("div");
+    skeleton.className = "chat-skeleton";
+    skeleton.id = "chat-skeleton";
+
+    // Add 4 alternating message skeletons (assistant, user, assistant, user)
+    const messageTypes = ["assistant", "user", "assistant", "user"];
+    const lineLengths = [["long", "medium", "short"], ["medium"], ["long", "long", "medium", "short"], ["short"]];
+
+    messageTypes.forEach((type, index) => {
+      const message = document.createElement("div");
+      message.className = `skeleton-message ${type === "user" ? "user" : ""}`;
+
+      // Avatar placeholder
+      const avatar = document.createElement("div");
+      avatar.className = "skeleton-message-avatar";
+
+      // Content lines
+      const content = document.createElement("div");
+      content.className = "skeleton-message-content";
+
+      lineLengths[index].forEach((length) => {
+        const line = document.createElement("div");
+        line.className = `skeleton-message-line ${length}`;
+        content.appendChild(line);
+      });
+
+      message.appendChild(avatar);
+      message.appendChild(content);
+      skeleton.appendChild(message);
+    });
+
+    this.element.appendChild(skeleton);
+  }
+
+  /**
    * Extract text content from various SDK message formats
    * Handles: string, JSON string, array [{type: "text", text: "..."}], object {text: "..."}
    * @private

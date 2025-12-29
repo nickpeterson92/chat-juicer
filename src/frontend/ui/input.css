@@ -3622,6 +3622,91 @@
     }
   }
 
+  /* ==========================================
+   * SKELETON LOADERS
+   * Loading placeholders for async content
+   * ========================================== */
+
+  /* Base skeleton style */
+  .skeleton {
+    background: linear-gradient(90deg, var(--color-surface-2) 25%, var(--color-surface-3) 50%, var(--color-surface-2) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s infinite;
+    border-radius: 8px;
+  }
+
+  /* Chat message skeletons */
+  .skeleton-message {
+    @apply flex gap-3 mb-4;
+  }
+
+  .skeleton-message-avatar {
+    @apply skeleton w-8 h-8 rounded-full flex-shrink-0;
+  }
+
+  .skeleton-message-content {
+    @apply flex flex-col gap-2 flex-1;
+  }
+
+  .skeleton-message-line {
+    @apply skeleton h-4;
+  }
+
+  .skeleton-message-line.short {
+    width: 60%;
+  }
+
+  .skeleton-message-line.medium {
+    width: 80%;
+  }
+
+  .skeleton-message-line.long {
+    width: 95%;
+  }
+
+  /* User message skeleton (right aligned) */
+  .skeleton-message.user {
+    @apply flex-row-reverse;
+  }
+
+  .skeleton-message.user .skeleton-message-content {
+    @apply items-end;
+  }
+
+  /* Chat container skeleton */
+  .chat-skeleton {
+    @apply flex flex-col gap-4 p-6;
+  }
+
+  /* File panel skeletons */
+  .skeleton-file-grid {
+    @apply grid gap-3 p-4;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  }
+
+  .skeleton-file-card {
+    @apply skeleton aspect-square rounded-lg;
+  }
+
+  /* Session loading overlay */
+  .session-loading {
+    @apply absolute inset-0 flex items-center justify-center z-10;
+    background-color: var(--color-surface-1);
+  }
+
+  .session-loading-spinner {
+    @apply w-8 h-8 rounded-full border-2;
+    border-color: var(--color-border-secondary);
+    border-top-color: var(--color-brand-primary);
+    animation: skeleton-spin 0.8s linear infinite;
+  }
+
+  @keyframes skeleton-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
   /* Updated welcome-files-list for grid mode */
   .welcome-files-list.thumbnail-mode {
     @apply p-2 max-h-[320px];
