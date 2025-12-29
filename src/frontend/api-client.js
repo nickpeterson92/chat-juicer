@@ -31,6 +31,11 @@ async function apiRequest(endpoint, options = {}) {
     throw new Error(detail || `Request failed with status ${response.status}`);
   }
 
+  // Return raw Response for binary content (e.g., file downloads)
+  if (options.rawResponse) {
+    return response;
+  }
+
   const contentType = response.headers.get("content-type");
   if (contentType?.includes("application/json")) {
     return response.json();
