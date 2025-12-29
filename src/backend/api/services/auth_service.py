@@ -66,13 +66,15 @@ class AuthService:
             "user": self.user_payload(user),
         }
 
-    async def refresh(self, refresh_token: str) -> dict[str, str]:
+    async def refresh(self, refresh_token: str) -> dict[str, Any]:
         """Validate refresh token and return new access and refresh tokens (rotation)."""
         payload = self._decode_token(refresh_token, "refresh")
         user = await self.get_user_by_id(UUID(payload["sub"]))
         if not user:
             raise ValueError("Invalid refresh token")
-        return self._issue_tokens(user, include_refresh=True)
+        tokens = self._issue_tokens(user, include_refresh=True)
+        tokens["user"] = self.user_payload(user)
+        return tokens
 
     async def get_default_user(self) -> dict[str, Any] | None:
         """Retrieve the default seeded user for Phase 1."""
@@ -96,7 +98,7 @@ class AuthService:
                 user_id,
             )
 
-    def _issue_tokens(self, user: asyncpg.Record, include_refresh: bool = True) -> dict[str, str]:
+    def _issue_tokens(self, user: asyncpg.Record, include_refresh: bool = True) -> dict[str, Any]:
         now = datetime.now(timezone.utc)
         access_exp = now + timedelta(minutes=self.settings.access_token_expires_minutes)
         refresh_exp = now + timedelta(days=self.settings.refresh_token_expires_days)
