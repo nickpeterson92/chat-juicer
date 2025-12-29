@@ -119,7 +119,8 @@ export async function showWelcomeView(elements, appState) {
   appState.setState("ui.welcomeModelConfig", null);
 
   // Get authenticated user's display name, falling back to system username
-  let userName = appState.getState("auth.user.displayName") || appState.getState("auth.user.email")?.split("@")[0];
+  const authUser = appState.getState("auth.user");
+  let userName = authUser?.displayName || authUser?.email?.split("@")[0];
 
   if (!userName) {
     try {
