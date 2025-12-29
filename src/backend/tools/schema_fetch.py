@@ -308,7 +308,7 @@ async def _fetch_sqlserver_schema(config: DatabaseConfig, table_name: str) -> li
     """Fetch schema from SQL Server database."""
     import aioodbc
 
-    driver = config.driver or "ODBC Driver 17 for SQL Server"
+    driver = config.driver or "ODBC Driver 18 for SQL Server"
     connection_string = (
         f"DRIVER={{{driver}}};"
         f"SERVER={config.host},{config.port};"

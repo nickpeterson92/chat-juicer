@@ -77,6 +77,25 @@ export function initSessionHeaderDisplay(dependencies) {
       }
     });
 
+    // Also subscribe to session.list changes to update when session data becomes available
+    // This handles the timing issue where session.current is set before session is added to list
+    const unsubscribeList = deps.appState.subscribe("session.list", () => {
+      const currentSessionId = deps.appState.getState("session.current");
+      if (currentSessionId && deps.sessionService) {
+        const session = deps.sessionService.getSession(currentSessionId);
+        if (session) {
+          updateDisplay(session);
+        }
+      }
+    });
+
+    // Store both unsubscribers for cleanup
+    const originalUnsubscribe = unsubscribe;
+    unsubscribe = () => {
+      originalUnsubscribe();
+      unsubscribeList();
+    };
+
     // Initial update
     const currentSessionId = deps.appState.getState("session.current");
     if (currentSessionId && deps.sessionService) {
