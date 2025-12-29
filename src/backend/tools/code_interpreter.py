@@ -42,7 +42,7 @@ TMP_SIZE = "64m"
 # Output settings
 CODE_OUTPUT_SUBDIR = "code"
 MAX_OUTPUT_SIZE = 10 * 1024 * 1024  # 10MB max output
-ALLOWED_OUTPUT_EXTENSIONS = {".png", ".jpg", ".svg", ".csv", ".json", ".txt", ".html", ".pdf"}
+ALLOWED_OUTPUT_EXTENSIONS = {".png", ".jpg", ".svg", ".csv", ".json", ".txt", ".html", ".pdf", ".xlsx", ".docx"}
 MAX_FILES_RETURNED = 10
 
 # Image formats (require base64 encoding in response)
@@ -652,6 +652,8 @@ class SandboxPool:
                 ".txt": "text/plain",
                 ".html": "text/html",
                 ".pdf": "application/pdf",
+                ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             }
 
             file_info: dict[str, Any] = {
