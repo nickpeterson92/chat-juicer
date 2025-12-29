@@ -754,6 +754,34 @@ app.whenReady().then(() => {
     }
   });
 
+  // IPC handler for downloading files via presigned S3 URL
+  ipcMain.handle("download-file", async (_event, { dirPath, filename }) => {
+    logger.info("File download requested", { dirPath, filename });
+
+    try {
+      const parsed = parseSessionFolder(dirPath);
+      if (!parsed) {
+        return { success: false, error: "Invalid path" };
+      }
+      const { sessionId, folder } = parsed;
+
+      // Get presigned download URL from backend
+      const response = await apiRequest(
+        `/api/v1/sessions/${sessionId}/files/${encodeURIComponent(filename)}/presign-download?folder=${encodeURIComponent(folder)}`
+      );
+
+      if (!response.download_url) {
+        return { success: false, error: "Failed to get download URL" };
+      }
+
+      logger.info("Presigned download URL generated", { dirPath, filename });
+      return { success: true, downloadUrl: response.download_url };
+    } catch (error) {
+      logger.error("Failed to get download URL", { dirPath, filename, error: error.message });
+      return { success: false, error: error.message };
+    }
+  });
+
   // IPC handler for downloading code interpreter output files
   ipcMain.handle("download-code-output-file", async (_event, { path: filePath, name }) => {
     logger.info("Code output file download requested", { path: filePath, name });

@@ -408,6 +408,28 @@ function createFileItem(file, directory, container, onDelete = null) {
   fileSize.className = "file-size";
   fileSize.textContent = formatFileSize(file.size || 0);
 
+  // Download button
+  const downloadBtn = document.createElement("button");
+  downloadBtn.className = "file-download-btn";
+  downloadBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+  </svg>`;
+  downloadBtn.title = "Download file";
+  downloadBtn.onclick = async (e) => {
+    e.stopPropagation();
+    try {
+      const result = await window.electronAPI.downloadFile(directory, file.name);
+      if (result.success && result.downloadUrl) {
+        // Open presigned URL in browser to trigger download
+        window.open(result.downloadUrl, "_blank");
+      } else {
+        showToast(`Failed to download: ${result.error}`, "error", 4000);
+      }
+    } catch (error) {
+      showToast(`Error downloading file: ${error.message}`, "error", 4000);
+    }
+  };
+
   // Delete button
   const deleteBtn = document.createElement("button");
   deleteBtn.className = "file-delete-btn";
@@ -436,6 +458,7 @@ function createFileItem(file, directory, container, onDelete = null) {
   fileItem.appendChild(fileIcon);
   fileItem.appendChild(fileName);
   fileItem.appendChild(fileSize);
+  fileItem.appendChild(downloadBtn);
   fileItem.appendChild(deleteBtn);
 
   return fileItem;
@@ -701,8 +724,12 @@ function updateWelcomeFileVisibility(container, hasFiles) {
 /**
  * Shared helper to create the base structure of a file card
  * ensuring consistent styling between pending and persisted files.
+ * @param {string} name - File name
+ * @param {number} size - File size in bytes
+ * @param {Function} onDelete - Delete handler
+ * @param {Function} onDownload - Optional download handler (for persisted files)
  */
-function createCardStructure(name, size, onDelete) {
+function createCardStructure(name, size, onDelete, onDownload = null) {
   const ext = name.split(".").pop()?.toLowerCase() || "";
 
   const card = document.createElement("div");
@@ -722,6 +749,21 @@ function createCardStructure(name, size, onDelete) {
   badge.className = `thumbnail-badge ${badgeInfo.class}`;
   badge.textContent = badgeInfo.label;
 
+  // Download button (only for persisted files)
+  let downloadBtn = null;
+  if (onDownload) {
+    downloadBtn = document.createElement("button");
+    downloadBtn.className = "thumbnail-download-btn";
+    downloadBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+    </svg>`;
+    downloadBtn.title = "Download file";
+    downloadBtn.onclick = (e) => {
+      e.stopPropagation();
+      onDownload(e);
+    };
+  }
+
   // Delete button
   const deleteBtn = document.createElement("button");
   deleteBtn.className = "thumbnail-delete-btn";
@@ -736,9 +778,10 @@ function createCardStructure(name, size, onDelete) {
 
   card.appendChild(filename);
   card.appendChild(badge);
+  if (downloadBtn) card.appendChild(downloadBtn);
   card.appendChild(deleteBtn);
 
-  return { card, badge, deleteBtn, ext };
+  return { card, badge, deleteBtn, downloadBtn, ext };
 }
 
 /**
@@ -864,7 +907,20 @@ function createThumbnailCard(file, directory, onDelete = null) {
     handleDeleteFile(file.name, directory, null, onDelete);
   };
 
-  const { card, ext } = createCardStructure(file.name, file.size || 0, handleDelete);
+  const handleDownload = async (_e) => {
+    try {
+      const result = await window.electronAPI.downloadFile(directory, file.name);
+      if (result.success && result.downloadUrl) {
+        window.open(result.downloadUrl, "_blank");
+      } else {
+        showToast(`Failed to download: ${result.error}`, "error", 4000);
+      }
+    } catch (error) {
+      showToast(`Error downloading file: ${error.message}`, "error", 4000);
+    }
+  };
+
+  const { card, ext } = createCardStructure(file.name, file.size || 0, handleDelete, handleDownload);
   card.setAttribute("aria-label", `Open ${file.name}`);
 
   // Click handler to open file
