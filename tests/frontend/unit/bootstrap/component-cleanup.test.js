@@ -79,6 +79,7 @@ describe("bootstrap cleanup", () => {
       onPythonExit: vi.fn(),
       openExternalUrl: vi.fn(),
       restartBot: vi.fn(),
+      readFile: vi.fn(),
     };
 
     ({ cleanup } = await initializeEventHandlers({
@@ -88,7 +89,10 @@ describe("bootstrap cleanup", () => {
       components,
       ipcAdapter,
       domAdapter: {},
-      eventBus: { emit: vi.fn() },
+      eventBus: {
+        emit: vi.fn(),
+        on: vi.fn(() => vi.fn()), // returns an unsubscribe function
+      },
       sendMessage: vi.fn(),
     }));
   });
