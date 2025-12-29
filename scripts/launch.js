@@ -49,7 +49,7 @@ async function launch() {
   if (isDev) {
     console.log("Starting Vite dev server...");
     const vitePort = 5173;
-    env.VITE_DEV_SERVER_URL = `http://localhost:${vitePort}/ui/`;
+    env.VITE_DEV_SERVER_URL = `http://localhost:${vitePort}/src/frontend/ui/`;
 
     // Start Vite in background
     const vite = spawn("npx", ["vite", "--port", vitePort.toString()], {
