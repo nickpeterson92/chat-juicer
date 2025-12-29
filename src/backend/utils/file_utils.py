@@ -118,21 +118,6 @@ async def get_session_files(session_id: str, subdir: str = "sources") -> list[st
         return []
 
 
-async def get_session_templates(session_id: str) -> list[str]:
-    """List template filenames for a session (read-only).
-
-    Uses the session's templates symlink/copy created at session bootstrap. Filters
-    hidden files and returns a sorted list of filenames.
-
-    Args:
-        session_id: Session identifier
-
-    Returns:
-        Sorted list of template filenames. Empty if missing or on error.
-    """
-    return await get_session_files(session_id, subdir="templates")
-
-
 def validate_session_path(file_path: str, session_id: str | None = None) -> tuple[Path, str | None]:  # noqa: PLR0911
     """
     Validate a path within session workspace boundaries.
@@ -186,7 +171,7 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
             requested_path = Path(sanitized_path)
 
             # Default to sources/ when no top-level directory explicitly provided
-            allowed_roots = {"sources", "templates", "output"}
+            allowed_roots = {"sources", "output"}
             if not requested_path.parts:
                 relative_request = Path(".")
             elif requested_path.parts[0] in allowed_roots:
@@ -210,7 +195,7 @@ def validate_session_path(file_path: str, session_id: str | None = None) -> tupl
 
             # Whitelist of allowed symlinks that can resolve outside session workspace
             # These are legitimate symlinks created by the application
-            allowed_symlinks = {"templates", "output"}
+            allowed_symlinks = {"output"}
 
             # Get first component of file_path to check if it's an allowed symlink
             first_component = relative_request.parts[0] if relative_request.parts else ""
