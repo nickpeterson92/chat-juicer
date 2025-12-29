@@ -1969,6 +1969,42 @@
     color: var(--color-status-error);
   }
 
+  /* Download button (list view) */
+  .file-download-btn {
+    @apply bg-transparent border-none cursor-pointer p-1 rounded text-sm opacity-0 flex-shrink-0;
+    color: var(--color-text-secondary);
+  }
+
+  .file-download-btn svg {
+    @apply transition-colors duration-150;
+  }
+
+  .file-item:hover .file-download-btn {
+    @apply opacity-100;
+  }
+
+  .file-download-btn:hover svg {
+    color: var(--color-brand-primary);
+  }
+
+  /* Download button (thumbnail view) */
+  .thumbnail-download-btn {
+    @apply absolute bg-transparent border-none cursor-pointer p-1.5 rounded-md opacity-0 transition-opacity;
+    bottom: 32px;
+    right: 28px;
+    color: var(--color-text-secondary);
+    background-color: var(--color-surface-overlay);
+  }
+
+  .thumbnail-card:hover .thumbnail-download-btn {
+    @apply opacity-100;
+  }
+
+  .thumbnail-download-btn:hover {
+    color: var(--color-brand-primary);
+    background-color: var(--color-surface-2);
+  }
+
   /* Welcome page components */
   .welcome-container {
     @apply absolute inset-0 flex items-center justify-center z-[100];
