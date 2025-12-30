@@ -32,10 +32,15 @@ describe("SessionHeaderDisplay", () => {
     nameElement = document.getElementById("header-session-name");
     chevronButton = document.getElementById("header-session-chevron");
 
-    // Mock appState
+    // Mock appState - store callbacks per path since component subscribes to multiple paths
     mockAppState = {
-      subscribe: vi.fn((_path, callback) => {
-        mockAppState._callback = callback;
+      _callbacks: {},
+      subscribe: vi.fn((path, callback) => {
+        mockAppState._callbacks[path] = callback;
+        // Keep legacy _callback for backward compatibility (points to session.current)
+        if (path === "session.current") {
+          mockAppState._callback = callback;
+        }
         return vi.fn(); // unsubscribe
       }),
       getState: vi.fn().mockReturnValue(null),
