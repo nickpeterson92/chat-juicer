@@ -176,7 +176,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         if app.state.ws_manager:
             await app.state.ws_manager.graceful_shutdown(timeout=settings.shutdown_connection_drain_timeout)
 
-            # Phase 2: Shutdown MCP server manager
+        # Phase 2: Shutdown MCP server manager
+        if hasattr(app.state, "mcp_manager") and app.state.mcp_manager:
             await app.state.mcp_manager.shutdown()
             logger.info("MCP server manager shutdown complete")
 

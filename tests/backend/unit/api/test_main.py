@@ -38,6 +38,8 @@ async def test_lifespan_startup_success() -> None:
     mock_settings.openai_api_key = "key"
     mock_settings.http_request_logging = False
     mock_settings.http_read_timeout = 10.0
+    mock_settings.file_storage = "local"  # Disable S3
+    mock_settings.sandbox_pool_size = 1
 
     # Mock all startup dependencies
     with (
@@ -49,6 +51,7 @@ async def test_lifespan_startup_success() -> None:
         patch("api.main.initialize_mcp_manager", new_callable=AsyncMock) as mock_init_mcp,
         patch("api.main.graceful_pool_close", new_callable=AsyncMock) as mock_close_db,
         patch("api.main.WebSocketManager", autospec=True) as MockWSManager,
+        patch("api.main.get_sandbox_pool") as mock_get_sandbox_pool,
     ):
 
         # Configure mocks
@@ -63,6 +66,11 @@ async def test_lifespan_startup_success() -> None:
         mock_ws_instance = MockWSManager.return_value
         # Important: Ensure the method is an AsyncMock that returns a coroutine
         mock_ws_instance.start_idle_checker = AsyncMock()
+
+        # Configure SandboxPool mock
+        mock_sandbox_pool = AsyncMock()
+        mock_sandbox_pool.initialize = AsyncMock()
+        mock_get_sandbox_pool.return_value = mock_sandbox_pool
 
         # Enter lifespan context
         async with lifespan(mock_app):
@@ -81,6 +89,7 @@ async def test_lifespan_startup_success() -> None:
             assert hasattr(mock_app.state, "shutdown_event")
             assert hasattr(mock_app.state, "background_tasks")
             assert isinstance(mock_app.state.background_tasks, set)
+            assert mock_app.state.sandbox_pool == mock_sandbox_pool
 
         # Verify shutdown calls handled in finally
         mock_close_db.assert_called_once()
@@ -115,6 +124,8 @@ async def test_lifespan_shutdown() -> None:
     mock_settings.shutdown_connection_drain_timeout = 5.0
     mock_settings.shutdown_timeout = 10.0
     mock_settings.database_url = "postgres://"
+    mock_settings.file_storage = "local"  # Disable S3
+    mock_settings.sandbox_pool_size = 1
 
     # Mock startup dependencies to allow entering context
     with (
@@ -126,6 +137,7 @@ async def test_lifespan_shutdown() -> None:
         patch("api.main.initialize_mcp_manager", new_callable=AsyncMock) as mock_init_mcp,
         patch("api.main.graceful_pool_close", new_callable=AsyncMock) as mock_close_db,
         patch("api.main.WebSocketManager", autospec=True) as MockWSManager,
+        patch("api.main.get_sandbox_pool") as mock_get_sandbox_pool,
     ):
 
         mock_check.return_value = {"healthy": True}
@@ -143,6 +155,12 @@ async def test_lifespan_shutdown() -> None:
         mock_db_pool = AsyncMock()
         mock_create_db.return_value = mock_db_pool
 
+        # Configure SandboxPool mock
+        mock_sandbox_pool = AsyncMock()
+        mock_sandbox_pool.initialize = AsyncMock()
+        mock_sandbox_pool.shutdown = AsyncMock()
+        mock_get_sandbox_pool.return_value = mock_sandbox_pool
+
         async with lifespan(mock_app):
             pass
 
@@ -156,6 +174,9 @@ async def test_lifespan_shutdown() -> None:
         # Check DB pool shutdown
         db_pool = mock_app.state.db_pool
         mock_close_db.assert_called_once_with(db_pool, timeout=10.0)
+
+        # Check sandbox pool shutdown
+        mock_sandbox_pool.shutdown.assert_called_once()
 
 
 @patch("api.main.lifespan", MagicMock())

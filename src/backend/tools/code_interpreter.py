@@ -249,7 +249,6 @@ class SandboxPool:
 
         async with self._lock:
             logger.info("Shutting down sandbox pool...")
-            logger.info("Shutting down sandbox pool...")
             tasks = [self._stop_container(cid) for cid in self._all_containers]
 
             await asyncio.gather(*tasks)
@@ -400,7 +399,6 @@ class SandboxPool:
             "--network=none",  # No network access
             "--read-only",  # Read-only root filesystem
             f"--memory={MEMORY_LIMIT}",
-            f"--cpus={CPU_LIMIT}",
             f"--cpus={CPU_LIMIT}",
             "--tmpfs",
             f"/tmp:size={TMP_SIZE}",
