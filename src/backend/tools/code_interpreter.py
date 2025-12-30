@@ -524,29 +524,38 @@ class SandboxPool:
 
         try:
             # Copy workspace into container (with timeout)
-            if not await self._container_cp(
+            success, error = await self._container_cp(
                 f"{workspace_path}/.",
                 f"{container_id}:/workspace/",
                 to_container=True,
-            ):
-                logger.warning("Failed to copy workspace to warm container")
-                return ExecutionResult(success=False, error="Failed to copy workspace to container")
+            )
+            if not success:
+                logger.warning(f"Failed to copy workspace to warm container: {error}")
+                return ExecutionResult(success=False, error=f"Failed to copy workspace: {error}")
+
+            # Copy session files (input/output) for read access
             if session_files_path:
                 input_path = session_files_path / "input"
                 output_path = session_files_path / "output"
+
                 # Non-critical: log warning but continue if copy fails
-                if input_path.exists() and not await self._container_cp(
-                    f"{input_path}/.",
-                    f"{container_id}:/input/",
-                    to_container=True,
-                ):
-                    logger.warning("Failed to copy input to container")
-                if output_path.exists() and not await self._container_cp(
-                    f"{output_path}/.",
-                    f"{container_id}:/output/",
-                    to_container=True,
-                ):
-                    logger.warning("Failed to copy output to container")
+                if input_path.exists():
+                    success, error = await self._container_cp(
+                        f"{input_path}/.",
+                        f"{container_id}:/input/",
+                        to_container=True,
+                    )
+                    if not success:
+                        logger.warning(f"Failed to copy input to container: {error}")
+
+                if output_path.exists():
+                    success, error = await self._container_cp(
+                        f"{output_path}/.",
+                        f"{container_id}:/output/",
+                        to_container=True,
+                    )
+                    if not success:
+                        logger.warning(f"Failed to copy output to container: {error}")
 
             # Execute script with timeout
             proc = await asyncio.create_subprocess_exec(
@@ -576,13 +585,21 @@ class SandboxPool:
                 )
 
             # Copy outputs back from container (with timeout)
-            if not await self._container_cp(
+            success, error = await self._container_cp(
                 f"{container_id}:/workspace/.",
                 f"{workspace_path}/",
                 to_container=False,
-            ):
-                logger.warning("Failed to copy workspace from container, files may be missing")
-
+            )
+            if not success:
+                logger.warning(f"Failed to copy outputs from warm container: {error}")
+                # We don't fail the whole execution if only output copy fails, but we should note it
+                # For now, let's treat it as a warning since we might have stdout
+                return ExecutionResult(
+                    success=True,  # Execution worked, just file retrieval failed
+                    stdout=stdout.decode(),
+                    stderr=stderr.decode() + f"\nWarning: Failed to retrieve partial output files: {error}",
+                    exit_code=proc.returncode or 0,
+                )
             # Clean workspace in container for next execution (security)
             # Use timeout to prevent hanging
             cleanup_proc = await asyncio.create_subprocess_exec(
@@ -699,7 +716,7 @@ class SandboxPool:
             exit_code=proc.returncode or 0,
         )
 
-    async def _container_cp(self, src: str, dst: str, to_container: bool, timeout: int = 30) -> bool:
+    async def _container_cp(self, src: str, dst: str, to_container: bool, timeout: int = 30) -> tuple[bool, str]:
         """Copy files to/from container with timeout.
 
         Args:
@@ -709,10 +726,10 @@ class SandboxPool:
             timeout: Timeout in seconds (default 30s)
 
         Returns:
-            True if copy succeeded, False if failed or timed out
+            Tuple of (success, error_message)
         """
         if not self.runtime:
-            return False
+            return False, "No runtime available"
 
         proc = await asyncio.create_subprocess_exec(
             self.runtime,
@@ -726,14 +743,17 @@ class SandboxPool:
         try:
             _, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
             if proc.returncode != 0:
-                logger.warning(f"Container cp failed: {stderr.decode()}")
-                return False
-            return True
+                err_msg = stderr.decode().strip()
+                logger.warning(f"Container cp failed: {err_msg}")
+                return False, err_msg
+            return True, ""
         except asyncio.TimeoutError:
-            proc.kill()
+            with contextlib.suppress(ProcessLookupError):
+                proc.kill()
             await proc.wait()
-            logger.error(f"Container cp timed out after {timeout}s: {src} -> {dst}")
-            return False
+            msg = f"Container cp timed out after {timeout}s: {src} -> {dst}"
+            logger.error(msg)
+            return False, msg
 
     def _collect_output_files(self, workspace_path: Path) -> list[dict[str, Any]]:
         """
