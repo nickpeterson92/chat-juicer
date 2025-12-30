@@ -401,14 +401,16 @@ class SandboxPool:
             "--read-only",  # Read-only root filesystem
             f"--memory={MEMORY_LIMIT}",
             f"--cpus={CPU_LIMIT}",
+            f"--cpus={CPU_LIMIT}",
             "--tmpfs",
             f"/tmp:size={TMP_SIZE}",
-            "--tmpfs",
-            "/workspace:size=64m",  # Writable workspace for warm container
-            "--tmpfs",
-            "/input:size=64m",  # Session source files (read via copy)
-            "--tmpfs",
-            "/output:size=64m",  # Session output files (read via copy)
+            # Use volumes instead of tmpfs for workspace to support 'docker cp' on read-only rootfs
+            "-v",
+            "/workspace",
+            "-v",
+            "/input",
+            "-v",
+            "/output",
             "-w",
             "/workspace",
             SANDBOX_IMAGE,
