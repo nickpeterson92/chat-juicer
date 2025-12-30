@@ -256,8 +256,9 @@ export function renderBreadcrumb(currentPath, container, onNavigate) {
   }
 
   // Root segment (Output/)
-  const isAtRoot = !currentPath;
-  const rootSegment = createBreadcrumbSegment("Output", 0, onNavigate, isAtRoot);
+  // Root segment (Output/)
+  // Note: We already returned if !currentPath, so we are strictly NOT at root here.
+  const rootSegment = createBreadcrumbSegment("Output", 0, onNavigate, false);
   breadcrumbContainer.appendChild(rootSegment);
 
   // Path segments
