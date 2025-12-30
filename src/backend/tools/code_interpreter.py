@@ -600,24 +600,6 @@ class SandboxPool:
                     stderr=stderr.decode() + f"\nWarning: Failed to retrieve partial output files: {error}",
                     exit_code=proc.returncode or 0,
                 )
-            # Clean workspace in container for next execution (security)
-            # Use timeout to prevent hanging
-            cleanup_proc = await asyncio.create_subprocess_exec(
-                self.runtime,
-                "exec",
-                container_id,
-                "sh",
-                "-c",
-                "rm -rf /workspace/*",
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            try:
-                await asyncio.wait_for(cleanup_proc.wait(), timeout=10)
-            except asyncio.TimeoutError:
-                with contextlib.suppress(ProcessLookupError):
-                    cleanup_proc.kill()
-                logger.warning("Workspace cleanup timed out")
 
             return ExecutionResult(
                 success=proc.returncode == 0,

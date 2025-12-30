@@ -51,7 +51,7 @@ async def test_lifespan_startup_success() -> None:
         patch("api.main.initialize_mcp_manager", new_callable=AsyncMock) as mock_init_mcp,
         patch("api.main.graceful_pool_close", new_callable=AsyncMock) as mock_close_db,
         patch("api.main.WebSocketManager", autospec=True) as MockWSManager,
-        patch("api.main.get_sandbox_pool") as mock_get_sandbox_pool,
+        patch("tools.code_interpreter.get_sandbox_pool") as mock_get_sandbox_pool,
     ):
 
         # Configure mocks
@@ -137,7 +137,7 @@ async def test_lifespan_shutdown() -> None:
         patch("api.main.initialize_mcp_manager", new_callable=AsyncMock) as mock_init_mcp,
         patch("api.main.graceful_pool_close", new_callable=AsyncMock) as mock_close_db,
         patch("api.main.WebSocketManager", autospec=True) as MockWSManager,
-        patch("api.main.get_sandbox_pool") as mock_get_sandbox_pool,
+        patch("tools.code_interpreter.get_sandbox_pool") as mock_get_sandbox_pool,
     ):
 
         mock_check.return_value = {"healthy": True}
