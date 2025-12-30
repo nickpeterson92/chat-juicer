@@ -1,0 +1,23 @@
+/**
+ * Accessibility Styles
+ *
+ * High contrast mode support and other accessibility overrides.
+ */
+
+@layer base {
+
+    /* ==========================================
+   * ACCESSIBILITY: Forced colors mode (high contrast)
+   * Disable animations and ensure proper contrast
+   * ========================================== */
+    @media (forced-colors: active) {
+
+        .welcome-greeting,
+        .suggestion-pill {
+            animation: none;
+            transition: none;
+            opacity: 1;
+            transform: none;
+        }
+    }
+}

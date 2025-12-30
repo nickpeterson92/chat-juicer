@@ -1,0 +1,196 @@
+/**
+ * Files Panel Component Styles
+ *
+ * File panel tabs, file items, folder items, thumbnails,
+ * and download buttons.
+ */
+
+@layer components {
+
+  /* ==========================================
+   * FILE PANEL TABS
+   * Sleek underline-style tabs
+   * ========================================== */
+  .file-panel-tabs {
+    @apply flex gap-1;
+    border-bottom: 1px solid var(--color-border-secondary);
+    padding-bottom: 0;
+  }
+
+  .file-panel-tab {
+    @apply bg-transparent border-none py-2 px-3 text-[13px] font-medium cursor-pointer transition-all duration-150 flex items-center gap-1.5;
+    color: var(--color-text-secondary);
+    position: relative;
+  }
+
+  .file-panel-tab::after {
+    content: "";
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: transparent;
+    transition: background 0.15s ease;
+  }
+
+  .file-panel-tab:hover {
+    color: var(--color-text-primary);
+  }
+
+  .file-panel-tab.active {
+    color: var(--color-text-primary);
+  }
+
+  .file-panel-tab.active::after {
+    background: var(--color-text-primary);
+  }
+
+  .file-panel-tab svg {
+    @apply w-3.5 h-3.5;
+  }
+
+  /* ==========================================
+   * BREADCRUMB NAVIGATION (Phase 2)
+   * ========================================== */
+  .breadcrumb-nav {
+    @apply flex items-center gap-1 py-2 px-0 mb-2 flex-wrap;
+    border-bottom: 1px solid var(--color-border-secondary);
+  }
+
+  .breadcrumb-segment {
+    @apply bg-transparent border-none py-1 px-2 rounded-md text-sm cursor-pointer transition-all;
+    color: var(--color-text-secondary);
+  }
+
+  .breadcrumb-segment:hover:not(:disabled):not(.active) {
+    background-color: var(--color-surface-hover);
+    color: var(--color-text-primary);
+  }
+
+  .breadcrumb-segment.active {
+    color: var(--color-text-primary);
+    font-weight: 600;
+    cursor: default;
+  }
+
+  .breadcrumb-segment:disabled {
+    cursor: default;
+  }
+
+  .breadcrumb-separator {
+    @apply select-none text-sm;
+    color: var(--color-text-secondary);
+  }
+
+  /* ==========================================
+   * FOLDER ITEMS (Phase 2)
+   * ========================================== */
+  .folder-item {
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .folder-item:hover {
+    border-color: var(--color-brand-primary);
+  }
+
+  .folder-item .file-icon {
+    color: var(--color-text-secondary);
+  }
+
+  .folder-name {
+    font-weight: 500;
+  }
+
+  .folder-count {
+    @apply ml-auto text-xs py-0.5 px-2 rounded-md;
+    color: var(--color-text-secondary);
+    background-color: var(--color-surface-overlay);
+  }
+
+  /* File items should not have delete button visible for folders */
+  .folder-item .file-delete-btn {
+    display: none;
+  }
+
+  /* ==========================================
+   * FILE ITEMS
+   * ========================================== */
+  .file-item {
+    @apply flex items-center gap-2.5 py-2.5 px-3 border rounded-lg transition-all cursor-pointer select-none active:scale-[0.98];
+    background-color: var(--color-surface-2);
+    border-color: var(--color-border-secondary);
+  }
+
+  .file-item:hover {
+    border-color: var(--color-brand-primary);
+  }
+
+  .file-icon {
+    @apply text-lg flex-shrink-0 flex items-center justify-center;
+    color: var(--color-text-secondary);
+  }
+
+  .file-name {
+    @apply flex-1 text-[13px] overflow-hidden text-ellipsis whitespace-nowrap font-medium;
+    color: var(--color-text-primary);
+  }
+
+  .file-size {
+    @apply text-[11px] flex-shrink-0;
+    color: var(--color-text-secondary);
+  }
+
+  .file-delete-btn {
+    @apply bg-transparent border-none cursor-pointer p-1 rounded text-sm opacity-0 flex-shrink-0;
+    color: var(--color-text-secondary);
+  }
+
+  .file-delete-btn svg {
+    @apply transition-colors duration-150;
+  }
+
+  .file-item:hover .file-delete-btn {
+    @apply opacity-100;
+  }
+
+  .file-delete-btn:hover svg {
+    color: var(--color-status-error);
+  }
+
+  /* Download button (list view) */
+  .file-download-btn {
+    @apply bg-transparent border-none cursor-pointer p-1 rounded text-sm opacity-0 flex-shrink-0;
+    color: var(--color-text-secondary);
+  }
+
+  .file-download-btn svg {
+    @apply transition-colors duration-150;
+  }
+
+  .file-item:hover .file-download-btn {
+    @apply opacity-100;
+  }
+
+  .file-download-btn:hover svg {
+    color: var(--color-brand-primary);
+  }
+
+  /* Download button (thumbnail view) */
+  .thumbnail-download-btn {
+    @apply absolute bottom-2 right-2 p-1 rounded opacity-0 transition-all;
+    background-color: var(--color-surface-overlay);
+    color: var(--color-text-secondary);
+    z-index: 3;
+  }
+
+  .thumbnail-card:hover .thumbnail-download-btn {
+    opacity: 1;
+  }
+
+  .thumbnail-download-btn:hover {
+    background-color: var(--color-brand-primary);
+    color: white;
+  }
+}

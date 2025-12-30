@@ -1,0 +1,103 @@
+/**
+ * Theme Configuration
+ *
+ * Tailwind v4 native theme tokens.
+ * All colors defined here are available as utilities (bg-*, text-*, border-*, etc.)
+ * AND as CSS custom properties (var(--color-*)).
+ */
+
+@theme {
+    /* ========================================
+   * SURFACE COLORS
+   * ======================================== */
+    --color-surface-1: #141622;
+    --color-surface-2: #191b29;
+    --color-surface-3: #1e2432;
+    --color-surface-overlay: rgba(255, 255, 255, 0.05);
+    --color-surface-hover: rgba(255, 255, 255, 0.03);
+    --color-surface-active: rgba(37, 99, 235, 0.12);
+
+    /* Body background colors */
+    --color-body-welcome: #191a29;
+    --color-body-chat: #191b29;
+
+    /* Welcome page specific colors */
+    --color-welcome-text: #f5f5f5;
+    --color-welcome-secondary: #a0a0a0;
+
+    /* Welcome pill colors */
+    --color-welcome-pill-bg: transparent;
+    --color-welcome-pill-bg-hover: var(--color-surface-hover);
+    --color-welcome-pill-border: var(--color-border-secondary);
+    --color-welcome-pill-border-hover: var(--color-border-hover);
+    --color-welcome-pill-text: var(--color-text-secondary);
+    --color-welcome-pill-text-hover: var(--color-text-primary);
+    --color-welcome-pill-focus-ring: var(--color-brand-primary);
+
+    /* ========================================
+   * TEXT COLORS
+   * ======================================== */
+    --color-text-primary: #f5f5f5;
+    --color-text-secondary: #a0a0a0;
+    --color-text-tertiary: #787878;
+    --color-text-assistant: #f1f5f9;
+    --color-text-user: #ffffff;
+    --color-text-on-surface: #d1d5db;
+
+    /* ========================================
+   * BORDER COLORS
+   * ======================================== */
+    --color-border-primary: #3b4254;
+    --color-border-secondary: #3b4254;
+    --color-border-focus: #0d63fb;
+    --color-border-hover: #0d63fb;
+
+    /* ========================================
+   * BRAND COLORS
+   * ======================================== */
+    --color-brand-primary: #0d63fb;
+    --color-brand-secondary: #0a4fc9;
+    --color-brand-gradient: linear-gradient(135deg, #0d63fb 0%, #0a4fc9 100%);
+    --color-brand-glow: rgba(13, 99, 251, 0.2);
+
+    /* Secondary brand colors */
+    --color-brand-accent-1: #deff4d;
+    --color-brand-accent-2: #c7baff;
+    --color-brand-accent-3: #ff4d5f;
+    --color-brand-accent-4: #1de1f2;
+    --color-brand-accent-5: #012faf;
+
+    /* ========================================
+   * STATUS COLORS
+   * ======================================== */
+    --color-status-info: #3b82f6;
+    --color-status-success: #10b981;
+    --color-status-warning: #f59e0b;
+    --color-status-error: #ef4444;
+
+    /* ========================================
+   * FUNCTION CALL STATES
+   * ======================================== */
+    --color-function-executing: linear-gradient(135deg, #0d63fb 0%, #0a4fc9 100%);
+    --color-function-success: linear-gradient(135deg, #059669 0%, #10b981 100%);
+    --color-function-error: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+
+    /* ========================================
+   * SCROLLBAR COLORS
+   * ======================================== */
+    --color-scrollbar-thumb: #333333;
+    --color-scrollbar-thumb-hover: #a0a0a0;
+
+    /* ========================================
+   * OVERLAYS
+   * ======================================== */
+    --color-overlay-backdrop: rgba(0, 0, 0, 0.9);
+
+    /* ========================================
+   * FILE TYPE COLORS
+   * ======================================== */
+    --color-file-image: #c084fc;
+    --color-file-code: #fbbf24;
+    --color-file-archive: #a16207;
+    --color-file-audio: #f472b6;
+}

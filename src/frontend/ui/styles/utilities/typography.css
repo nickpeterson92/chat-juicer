@@ -1,0 +1,538 @@
+/**
+ * Typography & Prose Overrides
+ *
+ * Message content styling, Tailwind Prose overrides,
+ * code blocks, lists, and markdown rendering.
+ */
+
+@layer components {
+  .message-content {
+    max-width: 100%;
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  /* Optimize rendering performance for long message lists */
+  .message {
+    content-visibility: auto;
+    contain-intrinsic-size: 0 100px;
+    /* Estimated height to prevent scrollbar jumping */
+  }
+
+  .message-content h1,
+  .message-content h2,
+  .message-content h3,
+  .message-content h4,
+  .message-content h5,
+  .message-content h6 {
+    margin-top: 0.5em;
+    margin-bottom: 0.2em;
+    font-weight: 600;
+    line-height: 1.25;
+    color: var(--color-text-primary);
+  }
+
+  .message-content h1 {
+    font-size: 1.5em;
+  }
+
+  .message-content h2 {
+    font-size: 1.3em;
+  }
+
+  .message-content h3 {
+    font-size: 1.15em;
+  }
+
+  .message-content h4 {
+    font-size: 1.05em;
+  }
+
+  .message-content h5 {
+    font-size: 1em;
+  }
+
+  .message-content h6 {
+    font-size: 0.95em;
+  }
+
+  .message-content p {
+    margin: 0.15em 0;
+    line-height: 1.4;
+  }
+
+  .message-content p+p {
+    margin-top: 0.5em;
+  }
+
+  /* Tighten gap between paragraph and code block - aggressive removal */
+  .message-content p+pre:not(.mermaid),
+  .message-content p+.code-block-wrapper,
+  .message-content p+br+pre:not(.mermaid),
+  .message-content p+br+.code-block-wrapper {
+    margin-top: 0;
+  }
+
+  /* Remove paragraph bottom margin before code */
+  .message-content p:has(+ pre),
+  .message-content p:has(+ .code-block-wrapper),
+  .message-content p:has(+ br + pre),
+  .message-content p:has(+ br + .code-block-wrapper) {
+    margin-bottom: 0;
+  }
+
+  /* Collapse empty paragraphs (often created by markdown blank lines) */
+  .message-content p:empty {
+    display: none;
+  }
+
+  /* DISABLED: This rule was hiding legitimate content like "Hey<br>World"
+   * The :has(> br:only-child) selector should only match <p><br></p> but
+   * may have browser quirks. Commenting out to fix rendering issues.
+   */
+  /* .message-content p:has(> br:only-child) {
+    display: none;
+  } */
+
+  /* Hide standalone br tags between paragraph and code */
+  .message-content p+br {
+    display: none;
+  }
+
+  .message-content h1+ul,
+  .message-content h2+ul,
+  .message-content h3+ul,
+  .message-content h4+ul,
+  .message-content h5+ul,
+  .message-content h6+ul,
+  .message-content h1+ol,
+  .message-content h2+ol,
+  .message-content h3+ol,
+  .message-content h4+ol,
+  .message-content h5+ol,
+  .message-content h6+ol {
+    margin-top: 0.1em;
+  }
+
+  .message-content>*:first-child {
+    margin-top: 0;
+  }
+
+  .message-content>*:last-child {
+    margin-bottom: 0;
+  }
+
+  /* Code styling */
+  .message-content code {
+    background-color: var(--color-surface-overlay);
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    font-size: 0.9em;
+    font-family: monospace;
+    color: var(--color-text-primary);
+  }
+
+  .message-content pre:not(.mermaid) {
+    background-color: var(--color-surface-overlay);
+    border: 1px solid var(--color-border-secondary);
+    border-radius: 0.5rem;
+    padding: 0.625rem;
+    overflow-x: auto;
+    margin: 0.2em 0;
+  }
+
+  .message-content pre code {
+    background-color: transparent;
+    padding: 0;
+    border-radius: 0;
+    font-size: 0.85em;
+    line-height: 1.5;
+  }
+
+  /* Code block with copy button */
+  .message-content .code-block-wrapper {
+    margin: 0.2em 0;
+    display: block;
+  }
+
+  /* Override wrapper margin when following paragraph - handled above with !important */
+
+  .message-content .code-block-wrapper pre {
+    margin: 0;
+    display: block;
+    position: relative;
+  }
+
+  .message-content .code-block-wrapper .code-copy-btn {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    background: var(--color-surface-overlay);
+    border: 1px solid var(--color-border-secondary);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    padding: 0.375rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.375rem;
+    transition: all 0.15s ease;
+    opacity: 0;
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  .message-content .code-block-wrapper:hover .code-copy-btn {
+    opacity: 1;
+  }
+
+  .message-content .code-copy-btn:hover {
+    background-color: var(--color-surface-hover);
+    color: var(--color-text-primary);
+    transform: scale(1.05);
+  }
+
+  .message-content .code-copy-btn.copied {
+    color: var(--color-status-success);
+    opacity: 1;
+  }
+
+  .message-content .code-copy-btn svg {
+    width: 16px;
+    height: 16px;
+    stroke-width: 2;
+  }
+
+  /* Lists */
+  .message-content ul {
+    margin: 0.15em 0;
+    padding-left: 1.5rem;
+    line-height: 1.35;
+    list-style-type: disc;
+    list-style-position: outside;
+  }
+
+  .message-content ol {
+    margin: 0.15em 0;
+    padding-left: 1.5rem;
+    line-height: 1.35;
+    list-style-type: decimal;
+    list-style-position: outside;
+  }
+
+  .message-content ul ul {
+    list-style-type: circle;
+    margin: 0 0 0.02em 0;
+  }
+
+  .message-content ul ul ul {
+    list-style-type: square;
+    margin: 0 0 0.02em 0;
+  }
+
+  .message-content ol ol {
+    list-style-type: lower-alpha;
+    margin: 0 0 0.02em 0;
+  }
+
+  .message-content ol ol ol {
+    list-style-type: lower-roman;
+    margin: 0 0 0.02em 0;
+  }
+
+  .message-content ol ul,
+  .message-content ul ol {
+    margin: 0 0 0.02em 0;
+  }
+
+  .message-content li {
+    margin: 0.02em 0;
+    padding-left: 0.2em;
+    display: list-item;
+  }
+
+  .message-content li li {
+    margin: 0.01em 0;
+  }
+
+  .message-content li>ul,
+  .message-content li>ol {
+    margin: 0 0 0.02em 0;
+    margin-top: 0;
+  }
+
+  /* Blockquotes */
+  .message-content blockquote {
+    border-left: 3px solid var(--color-border-primary);
+    margin: 0.4em 0;
+    padding: 0.4em 0.8em;
+    background-color: var(--color-surface-overlay);
+    font-style: italic;
+    color: var(--color-text-secondary);
+  }
+
+  /* Links */
+  .message-content a {
+    color: var(--color-brand-primary);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color 150ms;
+  }
+
+  .message-content a:hover {
+    border-bottom-color: var(--color-brand-primary);
+  }
+
+  /* Tables */
+  .message-content table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.4em 0;
+    font-size: 0.9em;
+  }
+
+  .message-content th,
+  .message-content td {
+    border: 1px solid var(--color-border-secondary);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+  }
+
+  .message-content th {
+    background-color: var(--color-surface-overlay);
+    font-weight: 600;
+  }
+
+  /* Images */
+  .message-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+    margin: 0.5em 0;
+    box-shadow: 0 1px 3px var(--color-surface-overlay);
+  }
+
+  /* Horizontal rule */
+  .message-content hr {
+    border: 0;
+    border-top: 1px solid var(--color-border-secondary);
+    margin: 0.4em 0;
+  }
+
+  /* Strong/bold text */
+  .message-content strong {
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+
+  /* Task lists (checkboxes) */
+  .message-content input[type="checkbox"] {
+    margin-right: 0.5em;
+    vertical-align: middle;
+    cursor: default;
+  }
+
+  .message-content li:has(> input[type="checkbox"]) {
+    list-style-type: none;
+    margin-left: -1.5rem;
+  }
+
+  /* Mermaid diagrams */
+  .message-content .mermaid-wrapper {
+    margin: 0.5rem 0;
+    padding: 1rem;
+    background-color: var(--color-surface-1);
+    border: 1px solid var(--color-border-secondary);
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    min-height: 100px;
+    overflow-anchor: none;
+    /* Prevent expanding diagrams from being scroll anchor */
+  }
+
+  .message-content .mermaid-wrapper svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Mermaid loading placeholder - progressive rendering */
+  .mermaid-wrapper.mermaid-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-surface-overlay);
+    border: 1px dashed var(--color-border-secondary);
+  }
+
+  .mermaid-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+  }
+
+  .mermaid-spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--color-border-secondary);
+    border-top-color: var(--color-brand-primary);
+    border-radius: 50%;
+    animation: mermaid-spin 1s linear infinite;
+  }
+
+  @keyframes mermaid-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* Spacing adjustments for different content combinations */
+  .message-content p+ul,
+  .message-content p+ol {
+    margin-top: 0.25em;
+  }
+
+  .message-content ul+p,
+  .message-content ol+p {
+    margin-top: 0.25em;
+  }
+
+  /* ===========================================
+   * PROSE OVERRIDES - Typography plugin has aggressive defaults
+   * These must be more specific than .prose selectors
+   * =========================================== */
+
+  /* Override prose pre margins */
+  .prose pre,
+  .message-content.prose pre,
+  .message-content pre {
+    margin-top: 0.5em;
+    margin-bottom: 1.5em;
+  }
+
+  /* Override prose code-block-wrapper margins */
+  .prose .code-block-wrapper,
+  .message-content.prose .code-block-wrapper,
+  .message-content .code-block-wrapper {
+    margin-top: 0.5em;
+    margin-bottom: 1.5em;
+  }
+
+  /* Code blocks inside list items - tighter spacing than standalone */
+  .prose li pre,
+  .prose li .code-block-wrapper,
+  .message-content.prose li pre,
+  .message-content.prose li .code-block-wrapper,
+  .message-content li pre,
+  .message-content li .code-block-wrapper {
+    margin-top: 0.15em;
+    margin-bottom: 0.15em;
+  }
+
+  /* Reduce prose li margins when containing code */
+  .prose li:has(pre),
+  .prose li:has(.code-block-wrapper),
+  .message-content li:has(pre),
+  .message-content li:has(.code-block-wrapper) {
+    margin-top: 0.25em;
+    margin-bottom: 0.25em;
+  }
+
+  /* DISABLED: This was hiding intentional line breaks in list items
+   * e.g., "- Line one  \n  Line two" produces <li>Line one<br>Line two</li>
+   * and the br was being hidden, merging the lines together.
+   */
+  /* .message-content li > br,
+  .prose li > br {
+    display: none;
+  } */
+
+  .message-content p+pre {
+    margin-top: 0.15em;
+  }
+
+  .message-content pre+p {
+    margin-top: 0.15em;
+  }
+
+  .message-content h1+pre,
+  .message-content h2+pre,
+  .message-content h3+pre,
+  .message-content h4+pre,
+  .message-content h5+pre,
+  .message-content h6+pre {
+    margin-top: 0.2em;
+  }
+}
+
+
+/* ===========================================
+ * PROSE TYPOGRAPHY OVERRIDES - Outside layers for maximum specificity
+ * Tailwind Typography plugin has aggressive defaults that override layered CSS
+ * =========================================== */
+/* ===========================================
+ * PROSE TYPOGRAPHY OVERRIDES - Outside layers for maximum specificity
+ * Tailwind Typography plugin has aggressive defaults that override layered CSS
+ * =========================================== */
+
+/* Fix: Remove padding from code-block-wrapper and margin from inner pre */
+.prose .code-block-wrapper,
+.message-content .code-block-wrapper {
+  padding: 0;
+  margin: 0.5em 0 1.5em 0;
+  /* balanced spacing: half-line above, line-and-half below */
+}
+
+.prose .code-block-wrapper pre,
+.message-content .code-block-wrapper pre {
+  margin: 0;
+}
+
+/* Tighter margins on paragraphs */
+.prose p,
+.message-content p {
+  margin: 0.15em 0;
+}
+
+/* Override prose pre margins (code-block-wrapper handled above) */
+.prose pre:not(.code-block-wrapper pre) {
+  margin-top: 0.5em;
+  margin-bottom: 1.5em;
+}
+
+/* Code blocks inside list items */
+.prose li pre,
+.prose li .code-block-wrapper {
+  margin-top: 0.15em;
+  margin-bottom: 0.15em;
+}
+
+/* Reduce li margins when containing code */
+.prose li:has(pre),
+.prose li:has(.code-block-wrapper) {
+  margin-top: 0.2em;
+  margin-bottom: 0.2em;
+}
+
+/* DISABLED: Same issue as above - hides intentional line breaks in list items */
+/* .prose li > br {
+  display: none;
+} */
+
+/* Override prose paragraph margins before code */
+.prose p+pre,
+.prose p+.code-block-wrapper {
+  margin-top: 0.15em;
+}
+
+/* Mermaid diagrams - match code block spacing */
+.prose .mermaid-wrapper,
+.message-content .mermaid-wrapper {
+  margin-top: 0.5em;
+  margin-bottom: 1.5em;
+}
+
+/* Base styles */

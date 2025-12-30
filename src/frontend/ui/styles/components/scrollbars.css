@@ -1,0 +1,59 @@
+/**
+ * Custom Scrollbar Styles
+ *
+ * WebKit and Firefox scrollbar styling.
+ * Not available via Tailwind utilities.
+ */
+
+@layer components {
+
+    /* ==========================================
+   * CUSTOM SCROLLBARS
+   * ========================================== */
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background-color: var(--color-scrollbar-thumb);
+        border-radius: 0.25rem;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background-color: var(--color-scrollbar-thumb-hover);
+    }
+
+    /* Firefox scrollbar styling */
+    .custom-scrollbar {
+        scrollbar-color: var(--color-scrollbar-thumb) transparent;
+        scrollbar-width: thin;
+    }
+
+    /* Smaller scrollbar for sessions sidebar */
+    .sessions-scrollbar::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .sessions-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .sessions-scrollbar::-webkit-scrollbar-thumb {
+        background-color: var(--color-scrollbar-thumb);
+        border-radius: 0.125rem;
+    }
+
+    .sessions-scrollbar::-webkit-scrollbar-thumb:hover {
+        background-color: var(--color-scrollbar-thumb-hover);
+    }
+
+    /* Firefox scrollbar styling */
+    .sessions-scrollbar {
+        scrollbar-color: var(--color-scrollbar-thumb) transparent;
+        scrollbar-width: thin;
+    }
+}

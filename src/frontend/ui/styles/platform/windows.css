@@ -1,0 +1,89 @@
+/**
+ * Windows/Linux Platform Styles
+ *
+ * Custom frameless titlebar with minimize/maximize/close buttons.
+ * Only active when Electron is running in frameless mode.
+ */
+
+@layer components {
+
+    /* ==========================================
+   * Custom titlebar (Windows/Linux)
+   * ========================================== */
+    .custom-titlebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 32px;
+        background: var(--color-surface-2);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        user-select: none;
+        z-index: 10000;
+        border-bottom: 1px solid var(--color-border-secondary);
+        transition:
+            background-color 0.2s,
+            border-color 0.2s;
+    }
+
+    .titlebar-drag-region {
+        -webkit-app-region: drag;
+        flex: 1;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        padding-left: 12px;
+    }
+
+    .titlebar-title {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--color-text-secondary);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    .titlebar-controls {
+        -webkit-app-region: no-drag;
+        display: flex;
+        height: 100%;
+    }
+
+    .titlebar-button {
+        width: 46px;
+        height: 100%;
+        border: none;
+        background: transparent;
+        color: var(--color-text-secondary);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition:
+            background-color 0.15s,
+            color 0.15s;
+        padding: 0;
+        margin: 0;
+    }
+
+    .titlebar-button:hover {
+        background: var(--color-surface-hover);
+        color: var(--color-text-primary);
+    }
+
+    .titlebar-close:hover {
+        background: var(--color-status-error);
+        color: var(--color-text-user);
+    }
+
+    .titlebar-button svg {
+        width: 10px;
+        height: 10px;
+    }
+
+    /* Push body content down when titlebar is present */
+    body:has(.custom-titlebar) {
+        padding-top: 32px;
+    }
+}

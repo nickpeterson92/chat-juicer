@@ -1,0 +1,329 @@
+/**
+ * Session List Component Styles
+ *
+ * Sidebar session items, actions, streaming indicators,
+ * header display, and dropdown menu.
+ */
+
+@layer components {
+
+    /* ==========================================
+   * SESSION ITEMS IN SIDEBAR
+   * ========================================== */
+    .session-item {
+        @apply p-3 mb-1 rounded-lg cursor-pointer text-sm transition-all duration-200 flex items-center justify-between gap-2;
+        color: var(--color-text-primary);
+        background-color: transparent;
+        border: 1px solid transparent;
+    }
+
+    .session-item:hover {
+        background-color: var(--color-surface-hover);
+        border-color: var(--color-brand-primary);
+        transform: translateX(2px);
+        box-shadow: 0 0 0 2px var(--color-brand-glow);
+    }
+
+    .session-item.active {
+        background-color: var(--color-brand-primary);
+        color: var(--color-text-user);
+    }
+
+    /* Streaming indicator container (Lottie animation) */
+    .session-streaming-indicator {
+        display: none;
+        position: absolute;
+        left: 0.25rem;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
+    }
+
+    /* Show indicator for streaming background sessions */
+    .session-item.session-streaming {
+        position: relative;
+        padding-left: 1.5rem;
+    }
+
+    .session-item.session-streaming .session-streaming-indicator {
+        display: block;
+    }
+
+    /* Hide indicator for active sessions (they use main chat streaming UI) */
+    .session-item.session-streaming.active .session-streaming-indicator {
+        display: none;
+    }
+
+    .session-item.session-streaming.active {
+        padding-left: 0.75rem;
+    }
+
+    .session-title {
+        @apply overflow-hidden text-ellipsis whitespace-nowrap;
+        max-width: 240px;
+    }
+
+    .session-content {
+        @apply flex-1 min-w-0 flex flex-col;
+    }
+
+    .session-timestamp {
+        @apply text-xs mt-0.5;
+    }
+
+    /* ==========================================
+   * SESSION ACTION BUTTONS
+   * ========================================== */
+    .session-actions {
+        @apply flex gap-1 opacity-0 transition-opacity duration-200 flex-shrink-0;
+        max-width: 0;
+        overflow: hidden;
+        pointer-events: none;
+    }
+
+    .session-item:hover .session-actions {
+        @apply opacity-100;
+        max-width: 180px;
+        pointer-events: auto;
+    }
+
+    .session-action-btn {
+        @apply bg-transparent border-none cursor-pointer p-1.5 rounded inline-flex items-center justify-center;
+    }
+
+    .session-action-btn svg {
+        @apply transition-colors duration-150;
+        transition:
+            color 150ms ease,
+            transform 150ms ease;
+        color: var(--color-text-on-surface, #ffffff);
+    }
+
+    .session-action-btn.rename-btn:hover svg {
+        color: var(--color-text-secondary);
+        @apply stroke-current;
+    }
+
+    .session-action-btn.delete-btn:hover svg {
+        color: var(--color-brand-accent-3);
+        @apply stroke-current;
+    }
+
+    .session-action-btn.pin-btn svg {
+        color: var(--color-text-on-surface, #ffffff);
+        @apply stroke-current;
+    }
+
+    .session-action-btn.pin-btn:hover svg {
+        color: var(--color-text-secondary);
+    }
+
+    .session-item.session-pinned .session-action-btn.pin-btn svg {
+        color: var(--color-brand-accent-5);
+    }
+
+    .session-item.session-pinned .session-action-btn.pin-btn:hover svg {
+        color: var(--color-brand-accent-5);
+        filter: brightness(1.12);
+        transform: scale(1.08);
+    }
+
+    .session-action-btn:hover svg {
+        transform: scale(1.05);
+    }
+
+    .session-title-edit {
+        font-family: inherit;
+        background: var(--color-surface-3);
+        color: var(--color-text-primary);
+        border-color: var(--color-brand-primary);
+    }
+
+    /* ==========================================
+   * HEADER SESSION DISPLAY (collapsed sidebar)
+   * ========================================== */
+    .header-session-display {
+        display: none;
+        align-items: center;
+        gap: 2px;
+        margin-left: 4px;
+    }
+
+    body:has(#sidebar.collapsed) .header-session-display.has-session {
+        display: flex;
+    }
+
+    .header-session-name {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--color-text-primary);
+        cursor: pointer;
+        transition: opacity 0.2s;
+    }
+
+    .header-session-name:hover {
+        opacity: 0.7;
+    }
+
+    .header-session-chevron {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        border: none;
+        padding: 4px;
+        cursor: pointer;
+        color: var(--color-text-secondary);
+        border-radius: 4px;
+        transition:
+            transform 0.2s ease,
+            color 0.2s,
+            background-color 0.2s;
+    }
+
+    .header-session-chevron:hover {
+        color: var(--color-text-primary);
+        background: var(--color-surface-hover);
+    }
+
+    .header-session-chevron.open {
+        color: var(--color-text-primary);
+    }
+
+    .header-session-chevron.open svg {
+        transform: rotate(90deg);
+    }
+
+    .header-session-chevron svg {
+        transition: transform 0.2s ease;
+    }
+
+    /* ==========================================
+   * SESSION HEADER DROPDOWN MENU
+   * ========================================== */
+    .session-header-menu {
+        display: none;
+        flex-direction: column;
+        gap: 2px;
+        padding: 6px;
+        border-radius: 10px;
+        z-index: 9999;
+        background-color: var(--color-surface-2);
+        border: 1px solid var(--color-border-secondary);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        min-width: 160px;
+        position: fixed;
+    }
+
+    .session-header-menu.visible {
+        display: flex;
+    }
+
+    .session-header-menu-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        background-color: transparent;
+        border: none;
+        color: var(--color-text-secondary);
+        text-align: left;
+        white-space: nowrap;
+        transition:
+            background-color 0.15s,
+            color 0.15s;
+    }
+
+    .session-header-menu-item:hover {
+        background-color: var(--color-surface-hover);
+        color: var(--color-text-primary);
+    }
+
+    .session-header-menu-item svg {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+    }
+
+    .session-header-menu-item.delete-item:hover {
+        color: var(--color-brand-accent-3);
+    }
+
+    .session-header-menu-item.pin-item {
+        justify-content: space-between;
+    }
+
+    .session-header-menu-item.pin-item .pin-label {
+        flex: 1;
+        text-align: left;
+    }
+
+    .session-header-menu-item.pin-item .pin-check {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+        opacity: 0;
+        color: var(--color-brand-primary);
+        transition: opacity 0.15s ease;
+    }
+
+    .session-header-menu-item.pin-item.pinned {
+        color: var(--color-brand-primary);
+    }
+
+    .session-header-menu-item.pin-item.pinned .pin-check {
+        opacity: 1;
+    }
+
+    .session-header-menu-item.pin-item.pinned:hover {
+        background-color: var(--color-surface-hover);
+    }
+
+    .header-session-rename-input {
+        font-size: 14px;
+        font-weight: 500;
+        padding: 2px 6px;
+        border: 1px solid var(--color-border-focus);
+        border-radius: 4px;
+        background: var(--color-surface-2);
+        color: var(--color-text-primary);
+        outline: none;
+        min-width: 120px;
+        max-width: 200px;
+    }
+
+    /* ==========================================
+   * SESSION LIST UTILITIES
+   * ========================================== */
+    .load-more-sessions-btn {
+        @apply w-full py-2.5 px-3 mt-2 bg-transparent rounded-lg text-[13px] font-medium cursor-pointer transition-all text-center disabled:opacity-50 disabled:cursor-not-allowed;
+        border: 1px solid var(--color-border-secondary);
+        color: var(--color-text-primary);
+    }
+
+    .load-more-sessions-btn:hover {
+        background-color: var(--color-surface-hover);
+        border-color: var(--color-brand-primary);
+        color: var(--color-brand-primary);
+    }
+
+    .session-list-empty {
+        @apply flex flex-col items-center justify-center py-12 px-4 text-center;
+    }
+
+    .empty-icon {
+        @apply mb-3;
+        color: var(--color-text-secondary);
+    }
+
+    .empty-message {
+        @apply text-sm;
+        color: var(--color-text-secondary);
+    }
+}
