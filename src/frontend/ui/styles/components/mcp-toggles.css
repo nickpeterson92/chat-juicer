@@ -1,0 +1,228 @@
+/**
+ * MCP Toggle & Attachment Styles
+ *
+ * MCP server toggle buttons, attachment dropdown menu,
+ * and related animations.
+ */
+
+@layer components {
+  .mcp-toggle-btn {
+    @apply flex items-center justify-center w-9 h-9 p-0 rounded-[0.65rem] cursor-pointer flex-shrink-0;
+    background-color: var(--color-surface-hover);
+    border: 1px solid var(--color-border-secondary);
+    color: var(--color-text-secondary);
+    transition:
+      color 0.2s,
+      background-color 0.2s,
+      border-color 0.2s,
+      box-shadow 0.2s;
+  }
+
+  /* Off + hover: darken */
+  .mcp-toggle-btn:not(.active):hover {
+    background-color: var(--color-surface-1);
+    color: var(--color-text-secondary);
+  }
+
+  .mcp-toggle-btn:active {
+    transform: scale(0.95);
+  }
+
+  /* On: white icon + blue border + colored background */
+  .mcp-toggle-btn.active {
+    background-color: var(--color-surface-active);
+    border-color: var(--color-border-hover);
+    color: var(--color-text-primary);
+  }
+
+  /* On + hover: glow */
+  .mcp-toggle-btn.active:hover {
+    box-shadow: 0 0 12px 2px var(--color-brand-glow);
+  }
+
+  /* Toggle ON animation: ripple expands outward from icon */
+  .mcp-toggle-btn.animate-on {
+    animation: mcp-ripple-out 0.3s ease-out;
+  }
+
+  /* Toggle OFF animation: ripple contracts inward to icon */
+  .mcp-toggle-btn.animate-off {
+    animation: mcp-ripple-in 0.3s ease-out;
+  }
+
+  @keyframes mcp-ripple-out {
+    0% {
+      box-shadow: inset 0 0 0 18px var(--color-brand-glow);
+    }
+
+    100% {
+      box-shadow: inset 0 0 0 0 var(--color-brand-glow);
+    }
+  }
+
+  @keyframes mcp-ripple-in {
+    0% {
+      box-shadow: inset 0 0 0 0 var(--color-brand-glow);
+    }
+
+    50% {
+      box-shadow: inset 0 0 0 18px var(--color-brand-glow);
+    }
+
+    100% {
+      box-shadow: inset 0 0 0 0 transparent;
+    }
+  }
+
+  .mcp-toggle-btn svg {
+    @apply w-4 h-4;
+  }
+
+  /* Attachment Plus Button - Wrapper for positioning context menu */
+  .attachment-btn-wrapper {
+    @apply relative flex-shrink-0;
+    /* Pull closer to MCP buttons */
+    margin-right: -4px;
+  }
+
+  /* Attachment Plus Button - minimal, borderless */
+  .attachment-plus-btn {
+    @apply flex items-center justify-center w-9 h-9 p-0 rounded-[0.65rem] cursor-pointer flex-shrink-0;
+    background-color: transparent;
+    border: none;
+    color: var(--color-text-secondary);
+    transition:
+      color 0.2s,
+      transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .attachment-plus-btn:hover {
+    color: var(--color-text-primary);
+  }
+
+  .attachment-plus-btn svg {
+    @apply w-5 h-5;
+  }
+
+  /* Rotate 45deg to form X when open */
+  .attachment-plus-btn.open {
+    transform: rotate(45deg);
+    color: var(--color-text-primary);
+  }
+
+  /* Context Menu - fixed positioned, appended to body */
+  .attachment-context-menu {
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px;
+    border-radius: 10px;
+    z-index: 9999;
+    background-color: var(--color-surface-2);
+    border: 1px solid var(--color-border-secondary);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    min-width: 180px;
+  }
+
+  .attachment-context-menu.visible {
+    display: flex;
+  }
+
+  .attachment-menu-item {
+    @apply flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium cursor-pointer transition-colors;
+    background-color: transparent;
+    border: none;
+    color: var(--color-text-secondary);
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .attachment-menu-item:hover {
+    background-color: var(--color-surface-hover);
+    color: var(--color-text-primary);
+  }
+
+  .attachment-menu-item svg {
+    @apply w-4 h-4 flex-shrink-0;
+  }
+
+  /* Submenu arrow icon */
+  .attachment-menu-item .submenu-arrow {
+    @apply w-3 h-3 ml-auto;
+    opacity: 0.6;
+  }
+
+  /* Menu item with submenu - needs relative positioning */
+  .attachment-menu-item.has-submenu {
+    position: relative;
+  }
+
+  /* Submenu container - positioned to the right */
+  .attachment-submenu {
+    display: none;
+    position: absolute;
+    left: calc(100% + 4px);
+    top: 0;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px;
+    border-radius: 10px;
+    z-index: 10000;
+    background-color: var(--color-surface-2);
+    border: 1px solid var(--color-border-secondary);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    min-width: 140px;
+  }
+
+  /* Show submenu on hover */
+  .attachment-menu-item.has-submenu:hover .attachment-submenu {
+    display: flex;
+  }
+
+  /* Disabled menu item state */
+  .attachment-menu-item.disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .attachment-menu-item.disabled:hover {
+    background-color: transparent;
+    color: var(--color-text-secondary);
+  }
+
+  /* Menu divider */
+  .menu-divider {
+    height: 1px;
+    margin: 4px 0;
+    background-color: var(--color-border-secondary);
+  }
+
+  /* MCP Toggle items in context menu */
+  .mcp-toggle-item {
+    @apply justify-between;
+  }
+
+  .mcp-toggle-item .mcp-label {
+    @apply flex-1 text-left;
+  }
+
+  /* Checkmark icon - hidden by default */
+  .mcp-toggle-item .mcp-check {
+    @apply w-4 h-4 flex-shrink-0 opacity-0;
+    color: var(--color-brand-primary);
+    transition: opacity 0.15s ease;
+  }
+
+  /* Active state: blue text + visible checkmark */
+  .mcp-toggle-item.active {
+    color: var(--color-brand-primary);
+  }
+
+  .mcp-toggle-item.active .mcp-check {
+    opacity: 1;
+  }
+
+  .mcp-toggle-item.active:hover {
+    background-color: var(--color-surface-hover);
+  }
+}

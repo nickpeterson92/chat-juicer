@@ -1,0 +1,268 @@
+/**
+ * Model Selector Component Styles
+ *
+ * Model dropdown, model cards, reasoning options,
+ * and inline model configuration.
+ */
+
+@layer components {
+  .model-config-inline {
+    @apply relative flex flex-col items-end gap-1 flex-shrink-0 col-start-2 row-start-1;
+  }
+
+  .model-selector-trigger {
+    @apply flex items-center gap-1.5 py-1.5 px-3 border-none rounded-lg bg-transparent text-sm font-medium cursor-pointer transition-colors;
+    color: var(--color-text-secondary);
+  }
+
+  .model-selector-trigger:hover {
+    color: var(--color-text-primary);
+  }
+
+  /* Compact variant - smaller model selector trigger */
+  .chat-input-section.compact .model-selector-trigger {
+    @apply py-1 px-2 text-xs;
+  }
+
+  .model-selector-trigger svg {
+    @apply w-4 h-4 transition-transform;
+  }
+
+  .model-selector-dropdown {
+    @apply absolute right-0 w-[300px] rounded-lg z-50 overflow-hidden;
+    background-color: var(--color-surface-2);
+    border: 1px solid var(--color-border-secondary);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    top: calc(100% + 4px);
+    max-height: 500px;
+  }
+
+  .model-selector-content {
+    @apply p-2 overflow-y-auto;
+    max-height: inherit;
+    scrollbar-color: var(--color-scrollbar-thumb) transparent;
+    scrollbar-width: thin;
+  }
+
+  .model-selector-content::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .model-selector-content::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .model-selector-content::-webkit-scrollbar-thumb {
+    background-color: var(--color-scrollbar-thumb);
+    border-radius: 3px;
+  }
+
+  .model-selector-content::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-scrollbar-thumb-hover);
+  }
+
+  .model-cards {
+    @apply flex flex-col gap-1.5 mb-1.5;
+  }
+
+  .model-card-wrapper {
+    @apply flex flex-col gap-0;
+  }
+
+  .model-card {
+    @apply flex flex-col items-start gap-0.5 p-2.5 rounded-md bg-transparent text-left cursor-pointer transition-all;
+    border: 1px solid transparent;
+  }
+
+  .model-card:hover {
+    border-color: var(--color-border-hover);
+    background-color: var(--color-surface-hover);
+  }
+
+  .model-card.selected {
+    border-color: var(--color-brand-primary);
+    background-color: var(--color-surface-active);
+  }
+
+  .model-card-header {
+    @apply flex items-center justify-between w-full;
+  }
+
+  .model-card-icons {
+    @apply flex items-center gap-1;
+  }
+
+  .model-card-name {
+    @apply text-sm font-semibold;
+    color: var(--color-text-primary);
+  }
+
+  .reasoning-expand-btn {
+    @apply flex items-center justify-center w-6 h-6 p-0 border-none rounded-md bg-transparent cursor-pointer transition-all;
+    color: var(--color-text-secondary);
+  }
+
+  .reasoning-expand-btn:hover {
+    background-color: var(--color-surface-hover);
+    color: var(--color-text-primary);
+  }
+
+  .reasoning-expand-btn svg {
+    @apply w-3.5 h-3.5 transition-transform;
+  }
+
+  .model-card-check {
+    @apply hidden;
+  }
+
+  .model-card-description {
+    @apply text-xs leading-tight;
+    color: var(--color-text-secondary);
+  }
+
+  .reasoning-panel {
+    @apply mt-1.5 pt-1.5;
+  }
+
+  .reasoning-panel-content {
+    @apply px-2.5 pb-1.5;
+  }
+
+  .reasoning-panel-label {
+    @apply text-[10px] font-semibold mb-1.5 uppercase tracking-wider;
+    color: var(--color-text-secondary);
+  }
+
+  .reasoning-options {
+    @apply flex flex-col gap-1;
+  }
+
+  .reasoning-option {
+    @apply flex flex-col items-start gap-0 p-1.5 rounded-md bg-transparent text-left cursor-pointer transition-all;
+    border: 1px solid transparent;
+  }
+
+  .reasoning-option:hover {
+    border-color: var(--color-border-hover);
+    background-color: var(--color-surface-hover);
+  }
+
+  .reasoning-option.selected {
+    border-color: var(--color-brand-primary);
+    background-color: var(--color-surface-active);
+  }
+
+  .reasoning-option-header {
+    @apply flex items-center justify-between w-full;
+  }
+
+  .reasoning-option-value {
+    @apply text-xs font-semibold;
+    color: var(--color-text-primary);
+  }
+
+  .reasoning-option-check {
+    @apply hidden;
+  }
+
+  .reasoning-option-description {
+    @apply text-[11px] leading-tight;
+    color: var(--color-text-secondary);
+  }
+
+  .more-models-toggle {
+    @apply flex items-center justify-between w-full py-2 px-2.5 border-none rounded-md bg-transparent text-xs font-medium cursor-pointer transition-colors;
+    color: var(--color-text-secondary);
+  }
+
+  .more-models-toggle:hover {
+    background-color: var(--color-surface-hover);
+    color: var(--color-text-primary);
+  }
+
+  .more-models-toggle svg {
+    @apply w-3.5 h-3.5 transition-transform;
+  }
+
+  .more-models-section {
+    @apply flex flex-col gap-1 mt-1.5 pt-1.5;
+  }
+
+  /* Model family sub-dropdown group */
+  .model-family-group {
+    @apply flex flex-col;
+  }
+
+  .model-family-toggle {
+    @apply flex items-center justify-between w-full py-2 px-2.5 border-none rounded-md bg-transparent text-xs font-medium cursor-pointer transition-colors;
+    color: var(--color-text-secondary);
+  }
+
+  .model-family-toggle:hover {
+    background-color: var(--color-surface-hover);
+    color: var(--color-text-primary);
+  }
+
+  .model-family-toggle svg {
+    @apply w-3.5 h-3.5 transition-transform;
+  }
+
+  .model-family-models {
+    @apply flex flex-col gap-1 pl-3 mt-1 ml-2;
+    border-left: 1px solid var(--color-border-secondary);
+  }
+
+  .reasoning-selector-section {
+    @apply mt-3 pt-3;
+  }
+
+  .reasoning-label {
+    @apply text-sm font-medium mb-2;
+    color: var(--color-text-primary);
+  }
+
+  .reasoning-select {
+    @apply w-full py-2 px-3 rounded-lg text-sm cursor-pointer transition-colors focus:outline-none;
+    background-color: var(--color-surface-1);
+    border: 1px solid var(--color-border-secondary);
+    color: var(--color-text-primary);
+  }
+
+  .reasoning-select:hover {
+    border-color: var(--color-border-hover);
+  }
+
+  .reasoning-select:focus {
+    border-color: var(--color-border-focus);
+    box-shadow: 0 0 0 1px var(--color-border-focus);
+  }
+
+  .mcp-toggle-btn {
+    @apply flex items-center justify-center w-9 h-9 p-0 rounded-[0.65rem] cursor-pointer flex-shrink-0;
+    background-color: var(--color-surface-hover);
+    border: 1px solid var(--color-border-secondary);
+    color: var(--color-text-secondary);
+    transition:
+      color 0.2s,
+      background-color 0.2s,
+      border-color 0.2s,
+      box-shadow 0.2s;
+  }
+
+  /* Off + hover: darken */
+  .mcp-toggle-btn:not(.active):hover {
+    background-color: var(--color-surface-1);
+    color: var(--color-text-secondary);
+  }
+
+  .mcp-toggle-btn:active {
+    transform: scale(0.95);
+  }
+
+  /* On: white icon + blue border + colored background */
+  .mcp-toggle-btn.active {
+    background-color: var(--color-surface-active);
+    border-color: var(--color-border-hover);
+    color: var(--color-text-primary);
+  }
+}

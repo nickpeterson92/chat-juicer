@@ -1,0 +1,215 @@
+/**
+ * Keyframe Animations
+ *
+ * Consolidated animation definitions used throughout the application.
+ * Each animation is documented with its primary use case.
+ */
+
+@layer base {
+    /* ==========================================
+   * GENERAL ANIMATIONS
+   * ========================================== */
+
+    /* Fade in - used for function cards, messages */
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
+    }
+
+    /* Slide in from bottom - used for messages */
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Fade out upward - used for toasts */
+    @keyframes fadeOut {
+        0% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        100% {
+            opacity: 0;
+            transform: translateY(-8px) scale(0.95);
+        }
+    }
+
+    /* ==========================================
+   * LOADING ANIMATIONS
+   * ========================================== */
+
+    /* Shimmer wave - used for skeleton loading */
+    @keyframes shimmer-wave {
+        from {
+            background-position: 200% center;
+        }
+
+        to {
+            background-position: -200% center;
+        }
+    }
+
+    @keyframes skeleton-shimmer {
+        0% {
+            background-position: -200% 0;
+        }
+
+        100% {
+            background-position: 200% 0;
+        }
+    }
+
+    /* Spinner rotation */
+    @keyframes skeleton-spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    @keyframes mermaid-spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    /* ==========================================
+   * INDICATOR ANIMATIONS
+   * ========================================== */
+
+    /* Toast pulse - attention grab */
+    @keyframes toast-pulse {
+
+        0%,
+        100% {
+            transform: scale(1);
+        }
+
+        50% {
+            transform: scale(1.05);
+        }
+    }
+
+    /* Streaming indicator pulse */
+    @keyframes streaming-pulse {
+
+        0%,
+        100% {
+            opacity: 1;
+            transform: translateY(-50%) scale(1);
+        }
+
+        50% {
+            opacity: 0.5;
+            transform: translateY(-50%) scale(0.8);
+        }
+    }
+
+    /* ==========================================
+   * MCP TOGGLE ANIMATIONS
+   * ========================================== */
+
+    @keyframes mcp-ripple-out {
+        0% {
+            transform: scale(0.9);
+        }
+
+        100% {
+            transform: scale(1.1);
+        }
+    }
+
+    @keyframes mcp-ripple-in {
+        0% {
+            transform: scale(1.1);
+        }
+
+        100% {
+            transform: scale(0.9);
+        }
+    }
+
+    /* ==========================================
+   * QUEUED MESSAGE ANIMATIONS
+   * ========================================== */
+
+    @keyframes queueBadgePop {
+        0% {
+            transform: scale(0);
+            opacity: 0;
+        }
+
+        50% {
+            transform: scale(1.2);
+        }
+
+        100% {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
+
+    @keyframes queuedMessageSlideIn {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes queuedMessageSlideOut {
+        from {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        to {
+            opacity: 0;
+            transform: translateY(-8px);
+        }
+    }
+
+    @keyframes queueCancelSlide {
+        0% {
+            width: 0;
+            opacity: 0;
+        }
+
+        100% {
+            width: var(--cancel-width, 60px);
+            opacity: 1;
+        }
+    }
+
+    /* ==========================================
+   * PREVIEW ANIMATIONS
+   * ========================================== */
+
+    @keyframes previewIn {
+        from {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+
+        to {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+}

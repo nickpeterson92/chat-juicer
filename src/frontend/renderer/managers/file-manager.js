@@ -250,6 +250,11 @@ export function renderBreadcrumb(currentPath, container, onNavigate) {
   breadcrumbContainer.setAttribute("role", "navigation");
   breadcrumbContainer.setAttribute("aria-label", "File path");
 
+  // Phase 2 Revision: If at root, do not show breadcrumb at all (avoids redundant "Output" header)
+  if (!currentPath) {
+    return;
+  }
+
   // Root segment (Output/)
   const isAtRoot = !currentPath;
   const rootSegment = createBreadcrumbSegment("Output", 0, onNavigate, isAtRoot);

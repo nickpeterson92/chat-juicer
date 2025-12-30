@@ -1,0 +1,178 @@
+/**
+ * Base Styles
+ *
+ * Global resets, body defaults, and foundational styles.
+ * Uses @layer base for proper Tailwind cascade ordering.
+ */
+
+@layer base {
+    :root {
+        /* ========================================
+     * LAYOUT VARIABLES
+     * ======================================== */
+        --input-min-height: 44px;
+    }
+
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        height: 100vh;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        transition: all 300ms;
+    }
+
+    /* Placeholder text for empty states */
+    .files-loading,
+    .files-empty,
+    .sessions-loading {
+        @apply p-4 text-center text-sm text-gray-600;
+    }
+
+    .files-empty svg {
+        @apply inline-block;
+    }
+
+    .files-error {
+        @apply p-4 text-center text-sm text-red-400;
+    }
+}
+
+/* ========================================
+ * UTILITY CLASSES
+ * Convenience classes for semantic color tokens
+ * ======================================== */
+
+@layer components {
+
+    /* Surface utilities */
+    .bg-surface-1 {
+        background-color: var(--color-surface-1);
+    }
+
+    .bg-surface-2 {
+        background-color: var(--color-surface-2);
+    }
+
+    .bg-surface-3 {
+        background-color: var(--color-surface-3);
+    }
+
+    .bg-surface-overlay {
+        background-color: var(--color-surface-overlay);
+    }
+
+    .bg-surface-hover {
+        background-color: var(--color-surface-hover);
+    }
+
+    .bg-surface-active {
+        background-color: var(--color-surface-active);
+    }
+
+    /* Text utilities */
+    .text-primary {
+        color: var(--color-text-primary);
+    }
+
+    .text-secondary {
+        color: var(--color-text-secondary);
+    }
+
+    .text-tertiary {
+        color: var(--color-text-tertiary);
+    }
+
+    .text-assistant {
+        color: var(--color-text-assistant);
+    }
+
+    .text-user {
+        color: var(--color-text-user);
+    }
+
+    .text-on-surface {
+        color: var(--color-text-on-surface);
+    }
+
+    /* Border utilities */
+    .border-primary {
+        border-color: var(--color-border-primary);
+    }
+
+    .border-secondary {
+        border-color: var(--color-border-secondary);
+    }
+
+    .border-focus {
+        border-color: var(--color-border-focus);
+    }
+
+    .border-hover {
+        border-color: var(--color-border-hover);
+    }
+
+    /* Brand utilities */
+    .bg-brand-primary {
+        background-color: var(--color-brand-primary);
+    }
+
+    .bg-brand-secondary {
+        background-color: var(--color-brand-secondary);
+    }
+
+    .text-brand-primary {
+        color: var(--color-brand-primary);
+    }
+
+    .text-brand-secondary {
+        color: var(--color-brand-secondary);
+    }
+
+    .border-brand-primary {
+        border-color: var(--color-brand-primary);
+    }
+
+    .border-brand-secondary {
+        border-color: var(--color-brand-secondary);
+    }
+
+    /* Status utilities */
+    .text-info {
+        color: var(--color-status-info);
+    }
+
+    .text-success {
+        color: var(--color-status-success);
+    }
+
+    .text-warning {
+        color: var(--color-status-warning);
+    }
+
+    .text-error {
+        color: var(--color-status-error);
+    }
+
+    .bg-info {
+        background-color: var(--color-status-info);
+    }
+
+    .bg-success {
+        background-color: var(--color-status-success);
+    }
+
+    .bg-warning {
+        background-color: var(--color-status-warning);
+    }
+
+    .bg-error {
+        background-color: var(--color-status-error);
+    }
+}

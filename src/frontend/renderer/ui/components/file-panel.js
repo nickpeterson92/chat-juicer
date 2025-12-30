@@ -119,7 +119,6 @@ export class FilePanel {
           directory: `data/files/${this.currentSessionId}/input`,
           isOutput: false,
           useThumbnailGrid: true, // Enable thumbnail grid mode
-          headerText: "Input",
           onDelete: () => this.refresh(),
         });
       }
