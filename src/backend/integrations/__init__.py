@@ -6,18 +6,18 @@ Provides integrations with external systems including MCP servers, SDK-level tok
 tracking, and event stream handlers for the Agent/Runner framework.
 
 Modules:
-    mcp_pool: MCP server connection pooling for concurrent request handling
+    mcp_manager: Singleton MCP server manager with WebSocket multiplexing
     mcp_registry: MCP server registration and discovery
     sdk_token_tracker: Universal token tracking via SDK monkey-patching
     event_handlers: Streaming event handlers for Agent/Runner events
 
 Key Components:
 
-MCP Server Pool (mcp_pool.py):
-    Connection pool for MCP servers to handle concurrent requests:
-    - Pre-spawns server instances to avoid per-request overhead
-    - Checkout/checkin pattern for concurrent safety
-    - Automatic health management and recovery
+MCP Server Manager (mcp_manager.py):
+    Manages singleton MCP client connections with WebSocket multiplexing:
+    - Single connection per server type handles concurrent requests
+    - No pooling needed due to WebSocket protocol multiplexing
+    - Clean startup/shutdown lifecycle management
 
 MCP Registry (mcp_registry.py):
     MCP server configuration and discovery:
@@ -40,14 +40,14 @@ Event Handlers (event_handlers.py):
     - reasoning_item: Sequential Thinking steps
 
 Example:
-    Using MCP server pool:
+    Using MCP server manager:
 
-        from integrations.mcp_pool import MCPServerPool
+        from integrations.mcp_manager import MCPServerManager
 
-        pool = MCPServerPool()
-        await pool.initialize(["sequential", "fetch"], pool_size=3)
+        manager = MCPServerManager()
+        await manager.initialize(["sequential", "fetch"])
 
-        async with pool.acquire_servers(["sequential"]) as servers:
+        async with manager.acquire_servers(["sequential"]) as servers:
             # Use servers for agent run
             pass
 
@@ -60,6 +60,6 @@ Example:
             await handlers.handle(event)
 
 See Also:
-    :mod:`api.services.chat_service`: Chat orchestration using MCP pool
+    :mod:`api.services.chat_service`: Chat orchestration using MCP manager
     :mod:`core.agent`: Agent creation with MCP servers
 """

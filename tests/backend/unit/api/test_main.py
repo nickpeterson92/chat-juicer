@@ -46,7 +46,7 @@ async def test_lifespan_startup_success() -> None:
         patch("api.main.patch_sdk_for_auto_tracking") as mock_patch_sdk,
         patch("api.main.create_database_pool", new_callable=AsyncMock) as mock_create_db,
         patch("api.main.check_pool_health", new_callable=AsyncMock) as mock_check_health,
-        patch("api.main.initialize_mcp_pool", new_callable=AsyncMock) as mock_init_mcp,
+        patch("api.main.initialize_mcp_manager", new_callable=AsyncMock) as mock_init_mcp,
         patch("api.main.graceful_pool_close", new_callable=AsyncMock) as mock_close_db,
         patch("api.main.WebSocketManager", autospec=True) as MockWSManager,
     ):
@@ -56,8 +56,8 @@ async def test_lifespan_startup_success() -> None:
         mock_db_pool = Mock()
         mock_create_db.return_value = mock_db_pool
 
-        mock_mcp_pool = AsyncMock()
-        mock_init_mcp.return_value = mock_mcp_pool
+        mock_mcp_manager = AsyncMock()
+        mock_init_mcp.return_value = mock_mcp_manager
 
         # Configure WebSocketManager instance
         mock_ws_instance = MockWSManager.return_value
@@ -76,7 +76,7 @@ async def test_lifespan_startup_success() -> None:
 
             # Verify state assignment
             assert mock_app.state.db_pool == mock_db_pool
-            assert mock_app.state.mcp_pool == mock_mcp_pool
+            assert mock_app.state.mcp_manager == mock_mcp_manager
             assert hasattr(mock_app.state, "ws_manager")
             assert hasattr(mock_app.state, "shutdown_event")
             assert hasattr(mock_app.state, "background_tasks")
@@ -123,7 +123,7 @@ async def test_lifespan_shutdown() -> None:
         patch("api.main.patch_sdk_for_auto_tracking"),
         patch("api.main.create_database_pool", new_callable=AsyncMock) as mock_create_db,
         patch("api.main.check_pool_health", new_callable=AsyncMock) as mock_check,
-        patch("api.main.initialize_mcp_pool", new_callable=AsyncMock) as mock_init_mcp,
+        patch("api.main.initialize_mcp_manager", new_callable=AsyncMock) as mock_init_mcp,
         patch("api.main.graceful_pool_close", new_callable=AsyncMock) as mock_close_db,
         patch("api.main.WebSocketManager", autospec=True) as MockWSManager,
     ):
@@ -135,9 +135,9 @@ async def test_lifespan_shutdown() -> None:
         mock_ws_instance.start_idle_checker = AsyncMock()
         mock_ws_instance.graceful_shutdown = AsyncMock()
 
-        # Mock MCP pool instance
-        mock_mcp_pool = AsyncMock()
-        mock_init_mcp.return_value = mock_mcp_pool
+        # Mock MCP manager instance
+        mock_mcp_manager = AsyncMock()
+        mock_init_mcp.return_value = mock_mcp_manager
 
         # Mock DB pool instance
         mock_db_pool = AsyncMock()
@@ -149,9 +149,9 @@ async def test_lifespan_shutdown() -> None:
         # Verify shutdown actions
         mock_ws_instance.graceful_shutdown.assert_called_once_with(timeout=5.0)
 
-        # Check MCP pool shutdown
-        mcp_pool = mock_app.state.mcp_pool
-        mcp_pool.shutdown.assert_called_once()
+        # Check MCP manager shutdown
+        mcp_manager = mock_app.state.mcp_manager
+        mcp_manager.shutdown.assert_called_once()
 
         # Check DB pool shutdown
         db_pool = mock_app.state.db_pool

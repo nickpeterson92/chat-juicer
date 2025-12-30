@@ -11,7 +11,7 @@ from api.services.chat_service import ChatService
 from api.websocket.manager import WebSocketManager
 from api.websocket.task_manager import CancellationToken
 from core.constants import MSG_TYPE_FUNCTION_COMPLETED, MSG_TYPE_FUNCTION_EXECUTING
-from integrations.mcp_pool import MCPServerPool
+from integrations.mcp_manager import MCPServerManager
 
 
 @pytest.fixture
@@ -30,16 +30,16 @@ def mock_file_service() -> Mock:
 
 
 @pytest.fixture
-def mock_mcp_pool() -> Mock:
-    pool = Mock(spec=MCPServerPool)
-    pool.get_pool_stats = Mock(return_value={"total": 1, "available": 1})
-    pool.acquire_servers = MagicMock()
+def mock_mcp_manager() -> Mock:
+    manager = Mock(spec=MCPServerManager)
+    manager.get_stats = Mock(return_value={"server_count": 1, "initialized": True})
+    manager.acquire_servers = MagicMock()
     # Context manager mock
     cm = AsyncMock()
     cm.__aenter__.return_value = []
     cm.__aexit__.return_value = None
-    pool.acquire_servers.return_value = cm
-    return pool
+    manager.acquire_servers.return_value = cm
+    return manager
 
 
 @pytest.fixture
@@ -57,13 +57,13 @@ def mock_db_pool() -> Mock:
 
 @pytest.fixture
 def chat_service(
-    mock_db_pool: Mock, mock_ws_manager: Mock, mock_file_service: Mock, mock_mcp_pool: Mock
+    mock_db_pool: Mock, mock_ws_manager: Mock, mock_file_service: Mock, mock_mcp_manager: Mock
 ) -> ChatService:
     return ChatService(
         pool=mock_db_pool,
         ws_manager=mock_ws_manager,
         file_service=mock_file_service,
-        mcp_pool=mock_mcp_pool,
+        mcp_manager=mock_mcp_manager,
     )
 
 
@@ -82,7 +82,7 @@ class TestChatService:
         assert chat_service.pool is not None
         assert chat_service.ws_manager is not None
         assert chat_service.file_service is not None
-        assert chat_service.mcp_pool is not None
+        assert chat_service.mcp_manager is not None
         assert chat_service._background_tasks == set()
 
     @pytest.mark.asyncio
@@ -112,7 +112,7 @@ class TestChatService:
         mock_db_pool: Mock,
         mock_ws_manager: Mock,
         mock_file_service: Mock,
-        mock_mcp_pool: Mock,
+        mock_mcp_manager: Mock,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Test successful chat processing flow."""

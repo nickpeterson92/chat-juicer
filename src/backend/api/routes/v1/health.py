@@ -77,14 +77,16 @@ async def health_check(db: DB, request: Request) -> HealthResponse:
     else:
         ws_health = WebSocketHealth(error="not initialized")
 
-    # MCP pool statistics
-    mcp_pool = request.app.state.mcp_pool
-    if mcp_pool:
-        stats = mcp_pool.get_stats()
-        pool_stats = stats.get("pool_stats", {})
-        total = sum(s["total"] for s in pool_stats.values())
-        available = sum(s["available"] for s in pool_stats.values())
-        mcp_health = MCPHealth(initialized=stats.get("initialized", True), pool_size=total, available=available)
+    # MCP manager statistics
+    mcp_manager = request.app.state.mcp_manager
+    if mcp_manager:
+        stats = mcp_manager.get_stats()
+        server_count = stats.get("server_count", 0)
+        mcp_health = MCPHealth(
+            initialized=stats.get("initialized", True),
+            pool_size=server_count,
+            available=server_count,
+        )
     else:
         mcp_health = MCPHealth(initialized=False, pool_size=0, available=0)
 

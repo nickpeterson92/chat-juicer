@@ -15,7 +15,7 @@ from api.routes import chat
 from api.routes.v1 import router as v1_router
 from api.websocket.manager import WebSocketManager
 from core.constants import get_settings
-from integrations.mcp_pool import initialize_mcp_pool
+from integrations.mcp_manager import initialize_mcp_manager
 from integrations.sdk_token_tracker import patch_sdk_for_auto_tracking
 from utils.client_factory import create_http_client, create_openai_client
 from utils.db_utils import check_pool_health, create_database_pool, graceful_pool_close
@@ -152,8 +152,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     await app.state.ws_manager.start_idle_checker()
 
-    # Initialize MCP server pool
-    app.state.mcp_pool = await initialize_mcp_pool(
+    # Initialize MCP server manager
+    app.state.mcp_manager = await initialize_mcp_manager(
         acquire_timeout=settings.mcp_acquire_timeout,
     )
 
@@ -169,10 +169,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         if app.state.ws_manager:
             await app.state.ws_manager.graceful_shutdown(timeout=settings.shutdown_connection_drain_timeout)
 
-        # Phase 2: Shutdown MCP pool
-        if app.state.mcp_pool:
-            await app.state.mcp_pool.shutdown()
-            logger.info("MCP server pool shutdown complete")
+        # Phase 2: Shutdown MCP server manager
+        if app.state.mcp_manager:
+            await app.state.mcp_manager.shutdown()
+            logger.info("MCP server manager shutdown complete")
 
         # Phase 3: Gracefully close database pool
         await graceful_pool_close(app.state.db_pool, timeout=settings.shutdown_timeout)
