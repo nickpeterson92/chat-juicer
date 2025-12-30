@@ -31,6 +31,38 @@ The application uses a **three-tier architecture**:
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
+### Cloud Deployment Architecture
+
+For production, the FastAPI backend runs on AWS:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     Electron Desktop App                            │
+│              (Connects to cloud backend via HTTPS)                  │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ HTTPS / WebSocket
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                     EC2 Instance (t3.xlarge)                        │
+│           Amazon Linux 2023 + FastAPI + MCP Sidecars                │
+└─────────────────────────────────────────────────────────────────────┘
+               │                              │
+               │ PostgreSQL                   │ S3 API
+               ▼                              ▼
+    ┌───────────────────┐          ┌───────────────────┐
+    │  RDS PostgreSQL   │          │    S3 Bucket      │
+    │   (db.t3.micro)   │          │  (Session files)  │
+    │   PostgreSQL 16   │          │                   │
+    └───────────────────┘          └───────────────────┘
+```
+
+**AWS Components:**
+- **EC2**: t3.xlarge running Amazon Linux 2023 with uvicorn + systemd
+- **RDS**: PostgreSQL 16.11 (db.t3.micro) with Performance Insights
+- **S3**: Session file storage with automatic sync and presigned URLs
+- **VPC**: Public subnets with security group whitelisting
+
 ### Project Structure
 
 ```
@@ -148,6 +180,18 @@ chat-juicer/
 │           └── json_utils.py       # JSON utilities
 ├── data/             # Persistent data storage
 │   └── files/        # Session-scoped file storage
+├── docker/           # Docker configurations
+│   └── mcp/          # MCP sidecar containers (docker-compose)
+├── infra/            # Terraform infrastructure (AWS)
+│   ├── bootstrap/    # State backend (S3 + DynamoDB)
+│   ├── modules/      # Terraform modules
+│   │   ├── compute/      # EC2 instance + IAM + security groups
+│   │   ├── database/     # RDS PostgreSQL
+│   │   ├── networking/   # VPC, subnets, routing
+│   │   └── storage/      # S3 bucket
+│   ├── main.tf       # Root module composition
+│   ├── variables.tf  # Input variables
+│   └── outputs.tf    # Output values
 ├── logs/             # Log files (gitignored)
 ├── scripts/          # Utility scripts
 └── tests/            # Test suites
@@ -299,15 +343,22 @@ PGPASSWORD=localdev psql -h localhost -p 5433 -U chatjuicer -d chatjuicer -c "SE
 
 ### Environment Requirements
 
-Required:
+**Required (All Environments):**
 - `AZURE_OPENAI_API_KEY`: Your Azure OpenAI API key
 - `AZURE_OPENAI_ENDPOINT`: Format `https://resource.openai.azure.com/`
-- `AZURE_OPENAI_DEPLOYMENT`: Model deployment name
 - `DATABASE_URL`: PostgreSQL connection string
 
-Optional:
+**Cloud-Specific (Production):**
+- `FILE_STORAGE=s3`: Enable S3 file storage (default: `local`)
+- `S3_BUCKET`: S3 bucket name for session files
+- `S3_REGION`: AWS region (e.g., `us-west-2`)
+- `JWT_SECRET`: Secret for JWT token signing
+- `ALLOW_LOCALHOST_NOAUTH=false`: Enforce authentication
+
+**Optional:**
 - `REASONING_EFFORT`: Control reasoning effort (`none`, `low`, `medium`, `high`)
 - `TAVILY_API_KEY`: Enable Tavily search MCP server
+- `SF_USER`, `SF_PASSWORD`, `SF_TOKEN`: Salesforce integration for schema_fetch
 
 ### Dependencies
 
