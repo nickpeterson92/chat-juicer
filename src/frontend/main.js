@@ -440,12 +440,12 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle("auth-register", async (_event, { email, password, displayName }) => {
+  ipcMain.handle("auth-register", async (_event, { email, password, displayName, inviteCode }) => {
     logger.info("Auth register requested", { email });
     try {
       const result = await apiRequest("/api/v1/auth/register", {
         method: "POST",
-        body: { email, password, display_name: displayName },
+        body: { email, password, display_name: displayName, invite_code: inviteCode },
       });
       if (result.access_token) {
         await storeTokens(result.access_token, result.refresh_token, result.user);

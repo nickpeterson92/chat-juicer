@@ -92,10 +92,11 @@ module "compute" {
   azure_openai_endpoint = var.azure_openai_endpoint
 
   # Auth & Integrations
-  jwt_secret  = random_password.jwt_secret.result
-  sf_user     = var.sf_user
-  sf_password = var.sf_password
-  sf_token    = var.sf_token
+  jwt_secret               = random_password.jwt_secret.result
+  sf_user                  = var.sf_user
+  sf_password              = var.sf_password
+  sf_token                 = var.sf_token
+  registration_invite_code = var.registration_invite_code
 }
 
 # Generate a strong JWT secret automatically

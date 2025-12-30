@@ -86,6 +86,17 @@ export class AuthModal {
                 autocomplete="name"
               >
             </div>
+
+            <div class="form-group">
+              <label for="invite-code">Invite Code (Required)</label>
+              <input
+                type="text"
+                id="invite-code"
+                name="inviteCode"
+                placeholder="Ask your admin for the code"
+                autocomplete="off"
+              >
+            </div>
           `
               : ""
           }
@@ -179,6 +190,7 @@ export class AuthModal {
     const email = form.email.value.trim();
     const password = form.password.value;
     const displayName = form.displayName?.value?.trim();
+    const inviteCode = form.inviteCode?.value?.trim();
 
     // Basic validation
     if (!email || !password) {
@@ -201,7 +213,7 @@ export class AuthModal {
       if (this._mode === "login") {
         await this.authService.login(email, password);
       } else {
-        await this.authService.register(email, password, displayName);
+        await this.authService.register(email, password, displayName, inviteCode);
       }
       this.hide();
     } catch (error) {
@@ -224,6 +236,9 @@ export class AuthModal {
     }
     if (message.includes("network") || message.includes("fetch")) {
       return "Unable to connect. Please check your connection and try again.";
+    }
+    if (message.includes("Invalid or missing invite code")) {
+      return "Invalid invite code. Please ask your administrator for the correct code.";
     }
     return message || "Something went wrong. Please try again.";
   }

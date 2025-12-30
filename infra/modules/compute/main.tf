@@ -176,19 +176,20 @@ resource "aws_instance" "app_server" {
   key_name               = aws_key_pair.deployer.key_name
 
   user_data = templatefile("${path.module}/user_data.sh.tpl", {
-    github_token          = var.github_token
-    tavily_api_key        = var.tavily_api_key
-    db_password           = var.db_password
-    db_username           = var.db_username
-    db_endpoint           = var.db_endpoint
-    s3_bucket             = var.s3_bucket_name
-    aws_region            = var.aws_region
-    azure_openai_api_key  = var.azure_openai_api_key
-    azure_openai_endpoint = var.azure_openai_endpoint
-    jwt_secret            = var.jwt_secret
-    sf_user               = var.sf_user
-    sf_password           = var.sf_password
-    sf_token              = var.sf_token
+    github_token             = var.github_token
+    tavily_api_key           = var.tavily_api_key
+    db_password              = var.db_password
+    db_username              = var.db_username
+    db_endpoint              = var.db_endpoint
+    s3_bucket                = var.s3_bucket_name
+    aws_region               = var.aws_region
+    azure_openai_api_key     = var.azure_openai_api_key
+    azure_openai_endpoint    = var.azure_openai_endpoint
+    jwt_secret               = var.jwt_secret
+    sf_user                  = var.sf_user
+    sf_password              = var.sf_password
+    sf_token                 = var.sf_token
+    registration_invite_code = var.registration_invite_code
   })
   user_data_replace_on_change = true
 

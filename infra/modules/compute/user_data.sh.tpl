@@ -74,6 +74,9 @@ HTTP_READ_TIMEOUT=600.0
 
 # CORS
 CORS_ALLOW_ORIGINS=app://.,https://chat-juicer.com,https://api.chat-juicer.com
+
+# Registration restriction
+REGISTRATION_INVITE_CODE=${registration_invite_code}
 EOF
 
 # 6. Start MCP Sidecars (Docker)

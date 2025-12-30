@@ -866,6 +866,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = Field(default="HS256", description="JWT signing algorithm")
     access_token_expires_minutes: int = Field(default=15, description="Access token lifetime (minutes)")
     refresh_token_expires_days: int = Field(default=7, description="Refresh token lifetime (days)")
+    registration_invite_code: str | None = Field(
+        default=None,
+        description="Required invite code for registration (if set, registration is restricted)",
+    )
 
     # Hot-reload support (development only)
     config_hot_reload: bool = Field(

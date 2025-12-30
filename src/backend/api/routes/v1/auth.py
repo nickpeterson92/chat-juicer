@@ -57,6 +57,20 @@ router = APIRouter()
 )
 async def register(body: RegisterRequest, db: DB) -> TokenResponse:
     """Register new user and issue tokens."""
+    from api.middleware.exception_handlers import AppException
+    from core.constants import get_settings
+
+    settings = get_settings()
+
+    # Check invite code if registration is restricted
+    if settings.registration_invite_code and (
+        not body.invite_code or body.invite_code != settings.registration_invite_code
+    ):
+        raise AppException(
+            code=ErrorCode.AUTH_INVALID_CREDENTIALS,
+            message="Invalid or missing invite code",
+        )
+
     auth = AuthService(db)
     try:
         result = await auth.register(body.email, body.password, body.display_name)
@@ -75,8 +89,6 @@ async def register(body: RegisterRequest, db: DB) -> TokenResponse:
             ),
         )
     except ValueError as exc:
-        from api.middleware.exception_handlers import AppException
-
         raise AppException(
             code=ErrorCode.RESOURCE_ALREADY_EXISTS,
             message=str(exc),

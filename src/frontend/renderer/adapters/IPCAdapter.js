@@ -429,11 +429,11 @@ export class IPCAdapter {
    * @param {string} [displayName] - Optional display name
    * @returns {Promise<object>} Auth result with tokens and user
    */
-  async authRegister(email, password, displayName) {
+  async authRegister(email, password, displayName, inviteCode) {
     if (!this.api?.authRegister) {
       throw new Error("IPC API not available: authRegister");
     }
-    return this.api.authRegister(email, password, displayName);
+    return this.api.authRegister(email, password, displayName, inviteCode);
   }
 
   /**
