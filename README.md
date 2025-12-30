@@ -58,7 +58,7 @@ make health             # Check system configuration
 - **FastAPI Backend**: RESTful API with WebSocket streaming and PostgreSQL persistence
 - **Agent/Runner Pattern**: Native OpenAI Agents SDK with automatic tool orchestration
 - **MCP Servers**: Sequential Thinking and Fetch servers by default, plus optional Tavily search when configured
-- **MCP Server Pool**: Pre-spawned server instances for concurrent request handling
+- **MCP Server Manager**: Shared WebSocket clients with multiplexing for concurrent request handling
 - **PostgreSQL Persistence**: Sessions and messages stored in PostgreSQL with connection pooling
 - **Multi-Session Support**: Create, switch, delete sessions with auto-title after first message
 - **WebSocket Streaming**: Real-time AI response streaming via `/ws/chat/{session_id}`
@@ -100,7 +100,7 @@ Chat Juicer uses a **three-tier architecture** with OpenAI's **Agent/Runner patt
 ### Key Architectural Components:
 - **FastAPI Backend**: RESTful API with WebSocket streaming at `/ws/chat/{session_id}`
 - **PostgreSQL**: Persistent storage for sessions and messages with connection pooling (asyncpg)
-- **MCP Server Pool**: Pre-spawned server instances for concurrent request handling
+- **MCP Server Manager**: Shared singleton clients with WebSocket multiplexing
 - **Agent/Runner Pattern**: Native MCP server integration with automatic tool orchestration
 - **Electron Main Process**: HTTP/WebSocket proxy connecting renderer to FastAPI
 - **Frontend**: 7-phase bootstrap, AppState pub/sub, EventBus for message routing
@@ -479,9 +479,9 @@ chat-juicer/
 │       │   ├── wrappers.py           # Session-aware tool wrappers
 │       │   └── registry.py           # Tool registration
 │       ├── integrations/ # External integrations
-│       │   ├── mcp_pool.py          # MCP server connection pool
-│       │   ├── mcp_registry.py      # MCP server registry
-│       │   ├── mcp_transport.py     # MCP transport layer
+│       │   ├── mcp_manager.py       # MCP server lifecycle management
+│       │   ├── mcp_registry.py      # MCP server registry and configuration
+│       │   ├── mcp_transport.py     # MCP transport layer (WebSocket)
 │       │   ├── mcp_websocket_client.py # MCP WebSocket client
 │       │   ├── sdk_token_tracker.py # Token tracking
 │       │   └── event_handlers/      # Streaming event handlers
@@ -583,9 +583,10 @@ chat-juicer/
 - **registry.py**: Tool registration and discovery
 
 **Integrations** (`integrations/`)
-- **mcp_servers.py**: MCP server setup (Sequential Thinking, Fetch, optional Tavily)
-- **mcp_pool.py**: MCP server connection pool for concurrent requests
-- **mcp_registry.py**: MCP server registry and discovery
+- **mcp_manager.py**: MCP server lifecycle management and connection handling
+- **mcp_registry.py**: MCP server registry, configuration, and discovery
+- **mcp_transport.py**: WebSocket transport layer for MCP servers
+- **mcp_websocket_client.py**: WebSocket client for containerized MCP sidecars
 - **sdk_token_tracker.py**: Universal token tracking via SDK monkey-patching
 - **event_handlers/**: Streaming event handlers for Agent/Runner pattern
   - **agent_events.py**: Agent event handlers
