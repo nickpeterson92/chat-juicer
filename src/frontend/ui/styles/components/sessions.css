@@ -161,6 +161,10 @@
         color: var(--color-text-primary);
         cursor: pointer;
         transition: opacity 0.2s;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 400px;
     }
 
     .header-session-name:hover {
