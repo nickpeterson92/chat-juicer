@@ -628,8 +628,6 @@ class SandboxPool:
 
         except Exception as e:
             logger.warning("Warm execution failed, container may be dead: %s", e)
-            # Mark warm container as dead so next call starts fresh
-            self.warm_container_id = None
             # Fall back to cold execution
             return await self._execute_cold(code, workspace_path, session_files_path)
 
