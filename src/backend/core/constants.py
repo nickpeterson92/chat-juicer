@@ -797,6 +797,12 @@ class Settings(BaseSettings):
     )
     mcp_acquire_timeout: float = Field(default=30.0, description="MCP server acquire timeout (seconds)")
 
+    # Sandbox Pool configuration
+    sandbox_pool_size: int = Field(default=3, description="Number of warm sandbox containers to pre-spawn")
+    sandbox_acquire_timeout: float = Field(
+        default=30.0, description="Timeout in seconds to acquire a sandbox container"
+    )
+
     # WebSocket connection management
     ws_idle_timeout: float = Field(
         default=600.0,

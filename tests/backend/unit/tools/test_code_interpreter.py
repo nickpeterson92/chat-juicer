@@ -137,19 +137,20 @@ class TestSandboxPool:
     def pool(self) -> SandboxPool:
         """Create a fresh pool instance."""
         with patch("tools.code_interpreter.get_container_runtime", return_value="docker"):
-            return SandboxPool()
+            return SandboxPool(pool_size=2)
 
     def test_init_with_runtime(self, pool: SandboxPool) -> None:
         """Should initialize with detected runtime."""
         assert pool.runtime == "docker"
-        assert pool.warm_container_id is None
+        assert pool.pool_size == 2
+        assert pool._initialized is False
 
     def test_init_without_runtime(self) -> None:
         """Should handle missing runtime gracefully."""
         with patch("tools.code_interpreter.get_container_runtime", return_value=None):
             pool = SandboxPool()
             assert pool.runtime is None
-            assert pool.warm_container_id is None
+            assert pool._initialized is False
 
     @pytest.mark.asyncio
     async def test_ensure_warm_no_runtime(self) -> None:
@@ -160,26 +161,29 @@ class TestSandboxPool:
             assert result is False
 
     @pytest.mark.asyncio
-    async def test_ensure_warm_starts_container(self, pool: SandboxPool) -> None:
-        """Should start warm container when not running."""
+    async def test_initialize_starts_containers(self, pool: SandboxPool) -> None:
+        """Should start warm containers on initialize."""
         with patch.object(pool, "_start_warm_container", new_callable=AsyncMock) as mock_start:
-            mock_start.return_value = "container123"
-            result = await pool.ensure_warm()
-            assert result is True
-            assert pool.warm_container_id == "container123"
-            mock_start.assert_called_once()
+            mock_start.side_effect = ["container1", "container2"]
+            await pool.initialize()
+
+            assert pool._initialized is True
+            assert mock_start.call_count == 2
+            assert pool._available.qsize() == 2
+            assert len(pool._all_containers) == 2
 
     @pytest.mark.asyncio
-    async def test_ensure_warm_reuses_container(self, pool: SandboxPool) -> None:
-        """Should reuse existing warm container if alive."""
-        pool.warm_container_id = "existing123"
-        with (
-            patch.object(pool, "_is_alive", new_callable=AsyncMock, return_value=True),
-            patch.object(pool, "_start_warm_container", new_callable=AsyncMock) as mock_start,
-        ):
-            result = await pool.ensure_warm()
-            assert result is True
-            mock_start.assert_not_called()
+    async def test_acquire_returns_container(self, pool: SandboxPool) -> None:
+        """Should acquire available container."""
+        # Pre-fill pool
+        with patch.object(pool, "_start_warm_container", new_callable=AsyncMock) as mock_start:
+            mock_start.side_effect = ["c1", "c2"]
+            await pool.initialize()
+
+        with patch.object(pool, "_is_alive", new_callable=AsyncMock, return_value=True):
+            cid = await pool.acquire()
+            assert cid == "c1"
+            assert pool._available.qsize() == 1
 
     @pytest.mark.asyncio
     async def test_execute_no_runtime(self) -> None:
@@ -191,24 +195,25 @@ class TestSandboxPool:
             assert "No container runtime" in result.error
 
     @pytest.mark.asyncio
-    async def test_execute_cold_fallback(self, pool: SandboxPool, tmp_path: Path) -> None:
-        """Should fall back to cold execution if warm fails."""
+    async def test_execute_success(self, pool: SandboxPool, tmp_path: Path) -> None:
+        """Should execute code and return results."""
         workspace = tmp_path / "workspace"
         workspace.mkdir()
 
         with (
-            patch.object(pool, "ensure_warm", new_callable=AsyncMock, return_value=False),
-            patch.object(pool, "_execute_cold", new_callable=AsyncMock) as mock_cold,
+            patch.object(pool, "acquire", new_callable=AsyncMock, return_value="c1"),
+            patch.object(pool, "release", new_callable=AsyncMock),
+            patch.object(pool, "_execute_in_container", new_callable=AsyncMock) as mock_exec,
         ):
-            mock_cold.return_value = ExecutionResult(success=True, stdout="output")
+            mock_exec.return_value = ExecutionResult(success=True, stdout="output")
             result = await pool.execute("print('hi')", workspace)
             assert result.success is True
-            mock_cold.assert_called_once()
+            mock_exec.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_shutdown_kills_container(self, pool: SandboxPool) -> None:
         """Should kill warm container on shutdown."""
-        pool.warm_container_id = "container123"
+        pool._all_containers.add("container123")
 
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
             mock_proc = AsyncMock()
@@ -217,13 +222,14 @@ class TestSandboxPool:
 
             await pool.shutdown()
 
-            assert pool.warm_container_id is None
-            mock_exec.assert_called_once()
+            assert pool._initialized is False
+            assert mock_exec.call_count == 1  # 1 container
+            assert pool._all_containers == set()
 
     @pytest.mark.asyncio
     async def test_shutdown_handles_no_container(self, pool: SandboxPool) -> None:
         """Should handle shutdown when no container running."""
-        pool.warm_container_id = None
+        pool._all_containers = set()
         await pool.shutdown()  # Should not raise
 
     def test_collect_output_files(self, pool: SandboxPool, tmp_path: Path) -> None:
@@ -365,11 +371,9 @@ class TestGlobalPool:
 
         # Create pool
         with patch("tools.code_interpreter.get_container_runtime", return_value="docker"):
-            pool = get_sandbox_pool()
-            pool.warm_container_id = None  # No actual container
-
             await shutdown_sandbox_pool()
 
+            # Pool should be cleared from global state
             assert module._state["pool"] is None
 
 

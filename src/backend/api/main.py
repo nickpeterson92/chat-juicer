@@ -157,6 +157,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         acquire_timeout=settings.mcp_acquire_timeout,
     )
 
+    # Initialize sandbox pool
+    from tools.code_interpreter import get_sandbox_pool
+
+    pool = get_sandbox_pool(pool_size=settings.sandbox_pool_size)
+    await pool.initialize()
+    app.state.sandbox_pool = pool
+
     try:
         yield
     finally:
@@ -169,12 +176,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         if app.state.ws_manager:
             await app.state.ws_manager.graceful_shutdown(timeout=settings.shutdown_connection_drain_timeout)
 
-        # Phase 2: Shutdown MCP server manager
-        if app.state.mcp_manager:
+            # Phase 2: Shutdown MCP server manager
             await app.state.mcp_manager.shutdown()
             logger.info("MCP server manager shutdown complete")
 
-        # Phase 3: Gracefully close database pool
+        # Phase 3: Shutdown Sandbox pool
+        if hasattr(app.state, "sandbox_pool") and app.state.sandbox_pool:
+            await app.state.sandbox_pool.shutdown()
+            logger.info("Sandbox pool shutdown complete")
+
+        # Phase 4: Gracefully close database pool
         await graceful_pool_close(app.state.db_pool, timeout=settings.shutdown_timeout)
 
 
