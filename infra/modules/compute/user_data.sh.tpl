@@ -71,6 +71,9 @@ SF_TOKEN=${sf_token}
 OPENAI_AGENTS_DISABLE_TRACING=true
 HTTP_REQUEST_LOGGING=false
 HTTP_READ_TIMEOUT=600.0
+
+# CORS
+CORS_ALLOW_ORIGINS=app://.,https://chat-juicer.com,https://api.chat-juicer.com
 EOF
 
 # 6. Start MCP Sidecars (Docker)

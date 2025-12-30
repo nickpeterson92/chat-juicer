@@ -1,0 +1,47 @@
+# Chat Juicer - Terraform Variables
+# Copy to terraform.tfvars and fill in your values
+# terraform.tfvars is gitignored for security
+
+# ====================================
+# AWS Configuration
+# ====================================
+aws_region   = "us-west-2"
+environment  = "dev"
+project_name = "chat-juicer"
+
+# ====================================
+# EC2 Configuration
+# ====================================
+instance_type   = "t3.xlarge"
+public_key_path = "~/.ssh/id_rsa.pub"
+
+# IP whitelist for SSH and API access (your IP)
+# Find your IP: curl ifconfig.me
+allowed_cidr_blocks = ["YOUR_IP/32"]
+
+# ====================================
+# Database
+# ====================================
+# Generate a strong password: openssl rand -base64 24
+db_password = "your-secure-database-password"
+
+# ====================================
+# API Keys (Required)
+# ====================================
+# GitHub PAT with repo access (for cloning on EC2)
+github_token = "ghp_xxxxxxxxxxxx"
+
+# Azure OpenAI credentials
+azure_openai_api_key  = "your-azure-openai-key"
+azure_openai_endpoint = "https://your-resource.openai.azure.com/"
+
+# ====================================
+# Optional Integrations
+# ====================================
+# Tavily search (leave empty to disable)
+tavily_api_key = ""
+
+# Salesforce integration (leave empty to disable)
+sf_user     = ""
+sf_password = ""
+sf_token    = ""

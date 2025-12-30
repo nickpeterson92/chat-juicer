@@ -825,6 +825,27 @@ class Settings(BaseSettings):
     # Reasoning models (GPT-5, O1, O3) can pause 30+ seconds while "thinking"
     http_read_timeout: float = Field(default=600.0, description="HTTP read timeout for streaming (seconds)")
 
+    # CORS configuration
+    # Production should use explicit origin list; development can use "*" for convenience
+    # Format: comma-separated origins e.g., "http://localhost:3000,https://app.example.com"
+    # Use "*" only for development (set via CORS_ALLOW_ORIGINS env var)
+    cors_allow_origins: str = Field(
+        default="http://localhost:8080,http://localhost:3000,http://127.0.0.1:8080",
+        description="Comma-separated list of allowed CORS origins (use '*' for development only)",
+    )
+    cors_allow_credentials: bool = Field(
+        default=True,
+        description="Allow credentials in CORS requests",
+    )
+    cors_allow_methods: str = Field(
+        default="GET,POST,PUT,DELETE,OPTIONS,PATCH",
+        description="Comma-separated list of allowed HTTP methods",
+    )
+    cors_allow_headers: str = Field(
+        default="Authorization,Content-Type,X-Request-ID",
+        description="Comma-separated list of allowed request headers",
+    )
+
     # Graceful shutdown configuration
     shutdown_timeout: float = Field(
         default=30.0,
@@ -991,6 +1012,12 @@ class Settings(BaseSettings):
                     "Configuration Error: allow_localhost_noauth must be False in production.\n"
                     "Set ALLOW_LOCALHOST_NOAUTH=false in your .env.production file."
                 )
+            if "*" in self.cors_allow_origins:
+                raise ValueError(
+                    "Configuration Error: CORS allow_origins='*' is not allowed in production.\n"
+                    "Set CORS_ALLOW_ORIGINS to a comma-separated list of allowed origins, e.g.,\n"
+                    "CORS_ALLOW_ORIGINS=https://app.example.com,https://admin.example.com"
+                )
         return self
 
     @property
@@ -1014,6 +1041,31 @@ class Settings(BaseSettings):
     def is_test(self) -> bool:
         """Check if running in test mode."""
         return self.app_env == "test"
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Parse comma-separated CORS origins into a list.
+
+        Handles the special case of "*" for development (allow all origins).
+        """
+        if self.cors_allow_origins.strip() == "*":
+            return ["*"]
+        return [origin.strip() for origin in self.cors_allow_origins.split(",") if origin.strip()]
+
+    @property
+    def cors_methods_list(self) -> list[str]:
+        """Parse comma-separated CORS methods into a list."""
+        return [method.strip() for method in self.cors_allow_methods.split(",") if method.strip()]
+
+    @property
+    def cors_headers_list(self) -> list[str]:
+        """Parse comma-separated CORS headers into a list."""
+        return [header.strip() for header in self.cors_allow_headers.split(",") if header.strip()]
+
+    @property
+    def cors_allows_all_origins(self) -> bool:
+        """Check if CORS is configured to allow all origins (insecure)."""
+        return "*" in self.cors_origins_list
 
 
 # ============================================================================
