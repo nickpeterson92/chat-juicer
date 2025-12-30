@@ -102,6 +102,32 @@ resource "aws_security_group" "app_sg" {
     description = "HTTPS from Cloudflare only"
   }
 
+  # HTTP API Access (Cloudflare proxy - for Flexible SSL mode)
+  # When Cloudflare SSL is set to "Flexible", it terminates HTTPS and connects to origin via HTTP
+  ingress {
+    from_port = 8000
+    to_port   = 8000
+    protocol  = "tcp"
+    cidr_blocks = [
+      "173.245.48.0/20",
+      "103.21.244.0/22",
+      "103.22.200.0/22",
+      "103.31.4.0/22",
+      "141.101.64.0/18",
+      "108.162.192.0/18",
+      "190.93.240.0/20",
+      "188.114.96.0/20",
+      "197.234.240.0/22",
+      "198.41.128.0/17",
+      "162.158.0.0/15",
+      "104.16.0.0/13",
+      "104.24.0.0/14",
+      "172.64.0.0/13",
+      "131.0.72.0/22",
+    ]
+    description = "HTTP API from Cloudflare (Flexible SSL)"
+  }
+
   # Egress (Allow all outbound)
   egress {
     from_port   = 0
