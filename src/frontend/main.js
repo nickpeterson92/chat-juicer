@@ -8,10 +8,44 @@ const { apiRequest: rawApiRequest, connectWebSocket, sendWebSocketMessage, close
 
 /**
  * Wrapper for apiRequest that automatically adds the authentication token
+ * and handles automatic token refresh on 401 errors.
  */
-async function apiRequest(endpoint, options = {}) {
+async function apiRequest(endpoint, options = {}, isRetry = false) {
   const token = options.token || cachedAccessToken;
-  return rawApiRequest(endpoint, { ...options, token });
+
+  try {
+    return await rawApiRequest(endpoint, { ...options, token });
+  } catch (error) {
+    // If unauthorized (401) and we have a refresh token and haven't retried yet
+    if (error.status === 401 && cachedRefreshToken && !isRetry) {
+      logger.info("Access token expired (401), attempting refresh...");
+
+      try {
+        // Attempt to refresh
+        const refreshResult = await rawApiRequest("/api/v1/auth/refresh", {
+          method: "POST",
+          body: { refresh_token: cachedRefreshToken },
+        });
+
+        if (refreshResult.access_token) {
+          logger.info("Token refresh successful, retrying request...");
+          // Update stored tokens
+          await storeTokens(
+            refreshResult.access_token,
+            refreshResult.refresh_token || cachedRefreshToken,
+            refreshResult.user
+          );
+
+          // Retry original request with new token
+          return await apiRequest(endpoint, options, true);
+        }
+      } catch (refreshError) {
+        logger.error("Token refresh failed during auto-recovery", { error: refreshError.message });
+        // Fall through to throw original error
+      }
+    }
+    throw error;
+  }
 }
 
 const {
@@ -36,6 +70,7 @@ let reconnectTimer = null;
 // Auth token storage
 const TOKEN_FILE = path.join(app.getPath("userData"), "auth-tokens.json");
 let cachedAccessToken = null;
+let cachedRefreshToken = null;
 
 /**
  * Read stored auth tokens (encrypted at rest)
@@ -86,6 +121,7 @@ readStoredTokens()
   .then((tokens) => {
     if (tokens?.accessToken) {
       cachedAccessToken = tokens.accessToken;
+      cachedRefreshToken = tokens.refreshToken;
       logger.info("Restored auth session from storage");
     }
   })
@@ -110,6 +146,7 @@ async function storeTokens(accessToken, refreshToken, user = null) {
       await fs.writeFile(TOKEN_FILE, JSON.stringify(encrypted));
     }
     cachedAccessToken = accessToken;
+    cachedRefreshToken = refreshToken;
     return true;
   } catch (error) {
     logger.error("Failed to store tokens", { error: error.message });
@@ -124,6 +161,7 @@ async function clearTokens() {
   try {
     await fs.unlink(TOKEN_FILE);
     cachedAccessToken = null;
+    cachedRefreshToken = null;
   } catch {
     // File may not exist
   }

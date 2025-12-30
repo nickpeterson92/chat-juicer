@@ -8,7 +8,7 @@ from api.dependencies import (
     get_app_settings,
     get_db,
     get_file_service,
-    get_mcp_pool,
+    get_mcp_manager,
     get_session_service,
     get_ws_manager,
 )
@@ -39,12 +39,12 @@ def test_get_ws_manager() -> None:
     assert get_ws_manager(mock_request) == mock_manager
 
 
-def test_get_mcp_pool() -> None:
+def test_get_mcp_manager() -> None:
     mock_request = Mock(spec=Request)
-    mock_pool = Mock()
-    mock_request.app.state.mcp_pool = mock_pool
+    mock_manager = Mock()
+    mock_request.app.state.mcp_manager = mock_manager
 
-    assert get_mcp_pool(mock_request) == mock_pool
+    assert get_mcp_manager(mock_request) == mock_manager
 
 
 def test_get_file_service() -> None:

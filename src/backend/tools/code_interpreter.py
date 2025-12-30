@@ -15,11 +15,13 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import json
 import logging
 import shutil
 import subprocess
 import time
+import uuid
 
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -195,27 +197,135 @@ class SandboxPool:
     code execution requests. Workspace is cleaned between executions.
     """
 
-    def __init__(self) -> None:
-        self.warm_container_id: str | None = None
-        self.runtime: str | None = get_container_runtime()
-        self._lock = asyncio.Lock()
+    _initialized: bool = False
+    _available: asyncio.Queue[str]
+    _all_containers: set[str]
+    _lock: asyncio.Lock
 
-    async def ensure_warm(self) -> bool:
-        """Start warm container if not running. Returns True if warm container available."""
+    async def initialize(self) -> None:
+        """Start warm containers for the pool."""
         if not self.runtime:
-            return False
+            return
 
         async with self._lock:
-            if self.warm_container_id and await self._is_alive():
-                return True
+            if self._initialized:
+                return
 
-            # Start new warm container
-            self.warm_container_id = await self._start_warm_container()
-            return self.warm_container_id is not None
+            logger.info(f"Initializing sandbox pool with {self.pool_size} containers")
+            tasks = [self._start_warm_container(i) for i in range(self.pool_size)]
+            container_ids = await asyncio.gather(*tasks)
 
-    async def _is_alive(self) -> bool:
-        """Check if warm container is still running."""
-        if not self.warm_container_id or not self.runtime:
+            for cid in container_ids:
+                if cid:
+                    await self._available.put(cid)
+                    self._all_containers.add(cid)
+
+            self._initialized = True
+
+    async def _stop_container(self, container_id: str) -> None:
+        """Stop a single container gracefully (or kill it)."""
+        if not self.runtime:
+            return
+
+        logger.info(f"Stopping container {container_id}...")
+        try:
+            # Force remove the container (kill + rm)
+            proc = await asyncio.create_subprocess_exec(
+                self.runtime,
+                "rm",
+                "-f",
+                container_id,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await proc.wait()
+        except Exception as e:
+            logger.warning(f"Error stopping container {container_id}: {e}")
+
+    async def shutdown(self) -> None:
+        """Stop all warm containers."""
+        if not self.runtime:
+            return
+
+        async with self._lock:
+            logger.info("Shutting down sandbox pool...")
+            tasks = [self._stop_container(cid) for cid in self._all_containers]
+
+            await asyncio.gather(*tasks)
+            self._all_containers.clear()
+            # Drain queue
+            while not self._available.empty():
+                with contextlib.suppress(asyncio.QueueEmpty):
+                    self._available.get_nowait()
+            self._initialized = False
+
+    async def acquire(self, timeout: float = 30.0) -> str:
+        """Get a warm container from the pool."""
+        if not self.runtime:
+            raise RuntimeError("No container runtime available")
+
+        # Auto-initialize if needed
+        if not self._initialized:
+            await self.initialize()
+
+        try:
+            container_id = await asyncio.wait_for(self._available.get(), timeout=timeout)
+
+            # Health check
+            if not await self._is_alive(container_id):
+                logger.warning(f"Container {container_id[:12]} dead on acquire, respawning...")
+                # Remove dead container from tracking
+                async with self._lock:
+                    self._all_containers.discard(container_id)
+                # Spawn replacement
+                new_id = await self._start_warm_container(str(uuid.uuid4())[:8])
+                if new_id:
+                    async with self._lock:
+                        self._all_containers.add(new_id)
+                    return new_id
+                else:
+                    raise RuntimeError("Failed to respawn container")
+
+            return container_id
+        except asyncio.TimeoutError:
+            raise TimeoutError(f"No sandbox containers available after {timeout}s") from None
+
+    async def release(self, container_id: str) -> None:
+        """Return container to pool after cleanup."""
+        try:
+            # Quick cleanup of workspace
+            await self._clean_container_workspace(container_id)
+            await self._available.put(container_id)
+        except Exception as e:
+            logger.error(f"Error releasing container {container_id[:12]}: {e}")
+            # If cleanup failed, kill it and spawn new one
+            await self._stop_container(container_id)
+            async with self._lock:
+                self._all_containers.discard(container_id)
+            # Spawn replacement
+            new_id = await self._start_warm_container(str(uuid.uuid4())[:8])
+            if new_id:
+                async with self._lock:
+                    self._all_containers.add(new_id)
+                await self._available.put(new_id)
+
+    def __init__(self, pool_size: int = 3) -> None:
+        self.pool_size = pool_size
+        self.runtime = get_container_runtime()
+        self._available = asyncio.Queue()
+        self._all_containers = set()
+        self._lock = asyncio.Lock()
+        self._initialized = False
+
+    async def ensure_warm(self) -> bool:
+        """Deprecated: Use initialize() instead."""
+        if not self._initialized:
+            await self.initialize()
+        return self._initialized
+
+    async def _is_alive(self, container_id: str) -> bool:
+        """Check if container is still running."""
+        if not container_id or not self.runtime:
             return False
 
         proc = await asyncio.create_subprocess_exec(
@@ -224,7 +334,7 @@ class SandboxPool:
             "inspect",
             "-f",
             "{{.State.Running}}",
-            self.warm_container_id,
+            container_id,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -233,8 +343,9 @@ class SandboxPool:
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
             return stdout.decode().strip() == "true"
         except asyncio.TimeoutError:
-            proc.kill()
-            logger.warning("Container inspect timed out, assuming dead")
+            with contextlib.suppress(ProcessLookupError):
+                proc.kill()
+            logger.warning("Container inspect timed out")
             return False
 
     async def _cleanup_stale_containers(self) -> None:
@@ -267,15 +378,14 @@ class SandboxPool:
                 )
                 await kill_proc.wait()
 
-    async def _start_warm_container(self) -> str | None:
+    async def _start_warm_container(self, suffix: str | int = 0) -> str | None:
         """Start a warm container with pre-imported packages."""
         if not self.runtime:
             return None
 
-        # Clean up any orphaned containers from previous runs
-        await self._cleanup_stale_containers()
-
-        logger.info("Starting warm sandbox container...")
+        # Name: chat-juicer-sandbox-pool-{suffix}
+        name = f"chat-juicer-sandbox-pool-{suffix}"
+        logger.info(f"Starting warm sandbox container {name}...")
 
         # Start container with security restrictions but no immediate command
         # The container runs sleep infinity and we exec into it
@@ -285,19 +395,20 @@ class SandboxPool:
             "-d",  # Detached
             "--rm",  # Remove on exit
             "--name",
-            f"chat-juicer-sandbox-warm-{int(time.time())}",
+            name,
             "--network=none",  # No network access
             "--read-only",  # Read-only root filesystem
             f"--memory={MEMORY_LIMIT}",
             f"--cpus={CPU_LIMIT}",
             "--tmpfs",
             f"/tmp:size={TMP_SIZE}",
-            "--tmpfs",
-            "/workspace:size=64m",  # Writable workspace for warm container
-            "--tmpfs",
-            "/input:size=64m",  # Session source files (read via copy)
-            "--tmpfs",
-            "/output:size=64m",  # Session output files (read via copy)
+            # Use volumes instead of tmpfs for workspace to support 'docker cp' on read-only rootfs
+            "-v",
+            "/workspace",
+            "-v",
+            "/input",
+            "-v",
+            "/output",
             "-w",
             "/workspace",
             SANDBOX_IMAGE,
@@ -337,6 +448,28 @@ class SandboxPool:
         logger.info("Warm container started: %s", container_id[:12])
         return container_id
 
+    async def _clean_container_workspace(self, container_id: str) -> None:
+        """Clean up workspace in container between runs."""
+        if not self.runtime:
+            return
+
+        cleanup_proc = await asyncio.create_subprocess_exec(
+            self.runtime,
+            "exec",
+            container_id,
+            "sh",
+            "-c",
+            "rm -rf /workspace/*",
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        try:
+            await asyncio.wait_for(cleanup_proc.wait(), timeout=10)
+        except asyncio.TimeoutError:
+            with contextlib.suppress(ProcessLookupError):
+                cleanup_proc.kill()
+            logger.warning(f"Workspace cleanup timed out for {container_id[:12]}")
+
     async def execute(
         self,
         code: str,
@@ -344,15 +477,7 @@ class SandboxPool:
         session_files_path: Path | None = None,
     ) -> ExecutionResult:
         """
-        Execute code in warm container (fast path) or cold container (fallback).
-
-        Args:
-            code: Python code to execute
-            workspace_path: Host path for workspace (code input + outputs)
-            session_files_path: Optional path to session files (input/, output/) for read access
-
-        Returns:
-            ExecutionResult with stdout, stderr, files, and metadata
+        Execute code in a warm container from the pool.
         """
         start_time = time.time()
         runtime = self.runtime
@@ -369,61 +494,74 @@ class SandboxPool:
         script_path = workspace_path / "script.py"
         script_path.write_text(enhanced_code, encoding="utf-8")
 
-        # Try warm container first, fall back to cold start
-        if await self.ensure_warm() and self.warm_container_id:
-            result = await self._execute_warm(code, workspace_path, session_files_path)
-        else:
-            result = await self._execute_cold(code, workspace_path, session_files_path)
-
-        result.execution_time_ms = int((time.time() - start_time) * 1000)
-        result.runtime = runtime
-        result.output_dir = str(workspace_path)
-
-        # Collect generated files
-        result.files = self._collect_output_files(workspace_path)
-
-        return result
-
-    async def _execute_warm(
-        self, code: str, workspace_path: Path, session_files_path: Path | None = None
-    ) -> ExecutionResult:
-        """Execute code in warm container via docker exec."""
-        if not self.runtime or not self.warm_container_id:
+        # Acquire container from pool
+        try:
+            container_id = await self.acquire()
+        except (TimeoutError, RuntimeError) as e:
+            logger.warning(f"Failed to acquire sandbox ({e}), falling back to cold execution")
             return await self._execute_cold(code, workspace_path, session_files_path)
 
         try:
+            result = await self._execute_in_container(container_id, code, workspace_path, session_files_path)
+
+            result.execution_time_ms = int((time.time() - start_time) * 1000)
+            result.runtime = runtime
+            result.output_dir = str(workspace_path)
+
+            # Collect generated files
+            result.files = self._collect_output_files(workspace_path)
+
+            return result
+        finally:
+            await self.release(container_id)
+
+    async def _execute_in_container(
+        self, container_id: str, code: str, workspace_path: Path, session_files_path: Path | None = None
+    ) -> ExecutionResult:
+        """Execute code in specific warm container via docker exec."""
+        if not self.runtime or not container_id:
+            return ExecutionResult(success=False, error="Invalid container or runtime")
+
+        try:
             # Copy workspace into container (with timeout)
-            if not await self._container_cp(
+            success, error = await self._container_cp(
                 f"{workspace_path}/.",
-                f"{self.warm_container_id}:/workspace/",
+                f"{container_id}:/workspace/",
                 to_container=True,
-            ):
-                logger.warning("Failed to copy workspace to warm container, falling back to cold start")
-                return await self._execute_cold(code, workspace_path, session_files_path)
+            )
+            if not success:
+                logger.warning(f"Failed to copy workspace to warm container: {error}")
+                return ExecutionResult(success=False, error=f"Failed to copy workspace: {error}")
 
             # Copy session files (input/output) for read access
             if session_files_path:
                 input_path = session_files_path / "input"
                 output_path = session_files_path / "output"
+
                 # Non-critical: log warning but continue if copy fails
-                if input_path.exists() and not await self._container_cp(
-                    f"{input_path}/.",
-                    f"{self.warm_container_id}:/input/",
-                    to_container=True,
-                ):
-                    logger.warning("Failed to copy input to container")
-                if output_path.exists() and not await self._container_cp(
-                    f"{output_path}/.",
-                    f"{self.warm_container_id}:/output/",
-                    to_container=True,
-                ):
-                    logger.warning("Failed to copy output to container")
+                if input_path.exists():
+                    success, error = await self._container_cp(
+                        f"{input_path}/.",
+                        f"{container_id}:/input/",
+                        to_container=True,
+                    )
+                    if not success:
+                        logger.warning(f"Failed to copy input to container: {error}")
+
+                if output_path.exists():
+                    success, error = await self._container_cp(
+                        f"{output_path}/.",
+                        f"{container_id}:/output/",
+                        to_container=True,
+                    )
+                    if not success:
+                        logger.warning(f"Failed to copy output to container: {error}")
 
             # Execute script with timeout
             proc = await asyncio.create_subprocess_exec(
                 self.runtime,
                 "exec",
-                self.warm_container_id,
+                container_id,
                 "python",
                 "/workspace/script.py",
                 stdout=asyncio.subprocess.PIPE,
@@ -437,7 +575,8 @@ class SandboxPool:
                 )
             except asyncio.TimeoutError:
                 # Kill the exec process
-                proc.kill()
+                with contextlib.suppress(ProcessLookupError):
+                    proc.kill()
                 await proc.wait()
                 return ExecutionResult(
                     success=False,
@@ -446,30 +585,21 @@ class SandboxPool:
                 )
 
             # Copy outputs back from container (with timeout)
-            if not await self._container_cp(
-                f"{self.warm_container_id}:/workspace/.",
+            success, error = await self._container_cp(
+                f"{container_id}:/workspace/.",
                 f"{workspace_path}/",
                 to_container=False,
-            ):
-                logger.warning("Failed to copy workspace from container, files may be missing")
-
-            # Clean workspace in container for next execution (security)
-            # Use timeout to prevent hanging
-            cleanup_proc = await asyncio.create_subprocess_exec(
-                self.runtime,
-                "exec",
-                self.warm_container_id,
-                "sh",
-                "-c",
-                "rm -rf /workspace/*",
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
             )
-            try:
-                await asyncio.wait_for(cleanup_proc.wait(), timeout=10)
-            except asyncio.TimeoutError:
-                cleanup_proc.kill()
-                logger.warning("Workspace cleanup timed out")
+            if not success:
+                logger.warning(f"Failed to copy outputs from warm container: {error}")
+                # We don't fail the whole execution if only output copy fails, but we should note it
+                # For now, let's treat it as a warning since we might have stdout
+                return ExecutionResult(
+                    success=True,  # Execution worked, just file retrieval failed
+                    stdout=stdout.decode(),
+                    stderr=stderr.decode() + f"\nWarning: Failed to retrieve partial output files: {error}",
+                    exit_code=proc.returncode or 0,
+                )
 
             return ExecutionResult(
                 success=proc.returncode == 0,
@@ -480,8 +610,6 @@ class SandboxPool:
 
         except Exception as e:
             logger.warning("Warm execution failed, container may be dead: %s", e)
-            # Mark warm container as dead so next call starts fresh
-            self.warm_container_id = None
             # Fall back to cold execution
             return await self._execute_cold(code, workspace_path, session_files_path)
 
@@ -568,7 +696,7 @@ class SandboxPool:
             exit_code=proc.returncode or 0,
         )
 
-    async def _container_cp(self, src: str, dst: str, to_container: bool, timeout: int = 30) -> bool:
+    async def _container_cp(self, src: str, dst: str, to_container: bool, timeout: int = 30) -> tuple[bool, str]:
         """Copy files to/from container with timeout.
 
         Args:
@@ -578,10 +706,10 @@ class SandboxPool:
             timeout: Timeout in seconds (default 30s)
 
         Returns:
-            True if copy succeeded, False if failed or timed out
+            Tuple of (success, error_message)
         """
         if not self.runtime:
-            return False
+            return False, "No runtime available"
 
         proc = await asyncio.create_subprocess_exec(
             self.runtime,
@@ -595,14 +723,17 @@ class SandboxPool:
         try:
             _, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
             if proc.returncode != 0:
-                logger.warning(f"Container cp failed: {stderr.decode()}")
-                return False
-            return True
+                err_msg = stderr.decode().strip()
+                logger.warning(f"Container cp failed: {err_msg}")
+                return False, err_msg
+            return True, ""
         except asyncio.TimeoutError:
-            proc.kill()
+            with contextlib.suppress(ProcessLookupError):
+                proc.kill()
             await proc.wait()
-            logger.error(f"Container cp timed out after {timeout}s: {src} -> {dst}")
-            return False
+            msg = f"Container cp timed out after {timeout}s: {src} -> {dst}"
+            logger.error(msg)
+            return False, msg
 
     def _collect_output_files(self, workspace_path: Path) -> list[dict[str, Any]]:
         """
@@ -664,22 +795,6 @@ class SandboxPool:
 
         return files
 
-    async def shutdown(self) -> None:
-        """Kill warm container on application exit."""
-        if not self.warm_container_id or not self.runtime:
-            return
-
-        logger.info("Shutting down warm sandbox container...")
-        proc = await asyncio.create_subprocess_exec(
-            self.runtime,
-            "kill",
-            self.warm_container_id,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-        await proc.wait()
-        self.warm_container_id = None
-
 
 # ============================================
 # GLOBAL SINGLETON
@@ -689,12 +804,13 @@ class SandboxPool:
 _state: dict[str, SandboxPool | None] = {"pool": None}
 
 
-def get_sandbox_pool() -> SandboxPool:
+def get_sandbox_pool(pool_size: int = 3) -> SandboxPool:
     """Get or create the global sandbox pool."""
     if _state["pool"] is None:
-        _state["pool"] = SandboxPool()
+        _state["pool"] = SandboxPool(pool_size=pool_size)
+
     pool = _state["pool"]
-    assert pool is not None  # For type narrowing
+    assert pool is not None
     return pool
 
 

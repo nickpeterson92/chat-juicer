@@ -34,14 +34,14 @@ def mock_ws_manager() -> MagicMock:
 
 
 @pytest.fixture
-def mock_mcp_pool() -> MagicMock:
-    pool = MagicMock()
-    pool.get_stats.return_value = {"server1": {"total": 5, "available": 5}}
-    return pool
+def mock_mcp_manager() -> MagicMock:
+    manager = MagicMock()
+    manager.get_stats.return_value = {"initialized": True, "servers": ["test"], "server_count": 1}
+    return manager
 
 
 @pytest.fixture
-def app(mock_db_pool: MagicMock, mock_ws_manager: MagicMock, mock_mcp_pool: MagicMock) -> FastAPI:
+def app(mock_db_pool: MagicMock, mock_ws_manager: MagicMock, mock_mcp_manager: MagicMock) -> FastAPI:
     app = FastAPI()
     app.include_router(router, prefix="")  # router has paths starting with /health
 
@@ -49,7 +49,7 @@ def app(mock_db_pool: MagicMock, mock_ws_manager: MagicMock, mock_mcp_pool: Magi
 
     # Set app state
     app.state.ws_manager = mock_ws_manager
-    app.state.mcp_pool = mock_mcp_pool
+    app.state.mcp_manager = mock_mcp_manager
 
     return app
 

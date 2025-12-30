@@ -54,7 +54,7 @@ async def chat_websocket(
     logger.info(f"WebSocket upgrade request received for session {session_id}")
     db = websocket.app.state.db_pool
     ws_manager: WebSocketManager = websocket.app.state.ws_manager
-    mcp_pool = websocket.app.state.mcp_pool
+    mcp_manager = websocket.app.state.mcp_manager
 
     # Initialize WebSocket request context for logging/tracking
     client_ip = websocket.client.host if websocket.client else None
@@ -110,7 +110,7 @@ async def chat_websocket(
         db,
         ws_manager,
         file_service=LocalFileService(base_path=DATA_FILES_PATH, pool=db, s3_sync=s3_sync),
-        mcp_pool=mcp_pool,
+        mcp_manager=mcp_manager,
     )
 
     # Track active chat task and its cancellation token for this session

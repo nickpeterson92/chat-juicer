@@ -1,8 +1,9 @@
 """
-MCP Server Connection Pool - Efficient MCP server management for multi-user cloud.
+MCP Server Manager - Shared MCP client management for multi-user cloud.
 
-Pre-spawns MCP server instances and manages them as a pool, similar to database
-connection pooling. This avoids the overhead of spawning new processes per request.
+Manages singleton instances of MCP clients. Since WebSocketMCPClient
+supports multiplexing, a single connection per server type handles
+concurrent requests without conflicts.
 """
 
 from __future__ import annotations
@@ -15,9 +16,8 @@ from typing import Any
 
 from utils.logger import logger
 
-# Pool configuration is now in Settings (core/constants.py):
+# Configuration is in Settings (core/constants.py):
 # - mcp_acquire_timeout: acquire timeout in seconds (default: 30.0)
-# Helper functions for PERF203 compliance (avoid try-except in loops)
 
 
 async def _spawn_mcp_server(server_key: str, index: int) -> Any | None:
@@ -43,12 +43,11 @@ async def _shutdown_mcp_server(server: Any, server_key: str) -> None:
 ACQUIRE_TIMEOUT_SECONDS = 30.0  # Fallback; prefer settings.mcp_acquire_timeout
 
 
-class MCPServerPool:
+class MCPServerManager:
     """Singleton Manager for MCP servers.
 
     Manages single shared instances of MCP clients. Since WebSocketMCPClient
     supports multiplexing, we no longer need a pool of multiple connections.
-    Maintains the 'pool' API for compatibility.
     """
 
     def __init__(self, acquire_timeout: float = ACQUIRE_TIMEOUT_SECONDS) -> None:
@@ -141,22 +140,12 @@ class MCPServerPool:
 
         yield servers
 
-    def get_pool_stats(self) -> dict[str, dict[str, int]]:
-        """Get current manager statistics."""
-        return {
-            key: {
-                "total": 1,
-                "available": 1,
-            }
-            for key in self._servers
-        }
-
     def get_stats(self) -> dict[str, Any]:
         """Get statistics for health check endpoint."""
         return {
             "initialized": self._initialized,
             "servers": list(self._servers.keys()),
-            "pool_stats": self.get_pool_stats(),
+            "server_count": len(self._servers),
         }
 
     async def shutdown(self) -> None:
@@ -176,41 +165,41 @@ class MCPServerPool:
 
 
 # Module-level state holder to avoid global statement (PLW0603)
-_state: dict[str, MCPServerPool | None] = {"pool": None}
+_state: dict[str, MCPServerManager | None] = {"manager": None}
 
 
-def get_mcp_pool(acquire_timeout: float = ACQUIRE_TIMEOUT_SECONDS) -> MCPServerPool:
-    """Get the global MCP server pool instance."""
-    pool = _state["pool"]
-    if pool is None:
-        pool = MCPServerPool(acquire_timeout=acquire_timeout)
-        _state["pool"] = pool
-    return pool
+def get_mcp_manager(acquire_timeout: float = ACQUIRE_TIMEOUT_SECONDS) -> MCPServerManager:
+    """Get the global MCP server manager instance."""
+    manager = _state["manager"]
+    if manager is None:
+        manager = MCPServerManager(acquire_timeout=acquire_timeout)
+        _state["manager"] = manager
+    return manager
 
 
-async def initialize_mcp_pool(
+async def initialize_mcp_manager(
     server_keys: list[str] | None = None,
     acquire_timeout: float = ACQUIRE_TIMEOUT_SECONDS,
-) -> MCPServerPool:
-    """Initialize the global MCP server pool.
+) -> MCPServerManager:
+    """Initialize the global MCP server manager.
 
     Args:
-        server_keys: Server types to pool (defaults to all configured)
-        acquire_timeout: Timeout in seconds for acquiring a server from pool
+        server_keys: Server types to connect to (defaults to all configured)
+        acquire_timeout: Timeout in seconds (kept for API compatibility)
 
     Returns:
-        The initialized pool
+        The initialized manager
     """
     from integrations.mcp_registry import DEFAULT_MCP_SERVERS
 
-    pool = get_mcp_pool(acquire_timeout=acquire_timeout)
+    manager = get_mcp_manager(acquire_timeout=acquire_timeout)
     keys = server_keys if server_keys is not None else DEFAULT_MCP_SERVERS
-    await pool.initialize(keys)
-    return pool
+    await manager.initialize(keys)
+    return manager
 
 
-async def shutdown_mcp_pool() -> None:
-    """Shutdown the global MCP server pool."""
-    if _state["pool"] is not None:
-        await _state["pool"].shutdown()
-        _state["pool"] = None
+async def shutdown_mcp_manager() -> None:
+    """Shutdown the global MCP server manager."""
+    if _state["manager"] is not None:
+        await _state["manager"].shutdown()
+        _state["manager"] = None

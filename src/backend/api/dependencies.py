@@ -10,7 +10,7 @@ from api.services.file_service import FileService, LocalFileService
 from api.services.session_service import SessionService
 from api.websocket.manager import WebSocketManager
 from core.constants import DATA_FILES_PATH, Settings, get_settings
-from integrations.mcp_pool import MCPServerPool
+from integrations.mcp_manager import MCPServerManager
 
 
 def get_app_settings() -> Settings:
@@ -63,9 +63,9 @@ def get_ws_manager(request: Request) -> WebSocketManager:
     return request.app.state.ws_manager
 
 
-def get_mcp_pool(request: Request) -> MCPServerPool:
-    """Get MCP server pool from application state."""
-    return request.app.state.mcp_pool
+def get_mcp_manager(request: Request) -> MCPServerManager:
+    """Get MCP server manager from application state."""
+    return request.app.state.mcp_manager
 
 
 # Type aliases for cleaner route signatures
@@ -73,5 +73,5 @@ DB = Annotated[asyncpg.Pool, Depends(get_db)]
 Files = Annotated[FileService, Depends(get_file_service)]
 Sessions = Annotated[SessionService, Depends(get_session_service)]
 WSManager = Annotated[WebSocketManager, Depends(get_ws_manager)]
-MCPPool = Annotated[MCPServerPool, Depends(get_mcp_pool)]
+MCPManager = Annotated[MCPServerManager, Depends(get_mcp_manager)]
 AppSettings = Annotated[Settings, Depends(get_app_settings)]

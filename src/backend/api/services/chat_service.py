@@ -33,7 +33,7 @@ from core.constants import (
 )
 from core.prompts import SESSION_TITLE_GENERATION_PROMPT, SYSTEM_INSTRUCTIONS, build_dynamic_instructions
 from integrations.event_handlers import CallTracker, build_event_handlers
-from integrations.mcp_pool import MCPServerPool
+from integrations.mcp_manager import MCPServerManager
 from integrations.mcp_registry import DEFAULT_MCP_SERVERS
 from integrations.sdk_token_tracker import connect_session, disconnect_session
 from tools.wrappers import create_session_aware_tools
@@ -61,12 +61,12 @@ class ChatService:
         pool: asyncpg.Pool,
         ws_manager: WebSocketManager,
         file_service: FileService,
-        mcp_pool: MCPServerPool,
+        mcp_manager: MCPServerManager,
     ):
         self.pool = pool
         self.ws_manager = ws_manager
         self.file_service = file_service
-        self.mcp_pool = mcp_pool
+        self.mcp_manager = mcp_manager
         # Background tasks set to prevent garbage collection (RUF006)
         self._background_tasks: set[asyncio.Task[Any]] = set()
 
@@ -148,12 +148,11 @@ class ChatService:
         # MCP servers use stdio which doesn't support concurrent access - pool serializes access
         server_keys = session_mcp_config if session_mcp_config else DEFAULT_MCP_SERVERS
         logger.info(
-            f"[DIAG:{session_id[:8]}] Acquiring MCP servers: {server_keys}, "
-            f"pool_stats: {self.mcp_pool.get_pool_stats()}"
+            f"[DIAG:{session_id[:8]}] Acquiring MCP servers: {server_keys}, " f"stats: {self.mcp_manager.get_stats()}"
         )
 
-        async with self.mcp_pool.acquire_servers(server_keys) as pooled_servers:
-            logger.info(f"[DIAG:{session_id[:8]}] Acquired {len(pooled_servers)} servers from pool")
+        async with self.mcp_manager.acquire_servers(server_keys) as mcp_servers:
+            logger.info(f"[DIAG:{session_id[:8]}] Acquired {len(mcp_servers)} MCP servers")
             async with session_file_context(
                 file_service=self.file_service,
                 session_id=session_id,
@@ -186,7 +185,7 @@ class ChatService:
                     deployment=model,
                     instructions=instructions,
                     tools=tools,
-                    mcp_servers=pooled_servers,  # Use pooled servers
+                    mcp_servers=mcp_servers,
                     reasoning_effort=reasoning,
                 )
                 logger.info(f"[DIAG:{session_id[:8]}] Agent created, sending assistant_start")

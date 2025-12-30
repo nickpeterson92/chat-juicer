@@ -28,7 +28,9 @@ async function apiRequest(endpoint, options = {}) {
     } catch {
       // ignore
     }
-    throw new Error(detail || `Request failed with status ${response.status}`);
+    const error = new Error(detail || `Request failed with status ${response.status}`);
+    error.status = response.status;
+    throw error;
   }
 
   // Return raw Response for binary content (e.g., file downloads)
