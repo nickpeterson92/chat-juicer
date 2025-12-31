@@ -137,7 +137,7 @@ export class BrowserAPIAdapter {
    * @param {string|null} sessionId
    */
   async sendMessage(content, sessionId = null) {
-    const targetSession = sessionId || this.appState?.getState("session.activeSessionId");
+    const targetSession = sessionId || this.appState?.getState("session.current");
     if (!targetSession) {
       throw new Error("No active session");
     }
@@ -178,7 +178,7 @@ export class BrowserAPIAdapter {
   }
 
   async interruptStream(sessionId = null) {
-    const targetSession = sessionId || this.appState?.getState("session.activeSessionId");
+    const targetSession = sessionId || this.appState?.getState("session.current");
     if (!targetSession || !this.wsManager) {
       return { success: false, error: "No active session" };
     }
@@ -250,7 +250,7 @@ export class BrowserAPIAdapter {
         });
       }
       case "summarize": {
-        const sessionId = data?.session_id || this.appState?.getState("session.activeSessionId");
+        const sessionId = data?.session_id || this.appState?.getState("session.current");
         if (!sessionId) return { error: "Missing session_id" };
         return this._fetch(`/api/v1/sessions/${sessionId}/summarize`, { method: "POST" });
       }
@@ -296,7 +296,7 @@ export class BrowserAPIAdapter {
   // ==========================================
 
   async uploadFile(_filePath, fileData, fileName, mimeType) {
-    const sessionId = this.appState?.getState("session.activeSessionId");
+    const sessionId = this.appState?.getState("session.current");
     if (!sessionId) {
       return { success: false, error: "No active session" };
     }
@@ -404,7 +404,7 @@ export class BrowserAPIAdapter {
     }
 
     // Fallback: use active session
-    const sessionId = this.appState?.getState("session.activeSessionId");
+    const sessionId = this.appState?.getState("session.current");
     if (sessionId) {
       return { sessionId, folder: dirPath };
     }
