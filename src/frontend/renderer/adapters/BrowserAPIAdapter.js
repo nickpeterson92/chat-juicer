@@ -146,17 +146,16 @@ export class BrowserAPIAdapter {
     const pendingAttachments = this.appState?.getState("message.pendingAttachments") || [];
 
     const messages = rawMessages.map((msg, index) => {
+      const msgObj = typeof msg === "string" ? { content: msg } : { ...msg };
+
       if (index === 0 && pendingAttachments.length > 0) {
-        return {
-          content: typeof msg === "string" ? msg : msg.content,
-          attachments: pendingAttachments.map((att) => ({
-            type: "image_ref",
-            filename: att.filename,
-            path: att.path || `input/${att.filename}`,
-          })),
-        };
+        msgObj.attachments = pendingAttachments.map((att) => ({
+          type: "image_ref",
+          filename: att.filename,
+          path: att.path || `input/${att.filename}`,
+        }));
       }
-      return msg;
+      return msgObj;
     });
 
     if (pendingAttachments.length > 0) {
@@ -370,7 +369,13 @@ export class BrowserAPIAdapter {
       `/api/v1/sessions/${parsed.sessionId}/files/${encodeURIComponent(filename)}/download?folder=${encodeURIComponent(parsed.folder)}`
     );
     const buffer = await response.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+    let binary = "";
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = btoa(binary);
     const ext = filename.split(".").pop()?.toLowerCase() || "";
     const mimeTypes = {
       jpg: "image/jpeg",
@@ -387,11 +392,17 @@ export class BrowserAPIAdapter {
   }
 
   _parseSessionFolder(dirPath) {
-    // Parse paths like "sessions/abc123/input" or just "input"
-    const match = dirPath.match(/sessions\/([^/]+)\/(.+)/);
-    if (match) {
-      return { sessionId: match[1], folder: match[2] };
+    // Parse paths like "sessions/abc123/input", "data/files/abc123/input", or just "input"
+    const matchSessions = dirPath.match(/sessions\/([^/]+)\/(.+)/);
+    if (matchSessions) {
+      return { sessionId: matchSessions[1], folder: matchSessions[2] };
     }
+
+    const matchData = dirPath.match(/data\/files\/([^/]+)\/(.+)/);
+    if (matchData) {
+      return { sessionId: matchData[1], folder: matchData[2] };
+    }
+
     // Fallback: use active session
     const sessionId = this.appState?.getState("session.activeSessionId");
     if (sessionId) {

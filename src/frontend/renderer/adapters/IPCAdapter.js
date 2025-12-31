@@ -228,6 +228,18 @@ export class IPCAdapter {
   }
 
   /**
+   * List files in a directory
+   * @param {string} dirPath - Directory path (e.g. data/files/<id>/input)
+   * @returns {Promise<object>} { success, files: [] }
+   */
+  async listDirectory(dirPath) {
+    if (!this.api?.listDirectory) {
+      throw new Error("IPC API not available: listDirectory");
+    }
+    return this.api.listDirectory(dirPath);
+  }
+
+  /**
    * Request file deletion from backend
    * @param {string} dirPath - Directory path
    * @param {string} filename - File name
@@ -238,6 +250,19 @@ export class IPCAdapter {
       throw new Error("IPC API not available: deleteFile");
     }
     return this.api.deleteFile(dirPath, filename);
+  }
+
+  /**
+   * Get file content (base64) for thumbnails/previews
+   * @param {string} dirPath - Directory path
+   * @param {string} filename - File name
+   * @returns {Promise<object>} { success, base64: "...", mimeType: "..." }
+   */
+  async getFileContent(dirPath, filename) {
+    if (!this.api?.getFileContent) {
+      throw new Error("IPC API not available: getFileContent");
+    }
+    return this.api.getFileContent(dirPath, filename);
   }
 
   /**

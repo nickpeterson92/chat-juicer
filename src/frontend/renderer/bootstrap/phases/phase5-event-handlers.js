@@ -995,6 +995,11 @@ export async function initializeEventHandlers({
         return;
       }
 
+      // If it's a normal closure (e.g. session switching), don't show alert
+      if (status?.code === 1000) {
+        return;
+      }
+
       // If it's an intentional disconnect (e.g., current session deletion), suppress toast
       if (appState.getState("ui.intentionalDisconnect")) {
         console.log("Intentional disconnect detected - suppressing toast");

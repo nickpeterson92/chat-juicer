@@ -242,7 +242,7 @@ function createWindow() {
 function parseSessionFolder(dirPath) {
   // Match session ID and full folder path including subdirectories
   // e.g., "data/files/chat_abc123/output/code/python" -> { sessionId: "chat_abc123", folder: "output/code/python" }
-  const match = dirPath?.match(/data\/files\/(chat_[^/]+)\/((?:input|output)(?:\/.*)?)/);
+  const match = dirPath?.match(/data\/files\/([^/]+)\/((?:input|output)(?:\/.*)?)/);
   if (!match) return null;
   return { sessionId: match[1], folder: match[2] };
 }

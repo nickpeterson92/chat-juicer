@@ -10,8 +10,11 @@ export default defineConfig({
   // Plugins
   plugins: [tailwindcss()],
 
+  // Root directory - use project root to ensure Tailwind scans all files
+  // root: "src/frontend/ui",
+
   // Public directory for static assets
-  publicDir: "public",
+  publicDir: resolve(__dirname, "public"),
 
   // Base public path for assets
   base: "./",
@@ -27,13 +30,18 @@ export default defineConfig({
   // Build configuration
   build: {
     // Output to different directories based on build mode
-    outDir: isWebBuild ? "dist/web" : "dist/renderer",
+    outDir: resolve(__dirname, isWebBuild ? "dist/web" : "dist/renderer"),
+    // Write to disk even if output is outside root
     emptyOutDir: true,
     rollupOptions: {
       input: {
         main: resolve(__dirname, "src/frontend/ui/index.html"),
       },
+      output: {
+        // manualChunks removed to fix build error
+      },
     },
+    chunkSizeWarningLimit: 1000,
     // Target modern browsers for web (es2022 for top-level await), esnext for Electron
     target: isWebBuild ? "es2022" : "esnext",
     minify: process.env.NODE_ENV === "production",
@@ -44,8 +52,10 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
-    // Automatically open the right HTML file
-    open: "/src/frontend/ui/index.html",
+    // Allow serving files from parent directories (needed for ../renderer imports)
+    fs: {
+      allow: [resolve(__dirname)],
+    },
   },
 
   // Resolve configuration
