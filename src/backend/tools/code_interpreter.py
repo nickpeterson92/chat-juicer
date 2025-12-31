@@ -211,6 +211,9 @@ class SandboxPool:
             if self._initialized:
                 return
 
+            # Clean up any orphaned containers from previous runs first
+            await self._cleanup_stale_containers()
+
             logger.info(f"Initializing sandbox pool with {self.pool_size} containers")
             tasks = [self._start_warm_container(i) for i in range(self.pool_size)]
             container_ids = await asyncio.gather(*tasks)
@@ -349,17 +352,17 @@ class SandboxPool:
             return False
 
     async def _cleanup_stale_containers(self) -> None:
-        """Kill any orphaned warm containers from previous runs."""
+        """Remove any orphaned pool containers from previous runs."""
         if not self.runtime:
             return
 
-        # Find containers matching our naming pattern
+        # Find containers matching our naming pattern (includes stopped containers with -a)
         proc = await asyncio.create_subprocess_exec(
             self.runtime,
             "ps",
-            "-q",
+            "-aq",  # Include stopped containers
             "--filter",
-            "name=chat-juicer-sandbox-warm",
+            "name=chat-juicer-sandbox-pool",  # Matches chat-juicer-sandbox-pool-*
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
         )
@@ -367,16 +370,18 @@ class SandboxPool:
 
         container_ids = stdout.decode().strip().split()
         if container_ids and container_ids[0]:
-            logger.info("Cleaning up %d stale warm container(s)", len(container_ids))
+            logger.info("Cleaning up %d stale pool container(s)", len(container_ids))
             for cid in container_ids:
-                kill_proc = await asyncio.create_subprocess_exec(
+                # Use rm -f to force remove (kill + remove) the container
+                rm_proc = await asyncio.create_subprocess_exec(
                     self.runtime,
-                    "kill",
+                    "rm",
+                    "-f",
                     cid,
                     stdout=asyncio.subprocess.DEVNULL,
                     stderr=asyncio.subprocess.DEVNULL,
                 )
-                await kill_proc.wait()
+                await rm_proc.wait()
 
     async def _start_warm_container(self, suffix: str | int = 0) -> str | None:
         """Start a warm container with pre-imported packages."""
