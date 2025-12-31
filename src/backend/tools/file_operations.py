@@ -5,6 +5,8 @@ Provides directory listing and file reading capabilities.
 
 from __future__ import annotations
 
+import asyncio
+
 from pathlib import Path
 
 import aiofiles
@@ -214,7 +216,8 @@ async def read_file(  # noqa: PLR0911
                         error=f"MarkItDown is required for reading {extension} files. Install with: pip install markitdown",
                     ).to_json()
                 try:
-                    result = markitdown_converter.convert(str(target_file))
+                    # Run sync conversion in thread to avoid blocking event loop
+                    result = await asyncio.to_thread(markitdown_converter.convert, str(target_file))
                     all_lines = result.text_content.splitlines(keepends=True)
                     if head is not None:
                         content = "".join(all_lines[:head])
@@ -287,8 +290,9 @@ async def read_file(  # noqa: PLR0911
                     error=f"MarkItDown is required for reading {extension} files. Install with: pip install markitdown",
                 ).to_json()
             try:
-                # Use singleton converter instance
-                conversion_result = markitdown_converter.convert(str(target_file))
+                # Run sync conversion in thread to avoid blocking event loop
+                # (important for image-heavy documents where LLM describes each image)
+                conversion_result = await asyncio.to_thread(markitdown_converter.convert, str(target_file))
                 content = conversion_result.text_content
                 conversion_method = "markitdown"
 
