@@ -29,6 +29,7 @@ import {
 } from "../config/constants.js";
 import { getFileBadgeInfo } from "../utils/file-icon-colors.js";
 import { formatFileSize, getFileIcon } from "../utils/file-utils.js";
+import { initializeCodeCopyButtons, processMermaidDiagrams } from "../utils/markdown-renderer.js";
 import { showToast } from "../utils/toast.js";
 
 /**
@@ -1485,6 +1486,12 @@ async function showExpandedPreview(file, directory, _container) {
       const { marked } = await import("marked");
       const renderedHtml = marked.parse(textContent);
       content.innerHTML = `<div class="file-preview-markdown message-content">${renderedHtml}</div>`;
+      // Process mermaid diagrams and code copy buttons in the preview
+      const previewDiv = content.querySelector(".file-preview-markdown");
+      if (previewDiv) {
+        await processMermaidDiagrams(previewDiv);
+        initializeCodeCopyButtons(previewDiv);
+      }
     } else if (codeExtensions.includes(ext) || textExtensions.includes(ext) || ext === "csv") {
       // Text/code preview with syntax highlighting (with proper UTF-8 decoding)
       const bytes = Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0));

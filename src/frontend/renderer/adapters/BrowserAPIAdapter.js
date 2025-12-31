@@ -26,7 +26,8 @@ export class BrowserAPIAdapter {
     this.apiBase = apiBase || "https://api.chat-juicer.com";
     this.appState = null;
     this.commandQueue = [];
-    this.wsManager = null;
+    // Map of sessionId -> WebSocketManager for concurrent connections
+    this.sessionWebSockets = new Map();
     this._messageCallbacks = [];
     this._errorCallbacks = [];
     this._disconnectCallbacks = [];
@@ -96,35 +97,63 @@ export class BrowserAPIAdapter {
   }
 
   /**
-   * Ensure WebSocket is connected for session
+   * Ensure WebSocket is connected for session (maintains multiple concurrent connections)
    * @param {string} sessionId
+   * @returns {WebSocketManager}
    */
   _ensureWebSocket(sessionId) {
-    if (!this.wsManager || this.wsManager.sessionId !== sessionId) {
-      if (this.wsManager) {
-        this.wsManager.close();
+    // Check if we already have a connection for this session
+    if (this.sessionWebSockets.has(sessionId)) {
+      const existing = this.sessionWebSockets.get(sessionId);
+      // Return if connected or connecting (readyState: 0=CONNECTING, 1=OPEN)
+      if (existing.isConnected() || existing.isConnecting()) {
+        return existing;
       }
-      this.wsManager = new WebSocketManager(this.apiBase, () => this._getAccessToken());
-      this.wsManager.connect(sessionId);
-
-      // Wire up callbacks
-      this.wsManager.onMessage((msg) => {
-        this._messageCallbacks.forEach((cb) => {
-          cb(msg);
-        });
-      });
-      this.wsManager.onClose((code, reason, isIdle) => {
-        this._disconnectCallbacks.forEach((cb) => {
-          cb({ code, reason, isIdle });
-        });
-      });
-      this.wsManager.onError((err) => {
-        this._errorCallbacks.forEach((cb) => {
-          cb(err.message || "WebSocket error");
-        });
-      });
+      // Clean up stale connection
+      existing.close();
+      this.sessionWebSockets.delete(sessionId);
     }
-    return this.wsManager;
+
+    // Create new WebSocket for this session (don't close others!)
+    const wsManager = new WebSocketManager(this.apiBase, () => this._getAccessToken());
+    wsManager.connect(sessionId);
+
+    // Wire up callbacks
+    wsManager.onMessage((msg) => {
+      this._messageCallbacks.forEach((cb) => {
+        cb(msg);
+      });
+    });
+    wsManager.onClose((code, reason, isIdle) => {
+      // Remove from map when connection closes
+      if (this.sessionWebSockets.get(sessionId) === wsManager) {
+        this.sessionWebSockets.delete(sessionId);
+      }
+      this._disconnectCallbacks.forEach((cb) => {
+        cb({ code, reason, isIdle, sessionId });
+      });
+    });
+    wsManager.onError((err) => {
+      this._errorCallbacks.forEach((cb) => {
+        cb(err.message || "WebSocket error");
+      });
+    });
+
+    this.sessionWebSockets.set(sessionId, wsManager);
+    return wsManager;
+  }
+
+  /**
+   * Get existing WebSocket for session (without creating new one)
+   * @param {string} sessionId
+   * @returns {WebSocketManager|null}
+   */
+  _getWebSocket(sessionId) {
+    const wsManager = this.sessionWebSockets.get(sessionId);
+    if (wsManager && (wsManager.isConnected() || wsManager.isConnecting())) {
+      return wsManager;
+    }
+    return null;
   }
 
   // ==========================================
@@ -137,7 +166,7 @@ export class BrowserAPIAdapter {
    * @param {string|null} sessionId
    */
   async sendMessage(content, sessionId = null) {
-    const targetSession = sessionId || this.appState?.getState("session.activeSessionId");
+    const targetSession = sessionId || this.appState?.getState("session.current");
     if (!targetSession) {
       throw new Error("No active session");
     }
@@ -171,18 +200,27 @@ export class BrowserAPIAdapter {
   }
 
   async stopGeneration() {
-    // In browser, just close and reopen WebSocket
-    if (this.wsManager) {
-      this.wsManager.close();
+    // Close WebSocket for current session only
+    const sessionId = this.appState?.getState("session.current");
+    if (sessionId) {
+      const wsManager = this.sessionWebSockets.get(sessionId);
+      if (wsManager) {
+        wsManager.close();
+        this.sessionWebSockets.delete(sessionId);
+      }
     }
   }
 
   async interruptStream(sessionId = null) {
-    const targetSession = sessionId || this.appState?.getState("session.activeSessionId");
-    if (!targetSession || !this.wsManager) {
+    const targetSession = sessionId || this.appState?.getState("session.current");
+    if (!targetSession) {
       return { success: false, error: "No active session" };
     }
-    this.wsManager.send({ type: "interrupt", session_id: targetSession });
+    const wsManager = this._getWebSocket(targetSession);
+    if (!wsManager) {
+      return { success: false, error: "No WebSocket connection for session" };
+    }
+    wsManager.send({ type: "interrupt", session_id: targetSession });
     return { success: true };
   }
 
@@ -250,7 +288,7 @@ export class BrowserAPIAdapter {
         });
       }
       case "summarize": {
-        const sessionId = data?.session_id || this.appState?.getState("session.activeSessionId");
+        const sessionId = data?.session_id || this.appState?.getState("session.current");
         if (!sessionId) return { error: "Missing session_id" };
         return this._fetch(`/api/v1/sessions/${sessionId}/summarize`, { method: "POST" });
       }
@@ -296,7 +334,7 @@ export class BrowserAPIAdapter {
   // ==========================================
 
   async uploadFile(_filePath, fileData, fileName, mimeType) {
-    const sessionId = this.appState?.getState("session.activeSessionId");
+    const sessionId = this.appState?.getState("session.current");
     if (!sessionId) {
       return { success: false, error: "No active session" };
     }
@@ -404,7 +442,7 @@ export class BrowserAPIAdapter {
     }
 
     // Fallback: use active session
-    const sessionId = this.appState?.getState("session.activeSessionId");
+    const sessionId = this.appState?.getState("session.current");
     if (sessionId) {
       return { sessionId, folder: dirPath };
     }

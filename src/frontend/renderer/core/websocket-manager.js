@@ -190,7 +190,15 @@ export class WebSocketManager {
    * Check if connected
    * @returns {boolean}
    */
-  get isConnected() {
+  isConnected() {
     return this.ws?.readyState === WebSocket.OPEN;
+  }
+
+  /**
+   * Check if connecting
+   * @returns {boolean}
+   */
+  isConnecting() {
+    return this.ws?.readyState === WebSocket.CONNECTING;
   }
 }
