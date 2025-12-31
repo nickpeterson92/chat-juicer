@@ -89,6 +89,8 @@ describe("ViewManager", () => {
       adapters: {
         ipcAdapter: {
           sendMessage: vi.fn(),
+          getUsername: vi.fn().mockResolvedValue("Test User"),
+          sendSessionCommand: vi.fn().mockResolvedValue({}),
         },
       },
     };
@@ -107,13 +109,15 @@ describe("ViewManager", () => {
     it("should update state and show welcome page", async () => {
       await viewManager.showWelcomeView(elements, appState);
       expect(appState.getState("ui.currentView")).toBe("welcome");
-      expect(mockElectronAPI.getUsername).toHaveBeenCalled();
+      expect(window.app.adapters.ipcAdapter.getUsername).toHaveBeenCalled();
     });
 
-    it("should log error if username fetch fails", async () => {
-      mockElectronAPI.getUsername.mockRejectedValue(new Error("API Error"));
+    it("should log warning if username fetch fails", async () => {
+      const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      window.app.adapters.ipcAdapter.getUsername.mockRejectedValue(new Error("API Error"));
       await viewManager.showWelcomeView(elements, appState);
-      expect(mockElectronAPI.log).toHaveBeenCalledWith("error", "Failed to get username", expect.any(Object));
+      expect(consoleSpy).toHaveBeenCalledWith("Failed to get username", "API Error");
+      consoleSpy.mockRestore();
     });
   });
 

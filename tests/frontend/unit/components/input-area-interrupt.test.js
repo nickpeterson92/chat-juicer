@@ -13,7 +13,8 @@ describe("InputArea - Stream Interrupt Feature", () => {
   let sendButton;
   let onSendCallback;
   let appState;
-  let mockElectronAPI;
+  // Mock ipcAdapter on window.app for adapter pattern
+  let mockIpcAdapter;
 
   beforeEach(() => {
     // Create mock DOM elements
@@ -28,11 +29,11 @@ describe("InputArea - Stream Interrupt Feature", () => {
     // Create AppState
     appState = new AppState();
 
-    // Mock electronAPI
-    mockElectronAPI = {
+    // Mock ipcAdapter via window.app
+    mockIpcAdapter = {
       interruptStream: vi.fn().mockResolvedValue({ success: true }),
     };
-    window.electronAPI = mockElectronAPI;
+    window.app = { adapters: { ipcAdapter: mockIpcAdapter } };
 
     // Clean up lifecycle manager
     globalLifecycleManager.unmountAll();
@@ -40,7 +41,7 @@ describe("InputArea - Stream Interrupt Feature", () => {
 
   afterEach(() => {
     globalLifecycleManager.unmountAll();
-    delete window.electronAPI;
+    delete window.app;
   });
 
   describe("Button Transforms During Streaming", () => {
@@ -252,7 +253,7 @@ describe("InputArea - Stream Interrupt Feature", () => {
       inputArea.handleInterrupt();
 
       // Should call IPC
-      expect(mockElectronAPI.interruptStream).toHaveBeenCalledTimes(1);
+      expect(mockIpcAdapter.interruptStream).toHaveBeenCalledTimes(1);
     });
 
     it("should update stream.interrupted state when interrupt triggered", () => {
@@ -284,7 +285,7 @@ describe("InputArea - Stream Interrupt Feature", () => {
       inputArea.handleInterrupt();
 
       // Should not call IPC
-      expect(mockElectronAPI.interruptStream).not.toHaveBeenCalled();
+      expect(mockIpcAdapter.interruptStream).not.toHaveBeenCalled();
     });
   });
 
@@ -345,8 +346,8 @@ describe("InputArea - Stream Interrupt Feature", () => {
   });
 
   describe("Edge Cases", () => {
-    it("should handle missing electronAPI gracefully", () => {
-      delete window.electronAPI;
+    it("should handle missing ipcAdapter gracefully", () => {
+      delete window.app;
 
       const inputArea = new InputArea(textarea, sendButton, onSendCallback, {
         appState,
@@ -359,7 +360,7 @@ describe("InputArea - Stream Interrupt Feature", () => {
     });
 
     it("should handle missing interruptStream method gracefully", () => {
-      window.electronAPI = {};
+      window.app = { adapters: { ipcAdapter: {} } };
 
       const inputArea = new InputArea(textarea, sendButton, onSendCallback, {
         appState,
@@ -379,7 +380,7 @@ describe("InputArea - Stream Interrupt Feature", () => {
       expect(() => inputArea.handleInterrupt()).not.toThrow();
 
       // Interrupt should do nothing without appState
-      expect(mockElectronAPI.interruptStream).not.toHaveBeenCalled();
+      expect(mockIpcAdapter.interruptStream).not.toHaveBeenCalled();
     });
 
     it("should handle rapid consecutive interrupt calls", () => {
@@ -399,7 +400,7 @@ describe("InputArea - Stream Interrupt Feature", () => {
       // Should only call IPC once (disabled button prevents spam)
       // Actually it will be called twice in this test because button state doesn't prevent the method call
       // But in real usage, disabled button won't trigger click events
-      expect(mockElectronAPI.interruptStream).toHaveBeenCalledTimes(2);
+      expect(mockIpcAdapter.interruptStream).toHaveBeenCalledTimes(2);
     });
   });
 

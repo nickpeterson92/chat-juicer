@@ -1808,7 +1808,10 @@ async function downloadFile(file) {
     const directory = `data/files/${sessionId}/output`;
 
     // Use the standard download handler which supports S3 presigned URLs
-    const result = await window.electronAPI.downloadFile(directory, relativePath);
+    const ipcAdapter = window.app?.adapters?.ipcAdapter;
+    const result = ipcAdapter
+      ? await ipcAdapter.downloadFile(directory, relativePath)
+      : { success: false, error: "Adapter not available" };
 
     if (result.success && result.downloadUrl) {
       // Open S3 presigned URL in browser for download

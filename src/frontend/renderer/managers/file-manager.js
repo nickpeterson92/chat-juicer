@@ -48,7 +48,11 @@ export async function loadFilesIntoState(appState, directory, listType = "input"
   appState.setState("files.isLoadingFiles", true);
 
   try {
-    const result = await window.electronAPI.listDirectory(directory);
+    const ipcAdapter = window.app?.adapters?.ipcAdapter;
+    if (!ipcAdapter) {
+      throw new Error("ipcAdapter not available");
+    }
+    const result = await ipcAdapter.listDirectory(directory);
 
     if (!result.success) {
       // Clear the list on error
@@ -65,7 +69,7 @@ export async function loadFilesIntoState(appState, directory, listType = "input"
 
     return { success: true, files };
   } catch (error) {
-    window.electronAPI?.log("error", "Failed to load files into state", { directory, error: error.message });
+    console.warn("Failed to load files into state", { directory, error: error.message });
     appState.setState("files.isLoadingFiles", false);
     return { success: false, error: error.message };
   }
@@ -424,7 +428,10 @@ function createFileItem(file, directory, container, onDelete = null) {
   downloadBtn.onclick = async (e) => {
     e.stopPropagation();
     try {
-      const result = await window.electronAPI.downloadFile(directory, file.name);
+      const ipcAdapter = window.app?.adapters?.ipcAdapter;
+      const result = ipcAdapter
+        ? await ipcAdapter.downloadFile(directory, file.name)
+        : { success: false, error: "Adapter not available" };
       if (result.success && result.downloadUrl) {
         // Create invisible anchor to trigger download without opening new window
         const a = document.createElement("a");
@@ -528,7 +535,11 @@ async function handleDeleteFile(filename, directory = "input", _container = null
   }
 
   try {
-    const result = await window.electronAPI.deleteFile(directory, filename);
+    const ipcAdapter = window.app?.adapters?.ipcAdapter;
+    if (!ipcAdapter) {
+      throw new Error("ipcAdapter not available");
+    }
+    const result = await ipcAdapter.deleteFile(directory, filename);
 
     if (result.success) {
       showToast(MSG_FILE_DELETED.replace("{filename}", filename), "success", 3000);
@@ -556,7 +567,7 @@ async function handleDeleteFile(filename, directory = "input", _container = null
       }
     }
   } catch (error) {
-    window.electronAPI?.log("error", "Failed to delete file", { filename, error: error.message });
+    console.warn("Failed to delete file", { filename, error: error.message });
 
     // If file doesn't exist, just refresh the list without error
     if (error.message?.includes("ENOENT")) {
@@ -980,7 +991,10 @@ function createThumbnailCard(file, directory, onDelete = null, isOutput = false,
 
   const handleDownload = async (_e) => {
     try {
-      const result = await window.electronAPI.downloadFile(directory, file.name);
+      const ipcAdapter = window.app?.adapters?.ipcAdapter;
+      const result = ipcAdapter
+        ? await ipcAdapter.downloadFile(directory, file.name)
+        : { success: false, error: "Adapter not available" };
       if (result.success && result.downloadUrl) {
         // Create invisible anchor to trigger download without opening new window
         const a = document.createElement("a");
@@ -1160,7 +1174,11 @@ function loadThumbnailForCard(card, skeleton) {
  */
 async function loadImageThumbnail(card, skeleton, directory, filename) {
   try {
-    const result = await window.electronAPI.getFileContent(directory, filename);
+    const ipcAdapter = window.app?.adapters?.ipcAdapter;
+    if (!ipcAdapter) {
+      throw new Error("ipcAdapter not available");
+    }
+    const result = await ipcAdapter.getFileContent(directory, filename);
 
     if (result.success && result.data) {
       // Create image preview
@@ -1208,7 +1226,11 @@ async function loadImageThumbnail(card, skeleton, directory, filename) {
  */
 async function loadPdfThumbnail(card, skeleton, directory, filename) {
   try {
-    const result = await window.electronAPI.getFileContent(directory, filename);
+    const ipcAdapter = window.app?.adapters?.ipcAdapter;
+    if (!ipcAdapter) {
+      throw new Error("ipcAdapter not available");
+    }
+    const result = await ipcAdapter.getFileContent(directory, filename);
 
     if (result.success && result.data) {
       // Dynamically import PDF thumbnail utility to avoid loading PDF.js for non-PDF files
@@ -1262,7 +1284,11 @@ function fallbackToIcon(card, skeleton, filename) {
  */
 async function loadContentPreview(card, skeleton, directory, filename, ext, type) {
   try {
-    const result = await window.electronAPI.getFileContent(directory, filename);
+    const ipcAdapter = window.app?.adapters?.ipcAdapter;
+    if (!ipcAdapter) {
+      throw new Error("ipcAdapter not available");
+    }
+    const result = await ipcAdapter.getFileContent(directory, filename);
 
     if (result.success && result.data) {
       // Decode base64 to text with proper UTF-8 handling
@@ -1338,7 +1364,10 @@ async function showExpandedPreview(file, directory, _container) {
   downloadBtn.title = "Download file";
   downloadBtn.onclick = async () => {
     try {
-      const result = await window.electronAPI.downloadFile(directory, file.name);
+      const ipcAdapter = window.app?.adapters?.ipcAdapter;
+      const result = ipcAdapter
+        ? await ipcAdapter.downloadFile(directory, file.name)
+        : { success: false, error: "Adapter not available" };
       if (result.success && result.downloadUrl) {
         const a = document.createElement("a");
         a.href = result.downloadUrl;
@@ -1403,7 +1432,11 @@ async function showExpandedPreview(file, directory, _container) {
 
   // Fetch and render content
   try {
-    const result = await window.electronAPI.getFileContent(directory, file.name);
+    const ipcAdapter = window.app?.adapters?.ipcAdapter;
+    if (!ipcAdapter) {
+      throw new Error("ipcAdapter not available");
+    }
+    const result = await ipcAdapter.getFileContent(directory, file.name);
 
     if (!result.success) {
       content.innerHTML = `<div class="file-preview-error">Failed to load file: ${result.error}</div>`;

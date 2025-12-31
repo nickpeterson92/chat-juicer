@@ -699,7 +699,7 @@ export async function initializeEventHandlers({
           .map(([key]) => key);
 
         try {
-          await window.electronAPI.sessionCommand("update_config", {
+          await ipcAdapter.sendSessionCommand("update_config", {
             session_id: sessionId,
             mcp_config: mcpConfig,
           });

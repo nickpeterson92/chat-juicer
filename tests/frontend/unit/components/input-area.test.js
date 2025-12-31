@@ -670,14 +670,15 @@ describe("InputArea", () => {
   });
 
   describe("Interrupt Handling", () => {
+    // Mock ipcAdapter on window.app for adapter pattern
+    const mockIpcAdapter = { interruptStream: vi.fn() };
+
     beforeEach(() => {
-      window.electronAPI = {
-        interruptStream: vi.fn(),
-      };
+      window.app = { adapters: { ipcAdapter: mockIpcAdapter } };
     });
 
     afterEach(() => {
-      delete window.electronAPI;
+      delete window.app;
     });
 
     it("should trigger interrupt when sending empty message while streaming", () => {
@@ -690,7 +691,7 @@ describe("InputArea", () => {
 
       inputArea.handleSend();
 
-      expect(window.electronAPI.interruptStream).toHaveBeenCalled();
+      expect(mockIpcAdapter.interruptStream).toHaveBeenCalled();
       expect(sendButton.classList.contains("stopping")).toBe(true);
       expect(appState.getState("stream.interrupted")).toBe(true);
     });
@@ -703,7 +704,7 @@ describe("InputArea", () => {
       appState.setState("message.isStreaming", false);
       inputArea.handleInterrupt();
 
-      expect(window.electronAPI.interruptStream).not.toHaveBeenCalled();
+      expect(mockIpcAdapter.interruptStream).not.toHaveBeenCalled();
     });
 
     it("should trigger interrupt on Escape key when streaming", () => {
@@ -715,7 +716,7 @@ describe("InputArea", () => {
       const event = new KeyboardEvent("keydown", { key: "Escape" });
       document.dispatchEvent(event);
 
-      expect(window.electronAPI.interruptStream).toHaveBeenCalled();
+      expect(mockIpcAdapter.interruptStream).toHaveBeenCalled();
     });
   });
 

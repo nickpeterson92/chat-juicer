@@ -10,7 +10,7 @@
     style-src 'self' 'unsafe-inline';
     img-src 'self' data: blob: https://www.google.com https://*.gstatic.com;
     font-src 'self' data:;
-    connect-src 'self';
+    connect-src 'self' https://api.chat-juicer.com wss://api.chat-juicer.com ws://localhost:* http://localhost:*;
     media-src 'self';
     object-src 'none';
     base-uri 'self';
@@ -32,7 +32,10 @@
 
   <div class="w-full h-screen relative overflow-hidden">
     <!-- Top Bar Controls (above title bar drag region) -->
-    <div class="absolute left-[85px] top-0.5 flex items-center gap-1 z-[10001] [.sidebar.collapsed~&]:left-0" id="top-bar-controls">
+    <!-- left-[85px] is for macOS traffic lights in Electron, but removed in browser mode via [data-env=browser] -->
+    <div
+      class="absolute left-[85px] [html[data-env=browser]_&]:left-3 top-0.5 flex items-center gap-1 z-[10001] [.sidebar.collapsed~&]:left-0"
+      id="top-bar-controls">
       <!-- Sidebar Toggle Button -->
       <button
         class="bg-transparent cursor-pointer p-2 rounded-lg transition-all duration-200 text-gray-600 dark:text-gray-400 hover:bg-surface-hover hover:text-gray-800 dark:hover:text-gray-200 [.sidebar.collapsed~&]:bg-surface-2 [.sidebar.collapsed~&]:shadow-md"

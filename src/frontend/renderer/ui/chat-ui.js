@@ -101,7 +101,7 @@ export function createMessageElement(chatContainer, content, type = "assistant",
       contentDiv.innerHTML = cached;
       chatUIComponent.setTimeout(() => {
         processMermaidDiagrams(contentDiv)
-          .catch((err) => window.electronAPI.log("error", "Mermaid processing error", { error: err.message }))
+          .catch((err) => console.warn("Mermaid processing error", { error: err.message }))
           .finally(() => {
             initializeCodeCopyButtons(contentDiv);
             if (chatContainer) {
@@ -113,7 +113,7 @@ export function createMessageElement(chatContainer, content, type = "assistant",
       contentDiv.innerHTML = renderMarkdown(content, true); // isComplete = true for static messages
       chatUIComponent.setTimeout(() => {
         processMermaidDiagrams(contentDiv)
-          .catch((err) => window.electronAPI.log("error", "Mermaid processing error", { error: err.message }))
+          .catch((err) => console.warn("Mermaid processing error", { error: err.message }))
           .finally(() => {
             initializeCodeCopyButtons(contentDiv);
             cacheRenderedMarkdown(content, true, contentDiv.innerHTML);
