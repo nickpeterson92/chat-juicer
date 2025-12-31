@@ -10,7 +10,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.middleware.exception_handlers import register_exception_handlers
+from api.middleware.rate_limiter import RateLimitMiddleware, get_rate_limiter
 from api.middleware.request_context import RequestContextMiddleware
+from api.middleware.request_limits import RequestSizeLimitMiddleware
+from api.middleware.security_headers import SecurityHeadersMiddleware
 from api.routes import chat
 from api.routes.v1 import router as v1_router
 from api.websocket.manager import WebSocketManager
@@ -164,6 +167,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await pool.initialize()
     app.state.sandbox_pool = pool
 
+    # Start rate limiter cleanup task
+    rate_limiter = get_rate_limiter()
+    await rate_limiter.start()
+    app.state.rate_limiter = rate_limiter
+
     try:
         yield
     finally:
@@ -186,7 +194,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             await app.state.sandbox_pool.shutdown()
             logger.info("Sandbox pool shutdown complete")
 
-        # Phase 4: Gracefully close database pool
+        # Phase 4: Stop rate limiter cleanup task
+        if hasattr(app.state, "rate_limiter") and app.state.rate_limiter:
+            await app.state.rate_limiter.stop()
+            logger.info("Rate limiter shutdown complete")
+
+        # Phase 5: Gracefully close database pool
         await graceful_pool_close(app.state.db_pool, timeout=settings.shutdown_timeout)
 
 
@@ -267,6 +280,15 @@ app.add_middleware(
     allow_methods=settings.cors_methods_list,
     allow_headers=settings.cors_headers_list,
 )
+
+# Security middleware stack (executed in reverse order of registration)
+# Last added = first executed
+# 1. Rate limiter (check limits first)
+# 2. Request size limits (validate body size)
+# 3. Security headers (add to all responses)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestSizeLimitMiddleware)
+app.add_middleware(RateLimitMiddleware)
 
 # Routes - API v1
 app.include_router(v1_router, prefix="/api/v1")
