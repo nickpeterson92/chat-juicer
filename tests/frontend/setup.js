@@ -19,3 +19,34 @@ vi.mock("lottie-web", () => ({
     })),
   },
 }));
+
+// Mock localStorage and sessionStorage
+const mockStorage = () => {
+  let store = {};
+  return {
+    getItem: vi.fn((key) => store[key] || null),
+    setItem: vi.fn((key, value) => {
+      store[key] = value.toString();
+    }),
+    removeItem: vi.fn((key) => {
+      delete store[key];
+    }),
+    clear: vi.fn(() => {
+      store = {};
+    }),
+    length: 0,
+    key: vi.fn((i) => Object.keys(store)[i] || null),
+  };
+};
+
+if (!global.localStorage || typeof global.localStorage.getItem !== "function") {
+  Object.defineProperty(window, "localStorage", {
+    value: mockStorage(),
+  });
+}
+
+if (!global.sessionStorage || typeof global.sessionStorage.getItem !== "function") {
+  Object.defineProperty(window, "sessionStorage", {
+    value: mockStorage(),
+  });
+}

@@ -467,7 +467,7 @@ describe("IPCAdapter", () => {
 
     it("should register successfully", async () => {
       const result = await adapter.authRegister("test@example.com", "password", "Test User");
-      expect(mockAPI.authRegister).toHaveBeenCalledWith("test@example.com", "password", "Test User");
+      expect(mockAPI.authRegister).toHaveBeenCalledWith("test@example.com", "password", "Test User", undefined);
       expect(result).toEqual({ user: { id: 1 }, tokens: {} });
     });
 
