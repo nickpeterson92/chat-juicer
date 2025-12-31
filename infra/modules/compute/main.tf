@@ -76,6 +76,58 @@ resource "aws_security_group" "app_sg" {
     description = "API access (whitelisted)"
   }
 
+  # HTTPS Access (Cloudflare proxy IPs only)
+  # Source: https://www.cloudflare.com/ips-v4/
+  ingress {
+    from_port = 443
+    to_port   = 443
+    protocol  = "tcp"
+    cidr_blocks = [
+      "173.245.48.0/20",
+      "103.21.244.0/22",
+      "103.22.200.0/22",
+      "103.31.4.0/22",
+      "141.101.64.0/18",
+      "108.162.192.0/18",
+      "190.93.240.0/20",
+      "188.114.96.0/20",
+      "197.234.240.0/22",
+      "198.41.128.0/17",
+      "162.158.0.0/15",
+      "104.16.0.0/13",
+      "104.24.0.0/14",
+      "172.64.0.0/13",
+      "131.0.72.0/22",
+    ]
+    description = "HTTPS from Cloudflare only"
+  }
+
+  # HTTP API Access (Cloudflare proxy - for Flexible SSL mode)
+  # When Cloudflare SSL is set to "Flexible", it terminates HTTPS and connects to origin via HTTP
+  ingress {
+    from_port = 8000
+    to_port   = 8000
+    protocol  = "tcp"
+    cidr_blocks = [
+      "173.245.48.0/20",
+      "103.21.244.0/22",
+      "103.22.200.0/22",
+      "103.31.4.0/22",
+      "141.101.64.0/18",
+      "108.162.192.0/18",
+      "190.93.240.0/20",
+      "188.114.96.0/20",
+      "197.234.240.0/22",
+      "198.41.128.0/17",
+      "162.158.0.0/15",
+      "104.16.0.0/13",
+      "104.24.0.0/14",
+      "172.64.0.0/13",
+      "131.0.72.0/22",
+    ]
+    description = "HTTP API from Cloudflare (Flexible SSL)"
+  }
+
   # Egress (Allow all outbound)
   egress {
     from_port   = 0
@@ -124,19 +176,20 @@ resource "aws_instance" "app_server" {
   key_name               = aws_key_pair.deployer.key_name
 
   user_data = templatefile("${path.module}/user_data.sh.tpl", {
-    github_token          = var.github_token
-    tavily_api_key        = var.tavily_api_key
-    db_password           = var.db_password
-    db_username           = var.db_username
-    db_endpoint           = var.db_endpoint
-    s3_bucket             = var.s3_bucket_name
-    aws_region            = var.aws_region
-    azure_openai_api_key  = var.azure_openai_api_key
-    azure_openai_endpoint = var.azure_openai_endpoint
-    jwt_secret            = var.jwt_secret
-    sf_user               = var.sf_user
-    sf_password           = var.sf_password
-    sf_token              = var.sf_token
+    github_token             = var.github_token
+    tavily_api_key           = var.tavily_api_key
+    db_password              = var.db_password
+    db_username              = var.db_username
+    db_endpoint              = var.db_endpoint
+    s3_bucket                = var.s3_bucket_name
+    aws_region               = var.aws_region
+    azure_openai_api_key     = var.azure_openai_api_key
+    azure_openai_endpoint    = var.azure_openai_endpoint
+    jwt_secret               = var.jwt_secret
+    sf_user                  = var.sf_user
+    sf_password              = var.sf_password
+    sf_token                 = var.sf_token
+    registration_invite_code = var.registration_invite_code
   })
   user_data_replace_on_change = true
 
@@ -153,4 +206,25 @@ resource "aws_instance" "app_server" {
     Name       = "${var.project_name}-${var.environment}-app"
     nukeoptout = "true"
   }
+
+  # Prevent replacement when user_data changes (e.g., JWT secret regenerates)
+  # To force replacement, use: terraform apply -replace="module.compute.aws_instance.app_server"
+  lifecycle {
+    ignore_changes = [user_data]
+  }
+}
+
+# --- Elastic IP for stable public address ---
+resource "aws_eip" "app_eip" {
+  domain = "vpc"
+
+  tags = {
+    Name       = "${var.project_name}-${var.environment}-eip"
+    nukeoptout = "true"
+  }
+}
+
+resource "aws_eip_association" "app_eip_assoc" {
+  instance_id   = aws_instance.app_server.id
+  allocation_id = aws_eip.app_eip.id
 }

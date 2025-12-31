@@ -116,3 +116,10 @@ variable "sf_token" {
   sensitive   = true
   default     = ""
 }
+
+variable "registration_invite_code" {
+  description = "Invite code required for user registration"
+  type        = string
+  sensitive   = true
+  default     = ""
+}

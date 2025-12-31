@@ -257,13 +257,15 @@ register_exception_handlers(app)
 # Note: Middleware is executed in reverse order of registration
 app.add_middleware(RequestContextMiddleware)
 
-# CORS for Electron
+# CORS configuration (uses Settings for origin control)
+# Production: Set CORS_ALLOW_ORIGINS to explicit list of allowed domains
+# Development: Can use "*" for convenience, but not in production
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=settings.cors_allow_credentials,
+    allow_methods=settings.cors_methods_list,
+    allow_headers=settings.cors_headers_list,
 )
 
 # Routes - API v1

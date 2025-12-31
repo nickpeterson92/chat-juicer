@@ -96,10 +96,11 @@ export class AuthService {
    * @param {string} email
    * @param {string} password
    * @param {string} [displayName]
+   * @param {string} [inviteCode]
    * @returns {Promise<object>} User info
    */
-  async register(email, password, displayName) {
-    const result = await this.ipcAdapter.authRegister(email, password, displayName);
+  async register(email, password, displayName, inviteCode) {
+    const result = await this.ipcAdapter.authRegister(email, password, displayName, inviteCode);
     if (result.error) {
       throw new Error(result.error);
     }

@@ -71,6 +71,12 @@ SF_TOKEN=${sf_token}
 OPENAI_AGENTS_DISABLE_TRACING=true
 HTTP_REQUEST_LOGGING=false
 HTTP_READ_TIMEOUT=600.0
+
+# CORS
+CORS_ALLOW_ORIGINS=app://.,https://chat-juicer.com,https://api.chat-juicer.com
+
+# Registration restriction
+REGISTRATION_INVITE_CODE=${registration_invite_code}
 EOF
 
 # 6. Start MCP Sidecars (Docker)
@@ -86,7 +92,17 @@ python3.11 -m venv venv
 source venv/bin/activate
 pip install -r src/backend/requirements.txt
 
-# 8. Setup Systemd Service for FastAPI
+# 8. Setup SSL directory for Cloudflare Origin Certificate
+# The certificate files must be deployed separately (not in user_data for security)
+mkdir -p /etc/ssl/cloudflare
+chmod 755 /etc/ssl/cloudflare
+# Placeholder files - will be replaced with actual certs
+touch /etc/ssl/cloudflare/cert.pem /etc/ssl/cloudflare/key.pem
+chmod 644 /etc/ssl/cloudflare/cert.pem
+chmod 600 /etc/ssl/cloudflare/key.pem
+chown -R ec2-user:ec2-user /etc/ssl/cloudflare
+
+# 9. Setup Systemd Service for FastAPI with HTTPS
 cat <<SERVICE > /etc/systemd/system/chat-juicer.service
 [Unit]
 Description=Chat Juicer Backend
@@ -98,7 +114,9 @@ Group=ec2-user
 WorkingDirectory=/opt/chat-juicer/src/backend
 Environment="PATH=/opt/chat-juicer/venv/bin:/usr/local/bin:/usr/bin"
 EnvironmentFile=/opt/chat-juicer/src/backend/.env
-ExecStart=/opt/chat-juicer/venv/bin/uvicorn api.main:app --host 0.0.0.0 --port 8000
+# Allow binding to privileged port 443 without root
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+ExecStart=/opt/chat-juicer/venv/bin/uvicorn api.main:app --host 0.0.0.0 --port 443 --ssl-keyfile=/etc/ssl/cloudflare/key.pem --ssl-certfile=/etc/ssl/cloudflare/cert.pem
 Restart=always
 
 [Install]

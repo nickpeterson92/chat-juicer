@@ -47,6 +47,7 @@ class RegisterRequest(BaseModel):
                 "email": "user@example.com",
                 "password": "secure_password_123",
                 "display_name": "John Doe",
+                "invite_code": "team-secret-2024",
             }
         }
     )
@@ -69,6 +70,11 @@ class RegisterRequest(BaseModel):
         max_length=100,
         description="Optional display name",
         json_schema_extra={"example": "John Doe"},
+    )
+    invite_code: str | None = Field(
+        default=None,
+        description="Invite code for restricted registration",
+        json_schema_extra={"example": "team-secret-2024"},
     )
 
 

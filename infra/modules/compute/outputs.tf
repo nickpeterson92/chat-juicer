@@ -4,8 +4,8 @@ output "instance_id" {
 }
 
 output "public_ip" {
-  description = "Public IP address of the EC2 instance"
-  value       = aws_instance.app_server.public_ip
+  description = "Elastic IP address of the EC2 instance"
+  value       = aws_eip.app_eip.public_ip
 }
 
 output "public_dns" {
