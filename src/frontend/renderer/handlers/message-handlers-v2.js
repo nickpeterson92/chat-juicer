@@ -97,7 +97,7 @@ export function registerMessageHandlers(context) {
           message,
         });
 
-        window.electronAPI?.log("error", `Message handler error: ${type}`, {
+        console.error(`Message handler error: ${type}`, {
           error: error.message,
           stack: error.stack,
         });
@@ -302,7 +302,7 @@ export function registerMessageHandlers(context) {
         if (messageContentDiv) {
           processMermaidDiagrams(messageContentDiv)
             .catch((err) =>
-              window.electronAPI?.log("error", "Mermaid processing error", {
+              console.warn("Mermaid processing error", {
                 error: err.message,
               })
             )
@@ -326,7 +326,7 @@ export function registerMessageHandlers(context) {
   // ===== Error Handler =====
 
   createHandler("error", (message) => {
-    window.electronAPI?.log("error", "Error from backend", {
+    console.error("Error from backend", {
       message: message.message,
     });
 
@@ -695,7 +695,7 @@ export function registerMessageHandlers(context) {
     const sessionId = message.session?.session_id || message.session_id;
     const title = message.session?.title || message.title;
 
-    window.electronAPI?.log("info", "Session created", {
+    console.debug("Session created", {
       session_id: sessionId,
       title: title,
       from_file_upload: isFromFileUpload,

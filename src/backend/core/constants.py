@@ -830,7 +830,7 @@ class Settings(BaseSettings):
     # Format: comma-separated origins e.g., "http://localhost:3000,https://app.example.com"
     # Use "*" only for development (set via CORS_ALLOW_ORIGINS env var)
     cors_allow_origins: str = Field(
-        default="http://localhost:8080,http://localhost:3000,http://127.0.0.1:8080",
+        default="http://localhost:8080,http://localhost:3000,http://localhost:5173,http://127.0.0.1:8080",
         description="Comma-separated list of allowed CORS origins (use '*' for development only)",
     )
     cors_allow_credentials: bool = Field(

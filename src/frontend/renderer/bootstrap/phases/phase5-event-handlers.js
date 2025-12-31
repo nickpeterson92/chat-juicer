@@ -699,7 +699,7 @@ export async function initializeEventHandlers({
           .map(([key]) => key);
 
         try {
-          await window.electronAPI.sessionCommand("update_config", {
+          await ipcAdapter.sendSessionCommand("update_config", {
             session_id: sessionId,
             mcp_config: mcpConfig,
           });
@@ -992,6 +992,11 @@ export async function initializeEventHandlers({
       // The connection will automatically restore when the user interacts
       if (status?.isIdle) {
         console.log("WebSocket idle timeout - connection closed (will auto-reconnect on activity)");
+        return;
+      }
+
+      // If it's a normal closure (e.g. session switching), don't show alert
+      if (status?.code === 1000) {
         return;
       }
 

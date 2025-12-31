@@ -16,6 +16,11 @@ const titlebarComponent = {};
  * Creates and injects titlebar HTML for Windows/Linux only
  */
 export function initializeTitlebar() {
+  // Skip entirely in browser - window controls only applicable in Electron
+  if (!window.electronAPI?.platform) {
+    return;
+  }
+
   const platform = window.electronAPI.platform;
   const isMac = platform === "darwin";
 

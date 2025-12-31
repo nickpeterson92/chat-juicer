@@ -124,9 +124,10 @@ export async function showWelcomeView(elements, appState) {
 
   if (!userName) {
     try {
-      userName = await window.electronAPI.getUsername();
+      const ipcAdapter = window.app?.adapters?.ipcAdapter;
+      userName = ipcAdapter ? await ipcAdapter.getUsername() : "User";
     } catch (error) {
-      window.electronAPI.log("error", "Failed to get username", { error: error.message });
+      console.warn("Failed to get username", error.message);
       userName = "User"; // Absolute fallback
     }
   }
@@ -144,7 +145,8 @@ export async function showWelcomeView(elements, appState) {
   // If no cached config, fetch it (only happens on very first load)
   if (!cachedConfig) {
     try {
-      const metadata = await window.electronAPI.sessionCommand("config_metadata", {});
+      const ipcAdapter = window.app?.adapters?.ipcAdapter;
+      const metadata = ipcAdapter ? await ipcAdapter.sendSessionCommand("config_metadata", {}) : null;
       if (metadata?.models) {
         cachedConfig = {
           models: metadata.models,
@@ -153,7 +155,7 @@ export async function showWelcomeView(elements, appState) {
         appState.setState("ui.cachedModelConfig", cachedConfig);
       }
     } catch (error) {
-      window.electronAPI.log("error", "Failed to load config metadata", { error: error.message });
+      console.warn("Failed to load config metadata", error.message);
     }
   }
 
@@ -269,7 +271,8 @@ async function initializeWelcomeModelSelector(container, cachedConfig) {
     });
   }
 
-  window.electronAPI.log("info", "ModelSelector initialized on welcome page", {
+  const ipcAdapter = window.app?.adapters?.ipcAdapter;
+  ipcAdapter?.log("info", "ModelSelector initialized on welcome page", {
     models: cachedConfig.models.length,
     reasoning_levels: cachedConfig.reasoning_levels?.length || 0,
     initialModel: initialSelection.model,
@@ -420,14 +423,16 @@ function attachWelcomePageListeners(elements, appState) {
     const mcpConfig = getMcpConfig();
     const modelConfig = getModelConfig();
 
-    // Update session config via new backend command
     try {
-      const response = await window.electronAPI.sessionCommand("update_config", {
-        session_id: sessionId,
-        model: modelConfig.model,
-        mcp_config: mcpConfig,
-        reasoning_effort: modelConfig.reasoning_effort,
-      });
+      const ipcAdapter = window.app?.adapters?.ipcAdapter;
+      const response = ipcAdapter
+        ? await ipcAdapter.sendSessionCommand("update_config", {
+            session_id: sessionId,
+            model: modelConfig.model,
+            mcp_config: mcpConfig,
+            reasoning_effort: modelConfig.reasoning_effort,
+          })
+        : null;
 
       if (response?.session_id) {
         // Reload sessions list to show updated metadata
@@ -505,8 +510,7 @@ function attachWelcomePageListeners(elements, appState) {
       // Create new session only if one does not already exist (e.g., created by file upload)
       const sessionService = window.app?.services?.sessionService;
       if (!sessionService) {
-        console.error("❌ SessionService not available");
-        window.electronAPI.log("error", "SessionService not available in view-manager");
+        console.error("SessionService not available");
         isProcessing = false;
         return;
       }
@@ -515,7 +519,7 @@ function attachWelcomePageListeners(elements, appState) {
 
       if (!sessionId) {
         // Use message snippet as initial title (will be replaced by LLM-generated title later)
-        const snippetTitle = message.length > 30 ? message.slice(0, 30).trim() + "..." : message;
+        const snippetTitle = message.length > 30 ? `${message.slice(0, 30).trim()}...` : message;
 
         const result = await sessionService.createSession({
           title: snippetTitle,
@@ -525,7 +529,7 @@ function attachWelcomePageListeners(elements, appState) {
         });
 
         if (!result.success) {
-          window.electronAPI.log("error", "Failed to create session from welcome page", { error: result.error });
+          console.error("Failed to create session from welcome page", result.error);
           isProcessing = false; // Reset guard before returning
           return;
         }
@@ -533,7 +537,7 @@ function attachWelcomePageListeners(elements, appState) {
         // SessionService returns { success, sessionId, title } (not wrapped in .data)
         sessionId = result.sessionId || null;
 
-        window.electronAPI.log("info", "Session created with full configuration", {
+        console.debug("Session created with full configuration", {
           session_id: sessionId,
           mcp_config: mcpConfig,
           model: modelConfig.model,
@@ -599,7 +603,7 @@ function attachWelcomePageListeners(elements, appState) {
           })
         );
       } else {
-        window.electronAPI.log("info", "Reusing existing session for welcome message", {
+        console.debug("Reusing existing session for welcome message", {
           session_id: sessionId,
           created_by: "file_upload",
         });
@@ -615,7 +619,7 @@ function attachWelcomePageListeners(elements, appState) {
 
         const { updateChatModelSelector } = await import("@/utils/chat-model-updater.js");
         updateChatModelSelector(sessionData);
-        window.electronAPI.log("info", "Chat model selector updated for existing session");
+        console.debug("Chat model selector updated for existing session");
       }
 
       // Clear the input
@@ -626,7 +630,7 @@ function attachWelcomePageListeners(elements, appState) {
 
       // Collapse sidebar to give chat more space (matches behavior when switching sessions)
       appState.setState("ui.sidebarCollapsed", true);
-      window.electronAPI.log("debug", "Sidebar collapsed after starting chat from welcome page");
+      console.debug("Sidebar collapsed after starting chat from welcome page");
 
       // Add user message to chat (Phase 7: use ChatContainer component if available)
       if (window.components?.chatContainer) {
@@ -645,15 +649,12 @@ function attachWelcomePageListeners(elements, appState) {
       if (ipcAdapter) {
         await ipcAdapter.sendMessage(message, sessionId);
       } else {
-        // Fallback to direct call (legacy, won't include attachments)
-        console.warn("[view-manager] ipcAdapter not available, attachments will not be sent");
-        window.electronAPI.sendUserInput(message, sessionId);
+        throw new Error("ipcAdapter not available");
       }
 
       // Session list will be updated automatically via session-created event
     } catch (error) {
       console.error("Error in sendWelcomeMessage:", error);
-      window.electronAPI.log("error", "Failed to send welcome message", { error: error.message });
     } finally {
       // Always reset guard, even if there's an error
       isProcessing = false;

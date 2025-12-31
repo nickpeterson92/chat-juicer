@@ -493,7 +493,7 @@ export class InputArea {
 
     // Send interrupt signal to backend
     // Backend will send stream_interrupted and assistant_end messages
-    window.electronAPI?.interruptStream?.();
+    window.app?.adapters?.ipcAdapter?.interruptStream?.();
 
     // Update state to track interrupt was requested
     this.appState.setState("stream.interrupted", true);

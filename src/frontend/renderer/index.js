@@ -9,7 +9,12 @@ import "katex/dist/katex.min.css";
 
 import { bootstrapSimple } from "./bootstrap.js";
 
-console.log("🚀 Starting Chat Juicer...");
+// Detect browser vs Electron environment and set data attribute for CSS targeting
+if (!window.electronAPI) {
+  document.documentElement.setAttribute("data-env", "browser");
+}
+
+console.log("Starting Chat Juicer...");
 
 // Initialize application
 bootstrapSimple()

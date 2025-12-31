@@ -194,6 +194,8 @@ describe("phase5-event-handlers coverage", () => {
         onPythonStderr: vi.fn(),
         onPythonExit: vi.fn(),
         readFile: vi.fn(),
+        sendSessionCommand: vi.fn().mockResolvedValue({}),
+        openFileDialog: vi.fn().mockResolvedValue([]),
       },
       domAdapter: {},
       eventBus: {
@@ -850,11 +852,6 @@ describe("phase5-event-handlers coverage", () => {
     const deps = createDeps();
     deps.services.sessionService.getCurrentSessionId = vi.fn(() => "mcp-sess");
 
-    // Mock electronAPI
-    window.electronAPI = {
-      sessionCommand: vi.fn().mockResolvedValue({}),
-    };
-
     const result = await initializeEventHandlers(deps);
     cleanupFunc = result.cleanup;
 
@@ -877,7 +874,7 @@ describe("phase5-event-handlers coverage", () => {
     // Wait for debounced config update
     await vi.advanceTimersByTimeAsync(350);
 
-    expect(window.electronAPI.sessionCommand).toHaveBeenCalledWith(
+    expect(deps.ipcAdapter.sendSessionCommand).toHaveBeenCalledWith(
       "update_config",
       expect.objectContaining({
         session_id: "mcp-sess",
