@@ -82,7 +82,7 @@
         height: 10px;
     }
 
-    /* Push body content down when titlebar is present */
+    /* Adjust top items (sidebar toggle, session name) to avoid overlap with Windows controls */
     /* Push body content down when titlebar is present */
     body:has(.custom-titlebar) {
         padding-top: 32px;
