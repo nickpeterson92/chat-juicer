@@ -454,16 +454,50 @@ function createFileItem(file, directory, container, onDelete = null) {
     handleDeleteFile(file.name, directory, container, onDelete);
   };
 
-  // Click handler to open file
-  fileItem.onclick = async () => {
-    try {
-      const result = await window.electronAPI.openFile(directory, file.name);
-      if (!result.success) {
-        showToast(`Failed to open file: ${result.error}`, "error", 4000);
-      }
-    } catch (error) {
-      window.electronAPI?.log("error", "Failed to open file", { filename: file.name, error: error.message });
-      showToast(`Error opening file: ${error.message}`, "error", 4000);
+  // Click handler to show preview (instead of opening in external app)
+  // This provides consistent UX in Electron and browser
+  fileItem.onclick = () => {
+    // Use download for files that can't be previewed inline
+    const ext = file.name.split(".").pop()?.toLowerCase() || "";
+    const previewableExts = [
+      "jpg",
+      "jpeg",
+      "png",
+      "gif",
+      "webp",
+      "svg",
+      "bmp",
+      "ico",
+      "pdf",
+      "txt",
+      "md",
+      "html",
+      "xml",
+      "json",
+      "yaml",
+      "yml",
+      "js",
+      "jsx",
+      "ts",
+      "tsx",
+      "py",
+      "java",
+      "c",
+      "cpp",
+      "go",
+      "rb",
+      "php",
+      "csv",
+      "log",
+      "sh",
+      "bash",
+      "sql",
+    ];
+    if (previewableExts.includes(ext)) {
+      showExpandedPreview(file, directory, container);
+    } else {
+      // For non-previewable files (xlsx, docx, etc), trigger download
+      downloadBtn.click();
     }
   };
 
@@ -979,18 +1013,9 @@ function createThumbnailCard(file, directory, onDelete = null, isOutput = false,
   );
   card.setAttribute("aria-label", `Open ${file.name}`);
 
-  // Click handler to open file
-  card.onclick = async () => {
-    try {
-      const result = await window.electronAPI.openFile(directory, file.name);
-      if (!result.success) {
-        showToast(`Failed to open file: ${result.error}`, "error", 4000);
-      }
-    } catch (error) {
-      window.electronAPI?.log("error", "Failed to open file", { filename: file.name, error: error.message });
-      showToast(`Error opening file: ${error.message}`, "error", 4000);
-    }
-  };
+  // Click handler to show preview (instead of opening in external app)
+  // This provides consistent UX in Electron and browser
+  card.onclick = () => handlePreview();
 
   // Keyboard handler
   card.onkeydown = (e) => {
