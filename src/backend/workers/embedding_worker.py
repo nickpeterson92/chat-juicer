@@ -109,6 +109,13 @@ def chunk_text(text: str, max_tokens: int = CHUNK_MAX_TOKENS, overlap: int = CHU
     if current_chunk:
         chunks.append("\n\n".join(current_chunk))
 
+    # Merge tiny tail chunks into previous to avoid orphans
+    if len(chunks) > 1:
+        last_tokens = count_tokens(chunks[-1])["exact_tokens"]
+        if last_tokens < CHUNK_OVERLAP_TOKENS:
+            chunks[-2] = chunks[-2] + "\n\n" + chunks[-1]
+            chunks.pop()
+
     return chunks
 
 
