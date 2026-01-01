@@ -140,7 +140,8 @@ class EmbeddingWorker:
         # Generate embedding
         embedding = await self.embedding_service.embed_text(summary)
         content_hash = self.embedding_service.content_hash(summary)
-        token_count = count_tokens(summary)
+        token_info = count_tokens(summary)
+        token_count = token_info["exact_tokens"]
 
         # Upsert to context_chunks
         await self.context_service.upsert_session_summary(
@@ -214,8 +215,9 @@ class EmbeddingWorker:
         """Embed a single message."""
         content = row["content"]
 
-        # Check token count
-        token_count = count_tokens(content)
+        # Check token count (count_tokens returns dict with 'exact_tokens')
+        token_info = count_tokens(content)
+        token_count = token_info["exact_tokens"]
         if token_count < MESSAGE_TOKEN_THRESHOLD:
             return
 
