@@ -131,7 +131,7 @@ async def call_mcp_tool_via_api(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="Load test - run manually with credentials")
+@pytest.mark.skipif(not os.getenv("LOADTEST_EMAIL"), reason="Load test - requires LOADTEST_EMAIL env var")
 async def test_mcp_concurrent_tool_calls(target_host: str) -> None:
     """Test concurrent MCP tool calls via chat.
 
@@ -188,7 +188,7 @@ async def test_mcp_concurrent_tool_calls(target_host: str) -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="Load test - run manually with credentials")
+@pytest.mark.skipif(not os.getenv("LOADTEST_EMAIL"), reason="Load test - requires LOADTEST_EMAIL env var")
 async def test_session_creation_concurrency(target_host: str) -> None:
     """Test concurrent session creation (database stress)."""
     num_sessions = 20
