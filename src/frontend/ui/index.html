@@ -83,7 +83,7 @@
 
     <!-- Sidebar (overlay mode) -->
     <div
-      class="absolute left-0 top-0 bottom-0 w-[260px] bg-surface-1 border-r border-primary flex flex-col transition-transform duration-300 z-[300] shadow-lg [&.collapsed]:-translate-x-full collapsed"
+      class="absolute left-0 top-0 bottom-0 w-[260px] bg-surface-1 border-r border-primary flex flex-col transition-transform duration-300 z-[300] shadow-lg [&.collapsed]:-translate-x-full collapsed [will-change:transform]"
       id="sidebar">
       <!-- New Chat Button -->
       <button
@@ -101,7 +101,7 @@
 
     <!-- Files Panel (overlay mode) -->
     <div
-      class="absolute right-0 top-0 bottom-0 w-[420px] flex flex-col bg-surface-1 border-l border-primary transition-transform duration-300 z-[300] shadow-lg files-panel [&.collapsed]:translate-x-full collapsed"
+      class="absolute right-0 top-0 bottom-0 w-[420px] flex flex-col bg-surface-1 border-l border-primary transition-transform duration-300 z-[300] shadow-lg files-panel [&.collapsed]:translate-x-full collapsed [will-change:transform]"
       id="files-panel">
       <div class="px-5 pt-4 bg-surface-1 relative z-[10001]">
         <div class="file-panel-tabs">
