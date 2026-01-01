@@ -6,12 +6,14 @@ Provides CRUD operations for projects.
 
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from api.dependencies import Projects
-from api.middleware.auth import CurrentUser
+from api.middleware.auth import get_current_user
+from models.api_models import UserInfo
 from models.schemas.base import PaginationMeta
 from models.schemas.projects import (
     CreateProjectRequest,
@@ -22,6 +24,9 @@ from models.schemas.projects import (
 )
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+
+# Type alias for authenticated user dependency
+CurrentUser = Annotated[UserInfo, Depends(get_current_user)]
 
 
 @router.post(
@@ -37,8 +42,9 @@ async def create_project(
     projects: Projects,
 ) -> ProjectResponse:
     """Create a new project."""
+    user_id = UUID(user.id)
     result = await projects.create_project(
-        user_id=user["id"],
+        user_id=user_id,
         name=request.name,
         description=request.description,
     )
@@ -58,8 +64,9 @@ async def list_projects(
     limit: int = 50,
 ) -> ProjectListResponse:
     """List all projects for the current user."""
+    user_id = UUID(user.id)
     result = await projects.list_projects(
-        user_id=user["id"],
+        user_id=user_id,
         offset=offset,
         limit=limit,
     )
@@ -86,7 +93,8 @@ async def get_project(
     projects: Projects,
 ) -> ProjectResponse:
     """Get a specific project."""
-    result = await projects.get_project(user_id=user["id"], project_id=project_id)
+    user_id = UUID(user.id)
+    result = await projects.get_project(user_id=user_id, project_id=project_id)
     if not result:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -108,8 +116,9 @@ async def update_project(
     projects: Projects,
 ) -> ProjectResponse:
     """Update a project."""
+    user_id = UUID(user.id)
     result = await projects.update_project(
-        user_id=user["id"],
+        user_id=user_id,
         project_id=project_id,
         name=request.name,
         description=request.description,
@@ -134,7 +143,8 @@ async def delete_project(
     projects: Projects,
 ) -> DeleteProjectResponse:
     """Delete a project."""
-    deleted = await projects.delete_project(user_id=user["id"], project_id=project_id)
+    user_id = UUID(user.id)
+    deleted = await projects.delete_project(user_id=user_id, project_id=project_id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

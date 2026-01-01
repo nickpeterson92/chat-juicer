@@ -57,6 +57,11 @@ class CreateSessionRequest(BaseModel):
         description="List of MCP servers to enable",
         json_schema_extra={"example": ["sequential-thinking", "fetch"]},
     )
+    project_id: str | None = Field(
+        default=None,
+        description="Project ID to assign this session to (immutable after creation)",
+        json_schema_extra={"example": "550e8400-e29b-41d4-a716-446655440000"},
+    )
 
 
 class UpdateSessionRequest(BaseModel):
@@ -210,6 +215,11 @@ class SessionResponse(BaseModel):
         default=None,
         description="Last activity timestamp",
         json_schema_extra={"example": "2025-01-15T14:22:00Z"},
+    )
+    project_id: str | None = Field(
+        default=None,
+        description="Project this session belongs to",
+        json_schema_extra={"example": "550e8400-e29b-41d4-a716-446655440000"},
     )
 
 

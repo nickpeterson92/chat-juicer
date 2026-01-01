@@ -33,6 +33,7 @@ class SessionService:
         model: str | None = None,
         mcp_config: list[str] | None = None,
         reasoning_effort: str | None = None,
+        project_id: UUID | None = None,
     ) -> dict[str, Any]:
         """Create a new session."""
         session_id = self._generate_session_id()
@@ -41,9 +42,9 @@ class SessionService:
             row = await conn.fetchrow(
                 """
                 INSERT INTO sessions (
-                    user_id, session_id, title, model, mcp_config, reasoning_effort
+                    user_id, session_id, title, model, mcp_config, reasoning_effort, project_id
                 )
-                VALUES ($1, $2, $3, $4, $5, $6)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING *
                 """,
                 user_id,
@@ -52,6 +53,7 @@ class SessionService:
                 model or DEFAULT_MODEL,
                 json.dumps(mcp_config or ["sequential-thinking", "fetch"]),
                 reasoning_effort or "medium",
+                project_id,
             )
         return self._row_to_session(row)
 
@@ -291,6 +293,7 @@ class SessionService:
             "message_count": row["message_count"],
             "turn_count": row["turn_count"],
             "total_tokens": row["total_tokens"],
+            "project_id": str(row["project_id"]) if row.get("project_id") else None,
             # Token fields for frontend indicator
             "tokens": row["total_tokens"] or 0,
             "max_tokens": max_tokens,
