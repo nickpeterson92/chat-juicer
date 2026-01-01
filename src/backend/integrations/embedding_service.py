@@ -12,12 +12,10 @@ from typing import TYPE_CHECKING
 
 from core.constants import get_settings
 from utils.client_factory import create_openai_client
-from utils.logger import get_logger
+from utils.logger import logger
 
 if TYPE_CHECKING:
     from openai import AsyncOpenAI
-
-logger = get_logger(__name__)
 
 # Embedding configuration
 EMBEDDING_MODEL = "text-embedding-3-small"

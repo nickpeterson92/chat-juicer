@@ -14,12 +14,10 @@ import asyncpg
 from core.constants import DEFAULT_MODEL, get_settings
 from core.prompts import CONVERSATION_SUMMARIZATION_INSTRUCTIONS
 from utils.client_factory import create_openai_client
-from utils.logger import get_logger
+from utils.logger import logger
 
 if TYPE_CHECKING:
     from openai import AsyncOpenAI
-
-logger = get_logger(__name__)
 
 # Summarization configuration
 SUMMARY_TURN_THRESHOLD = 10  # Summarize every N turns

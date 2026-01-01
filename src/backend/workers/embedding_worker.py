@@ -21,13 +21,11 @@ import asyncpg
 from api.services.context_service import ContextService
 from api.services.summarization_service import SummarizationService
 from integrations.embedding_service import EmbeddingService, get_embedding_service
-from utils.logger import get_logger
+from utils.logger import logger
 from utils.token_utils import count_tokens
 
 if TYPE_CHECKING:
     pass
-
-logger = get_logger(__name__)
 
 # Worker configuration
 WORKER_INTERVAL_SECONDS = 10  # Check for work every N seconds
