@@ -268,8 +268,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if path in EXEMPT_PATHS:
             return await call_next(request)
 
-        # Skip rate limiting in development if disabled
-        if settings.is_development and not getattr(settings, "rate_limit_enabled", True):
+        # Skip rate limiting if disabled via settings (for load testing)
+        if not settings.rate_limit_enabled:
             return await call_next(request)
 
         # Skip WebSocket upgrades (connection limits handled separately)
