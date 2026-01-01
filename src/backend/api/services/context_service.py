@@ -14,6 +14,11 @@ from uuid import UUID
 import asyncpg
 
 
+def _embedding_to_pgvector(embedding: list[float]) -> str:
+    """Convert embedding list to pgvector string format."""
+    return "[" + ",".join(str(x) for x in embedding) + "]"
+
+
 @dataclass
 class ChunkResult:
     """Result from vector similarity search."""
@@ -91,7 +96,7 @@ class ContextService:
                 session_id,
                 content,
                 content_hash,
-                embedding,
+                _embedding_to_pgvector(embedding),
                 token_count,
                 metadata,
             )
@@ -144,7 +149,7 @@ class ContextService:
                 chunk_index,
                 content,
                 content_hash,
-                embedding,
+                _embedding_to_pgvector(embedding),
                 token_count,
                 metadata,
             )
@@ -187,7 +192,7 @@ class ContextService:
                 LIMIT $4
                 """,
                 project_id,
-                query_embedding,
+                _embedding_to_pgvector(query_embedding),
                 score_threshold,
                 top_k,
             )
