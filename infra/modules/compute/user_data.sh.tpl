@@ -36,8 +36,8 @@ API_HOST=0.0.0.0
 
 # Database
 DATABASE_URL=postgresql://${db_username}:${db_password}@${db_endpoint}/chatjuicer
-DB_POOL_MIN_SIZE=2
-DB_POOL_MAX_SIZE=10
+DB_POOL_MIN_SIZE=5
+DB_POOL_MAX_SIZE=40
 
 # Storage
 FILE_STORAGE=s3
@@ -49,10 +49,11 @@ AZURE_OPENAI_API_KEY=${azure_openai_api_key}
 AZURE_OPENAI_ENDPOINT=${azure_openai_endpoint}
 REASONING_EFFORT=medium
 
-# MCP
+# MCP & Scaling
 TAVILY_API_KEY=${tavily_api_key}
-MCP_POOL_SIZE=3
 MCP_ACQUIRE_TIMEOUT=30.0
+SANDBOX_POOL_SIZE=15
+WS_MAX_CONNECTIONS=500
 
 # Auth
 JWT_SECRET=${jwt_secret}

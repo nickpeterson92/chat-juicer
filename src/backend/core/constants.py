@@ -756,7 +756,12 @@ class Settings(BaseSettings):
         description="Tavily MCP server HTTP endpoint",
     )
 
-    # Database (Phase 1: local PostgreSQL)
+    # Logging security
+    enable_content_logging: bool = Field(
+        default=False, description="Enable logging of message content (security risk, avoid in production)"
+    )
+
+    # Database
     database_url: str = Field(
         default="postgresql://chatjuicer:localdev@localhost:5433/chatjuicer",
         description="PostgreSQL connection string",
@@ -819,6 +824,38 @@ class Settings(BaseSettings):
     ws_heartbeat_interval: float = Field(
         default=30.0,
         description="WebSocket heartbeat/ping interval (seconds)",
+    )
+
+    # Rate limiting configuration
+    rate_limit_enabled: bool = Field(
+        default=True,
+        description="Enable rate limiting middleware",
+    )
+    rate_limit_auth_burst: int = Field(
+        default=5,
+        description="Initial burst allowance for auth endpoints",
+    )
+    rate_limit_auth_sustained: int = Field(
+        default=10,
+        description="Sustained requests per minute for auth endpoints",
+    )
+    rate_limit_upload: int = Field(
+        default=10,
+        description="File uploads per minute per user",
+    )
+    rate_limit_api: int = Field(
+        default=120,
+        description="Regular API requests per minute per user",
+    )
+
+    # Request size limits
+    max_request_body_size: int = Field(
+        default=1 * 1024 * 1024,
+        description="Maximum request body size in bytes (default 1 MB)",
+    )
+    max_upload_size: int = Field(
+        default=50 * 1024 * 1024,
+        description="Maximum file upload size in bytes (default 50 MB)",
     )
 
     # HTTP client timeouts (for Azure OpenAI streaming)

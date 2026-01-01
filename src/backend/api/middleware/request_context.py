@@ -20,6 +20,8 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import Response
 
+from utils.metrics import request_duration_seconds
+
 # Context variable for request-scoped data
 _request_context: ContextVar[RequestContext | None] = ContextVar("request_context", default=None)
 
@@ -169,6 +171,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
             # Add timing header in development
             response.headers["X-Response-Time"] = f"{context.elapsed_ms:.2f}ms"
+
+            # Record metrics
+            request_duration_seconds.labels(
+                method=request.method, path=request.url.path, status=response.status_code
+            ).observe(context.elapsed_ms / 1000)
 
             return response
         finally:

@@ -245,6 +245,27 @@ class S3SyncService:
                 logger.error(f"Failed to create S3 bucket {self.bucket}: {e}")
                 raise
 
+    async def check_connectivity(self) -> dict[str, Any]:
+        """Check S3 connectivity explicitly.
+
+        Returns:
+            Dict with 'connected' (bool) and 'latency_ms' (float)
+        """
+        import time
+
+        client = self._get_client()
+        loop = asyncio.get_event_loop()
+        start = time.monotonic()
+
+        try:
+            await loop.run_in_executor(
+                None,
+                lambda: client.head_bucket(Bucket=self.bucket),
+            )
+            return {"connected": True, "latency_ms": (time.monotonic() - start) * 1000}
+        except Exception as e:
+            return {"connected": False, "error": str(e), "latency_ms": (time.monotonic() - start) * 1000}
+
     def generate_presigned_upload_url(
         self, session_id: str, folder: str, filename: str, content_type: str | None = None
     ) -> tuple[str, str]:

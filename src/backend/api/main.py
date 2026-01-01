@@ -8,9 +8,13 @@ from contextlib import asynccontextmanager
 from agents import set_default_openai_client, set_tracing_disabled
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from api.middleware.exception_handlers import register_exception_handlers
+from api.middleware.rate_limiter import RateLimitMiddleware, get_rate_limiter
 from api.middleware.request_context import RequestContextMiddleware
+from api.middleware.request_limits import RequestSizeLimitMiddleware
+from api.middleware.security_headers import SecurityHeadersMiddleware
 from api.routes import chat
 from api.routes.v1 import router as v1_router
 from api.websocket.manager import WebSocketManager
@@ -78,6 +82,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     shutdown_event = asyncio.Event()
     app.state.shutdown_event = shutdown_event
     app.state.background_tasks = set()
+
+    # helper imports for startup time
+    from datetime import datetime, timezone
+
+    app.state.startup_time = datetime.now(timezone.utc)
 
     # Initialize OpenAI client for agents SDK
     _setup_openai_client()
@@ -164,6 +173,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await pool.initialize()
     app.state.sandbox_pool = pool
 
+    # Start rate limiter cleanup task
+    rate_limiter = get_rate_limiter()
+    await rate_limiter.start()
+    app.state.rate_limiter = rate_limiter
+
     try:
         yield
     finally:
@@ -186,7 +200,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             await app.state.sandbox_pool.shutdown()
             logger.info("Sandbox pool shutdown complete")
 
-        # Phase 4: Gracefully close database pool
+        # Phase 4: Stop rate limiter cleanup task
+        if hasattr(app.state, "rate_limiter") and app.state.rate_limiter:
+            await app.state.rate_limiter.stop()
+            logger.info("Rate limiter shutdown complete")
+
+        # Phase 5: Gracefully close database pool
         await graceful_pool_close(app.state.db_pool, timeout=settings.shutdown_timeout)
 
 
@@ -250,6 +269,9 @@ Breaking changes will increment the version number.
     redoc_url="/api/v1/redoc",
 )
 
+# Setup Prometheus metrics (exposes /api/v1/metrics)
+Instrumentator().instrument(app).expose(app, include_in_schema=True, endpoint="/api/v1/metrics")
+
 # Register global exception handlers for consistent error responses
 register_exception_handlers(app)
 
@@ -267,6 +289,15 @@ app.add_middleware(
     allow_methods=settings.cors_methods_list,
     allow_headers=settings.cors_headers_list,
 )
+
+# Security middleware stack (executed in reverse order of registration)
+# Last added = first executed
+# 1. Rate limiter (check limits first)
+# 2. Request size limits (validate body size)
+# 3. Security headers (add to all responses)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestSizeLimitMiddleware)
+app.add_middleware(RateLimitMiddleware)
 
 # Routes - API v1
 app.include_router(v1_router, prefix="/api/v1")

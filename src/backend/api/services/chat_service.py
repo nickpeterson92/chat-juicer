@@ -147,12 +147,12 @@ class ChatService:
         # Acquire MCP servers from pool for concurrent safety
         # MCP servers use stdio which doesn't support concurrent access - pool serializes access
         server_keys = session_mcp_config if session_mcp_config else DEFAULT_MCP_SERVERS
-        logger.info(
+        logger.debug(
             f"[DIAG:{session_id[:8]}] Acquiring MCP servers: {server_keys}, " f"stats: {self.mcp_manager.get_stats()}"
         )
 
         async with self.mcp_manager.acquire_servers(server_keys) as mcp_servers:
-            logger.info(f"[DIAG:{session_id[:8]}] Acquired {len(mcp_servers)} MCP servers")
+            logger.debug(f"[DIAG:{session_id[:8]}] Acquired {len(mcp_servers)} MCP servers")
             async with session_file_context(
                 file_service=self.file_service,
                 session_id=session_id,
@@ -180,7 +180,7 @@ class ChatService:
                 # Create provider with dedicated client for stream isolation
                 request_provider = OpenAIProvider(openai_client=request_client)
 
-                logger.info(f"[DIAG:{session_id[:8]}] Creating agent with model={model} and dedicated provider")
+                logger.debug(f"[DIAG:{session_id[:8]}] Creating agent with model={model} and dedicated provider")
                 agent = create_agent(
                     deployment=model,
                     instructions=instructions,
@@ -188,13 +188,13 @@ class ChatService:
                     mcp_servers=mcp_servers,
                     reasoning_effort=reasoning,
                 )
-                logger.info(f"[DIAG:{session_id[:8]}] Agent created, sending assistant_start")
+                logger.debug(f"[DIAG:{session_id[:8]}] Agent created, sending assistant_start")
 
                 await self.ws_manager.send(
                     session_id,
                     {"type": "assistant_start", "session_id": session_id},
                 )
-                logger.info(f"[DIAG:{session_id[:8]}] assistant_start sent")
+                logger.debug(f"[DIAG:{session_id[:8]}] assistant_start sent")
 
                 try:
                     # Build user messages list for SDK input
@@ -217,13 +217,13 @@ class ChatService:
                         )
 
                         user_messages.append({"role": "user", "content": content})
-                        logger.info(f"Processing user message for session {session_id}")
+                        logger.debug(f"Processing user message for session {session_id}")
 
                         # Save text to Layer 2 (UI history) - serialize content array to JSON if multimodal
                         history_content = json.dumps(content) if isinstance(content, list) else text_content
                         try:
                             await self._add_to_full_history(session_uuid, "user", history_content)
-                            logger.info("Saved to messages table (Layer 2) successfully")
+                            logger.debug("Saved to messages table (Layer 2) successfully")
                         except Exception as e:
                             logger.error(f"Failed to save to messages: {e}", exc_info=True)
                             raise
@@ -233,7 +233,7 @@ class ChatService:
                     try:
                         # Pass only NEW user messages - SDK merges with session history via session_input_callback
                         # Pass model_provider for stream isolation (critical for concurrent multi-user requests)
-                        logger.info(f"[DIAG:{session_id[:8]}] Starting _run_agent_stream with dedicated provider")
+                        logger.debug(f"[DIAG:{session_id[:8]}] Starting _run_agent_stream with dedicated provider")
                         completed_normally = await self._run_agent_stream(
                             agent,
                             session,
@@ -243,7 +243,7 @@ class ChatService:
                             model_provider=request_provider,
                             cancellation_token=cancellation_token,
                         )
-                        logger.info(f"[DIAG:{session_id[:8]}] _run_agent_stream completed: {completed_normally}")
+                        logger.debug(f"[DIAG:{session_id[:8]}] _run_agent_stream completed: {completed_normally}")
                     finally:
                         disconnect_session()
 
@@ -339,7 +339,7 @@ class ChatService:
 
         # Pass only NEW user messages - SDK uses session_input_callback to merge with history
         # This is critical for concurrent sessions: each session gets its own isolated history
-        logger.info(f"[DIAG:{session_id[:8]}] Calling Runner.run_streamed")
+        logger.debug(f"[DIAG:{session_id[:8]}] Calling Runner.run_streamed")
         stream_candidate = Runner.run_streamed(
             agent,
             input=user_messages,  # type: ignore[arg-type]  # SDK accepts dict messages
@@ -347,9 +347,9 @@ class ChatService:
             run_config=run_config,
             max_turns=MAX_CONVERSATION_TURNS,
         )
-        logger.info(f"[DIAG:{session_id[:8]}] Awaiting stream_candidate")
+        logger.debug(f"[DIAG:{session_id[:8]}] Awaiting stream_candidate")
         stream = await stream_candidate if inspect.isawaitable(stream_candidate) else stream_candidate
-        logger.info(f"[DIAG:{session_id[:8]}] Stream ready, entering event loop")
+        logger.debug(f"[DIAG:{session_id[:8]}] Stream ready, entering event loop")
 
         # Store stream for interrupt access (enables SDK cancel())
         self._active_streams[session_id] = stream
@@ -364,7 +364,7 @@ class ChatService:
             async with token_context:
                 async for event in stream.stream_events():
                     if event_count == 0:
-                        logger.info(f"[DIAG:{session_id[:8]}] First event received: {event.type}")
+                        logger.debug(f"[DIAG:{session_id[:8]}] First event received: {event.type}")
                     event_count += 1
 
                     # Check cancellation via token

@@ -136,11 +136,18 @@ export class FilePanel {
 
     // Auto-refresh when opening
     if (wasCollapsed && this.currentSessionId) {
-      try {
-        await this.refresh();
-      } catch (error) {
-        console.error("FilePanel refresh failed", error);
-      }
+      // Defer refresh until transition completes to prevent animation jank
+      // The CSS transition is 300ms
+      setTimeout(async () => {
+        try {
+          // Check if still visible (user didn't quickly close it)
+          if (this.isVisible()) {
+            await this.refresh();
+          }
+        } catch (error) {
+          console.error("FilePanel refresh failed", error);
+        }
+      }, 300);
     }
   }
 

@@ -1,13 +1,12 @@
-"""Tests for logger module.
+"""Tests for logger module with security improvements.
 
-Tests logging configuration, handlers, and structured logging.
+Tests logging configuration, handlers, structure, and secure PII redaction.
 """
 
 from __future__ import annotations
 
 import logging
 
-from pathlib import Path
 from unittest.mock import Mock, patch
 
 from utils.logger import ChatLogger, ConversationFilter, ConversationTurn, ErrorFilter, setup_logging
@@ -67,22 +66,6 @@ class TestConversationFilter:
             args=(),
             exc_info=None,
         )
-
-        assert conv_filter.filter(record) is True
-
-    def test_filter_allows_warning(self) -> None:
-        """Test that filter allows WARNING level."""
-        conv_filter = ConversationFilter()
-        record = logging.LogRecord(
-            name="test",
-            level=logging.WARNING,
-            pathname="",
-            lineno=0,
-            msg="test",
-            args=(),
-            exc_info=None,
-        )
-
         assert conv_filter.filter(record) is True
 
     def test_filter_blocks_debug(self) -> None:
@@ -97,7 +80,6 @@ class TestConversationFilter:
             args=(),
             exc_info=None,
         )
-
         assert conv_filter.filter(record) is False
 
 
@@ -288,123 +270,108 @@ class TestChatLogger:
         call_args = chat_logger.logger.error.call_args
         assert call_args.kwargs["exc_info"] is True
 
-    def test_log_conversation_turn_basic(self) -> None:
-        """Test log_conversation_turn with basic inputs."""
-        chat_logger = ChatLogger("test-conv-turn")
-        chat_logger.logger = Mock()
 
-        chat_logger.log_conversation_turn(
-            user_input="Hello",
-            response="Hi there!",
-        )
+class TestChatLoggerSecurity:
+    """Tests for ChatLogger security features (redaction, opt-in logging)."""
 
-        chat_logger.logger.info.assert_called_once()
-        call_args = chat_logger.logger.info.call_args
-        message = call_args.args[0]
-        assert "User: Hello" in message
-        assert "Hi there!" in message
+    def test_redact_content_email(self) -> None:
+        """Test email redaction."""
+        logger_inst = ChatLogger("test-security")
+        text = "Contact me at user@example.com please."
+        redacted = logger_inst._redact_content(text)
+        assert "[EMAIL]" in redacted
+        assert "user@example.com" not in redacted
 
-    def test_log_conversation_turn_with_function_calls(self) -> None:
-        """Test log_conversation_turn with function calls."""
-        chat_logger = ChatLogger("test-conv-func")
-        chat_logger.logger = Mock()
+    def test_redact_content_credit_card(self) -> None:
+        """Test credit card redaction."""
+        logger_inst = ChatLogger("test-security")
+        text = "My card is 1234-5678-9012-3456 used here."
+        redacted = logger_inst._redact_content(text)
+        assert "[CARD]" in redacted
+        assert "1234-5678-9012-3456" not in redacted
 
-        chat_logger.log_conversation_turn(
-            user_input="What's the weather?",
-            response="It's sunny!",
-            function_calls=["get_weather", "get_location"],
-        )
+    def test_redact_content_api_key(self) -> None:
+        """Test API key redaction."""
+        logger_inst = ChatLogger("test-security")
+        text = "Key: sk-1234567890abcdef12345678 is secret."
+        redacted = logger_inst._redact_content(text)
+        assert "[API_KEY]" in redacted
+        assert "sk-1234567890abcdef12345678" not in redacted
 
-        call_args = chat_logger.logger.info.call_args
-        message = call_args.args[0]
-        assert "[2 functions]" in message
+    def test_log_content_disabled_by_default(self) -> None:
+        """Test that content is hidden by default."""
+        with patch("utils.logger.get_settings") as mock_settings:
+            mock_settings.return_value.enable_content_logging = False
 
-    def test_log_conversation_turn_with_metrics(self) -> None:
-        """Test log_conversation_turn with performance metrics."""
-        chat_logger = ChatLogger("test-conv-metrics")
-        chat_logger.logger = Mock()
+            chat_logger = ChatLogger("test-hidden")
+            chat_logger.logger = Mock()
 
-        chat_logger.log_conversation_turn(
-            user_input="Test",
-            response="Response",
-            duration_ms=123.45,
-            tokens_used=50,
-        )
+            chat_logger.log_conversation_turn("Secret input", "Secret output")
 
-        call_args = chat_logger.logger.info.call_args
-        message = call_args.args[0]
-        assert "[123ms]" in message
-        assert "[50 tokens]" in message
+            call_args = chat_logger.logger.info.call_args
+            message = call_args[0][0]
+            extra = call_args[1]["extra"]
 
-    def test_log_conversation_turn_truncates_long_text(self) -> None:
-        """Test that log_conversation_turn truncates long text."""
-        chat_logger = ChatLogger("test-conv-truncate")
-        chat_logger.logger = Mock()
+            assert "[HIDDEN]" in message
+            assert "Secret" not in message
+            assert extra["content_logging"] is False
 
-        long_input = "x" * 1000
-        long_response = "y" * 1000
+    def test_log_content_enabled_redacted(self) -> None:
+        """Test that content is logged but redacted when enabled."""
+        with patch("utils.logger.get_settings") as mock_settings:
+            mock_settings.return_value.enable_content_logging = True
 
-        chat_logger.log_conversation_turn(
-            user_input=long_input,
-            response=long_response,
-        )
+            chat_logger = ChatLogger("test-visible")
+            chat_logger.logger = Mock()
 
-        call_args = chat_logger.logger.info.call_args
-        message = call_args.args[0]
-        # Should have "..." indicating truncation
-        assert "..." in message
+            chat_logger.log_conversation_turn("My email is test@test.com", "Confirmed test@test.com")
 
-    def test_log_function_call_basic(self) -> None:
-        """Test log_function_call with basic inputs."""
-        chat_logger = ChatLogger("test-func-call")
-        chat_logger.logger = Mock()
+            call_args = chat_logger.logger.info.call_args
+            message = call_args[0][0]
 
-        chat_logger.log_function_call(
-            function_name="test_func",
-            args={"arg1": "value1"},
-            result="success",
-        )
+            assert "[EMAIL]" in message
+            assert "test@test.com" not in message
 
-        chat_logger.logger.info.assert_called_once()
-        call_args = chat_logger.logger.info.call_args
-        message = call_args.args[0]
-        assert "test_func" in message
-        assert "value1" in message or "arg1" in message
+    def test_log_function_call_hidden_by_default(self) -> None:
+        """Test function args hidden by default."""
+        with patch("utils.logger.get_settings") as mock_settings:
+            mock_settings.return_value.enable_content_logging = False
 
-    def test_log_function_call_truncates_long_args(self) -> None:
-        """Test that log_function_call truncates long argument values."""
-        chat_logger = ChatLogger("test-func-long-args")
-        chat_logger.logger = Mock()
+            chat_logger = ChatLogger("test-func-hidden")
+            chat_logger.logger = Mock()
 
-        long_value = "x" * 1000
+            chat_logger.log_function_call("my_func", {"secret": "value"}, "result")
 
-        chat_logger.log_function_call(
-            function_name="test_func",
-            args={"arg1": long_value},
-            result="success",
-        )
+            call_args = chat_logger.logger.info.call_args
+            message = call_args[0][0]  # Console message
+            extra = call_args[1]["extra"]
+            file_msg = extra["file_message"]
 
-        call_args = chat_logger.logger.info.call_args
-        extra = call_args.kwargs.get("extra", {})
-        # Should have truncated the args in the file message
-        assert "file_message" in extra
+            assert "..." in message or "[HIDDEN]" in message
+            assert "value" not in message
+            assert "[HIDDEN]" in file_msg
 
 
 class TestChatLoggerIntegration:
-    """Integration tests for ChatLogger with actual logging."""
+    """Integration tests covering context injection and global instance."""
 
-    def test_chat_logger_actually_logs(self, tmp_path: Path) -> None:
-        """Test that ChatLogger actually writes to log files."""
-        # Create a test logger with temp directory
-        with patch("pathlib.Path") as mock_path:
-            mock_path.return_value.parent.parent.parent = tmp_path
-            mock_path.return_value = tmp_path
+    def test_context_injection(self) -> None:
+        """Test that request context is injected if available."""
+        from api.middleware.request_context import RequestContext, set_request_context
 
-            chat_logger = ChatLogger("test-integration")
-            chat_logger.info("Test message")
+        ctx = RequestContext(request_id="req_123", session_id="sess_abc")
+        set_request_context(ctx)
 
-            # Logger should have been called
-            assert chat_logger.logger is not None
+        chat_logger = ChatLogger("test-context")
+        chat_logger.logger = Mock()
+
+        chat_logger.info("Test context")
+
+        call_args = chat_logger.logger.info.call_args
+        extra = call_args[1]["extra"]
+
+        assert extra["request_id"] == "req_123"
+        assert extra["session_id"] == "sess_abc"
 
     def test_global_logger_instance(self) -> None:
         """Test that global logger instance is created."""

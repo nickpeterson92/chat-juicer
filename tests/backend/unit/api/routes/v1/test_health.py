@@ -37,6 +37,7 @@ def mock_ws_manager() -> MagicMock:
 def mock_mcp_manager() -> MagicMock:
     manager = MagicMock()
     manager.get_stats.return_value = {"initialized": True, "servers": ["test"], "server_count": 1}
+    manager.check_connectivity = AsyncMock(return_value={"healthy": True, "servers": {"test": True}})
     return manager
 
 
@@ -112,21 +113,22 @@ async def test_health_check_healthy(client: TestClient, mock_db_pool: MagicMock)
 
 @pytest.mark.asyncio
 async def test_health_check_degraded(client: TestClient, mock_db_pool: MagicMock, mock_ws_manager: MagicMock) -> None:
-    # Simulate DB healthy but WS error (if possible logic allows)
-    # health.py logic:
-    # if db_healthy and ws_healthy: healthy
-    # elif db_healthy or ws_healthy: degraded
-    # else: unhealthy
+    # Simulate DB healthy but WS error
+    # status = "degraded" if DB is healthy but others are not
 
-    # 1. DB Unhealthy
+    # 1. WS Unhealthy (shutting down)
+    mock_ws_manager.get_stats.return_value = {"active_connections": 0, "active_sessions": 0, "shutting_down": True}
+
     with patch("api.routes.v1.health.check_pool_health", new_callable=AsyncMock) as mock_check:
-        mock_check.return_value = {"healthy": False, "error": "Connection failed"}
+        # DB Healthy
+        mock_check.return_value = {"healthy": True, "pool_size": 10}
 
         response = client.get("/health")
 
         data = response.json()
-        assert data["status"] == "degraded"  # Because WS is healthy (mocked healthy by default)
-        assert data["database"]["healthy"] is False
+        assert data["status"] == "degraded"
+        assert data["database"]["healthy"] is True
+        assert data["websocket"]["shutting_down"] is True
 
 
 @pytest.mark.asyncio
