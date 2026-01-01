@@ -82,16 +82,11 @@ class EmbeddingWorker:
 
     async def _run_loop(self) -> None:
         """Main worker loop."""
-        import traceback
-
         while self._running:
             try:
                 await self._process_cycle()
-            except Exception as e:
-                logger.error(
-                    "Embedding worker cycle failed",
-                    extra={"error": str(e), "traceback": traceback.format_exc()},
-                )
+            except Exception:
+                logger.exception("Embedding worker cycle failed")
 
             await asyncio.sleep(WORKER_INTERVAL_SECONDS)
 
