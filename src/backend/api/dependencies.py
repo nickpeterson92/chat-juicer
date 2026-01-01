@@ -7,6 +7,7 @@ import asyncpg
 from fastapi import Depends, Request
 
 from api.services.file_service import FileService, LocalFileService
+from api.services.project_service import ProjectService
 from api.services.session_service import SessionService
 from api.websocket.manager import WebSocketManager
 from core.constants import DATA_FILES_PATH, Settings, get_settings
@@ -58,6 +59,11 @@ def get_session_service(db: Annotated[asyncpg.Pool, Depends(get_db)]) -> Session
     return SessionService(db)
 
 
+def get_project_service(db: Annotated[asyncpg.Pool, Depends(get_db)]) -> ProjectService:
+    """Provide project service backed by PostgreSQL."""
+    return ProjectService(db)
+
+
 def get_ws_manager(request: Request) -> WebSocketManager:
     """Get WebSocket manager from application state."""
     return request.app.state.ws_manager
@@ -72,6 +78,7 @@ def get_mcp_manager(request: Request) -> MCPServerManager:
 DB = Annotated[asyncpg.Pool, Depends(get_db)]
 Files = Annotated[FileService, Depends(get_file_service)]
 Sessions = Annotated[SessionService, Depends(get_session_service)]
+Projects = Annotated[ProjectService, Depends(get_project_service)]
 WSManager = Annotated[WebSocketManager, Depends(get_ws_manager)]
 MCPManager = Annotated[MCPServerManager, Depends(get_mcp_manager)]
 AppSettings = Annotated[Settings, Depends(get_app_settings)]
