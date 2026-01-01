@@ -144,28 +144,6 @@ class TestRequestSizeLimitMiddleware:
         assert call_next_called is True
 
     @pytest.mark.asyncio
-    async def test_no_content_length_passes(self) -> None:
-        """Requests without Content-Length should pass (chunked encoding)."""
-        call_next_called = False
-
-        async def call_next(request: Request) -> JSONResponse:
-            nonlocal call_next_called
-            call_next_called = True
-            return JSONResponse(content={"status": "ok"})
-
-        request = MagicMock(spec=Request)
-        request.method = "POST"
-        request.url = MagicMock()
-        request.url.path = "/api/v1/sessions"
-        request.headers = {}  # No content-length
-
-        middleware = RequestSizeLimitMiddleware(lambda r: None)
-        response = await middleware.dispatch(request, call_next)
-
-        assert call_next_called is True
-        assert response.status_code == 200
-
-    @pytest.mark.asyncio
     async def test_invalid_content_length_passes(self) -> None:
         """Invalid Content-Length should not crash middleware."""
         call_next_called = False

@@ -10,7 +10,7 @@ Size limits vary by endpoint type:
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 from fastapi import Request, Response
@@ -34,6 +34,36 @@ UPLOAD_PATTERNS: tuple[str, ...] = (
 def _is_upload_path(path: str) -> bool:
     """Check if path is a file upload endpoint."""
     return any(pattern in path for pattern in UPLOAD_PATTERNS)
+
+
+class BodySizeLimitExceeded(Exception):
+    """Raised when request body exceeds size limit."""
+
+    def __init__(self, bytes_read: int, max_size: int) -> None:
+        self.bytes_read = bytes_read
+        self.max_size = max_size
+        super().__init__(f"Body size {bytes_read} exceeds limit {max_size}")
+
+
+class SizeLimitedBodyStream:
+    """Wraps request body stream with size tracking for chunked transfers."""
+
+    def __init__(self, stream: AsyncIterator[bytes], max_size: int, path: str) -> None:
+        self._stream = stream
+        self._max_size = max_size
+        self._path = path
+        self._bytes_read = 0
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        async for chunk in self._stream:
+            self._bytes_read += len(chunk)
+            if self._bytes_read > self._max_size:
+                logger.warning(
+                    f"Chunked request body too large: {self._bytes_read} bytes > "
+                    f"{self._max_size} bytes (path: {self._path})"
+                )
+                raise BodySizeLimitExceeded(self._bytes_read, self._max_size)
+            yield chunk
 
 
 class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
@@ -102,9 +132,20 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
             except ValueError:
                 # Invalid Content-Length header
                 pass
+        else:
+            # For chunked transfers without Content-Length, wrap the body stream
+            # to track size incrementally and enforce limits
+            original_stream = request.stream()
+            request._stream = SizeLimitedBodyStream(original_stream, max_size, path).__aiter__()  # type: ignore[attr-defined]
 
-        # For requests without Content-Length (chunked encoding),
-        # the body will be validated during parsing by FastAPI/Starlette
-        # We rely on the Content-Length check for the common case
-
-        return await call_next(request)
+        try:
+            return await call_next(request)
+        except BodySizeLimitExceeded as e:
+            return JSONResponse(
+                status_code=413,
+                content={
+                    "error": "request_too_large",
+                    "message": f"Request body exceeds maximum size of {e.max_size} bytes",
+                    "max_size": e.max_size,
+                },
+            )

@@ -123,6 +123,40 @@ test-backend-integration: ## Run Python integration tests only
 		exit 1; \
 	fi
 
+##@ Load Testing
+
+test-load: ## Run Locust load tests (TARGET_HOST=http://your-ec2:8000)
+	@echo "$(BLUE)Running Locust load tests...$(NC)"
+	@echo "$(YELLOW)Use TARGET_HOST env var to set target (default: localhost:8000)$(NC)"
+	@if [ -f ".juicer/bin/locust" ]; then \
+		.juicer/bin/locust -f tests/load/locustfile.py --host=$${TARGET_HOST:-http://localhost:8000}; \
+	else \
+		echo "$(YELLOW)⚠ Locust not installed in .juicer venv$(NC)"; \
+		echo "$(BLUE)Run: pip install locust$(NC)"; \
+		exit 1; \
+	fi
+
+test-load-headless: ## Run load tests headless (50 users, 60s) - CI friendly
+	@echo "$(BLUE)Running headless load tests...$(NC)"
+	@if [ -f ".juicer/bin/locust" ]; then \
+		.juicer/bin/locust -f tests/load/locustfile.py \
+			--host=$${TARGET_HOST:-http://localhost:8000} \
+			--users 50 --spawn-rate 5 --run-time 60s --headless; \
+	else \
+		echo "$(YELLOW)⚠ Locust not installed$(NC)"; \
+		exit 1; \
+	fi
+
+test-load-websocket: ## Run WebSocket load tests via pytest
+	@echo "$(BLUE)Running WebSocket load tests...$(NC)"
+	@if [ -f ".juicer/bin/pytest" ]; then \
+		TARGET_HOST=$${TARGET_HOST:-http://localhost:8000} \
+		.juicer/bin/pytest tests/load/test_websocket_load.py -v --no-cov -s; \
+	else \
+		echo "$(YELLOW)⚠ Pytest not installed$(NC)"; \
+		exit 1; \
+	fi
+
 test-frontend-unit: ## Run JavaScript unit tests only
 	@echo "$(BLUE)Running JavaScript unit tests...$(NC)"
 	@npm run test:unit

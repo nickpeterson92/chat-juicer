@@ -12,6 +12,7 @@ import asyncpg
 
 from api.services.message_utils import row_to_message
 from core.constants import DATA_FILES_PATH, DEFAULT_MODEL, MODEL_TOKEN_LIMITS
+from utils.cache import get_session_cache, get_session_list_cache
 from utils.logger import logger
 
 
@@ -55,7 +56,15 @@ class SessionService:
         return self._row_to_session(row)
 
     async def get_session(self, user_id: UUID, session_id: str) -> dict[str, Any] | None:
-        """Get session by ID."""
+        """Get session by ID (with caching)."""
+        cache_key = f"session:{user_id}:{session_id}"
+        cache = get_session_cache()
+
+        # Try cache first
+        cached = await cache.get(cache_key)
+        if cached is not None:
+            return dict(cached)  # Explicit dict() to satisfy mypy
+
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
@@ -67,7 +76,10 @@ class SessionService:
             )
         if not row:
             return None
-        return self._row_to_session(row)
+
+        session = self._row_to_session(row)
+        await cache.set(cache_key, session, ttl=60.0)  # Cache for 60s
+        return session
 
     async def get_session_with_history(
         self,
@@ -127,7 +139,17 @@ class SessionService:
         offset: int = 0,
         limit: int = 50,
     ) -> dict[str, Any]:
-        """List all sessions for user."""
+        """List all sessions for user (with caching for first page)."""
+        # Only cache first page (most common request)
+        use_cache = offset == 0 and limit == 50
+        cache_key = f"sessions:{user_id}:0:50"
+        cache = get_session_list_cache()
+
+        if use_cache:
+            cached = await cache.get(cache_key)
+            if cached is not None:
+                return dict(cached)  # Explicit dict() to satisfy mypy
+
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
@@ -148,11 +170,16 @@ class SessionService:
 
         sessions = [self._row_to_session(r) for r in rows]
 
-        return {
+        result = {
             "sessions": sessions,
             "total_count": total,
             "has_more": offset + len(sessions) < total,
         }
+
+        if use_cache:
+            await cache.set(cache_key, result, ttl=30.0)  # Cache for 30s
+
+        return result
 
     async def update_session(
         self,
@@ -191,6 +218,13 @@ class SessionService:
             row = await conn.fetchrow(query, *values)
         if not row:
             return None
+
+        # Invalidate caches
+        session_cache = get_session_cache()
+        list_cache = get_session_list_cache()
+        await session_cache.delete(f"session:{user_id}:{session_id}")
+        await list_cache.delete(f"sessions:{user_id}:0:50")
+
         return self._row_to_session(row)
 
     async def delete_session(self, user_id: UUID, session_id: str) -> bool:
@@ -206,6 +240,13 @@ class SessionService:
             )
 
         deleted: bool = result == "DELETE 1"
+
+        # Invalidate caches
+        if deleted:
+            session_cache = get_session_cache()
+            list_cache = get_session_list_cache()
+            await session_cache.delete(f"session:{user_id}:{session_id}")
+            await list_cache.delete(f"sessions:{user_id}:0:50")
 
         # Clean up session files from disk
         if deleted:

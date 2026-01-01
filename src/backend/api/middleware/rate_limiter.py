@@ -186,10 +186,12 @@ class SlidingWindowRateLimiter:
 
             # Request allowed - record it
             entry.timestamps.append(now)
+            # Capture pre-increment count for burst tracking
+            pre_increment_count = entry.request_count
             entry.request_count += 1
 
-            # Track burst usage
-            if entry.request_count <= config.burst_size:
+            # Track burst usage (use pre-increment count to correctly identify burst window)
+            if pre_increment_count < config.burst_size:
                 entry.burst_used = min(entry.request_count, config.burst_size)
 
             return True, self._build_headers(config, entry.request_count, now, window_size)
