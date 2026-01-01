@@ -199,9 +199,12 @@ class EmbeddingWorker:
 
     async def _safe_embed_message(self, row: asyncpg.Record) -> None:
         """Safely embed a message, logging any errors."""
+        import traceback
+
         try:
             await self._embed_message(row)
         except Exception as e:
+            print(f"[EMBED MESSAGE ERROR] {row['id']}\n{traceback.format_exc()}", flush=True)
             logger.error(
                 "Failed to embed message",
                 extra={"message_id": str(row["id"]), "error": str(e)},
