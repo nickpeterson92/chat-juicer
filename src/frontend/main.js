@@ -498,6 +498,62 @@ app.whenReady().then(() => {
     return cachedAccessToken;
   });
 
+  // ==========================================
+  // Project IPC Handlers
+  // ==========================================
+
+  ipcMain.handle("list-projects", async (_event, { offset, limit }) => {
+    logger.debug("List projects requested", { offset, limit });
+    try {
+      const result = await apiRequest(`/api/v1/projects?offset=${offset}&limit=${limit}`);
+      return result;
+    } catch (error) {
+      logger.error("Failed to list projects", { error: error.message });
+      return { projects: [], pagination: { total_count: 0 } };
+    }
+  });
+
+  ipcMain.handle("create-project", async (_event, { name, description }) => {
+    logger.info("Create project requested", { name });
+    try {
+      const result = await apiRequest("/api/v1/projects", {
+        method: "POST",
+        body: { name, description },
+      });
+      return result;
+    } catch (error) {
+      logger.error("Failed to create project", { error: error.message });
+      throw error;
+    }
+  });
+
+  ipcMain.handle("update-project", async (_event, { projectId, updates }) => {
+    logger.info("Update project requested", { projectId });
+    try {
+      const result = await apiRequest(`/api/v1/projects/${projectId}`, {
+        method: "PATCH",
+        body: updates,
+      });
+      return result;
+    } catch (error) {
+      logger.error("Failed to update project", { error: error.message });
+      throw error;
+    }
+  });
+
+  ipcMain.handle("delete-project", async (_event, { projectId }) => {
+    logger.info("Delete project requested", { projectId });
+    try {
+      const result = await apiRequest(`/api/v1/projects/${projectId}`, {
+        method: "DELETE",
+      });
+      return result;
+    } catch (error) {
+      logger.error("Failed to delete project", { error: error.message });
+      throw error;
+    }
+  });
+
   // IPC handler for user input (Binary V2)
   // Accepts payload with messages array and optional session_id from preload.js
   ipcMain.on("user-input", (event, payload) => {

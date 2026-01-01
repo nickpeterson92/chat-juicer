@@ -225,4 +225,40 @@
   .mcp-toggle-item.active:hover {
     background-color: var(--color-surface-hover);
   }
+
+  /* Project submenu styles */
+  .submenu-loading,
+  .submenu-error {
+    @apply px-3 py-2 text-sm;
+    color: var(--color-text-tertiary);
+  }
+
+  .submenu-error {
+    color: var(--color-error);
+  }
+
+  .submenu-divider {
+    height: 1px;
+    margin: 4px 0;
+    background-color: var(--color-border-secondary);
+    border: none;
+  }
+
+  .project-option {
+    @apply relative;
+  }
+
+  .project-check {
+    @apply w-4 text-center flex-shrink-0;
+    color: var(--color-brand-primary);
+    font-weight: 600;
+  }
+
+  .project-option.selected {
+    color: var(--color-brand-primary);
+  }
+
+  .project-option.no-project {
+    font-style: italic;
+  }
 }

@@ -125,6 +125,7 @@ export class SessionService {
    * @param {string[]|null} options.mcpConfig - Optional MCP server configuration
    * @param {string|null} options.model - Optional model deployment name
    * @param {string|null} options.reasoningEffort - Optional reasoning effort level
+   * @param {string|null} options.projectId - Optional project ID to assign session to
    * @returns {Promise<Object>} Result with session_id
    */
   async createSession(options = {}) {
@@ -134,6 +135,7 @@ export class SessionService {
       if (options.mcpConfig) data.mcp_config = options.mcpConfig;
       if (options.model) data.model = options.model;
       if (options.reasoningEffort) data.reasoning_effort = options.reasoningEffort;
+      if (options.projectId) data.project_id = options.projectId;
 
       const response = await this.ipc.sendSessionCommand("new", data);
 

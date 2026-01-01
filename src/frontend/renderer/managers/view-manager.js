@@ -521,11 +521,15 @@ function attachWelcomePageListeners(elements, appState) {
         // Use message snippet as initial title (will be replaced by LLM-generated title later)
         const snippetTitle = message.length > 30 ? `${message.slice(0, 30).trim()}...` : message;
 
+        // Get selected project from appState (set via welcome page + menu)
+        const projectId = appState.getState("ui.selectedProjectId") || null;
+
         const result = await sessionService.createSession({
           title: snippetTitle,
           mcpConfig,
           model: modelConfig.model,
           reasoningEffort: modelConfig.reasoning_effort,
+          projectId,
         });
 
         if (!result.success) {

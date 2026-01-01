@@ -304,6 +304,9 @@ export function showWelcomePage(container, userName = "User") {
   let attachmentContextMenu = null;
 
   if (attachmentPlusBtn) {
+    // Track selected project for session creation
+    let selectedProjectId = null;
+
     // Create menu element and append to body (avoids overflow clipping)
     const createMenu = () => {
       const menu = document.createElement("div");
@@ -327,10 +330,8 @@ export function showWelcomePage(container, userName = "User") {
           <svg class="submenu-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M9 18l6-6-6-6"/>
           </svg>
-          <div class="attachment-submenu">
-            <button class="attachment-menu-item disabled" data-action="coming-soon">
-              Coming Soon!
-            </button>
+          <div class="attachment-submenu" id="project-submenu">
+            <div class="submenu-loading">Loading...</div>
           </div>
         </div>
       `;
@@ -346,6 +347,102 @@ export function showWelcomePage(container, userName = "User") {
         }
       });
       return menu;
+    };
+
+    // Load projects into submenu
+    const loadProjectsSubmenu = async (submenu) => {
+      try {
+        const ipcAdapter = window.app?.adapters?.ipcAdapter;
+        if (!ipcAdapter) {
+          submenu.innerHTML = `<div class="submenu-error">Not available</div>`;
+          return;
+        }
+
+        const result = await ipcAdapter.listProjects(0, 20);
+        const projects = result.projects || [];
+
+        if (projects.length === 0) {
+          submenu.innerHTML = `
+            <button class="attachment-menu-item" data-action="create-project">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+              Create first project
+            </button>
+          `;
+        } else {
+          submenu.innerHTML = `
+            <button class="attachment-menu-item project-option no-project ${!selectedProjectId ? "selected" : ""}" data-project-id="">
+              <span class="project-check">${!selectedProjectId ? "✓" : ""}</span>
+              No project
+            </button>
+            ${projects
+              .map(
+                (p) => `
+              <button class="attachment-menu-item project-option ${selectedProjectId === p.id ? "selected" : ""}" data-project-id="${p.id}">
+                <span class="project-check">${selectedProjectId === p.id ? "✓" : ""}</span>
+                ${p.name}
+              </button>
+            `
+              )
+              .join("")}
+            <hr class="submenu-divider"/>
+            <button class="attachment-menu-item" data-action="create-project">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+              New project...
+            </button>
+          `;
+        }
+
+        // Add click handlers for project selection
+        submenu.querySelectorAll(".project-option").forEach((btn) => {
+          btn.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const projectId = btn.dataset.projectId || null;
+            selectedProjectId = projectId;
+
+            // Store in appState for session creation
+            window.app?.appState?.setState("ui.selectedProjectId", projectId);
+
+            // Update visual selection
+            submenu.querySelectorAll(".project-option").forEach((b) => {
+              b.classList.remove("selected");
+              b.querySelector(".project-check").textContent = "";
+            });
+            btn.classList.add("selected");
+            btn.querySelector(".project-check").textContent = "✓";
+
+            closeMenu();
+          });
+        });
+
+        // Handle create project
+        const createBtn = submenu.querySelector('[data-action="create-project"]');
+        if (createBtn) {
+          createBtn.addEventListener("click", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            closeMenu();
+
+            const name = prompt("Enter project name:");
+            if (name?.trim()) {
+              try {
+                const newProject = await ipcAdapter.createProject(name.trim(), "");
+                selectedProjectId = newProject.id;
+                window.app?.appState?.setState("ui.selectedProjectId", newProject.id);
+              } catch (err) {
+                console.error("Failed to create project:", err);
+              }
+            }
+          });
+        }
+      } catch (error) {
+        console.error("Failed to load projects:", error);
+        submenu.innerHTML = `<div class="submenu-error">Failed to load</div>`;
+      }
     };
 
     const closeMenu = () => {
@@ -385,6 +482,12 @@ export function showWelcomePage(container, userName = "User") {
             }
           });
         }
+      }
+
+      // Load projects when submenu is shown
+      const projectSubmenu = attachmentContextMenu.querySelector("#project-submenu");
+      if (projectSubmenu) {
+        loadProjectsSubmenu(projectSubmenu);
       }
 
       // Position menu above button with viewport clamping

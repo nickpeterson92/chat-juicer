@@ -126,6 +126,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("auth-store-tokens", { accessToken, refreshToken, user }),
   authGetAccessToken: async () => ipcRenderer.invoke("auth-get-access-token"),
 
+  // Project methods
+  listProjects: async (offset = 0, limit = 50) => ipcRenderer.invoke("list-projects", { offset, limit }),
+  createProject: async (name, description) => ipcRenderer.invoke("create-project", { name, description }),
+  updateProject: async (projectId, updates) => ipcRenderer.invoke("update-project", { projectId, updates }),
+  deleteProject: async (projectId) => ipcRenderer.invoke("delete-project", { projectId }),
+
   // Platform detection
   platform: process.platform,
 
