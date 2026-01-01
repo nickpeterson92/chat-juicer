@@ -173,7 +173,7 @@ class EmbeddingWorker:
                 """
                 SELECT m.id, m.session_id, m.content, s.project_id
                 FROM messages m
-                JOIN sessions s ON m.session_id = s.session_id
+                JOIN sessions s ON m.session_id = s.id
                 WHERE s.project_id IS NOT NULL
                   AND m.role = 'assistant'
                   AND m.content IS NOT NULL
