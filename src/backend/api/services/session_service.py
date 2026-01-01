@@ -230,8 +230,19 @@ class SessionService:
         return self._row_to_session(row)
 
     async def delete_session(self, user_id: UUID, session_id: str) -> bool:
-        """Delete session and all related data including files."""
+        """Delete session and all related data including files and context chunks."""
+        # First, get the session UUID for chunk cleanup
+        session_uuid: UUID | None = None
         async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT id FROM sessions WHERE user_id = $1 AND session_id = $2",
+                user_id,
+                session_id,
+            )
+            if row:
+                session_uuid = row["id"]
+
+            # Delete session (cascades to messages via FK)
             result: str = await conn.execute(
                 """
                 DELETE FROM sessions
@@ -249,6 +260,23 @@ class SessionService:
             list_cache = get_session_list_cache()
             await session_cache.delete(f"session:{user_id}:{session_id}")
             await list_cache.delete(f"sessions:{user_id}:0:50")
+
+        # Clean up context chunks (session summary + message chunks)
+        if deleted and session_uuid:
+            async with self.pool.acquire() as conn:
+                # Delete session summary chunk
+                await conn.execute(
+                    "DELETE FROM context_chunks WHERE source_type = 'session_summary' AND source_id = $1",
+                    session_uuid,
+                )
+                # Delete message chunks (source_id references messages.id, which are already cascaded)
+                # Messages are deleted via FK cascade, so chunks referencing them become orphans
+                # We delete by querying messages that belonged to this session first
+                # Actually, messages are already gone, so we need to delete by session metadata
+                await conn.execute(
+                    "DELETE FROM context_chunks WHERE source_type = 'message' AND metadata->>'session_id' = $1",
+                    str(session_uuid),
+                )
 
         # Clean up session files from disk
         if deleted:
