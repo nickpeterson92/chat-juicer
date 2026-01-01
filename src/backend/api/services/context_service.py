@@ -6,6 +6,8 @@ Provides CRUD operations for embeddings and vector similarity search.
 
 from __future__ import annotations
 
+import json
+
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -17,6 +19,20 @@ import asyncpg
 def _embedding_to_pgvector(embedding: list[float]) -> str:
     """Convert embedding list to pgvector string format."""
     return "[" + ",".join(str(x) for x in embedding) + "]"
+
+
+def _metadata_to_json(metadata: dict[str, Any] | None) -> str | None:
+    """Convert metadata dict to JSON string for asyncpg."""
+    if metadata is None:
+        return None
+
+    # Convert UUIDs to strings for JSON serialization
+    def serialize(obj: Any) -> Any:
+        if isinstance(obj, UUID):
+            return str(obj)
+        raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
+    return json.dumps(metadata, default=serialize)
 
 
 @dataclass
@@ -98,7 +114,7 @@ class ContextService:
                 content_hash,
                 _embedding_to_pgvector(embedding),
                 token_count,
-                metadata,
+                _metadata_to_json(metadata),
             )
             return row["id"] if row else None
 
@@ -151,7 +167,7 @@ class ContextService:
                 content_hash,
                 _embedding_to_pgvector(embedding),
                 token_count,
-                metadata,
+                _metadata_to_json(metadata),
             )
             return row["id"] if row else None
 
