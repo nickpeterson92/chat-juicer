@@ -54,8 +54,8 @@ def chunk_text(text: str, max_tokens: int = CHUNK_MAX_TOKENS, overlap: int = CHU
     token_info = count_tokens(text)
     total_tokens = token_info["exact_tokens"]
 
-    # No chunking needed for small texts
-    if total_tokens <= max_tokens:
+    # No chunking needed if within 50% tolerance of max (handles edge cases)
+    if total_tokens <= max_tokens * 1.5:
         return [text]
 
     # Split by paragraphs first for cleaner boundaries
