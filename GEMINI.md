@@ -209,7 +209,7 @@ The backend is a FastAPI application with:
 - **WebSocket**: Real-time chat streaming via `/ws/chat/{session_id}`
 - **PostgreSQL**: Persistent storage for sessions and messages
 - **Dependency Injection**: Clean service injection via FastAPI's `Depends`
-- **MCP Server Pool**: Pre-spawned MCP server instances for concurrent requests
+- **MCP Server Manager**: Singleton MCP server instances with WebSocket multiplexing
 
 **Key files:**
 - `src/backend/api/main.py` - FastAPI app initialization, lifespan management, route registration
@@ -265,16 +265,16 @@ The application uses OpenAI's Agent/Runner pattern:
 - **Streaming Events**: Real-time responses via WebSocket
 - **Token-Aware Sessions**: PostgreSQL-based with automatic summarization
 
-### MCP Server Pool
+### MCP Server Manager
 
-For concurrent request handling, MCP servers are pooled:
+For concurrent request handling, MCP servers use WebSocket multiplexing:
 
 ```python
 # In api/main.py lifespan
-app.state.mcp_pool = await initialize_mcp_pool(pool_size=3)
+app.state.mcp_manager = await initialize_mcp_manager()
 ```
 
-This pre-spawns server instances to avoid per-request overhead.
+This maintains one active connection per server type to handle all requests.
 
 ## Logging Guidelines
 
@@ -400,7 +400,7 @@ Chat streaming uses WebSocket at `/ws/chat/{session_id}`:
 All application state flows through `app.state`:
 - `app.state.db_pool` - PostgreSQL connection pool
 - `app.state.ws_manager` - WebSocket connection tracking
-- `app.state.mcp_pool` - MCP server pool
+- `app.state.mcp_manager` - MCP server manager
 
 Services are injected via FastAPI dependencies:
 ```python

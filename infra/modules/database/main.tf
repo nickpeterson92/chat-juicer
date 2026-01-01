@@ -4,7 +4,7 @@ resource "aws_db_instance" "main" {
   storage_type      = "gp3"
   engine            = "postgres"
   engine_version    = "16.11"
-  instance_class    = "db.t3.micro"
+  instance_class    = "db.t3.medium"
   db_name           = var.db_name
   username          = var.db_username
   password          = var.db_password
