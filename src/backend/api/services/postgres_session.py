@@ -11,11 +11,14 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 
 from typing import Any
 from uuid import UUID
 
 import asyncpg
+
+from utils.metrics import db_query_duration_seconds
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +54,7 @@ class PostgresSession:
         Uses seq column for ordering - critical for reasoning models where
         reasoning items must precede their associated function_call/message items.
         """
+        start_time = time.perf_counter()
         async with self.pool.acquire() as conn:
             if limit is not None:
                 # Get latest N items in chronological order
@@ -74,6 +78,8 @@ class PostgresSession:
                     """,
                     self.session_uuid,
                 )
+        duration = time.perf_counter() - start_time
+        db_query_duration_seconds.labels(query_type="select").observe(duration)
 
         # Parse JSON items using helper function (PERF203 compliant)
         parsed = [_parse_json_item(row["content"], self.session_id) for row in rows]
@@ -88,6 +94,7 @@ class PostgresSession:
         if not items:
             return
 
+        start_time = time.perf_counter()
         async with self.pool.acquire() as conn, conn.transaction():
             for item in items:
                 # Serialize the item exactly as provided
@@ -106,9 +113,12 @@ class PostgresSession:
                     "item",  # Simple marker - not used for filtering
                     content,
                 )
+        duration = time.perf_counter() - start_time
+        db_query_duration_seconds.labels(query_type="insert").observe(duration)
 
     async def pop_item(self) -> dict[str, Any] | None:
         """Remove and return the most recent item."""
+        start_time = time.perf_counter()
         async with self.pool.acquire() as conn, conn.transaction():
             row = await conn.fetchrow(
                 """
@@ -123,6 +133,8 @@ class PostgresSession:
                 """,
                 self.session_uuid,
             )
+        duration = time.perf_counter() - start_time
+        db_query_duration_seconds.labels(query_type="delete").observe(duration)
 
         if not row:
             return None

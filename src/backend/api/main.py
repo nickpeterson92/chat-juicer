@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from agents import set_default_openai_client, set_tracing_disabled
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from api.middleware.exception_handlers import register_exception_handlers
 from api.middleware.rate_limiter import RateLimitMiddleware, get_rate_limiter
@@ -81,6 +82,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     shutdown_event = asyncio.Event()
     app.state.shutdown_event = shutdown_event
     app.state.background_tasks = set()
+
+    # helper imports for startup time
+    from datetime import datetime, timezone
+
+    app.state.startup_time = datetime.now(timezone.utc)
 
     # Initialize OpenAI client for agents SDK
     _setup_openai_client()
@@ -262,6 +268,9 @@ Breaking changes will increment the version number.
     docs_url="/api/v1/docs",
     redoc_url="/api/v1/redoc",
 )
+
+# Setup Prometheus metrics (exposes /api/v1/metrics)
+Instrumentator().instrument(app).expose(app, include_in_schema=True, endpoint="/api/v1/metrics")
 
 # Register global exception handlers for consistent error responses
 register_exception_handlers(app)

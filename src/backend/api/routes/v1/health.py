@@ -7,6 +7,8 @@ response patterns and comprehensive OpenAPI documentation.
 
 from __future__ import annotations
 
+from datetime import timezone
+
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
@@ -17,6 +19,7 @@ from models.schemas.health import (
     LivenessResponse,
     MCPHealth,
     ReadinessResponse,
+    S3Health,
     WebSocketHealth,
 )
 from utils.db_utils import check_pool_health
@@ -62,6 +65,18 @@ router = APIRouter()
 )
 async def health_check(db: DB, request: Request) -> HealthResponse:
     """Comprehensive health check endpoint."""
+    from datetime import datetime
+
+    # Calculate uptime
+    startup_time = getattr(request.app.state, "startup_time", None)
+    now_utc = datetime.now(timezone.utc)
+    if startup_time:
+        uptime = (now_utc - startup_time).total_seconds()
+        startup_str = startup_time.isoformat()
+    else:
+        uptime = 0.0
+        startup_str = now_utc.isoformat()
+
     # Database health with pool statistics
     db_health_data = await check_pool_health(db)
 
@@ -77,26 +92,47 @@ async def health_check(db: DB, request: Request) -> HealthResponse:
     else:
         ws_health = WebSocketHealth(error="not initialized")
 
-    # MCP manager statistics
+    # MCP manager statistics & health
     mcp_manager = request.app.state.mcp_manager
+    mcp_ping_data = {}
     if mcp_manager:
         stats = mcp_manager.get_stats()
+        # Perform deep check
+        mcp_ping_data = await mcp_manager.check_connectivity()
+
         server_count = stats.get("server_count", 0)
         mcp_health = MCPHealth(
             initialized=stats.get("initialized", True),
             pool_size=server_count,
             available=server_count,
+            ping_latency_ms=mcp_ping_data.get("latency_ms"),
+            error=str(mcp_ping_data.get("details")) if not mcp_ping_data.get("healthy") else None,
         )
     else:
         mcp_health = MCPHealth(initialized=False, pool_size=0, available=0)
 
+    # S3 health
+    s3_health = None
+    s3_service = getattr(request.app.state, "s3_sync", None)
+    if s3_service:
+        s3_data = await s3_service.check_connectivity()
+        s3_health = S3Health(
+            bucket=s3_service.bucket,
+            connected=s3_data.get("connected", False),
+            latency_ms=s3_data.get("latency_ms"),
+            error=s3_data.get("error"),
+        )
+
     # Determine overall status
     db_healthy = db_health_data.get("healthy", False)
     ws_healthy = not ws_health.shutting_down and ws_health.error is None
+    mcp_healthy = mcp_ping_data.get("healthy", True)  # Default true if no manager (not critical)
+    s3_healthy = s3_health.connected if s3_health else True
 
-    if db_healthy and ws_healthy:
+    if db_healthy and ws_healthy and mcp_healthy and s3_healthy:
         status = "healthy"
-    elif db_healthy or ws_healthy:
+    elif db_healthy:
+        # DB is critical, others might mean degraded
         status = "degraded"
     else:
         status = "unhealthy"
@@ -104,6 +140,8 @@ async def health_check(db: DB, request: Request) -> HealthResponse:
     return HealthResponse(
         status=status,
         version="1.0.0-local",
+        uptime_seconds=uptime,
+        startup_time=startup_str,
         database=DatabaseHealth(
             healthy=db_healthy,
             pool_size=db_health_data.get("pool_size", 0),
@@ -113,6 +151,7 @@ async def health_check(db: DB, request: Request) -> HealthResponse:
         ),
         websocket=ws_health,
         mcp=mcp_health,
+        s3=s3_health,
     )
 
 

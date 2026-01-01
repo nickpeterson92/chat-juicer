@@ -756,7 +756,12 @@ class Settings(BaseSettings):
         description="Tavily MCP server HTTP endpoint",
     )
 
-    # Database (Phase 1: local PostgreSQL)
+    # Logging security
+    enable_content_logging: bool = Field(
+        default=False, description="Enable logging of message content (security risk, avoid in production)"
+    )
+
+    # Database
     database_url: str = Field(
         default="postgresql://chatjuicer:localdev@localhost:5433/chatjuicer",
         description="PostgreSQL connection string",

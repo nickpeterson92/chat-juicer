@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from utils.logger import logger
+from utils.metrics import mcp_servers_available, mcp_servers_total
 
 # Configuration is in Settings (core/constants.py):
 # - mcp_acquire_timeout: acquire timeout in seconds (default: 30.0)
@@ -86,7 +87,13 @@ class MCPServerManager:
                     logger.info(f"Connected to {server_key}")
 
             self._initialized = True
-            logger.info(f"MCP manager initialized with {len(self._servers)} servers")
+
+            # Update metrics
+            count = len(self._servers)
+            mcp_servers_total.set(count)
+            mcp_servers_available.set(count)
+
+            logger.info(f"MCP manager initialized with {count} servers")
 
     async def acquire(self, server_key: str, timeout: float | None = None) -> Any:
         """Acquire the shared server instance.
@@ -148,6 +155,47 @@ class MCPServerManager:
             "server_count": len(self._servers),
         }
 
+    async def check_connectivity(self) -> dict[str, Any]:
+        """Verify connectivity to all active servers.
+
+        Performs a tool list call on each server to verify it's responsive.
+
+        Returns:
+            Dict with 'healthy' (bool), 'latency_ms' (float), and 'details' (dict)
+        """
+        import time
+
+        if not self._servers:
+            return {"healthy": True, "latency_ms": 0.0}
+
+        start = time.monotonic()
+        results: dict[str, str] = {}
+        error_count = 0
+
+        async def check_server(key: str, server: Any) -> tuple[str, str | None]:
+            """Check single server connectivity."""
+            try:
+                await asyncio.wait_for(server.list_tools(), timeout=2.0)
+                return (key, None)
+            except Exception as e:
+                return (key, str(e))
+
+        # Run all checks concurrently
+        check_results = await asyncio.gather(*[check_server(k, s) for k, s in self._servers.items()])
+
+        for key, error in check_results:
+            if error:
+                results[key] = error
+                error_count += 1
+                logger.warning(f"MCP health check failed for {key}: {error}")
+            else:
+                results[key] = "ok"
+
+        total_latency = (time.monotonic() - start) * 1000
+        avg_latency = total_latency / len(self._servers) if self._servers else 0
+
+        return {"healthy": error_count == 0, "latency_ms": avg_latency, "error_count": error_count, "details": results}
+
     async def shutdown(self) -> None:
         """Shutdown all managed servers."""
         async with self._lock:
@@ -160,6 +208,10 @@ class MCPServerManager:
 
             self._servers.clear()
             self._initialized = False
+
+            # Reset metrics
+            mcp_servers_total.set(0)
+            mcp_servers_available.set(0)
 
             logger.info("MCP server manager shutdown complete")
 

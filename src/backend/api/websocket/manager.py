@@ -10,6 +10,7 @@ from typing import Any
 from fastapi import WebSocket
 
 from utils.logger import logger
+from utils.metrics import ws_connections_active, ws_connections_total, ws_messages_total
 
 # Type for session cleanup callback
 SessionCleanupCallback = Callable[[str], None] | None
@@ -77,6 +78,10 @@ class WebSocketManager:
             self.connections[session_id].add(websocket)
             self.last_activity[websocket] = time.monotonic()
 
+            # Update metrics
+            ws_connections_active.inc()
+            ws_connections_total.inc()
+
             logger.info(
                 f"WebSocket connected for session {session_id} "
                 f"(total: {current_count + 1}, session: {session_connections + 1})"
@@ -89,6 +94,10 @@ class WebSocketManager:
         async with self._lock:
             if session_id in self.connections:
                 self.connections[session_id].discard(websocket)
+
+                # Update metrics
+                ws_connections_active.dec()
+
                 conn_count = len(self.connections[session_id])
                 logger.info(f"WebSocket disconnected for session {session_id} ({conn_count} remaining)")
                 if not self.connections[session_id]:
@@ -117,6 +126,7 @@ class WebSocketManager:
         for ws in list(websockets):
             try:
                 await ws.send_json(message)
+                ws_messages_total.labels(direction="outbound").inc()
             except Exception:  # noqa: PERF203
                 await self.disconnect(ws, session_id)
 

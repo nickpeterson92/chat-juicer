@@ -22,6 +22,7 @@ from core.constants import get_settings
 from models.api_models import UserInfo
 from models.error_models import ErrorCode
 from utils.logger import logger
+from utils.metrics import ws_messages_total
 
 router = APIRouter()
 
@@ -123,6 +124,7 @@ async def chat_websocket(
             async for data in websocket.iter_json():
                 # Update activity timestamp on any message
                 await ws_manager.touch(websocket)
+                ws_messages_total.labels(direction="inbound").inc()
                 msg_type = data.get("type")
 
                 if msg_type == "message":

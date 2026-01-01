@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -61,7 +62,46 @@ def create_session_aware_tools(
         # Tool resolves to: data/files/chat_abc123/input/doc.pdf
         ```
     """
+    import time
+
+    from functools import wraps
+
     from agents import function_tool
+
+    from utils.metrics import mcp_tool_call_duration_seconds, mcp_tool_calls_total
+
+    def track_tool_execution(
+        tool_name: str,
+    ) -> Callable[[Callable[..., Awaitable[str]]], Callable[..., Awaitable[str]]]:
+        """Decorator to track tool execution metrics."""
+
+        def decorator(func: Callable[..., Awaitable[str]]) -> Callable[..., Awaitable[str]]:
+            @wraps(func)
+            async def wrapper(*args: Any, **kwargs: Any) -> str:
+                start_time = time.perf_counter()
+                status = "success"
+                try:
+                    result = await func(*args, **kwargs)
+                    # Try to check success in JSON result if applicable
+                    if isinstance(result, str) and result.strip().startswith("{"):
+                        try:
+                            data = json.loads(result)
+                            if isinstance(data, dict) and not data.get("success", True) and "error" in data:
+                                status = "error"
+                        except Exception:
+                            pass
+                    return result
+                except Exception:
+                    status = "error"
+                    raise
+                finally:
+                    duration = time.perf_counter() - start_time
+                    mcp_tool_calls_total.labels(tool_name=tool_name, status=status).inc()
+                    mcp_tool_call_duration_seconds.labels(tool_name=tool_name).observe(duration)
+
+            return wrapper
+
+        return decorator
 
     logger.info(f"Creating session-aware tools for session: {session_id}, model: {model}")
 
@@ -76,8 +116,26 @@ def create_session_aware_tools(
         Returns:
             JSON with directory contents and metadata
         """
-        return list_directory(path=path, session_id=session_id, show_hidden=show_hidden)  # type: ignore[no-any-return]
+        # Note: list_directory is synchronous, but we can still track it.
+        # However, track_tool_execution is async. We handle list_directory specially or duplicate logic?
+        # Since list_directory is fast and local, maybe skip or wrap manually?
+        # Actually list_directory is synchronous in file_operations.py.
+        # But the agent framework might expect async or sync.
+        # function_tool handles both.
+        # Let's wrap it manually for metrics since decorator is async.
+        start_time = time.perf_counter()
+        status = "success"
+        try:
+            return list_directory(path=path, session_id=session_id, show_hidden=show_hidden)  # type: ignore[no-any-return]
+        except Exception:
+            status = "error"
+            raise
+        finally:
+            duration = time.perf_counter() - start_time
+            mcp_tool_calls_total.labels(tool_name="list_directory", status=status).inc()
+            mcp_tool_call_duration_seconds.labels(tool_name="list_directory").observe(duration)
 
+    @track_tool_execution("read_file")
     async def wrapped_read_file(file_path: str, head: int | None = None, tail: int | None = None) -> str:
         """Read file contents with automatic format conversion.
 
@@ -91,6 +149,7 @@ def create_session_aware_tools(
         """
         return await read_file(file_path=file_path, session_id=session_id, head=head, tail=tail, model=model)  # type: ignore[no-any-return]
 
+    @track_tool_execution("search_files")
     async def wrapped_search_files(
         pattern: str,
         base_path: str = ".",
@@ -117,6 +176,7 @@ def create_session_aware_tools(
         )
 
     # Text Editing - Unified editing tool with session_id injection
+    @track_tool_execution("edit_file")
     async def wrapped_edit_file(
         file_path: str,
         edits: list[EditOperation],
@@ -155,6 +215,7 @@ def create_session_aware_tools(
         return result  # type: ignore[no-any-return]
 
     # Document Generation - Write tool with session_id injection
+    @track_tool_execution("generate_document")
     async def wrapped_generate_document(
         content: str,
         filename: str,
@@ -188,6 +249,7 @@ def create_session_aware_tools(
         return result  # type: ignore[no-any-return]
 
     # Code Interpreter - Secure Python execution with session_id injection
+    @track_tool_execution("execute_python_code")
     async def wrapped_execute_python_code(code: str) -> str:
         """Execute Python code in a secure sandbox environment.
 
@@ -232,6 +294,7 @@ def create_session_aware_tools(
         return result  # type: ignore[no-any-return]
 
     # Schema Fetch - Database schema tools (no session injection needed, uses global registry)
+    @track_tool_execution("list_registered_databases")
     async def wrapped_list_registered_databases() -> str:
         """List all databases configured in the registry.
 
@@ -243,6 +306,7 @@ def create_session_aware_tools(
         """
         return await list_registered_databases()  # type: ignore[no-any-return]
 
+    @track_tool_execution("get_table_schema")
     async def wrapped_get_table_schema(db_name: str, table_name: str) -> str:
         """Fetch column schema for a database table.
 

@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import logging.handlers
 import os
+import re
 import sys
 import uuid
 
@@ -22,6 +23,7 @@ from typing import Any, cast
 
 from pythonjsonlogger import json as jsonlogger
 
+from api.middleware.request_context import get_request_context
 from core.constants import (
     LOG_BACKUP_COUNT_CONVERSATIONS,
     LOG_BACKUP_COUNT_ERRORS,
@@ -29,7 +31,16 @@ from core.constants import (
     LOG_PREVIEW_LENGTH,
     PROJECT_ROOT,
     SESSION_ID_LENGTH,
+    get_settings,
 )
+
+# PII Redaction patterns
+REDACTION_PATTERNS = [
+    (r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", "[EMAIL]"),
+    (r"\b(?:\d{4}[- ]?){3}\d{4}\b", "[CARD]"),
+    (r"\b(sk-|pk-|api[-_]?key[-_]?)[A-Za-z0-9]{20,}\b", "[API_KEY]"),
+    (r"\b(password|secret|token)\s*[:=]\s*\S+", "[REDACTED]"),
+]
 
 
 @dataclass
@@ -238,29 +249,61 @@ class ChatLogger:
         self.logger = setup_logging(name)
         self.session_id = str(uuid.uuid4())[:SESSION_ID_LENGTH]
 
+    def _enrich_context(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """Enrich log arguments with request context and session ID."""
+        # Always include instance session_id (which acts as a fallback or component ID)
+        kwargs.setdefault("session_id", self.session_id)
+
+        # Inject request context if available
+        if ctx := get_request_context():
+            kwargs.update(ctx.to_log_context())
+            # If context has a specific session_id (e.g. from URL), override the default
+            if ctx.session_id:
+                kwargs["session_id"] = ctx.session_id
+
+        return kwargs
+
     def debug(self, message: str, **kwargs: Any) -> None:
         """Debug level logging"""
-        # Merge session_id into kwargs for all log calls
-        kwargs["session_id"] = self.session_id
+        # Merge context into kwargs
+        kwargs = self._enrich_context(kwargs)
         self.logger.debug(message, extra=kwargs)
 
     def info(self, message: str, **kwargs: Any) -> None:
         """Info level logging"""
-        # Merge session_id into kwargs for all log calls
-        kwargs["session_id"] = self.session_id
+        # Merge context into kwargs
+        kwargs = self._enrich_context(kwargs)
         self.logger.info(message, extra=kwargs)
 
     def warning(self, message: str, **kwargs: Any) -> None:
         """Warning level logging"""
-        # Merge session_id into kwargs for all log calls
-        kwargs["session_id"] = self.session_id
+        # Merge context into kwargs
+        kwargs = self._enrich_context(kwargs)
         self.logger.warning(message, extra=kwargs)
 
     def error(self, message: str, exc_info: bool = False, **kwargs: Any) -> None:
         """Error level logging with optional exception info"""
-        # Merge session_id into kwargs for all log calls
-        kwargs["session_id"] = self.session_id
+        # Merge context into kwargs
+        kwargs = self._enrich_context(kwargs)
         self.logger.error(message, extra=kwargs, exc_info=exc_info)
+
+    def _should_log_content(self) -> bool:
+        """Check if content logging is enabled via settings."""
+        try:
+            return bool(get_settings().enable_content_logging)
+        except Exception:
+            # Fallback if settings not loaded
+            return False
+
+    def _redact_content(self, text: str) -> str:
+        """Redact PII from text using defined patterns."""
+        if not text:
+            return text
+
+        redacted = text
+        for pattern, replacement in REDACTION_PATTERNS:
+            redacted = re.sub(pattern, replacement, redacted)
+        return redacted
 
     def log_conversation_turn(
         self,
@@ -269,16 +312,12 @@ class ChatLogger:
         function_calls: list[Any] | None = None,
         duration_ms: float | None = None,
         tokens_used: int | None = None,
+        attachments_count: int = 0,
+        is_multimodal: bool = False,
+        tool_names: list[str] | None = None,
     ) -> None:
         """
-        Log a complete conversation turn to conversations.jsonl
-
-        Args:
-            user_input: The user's input text
-            response: The AI's response text
-            function_calls: List of function calls made
-            duration_ms: Response time in milliseconds
-            tokens_used: Number of tokens used
+        Log a conversation turn securely.
         """
         # Create structured conversation turn
         turn = ConversationTurn(
@@ -290,14 +329,20 @@ class ChatLogger:
             session_id=self.session_id,
         )
 
-        # Create concise summary for log file
-        user_preview = turn.user_input[:LOG_PREVIEW_LENGTH].replace("\\n", " ")
-        if len(turn.user_input) > LOG_PREVIEW_LENGTH:
-            user_preview += "..."
+        should_log_content = self._should_log_content()
 
-        response_preview = turn.response[:LOG_PREVIEW_LENGTH].replace("\\n", " ")
-        if len(turn.response) > LOG_PREVIEW_LENGTH:
-            response_preview += "..."
+        # Prepare content previews (redacted or hidden)
+        if should_log_content:
+            user_preview = self._redact_content(turn.user_input[:LOG_PREVIEW_LENGTH].replace("\\n", " "))
+            if len(turn.user_input) > LOG_PREVIEW_LENGTH:
+                user_preview += "..."
+
+            response_preview = self._redact_content(turn.response[:LOG_PREVIEW_LENGTH].replace("\\n", " "))
+            if len(turn.response) > LOG_PREVIEW_LENGTH:
+                response_preview += "..."
+        else:
+            user_preview = "[HIDDEN]"
+            response_preview = "[HIDDEN]"
 
         # Build concise message
         msg_parts = [f"User: {user_preview} → AI: {response_preview}"]
@@ -311,14 +356,24 @@ class ChatLogger:
         if turn.tokens_used:
             msg_parts.append(f"[{turn.tokens_used} tokens]")
 
-        # Log concise message with minimal extra data
+        # Log structure
         extra_data = {
-            "conversation_turn": True,  # Flag for filter
+            "conversation_turn": True,
             "timestamp": turn.timestamp,
             "session_id": turn.session_id,
-            "chars": len(turn.user_input) + len(turn.response),
+            "chars_input": len(turn.user_input),
+            "chars_response": len(turn.response),
             "functions": len(turn.function_calls),
+            "content_logging": should_log_content,
         }
+
+        # Optional metadata fields
+        if attachments_count > 0:
+            extra_data["attachments"] = attachments_count
+        if is_multimodal:
+            extra_data["multimodal"] = True
+        if tool_names:
+            extra_data["tool_names"] = tool_names
 
         # Only add performance metrics if present
         if turn.duration_ms is not None:
@@ -326,42 +381,36 @@ class ChatLogger:
         if turn.tokens_used is not None:
             extra_data["tokens"] = turn.tokens_used
 
-        # Log with special flag for conversation filter
+        # Enrich with request context
+        extra_data = self._enrich_context(extra_data)
+
         self.logger.info(" ".join(msg_parts), extra=extra_data)
 
     def log_function_call(self, function_name: str, args: dict[str, Any], result: Any) -> None:
         """
-        Log a function call - verbose to console, concise to file.
-
-        Args:
-            function_name: Name of the function called
-            args: Arguments passed to the function
-            result: Result returned by the function
+        Log a function call - secure version.
         """
-        # CONSOLE: Full verbose output
-        console_msg = f"Function call: {function_name}({args}) → {result}"
+        should_log_content = self._should_log_content()
 
-        # FILE: Concise summary
-        args_parts = []
-        for key, value in args.items():
-            value_str = str(value)
-            if len(value_str) > 20:
-                value_str = value_str[:20] + "..."
-            args_parts.append(f"{key}={value_str}")
+        if should_log_content:
+            # Redact args for logging
+            args_str = str(args)
+            redacted_args = self._redact_content(args_str)
 
-        args_summary = ", ".join(args_parts) if args_parts else ""
+            # Console: Verbose redacted
+            console_msg = f"Function call: {function_name}({redacted_args}) → {str(result)[:50]}..."
 
-        # Truncate result for file
-        result_str = str(result)[:LOG_PREVIEW_LENGTH]
-        if len(str(result)) > LOG_PREVIEW_LENGTH:
-            result_str += "..."
+            # File: Concise redacted
+            file_msg = f"Func: {function_name}({redacted_args[:50]}...) → {str(result)[:20]}..."
+        else:
+            # Metadata only
+            console_msg = f"Function call: {function_name}(...) -> [HIDDEN]"
+            file_msg = f"Func: {function_name} -> [HIDDEN]"
 
-        file_msg = f"Func: {function_name}({args_summary}) → {result_str}"
+        extra_data = {"file_message": file_msg, "func": function_name, "content_logging": should_log_content}
+        extra_data = self._enrich_context(extra_data)
 
-        # Log different messages to console vs file
-        # Console handler will show console_msg, file handler will show file_msg
-        # We'll use a custom attribute to differentiate
-        self.logger.info(console_msg, extra={"file_message": file_msg, "func": function_name})
+        self.logger.info(console_msg, extra=extra_data)
 
 
 # Global logger instance
