@@ -212,9 +212,9 @@ class SummarizationService:
                       SELECT 1 FROM context_chunks cc
                       WHERE cc.source_id = s.id
                         AND cc.source_type = 'session_summary'
-                        AND cc.created_at > s.updated_at - INTERVAL '1 minute'
+                        AND cc.created_at > s.last_used_at - INTERVAL '1 minute'
                   )
-                ORDER BY s.updated_at DESC
+                ORDER BY s.last_used_at DESC
                 LIMIT $2
                 """,
                 SUMMARY_TURN_THRESHOLD,
