@@ -32,6 +32,85 @@ WORKER_INTERVAL_SECONDS = 10  # Check for work every N seconds
 MESSAGE_TOKEN_THRESHOLD = 100  # Minimum tokens to embed a message
 MAX_ITEMS_PER_CYCLE = 10  # Maximum items to process per cycle
 
+# Chunking configuration
+CHUNK_MAX_TOKENS = 300  # Target chunk size
+CHUNK_OVERLAP_TOKENS = 75  # Overlap between chunks
+
+
+def chunk_text(text: str, max_tokens: int = CHUNK_MAX_TOKENS, overlap: int = CHUNK_OVERLAP_TOKENS) -> list[str]:
+    """Split text into overlapping chunks by token count.
+
+    Uses paragraph boundaries when possible for cleaner splits.
+
+    Args:
+        text: Text to chunk
+        max_tokens: Maximum tokens per chunk
+        overlap: Token overlap between chunks
+
+    Returns:
+        List of text chunks
+    """
+    # Get token count
+    token_info = count_tokens(text)
+    total_tokens = token_info["exact_tokens"]
+
+    # No chunking needed for small texts
+    if total_tokens <= max_tokens:
+        return [text]
+
+    # Split by paragraphs first for cleaner boundaries
+    paragraphs = text.split("\n\n")
+
+    chunks = []
+    current_chunk: list[str] = []
+    current_tokens = 0
+
+    for para in paragraphs:
+        para_info = count_tokens(para)
+        para_tokens = para_info["exact_tokens"]
+
+        # If single paragraph exceeds max, split by sentences
+        if para_tokens > max_tokens:
+            # Flush current chunk first
+            if current_chunk:
+                chunks.append("\n\n".join(current_chunk))
+                current_chunk = []
+                current_tokens = 0
+
+            # Split large paragraph by sentences
+            sentences = para.replace(". ", ".\n").split("\n")
+            for sent in sentences:
+                sent_info = count_tokens(sent)
+                sent_tokens = sent_info["exact_tokens"]
+
+                if current_tokens + sent_tokens > max_tokens and current_chunk:
+                    chunks.append(" ".join(current_chunk))
+                    # Keep overlap by retaining last few sentences
+                    overlap_text = " ".join(current_chunk[-2:]) if len(current_chunk) >= 2 else ""
+                    current_chunk = [overlap_text] if overlap_text else []
+                    current_tokens = count_tokens(overlap_text)["exact_tokens"] if overlap_text else 0
+
+                current_chunk.append(sent)
+                current_tokens += sent_tokens
+
+        elif current_tokens + para_tokens > max_tokens:
+            # Flush and start new chunk with overlap
+            if current_chunk:
+                chunks.append("\n\n".join(current_chunk))
+                # Keep last paragraph as overlap
+                overlap_para = current_chunk[-1] if current_chunk else ""
+                current_chunk = [overlap_para, para] if overlap_para else [para]
+                current_tokens = count_tokens("\n\n".join(current_chunk))["exact_tokens"]
+        else:
+            current_chunk.append(para)
+            current_tokens += para_tokens
+
+    # Don't forget the last chunk
+    if current_chunk:
+        chunks.append("\n\n".join(current_chunk))
+
+    return chunks
+
 
 class EmbeddingWorker:
     """Background worker for embedding generation.
@@ -212,35 +291,45 @@ class EmbeddingWorker:
             )
 
     async def _embed_message(self, row: asyncpg.Record) -> None:
-        """Embed a single message."""
+        """Embed a single message, chunking if necessary."""
         content = row["content"]
 
         # Check token count (count_tokens returns dict with 'exact_tokens')
         token_info = count_tokens(content)
-        token_count = token_info["exact_tokens"]
-        if token_count < MESSAGE_TOKEN_THRESHOLD:
+        total_tokens = token_info["exact_tokens"]
+        if total_tokens < MESSAGE_TOKEN_THRESHOLD:
             return
 
-        # Generate embedding
-        embedding = await self.embedding_service.embed_text(content)
-        content_hash = self.embedding_service.content_hash(content)
+        # Chunk the content if large
+        chunks = chunk_text(content)
 
-        # Insert chunk
-        await self.context_service.insert_chunk(
-            project_id=row["project_id"],
-            source_type="message",
-            source_id=row["id"],
-            chunk_index=0,
-            content=content,
-            content_hash=content_hash,
-            embedding=embedding,
-            token_count=token_count,
-            metadata={"session_id": row["session_id"]},
-        )
+        # Embed each chunk
+        for chunk_index, chunk_content in enumerate(chunks):
+            chunk_token_info = count_tokens(chunk_content)
+            chunk_tokens = chunk_token_info["exact_tokens"]
+
+            embedding = await self.embedding_service.embed_text(chunk_content)
+            content_hash = self.embedding_service.content_hash(chunk_content)
+
+            await self.context_service.insert_chunk(
+                project_id=row["project_id"],
+                source_type="message",
+                source_id=row["id"],
+                chunk_index=chunk_index,
+                content=chunk_content,
+                content_hash=content_hash,
+                embedding=embedding,
+                token_count=chunk_tokens,
+                metadata={"session_id": row["session_id"], "total_chunks": len(chunks)},
+            )
 
         logger.debug(
             "Embedded message",
-            extra={"message_id": str(row["id"]), "tokens": token_count},
+            extra={
+                "message_id": str(row["id"]),
+                "total_tokens": total_tokens,
+                "chunks": len(chunks),
+            },
         )
 
 
