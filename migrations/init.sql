@@ -101,3 +101,36 @@ CREATE TABLE IF NOT EXISTS files (
 
 CREATE INDEX IF NOT EXISTS idx_files_session_id ON files(session_id);
 CREATE INDEX IF NOT EXISTS idx_files_project_id ON files(project_id);
+
+-- Context chunks table (pgvector embeddings for semantic search)
+-- Note: Requires pgvector extension: CREATE EXTENSION IF NOT EXISTS vector;
+CREATE TABLE IF NOT EXISTS context_chunks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    source_type TEXT NOT NULL,           -- 'session_summary' | 'message' | 'file'
+    source_id UUID NOT NULL,             -- FK to source (sessions.id, messages.id, files.id)
+    chunk_index INT NOT NULL DEFAULT 0,  -- For multi-chunk sources
+    content TEXT NOT NULL,
+    content_hash TEXT NOT NULL,          -- SHA-256 hash for deduplication
+    embedding vector(1536),              -- text-embedding-3-small dimension
+    token_count INT,
+    metadata JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- HNSW index for fast approximate nearest neighbor search
+CREATE INDEX IF NOT EXISTS idx_context_chunks_embedding ON context_chunks
+    USING hnsw (embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64);
+
+CREATE INDEX IF NOT EXISTS idx_context_chunks_project ON context_chunks(project_id);
+CREATE INDEX IF NOT EXISTS idx_context_chunks_source ON context_chunks(source_type, source_id);
+
+-- Deduplication: same content in same project = skip
+CREATE UNIQUE INDEX IF NOT EXISTS idx_context_chunks_dedupe
+ON context_chunks (project_id, source_type, content_hash);
+
+-- Session summary upsert support (one summary per session per project)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_context_chunks_session_summary
+ON context_chunks (project_id, source_type, source_id)
+WHERE source_type = 'session_summary';
