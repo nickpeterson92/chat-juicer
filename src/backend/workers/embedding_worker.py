@@ -38,81 +38,73 @@ CHUNK_OVERLAP_TOKENS = 75  # Overlap between chunks
 
 
 def chunk_text(text: str, max_tokens: int = CHUNK_MAX_TOKENS, overlap: int = CHUNK_OVERLAP_TOKENS) -> list[str]:
-    """Split text into overlapping chunks by token count.
+    """Split text into balanced chunks by token count.
 
-    Uses paragraph boundaries when possible for cleaner splits.
+    Uses balanced distribution to ensure all chunks are roughly equal size,
+    respecting paragraph and sentence boundaries when possible.
 
     Args:
         text: Text to chunk
-        max_tokens: Maximum tokens per chunk
-        overlap: Token overlap between chunks
+        max_tokens: Target tokens per chunk
+        overlap: Token overlap between chunks (for context continuity)
 
     Returns:
-        List of text chunks
+        List of text chunks with roughly equal token counts
     """
-    # Get token count
+    import math
+
+    # Get total token count
     token_info = count_tokens(text)
     total_tokens = token_info["exact_tokens"]
 
-    # No chunking needed if within 50% tolerance of max (handles edge cases)
+    # No chunking needed if within 50% tolerance of max
     if total_tokens <= max_tokens * 1.5:
         return [text]
 
-    # Split by paragraphs first for cleaner boundaries
-    paragraphs = text.split("\n\n")
+    # Calculate optimal number of chunks for even distribution
+    num_chunks = math.ceil(total_tokens / max_tokens)
+    target_per_chunk = total_tokens / num_chunks
 
-    chunks = []
+    # Split into sentences for fine-grained control
+    # Replace paragraph breaks with special marker to preserve them
+    text_with_markers = text.replace("\n\n", " <PARA> ")
+    sentences = text_with_markers.replace(". ", ".\n").split("\n")
+
+    # Build chunks with balanced sizes
+    chunks: list[str] = []
     current_chunk: list[str] = []
     current_tokens = 0
 
-    for para in paragraphs:
-        para_info = count_tokens(para)
-        para_tokens = para_info["exact_tokens"]
+    for sent in sentences:
+        sent_info = count_tokens(sent)
+        sent_tokens = sent_info["exact_tokens"]
 
-        # If single paragraph exceeds max, split by sentences
-        if para_tokens > max_tokens:
-            # Flush current chunk first
-            if current_chunk:
-                chunks.append("\n\n".join(current_chunk))
-                current_chunk = []
-                current_tokens = 0
+        # Would adding this sentence exceed target AND we have content?
+        # Use target_per_chunk for balanced distribution
+        if current_tokens + sent_tokens > target_per_chunk and current_chunk:
+            # Finalize current chunk
+            chunk_text_raw = " ".join(current_chunk)
+            chunk_text_clean = chunk_text_raw.replace(" <PARA> ", "\n\n")
+            chunks.append(chunk_text_clean.strip())
 
-            # Split large paragraph by sentences
-            sentences = para.replace(". ", ".\n").split("\n")
-            for sent in sentences:
-                sent_info = count_tokens(sent)
-                sent_tokens = sent_info["exact_tokens"]
+            # Start new chunk with overlap (last 1-2 sentences)
+            overlap_sents = current_chunk[-2:] if len(current_chunk) >= 2 else current_chunk[-1:]
+            current_chunk = list(overlap_sents)
+            current_tokens = sum(count_tokens(s)["exact_tokens"] for s in current_chunk)
 
-                if current_tokens + sent_tokens > max_tokens and current_chunk:
-                    chunks.append(" ".join(current_chunk))
-                    # Keep overlap by retaining last few sentences
-                    overlap_text = " ".join(current_chunk[-2:]) if len(current_chunk) >= 2 else ""
-                    current_chunk = [overlap_text] if overlap_text else []
-                    current_tokens = count_tokens(overlap_text)["exact_tokens"] if overlap_text else 0
-
-                current_chunk.append(sent)
-                current_tokens += sent_tokens
-
-        elif current_tokens + para_tokens > max_tokens:
-            # Flush and start new chunk with overlap
-            if current_chunk:
-                chunks.append("\n\n".join(current_chunk))
-                # Keep last paragraph as overlap
-                overlap_para = current_chunk[-1] if current_chunk else ""
-                current_chunk = [overlap_para, para] if overlap_para else [para]
-                current_tokens = count_tokens("\n\n".join(current_chunk))["exact_tokens"]
-        else:
-            current_chunk.append(para)
-            current_tokens += para_tokens
+        current_chunk.append(sent)
+        current_tokens += sent_tokens
 
     # Don't forget the last chunk
     if current_chunk:
-        chunks.append("\n\n".join(current_chunk))
+        chunk_text_raw = " ".join(current_chunk)
+        chunk_text_clean = chunk_text_raw.replace(" <PARA> ", "\n\n")
+        chunks.append(chunk_text_clean.strip())
 
-    # Merge tiny tail chunks into previous to avoid orphans
+    # Final balance check: if last chunk is tiny, merge with previous
     if len(chunks) > 1:
         last_tokens = count_tokens(chunks[-1])["exact_tokens"]
-        if last_tokens < CHUNK_OVERLAP_TOKENS:
+        if last_tokens < target_per_chunk * 0.5:  # Less than half target
             chunks[-2] = chunks[-2] + "\n\n" + chunks[-1]
             chunks.pop()
 
