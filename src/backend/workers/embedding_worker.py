@@ -86,7 +86,7 @@ class EmbeddingWorker:
             try:
                 await self._process_cycle()
             except Exception:
-                logger.exception("Embedding worker cycle failed")
+                logger.error("Embedding worker cycle failed", exc_info=True)
 
             await asyncio.sleep(WORKER_INTERVAL_SECONDS)
 
