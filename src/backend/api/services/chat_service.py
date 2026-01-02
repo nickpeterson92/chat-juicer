@@ -423,6 +423,8 @@ class ChatService:
                             # Parse the JSON message from the handler
                             try:
                                 msg_data = json.loads(ipc_msg)
+                                # Inject session_id for frontend routing (critical for concurrent sessions)
+                                msg_data["session_id"] = session_id
                                 await self.ws_manager.send(session_id, msg_data)
 
                                 # Accumulate text for persistence (assistant_delta messages)
