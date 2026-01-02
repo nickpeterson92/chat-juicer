@@ -70,8 +70,10 @@ class SessionService:
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                SELECT * FROM sessions
-                WHERE user_id = $1 AND session_id = $2
+                SELECT s.*, p.name as project_name
+                FROM sessions s
+                LEFT JOIN projects p ON s.project_id = p.id
+                WHERE s.user_id = $1 AND s.session_id = $2
                 """,
                 user_id,
                 session_id,
@@ -155,9 +157,11 @@ class SessionService:
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT * FROM sessions
-                WHERE user_id = $1
-                ORDER BY pinned DESC, last_used_at DESC
+                SELECT s.*, p.name as project_name
+                FROM sessions s
+                LEFT JOIN projects p ON s.project_id = p.id
+                WHERE s.user_id = $1
+                ORDER BY s.pinned DESC, s.last_used_at DESC
                 LIMIT $2 OFFSET $3
                 """,
                 user_id,
@@ -322,6 +326,7 @@ class SessionService:
             "turn_count": row["turn_count"],
             "total_tokens": row["total_tokens"],
             "project_id": str(row["project_id"]) if row.get("project_id") else None,
+            "project_name": row.get("project_name"),
             # Token fields for frontend indicator
             "tokens": row["total_tokens"] or 0,
             "max_tokens": max_tokens,

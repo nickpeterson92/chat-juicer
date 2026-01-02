@@ -221,6 +221,11 @@ class SessionResponse(BaseModel):
         description="Project this session belongs to",
         json_schema_extra={"example": "550e8400-e29b-41d4-a716-446655440000"},
     )
+    project_name: str | None = Field(
+        default=None,
+        description="Project name (for display)",
+        json_schema_extra={"example": "My Project"},
+    )
 
 
 class MessageResponse(BaseModel):

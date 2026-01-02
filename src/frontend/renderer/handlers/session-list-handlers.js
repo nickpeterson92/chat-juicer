@@ -320,6 +320,12 @@ async function handleSwitch(sessionId, sessionService, streamManager, updateSess
         import("../utils/chat-model-updater.js").then(({ updateChatModelSelector }) => {
           updateChatModelSelector(result.session);
         });
+
+        // Update chat project label
+        const chatProjectLabel = document.getElementById("chat-project-label");
+        if (chatProjectLabel) {
+          chatProjectLabel.textContent = result.session.project_name || "No Project";
+        }
       }
 
       // Clear skeleton and render real messages
