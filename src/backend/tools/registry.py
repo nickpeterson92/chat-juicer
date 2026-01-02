@@ -259,4 +259,27 @@ be collected and persisted alongside other generated documents.""",
             "required": ["db_name", "table_name"],
         },
     },
+    {
+        "type": "function",
+        "name": "search_project_context",
+        "description": "Search the current project's knowledge base for relevant context. Uses semantic similarity to find related session summaries, past messages, and file content. Only available when the session is assigned to a project.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Natural language search query describing what you're looking for",
+                },
+                "top_k": {
+                    "type": "integer",
+                    "description": "Maximum number of results to return (1-20, default 5)",
+                },
+                "min_score": {
+                    "type": "number",
+                    "description": "Minimum similarity score threshold (0.0-1.0, default 0.7)",
+                },
+            },
+            "required": ["query"],
+        },
+    },
 ]

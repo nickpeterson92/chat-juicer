@@ -13,7 +13,7 @@ Usage in main.py:
 
 from fastapi import APIRouter
 
-from api.routes.v1 import auth, config, files, health, messages, projects, sessions
+from api.routes.v1 import auth, config, context, files, health, messages, projects, sessions
 
 # Create the v1 API router
 router = APIRouter()
@@ -56,6 +56,12 @@ router.include_router(
     files.router,
     prefix="/sessions",
     tags=["Files"],
+)
+
+# Context search (vector similarity)
+router.include_router(
+    context.router,
+    tags=["Context"],
 )
 
 # Configuration

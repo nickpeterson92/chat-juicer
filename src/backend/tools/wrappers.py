@@ -23,10 +23,13 @@ import json
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
+import asyncpg
+
 if TYPE_CHECKING:
     from api.services.s3_sync_service import S3SyncService
 
 from tools.code_interpreter import execute_python_code
+from tools.context_search import _search_project_context_impl
 from tools.document_generation import generate_document
 from tools.file_operations import list_directory, read_file, search_files
 from tools.schema_fetch import get_table_schema, list_registered_databases
@@ -38,6 +41,8 @@ def create_session_aware_tools(
     session_id: str,
     model: str | None = None,
     s3_sync: S3SyncService | None = None,
+    pool: asyncpg.Pool | None = None,
+    project_id: str | None = None,
 ) -> list[Any]:
     """Create tool wrappers that automatically inject session_id and model for workspace isolation.
 
@@ -47,6 +52,9 @@ def create_session_aware_tools(
     Args:
         session_id: Session identifier for workspace isolation
         model: Model to use for document summarization (uses conversation's model)
+        s3_sync: Optional S3 sync service for cloud file persistence
+        pool: Database pool for context search (optional)
+        project_id: Project ID for context search scope (optional)
 
     Returns:
         List of Agent-compatible tool wrappers with session_id and model injection
@@ -324,8 +332,39 @@ def create_session_aware_tools(
         """
         return await get_table_schema(db_name=db_name, table_name=table_name)  # type: ignore[no-any-return]
 
+    # Context Search - Project knowledge base search (requires pool and project_id)
+    @track_tool_execution("search_project_context")
+    async def wrapped_search_project_context(
+        query: str,
+        top_k: int = 5,
+        min_score: float = 0.7,
+    ) -> str:
+        """Search the current project's knowledge base for relevant context.
+
+        Uses semantic similarity to find related session summaries, messages,
+        and file content from the current project. Only available when the
+        session is associated with a project.
+
+        Args:
+            query: Natural language search query describing what you're looking for
+            top_k: Maximum number of results to return (1-20, default 5)
+            min_score: Minimum similarity score threshold (0.0-1.0, default 0.7)
+
+        Returns:
+            Formatted search results with relevant context chunks
+        """
+        if not pool or not project_id:
+            return "Context search unavailable: session is not associated with a project."
+        return await _search_project_context_impl(  # type: ignore[no-any-return]
+            query=query,
+            project_id=project_id,
+            pool=pool,
+            top_k=top_k,
+            min_score=min_score,
+        )
+
     # Create Agent-compatible tool objects with function_tool decorator
-    return [
+    tools = [
         function_tool(wrapped_list_directory),
         function_tool(wrapped_read_file),
         function_tool(wrapped_search_files),
@@ -335,3 +374,9 @@ def create_session_aware_tools(
         function_tool(wrapped_list_registered_databases),
         function_tool(wrapped_get_table_schema),
     ]
+
+    # Only add context search if pool and project_id are available
+    if pool and project_id:
+        tools.append(function_tool(wrapped_search_project_context))
+
+    return tools

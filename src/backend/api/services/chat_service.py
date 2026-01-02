@@ -14,10 +14,12 @@ from agents import Agent, RunConfig, Runner
 from agents.models.openai_provider import OpenAIProvider
 from agents.result import RunResultStreaming
 
+from api.services.context_service import ChunkResult, ContextService
 from api.services.file_context import session_file_context
 from api.services.file_service import FileService
 from api.services.token_aware_session import PostgresTokenAwareSession
 from api.websocket.manager import WebSocketManager
+from integrations.embedding_service import get_embedding_service
 
 if TYPE_CHECKING:
     from api.websocket.task_manager import CancellationToken
@@ -158,10 +160,45 @@ class ChatService:
                 session_id=session_id,
                 base_folder="input",
             ):
+                # Get project_id for context search (may be None if session not in project)
+                project_id_raw = session_row.get("project_id")
+                project_id_str = str(project_id_raw) if project_id_raw else None
+
+                # Auto-inject relevant project context into instructions
+                if project_id_str and messages:
+                    # Extract first user message text for context search query
+                    first_msg = messages[0]
+                    query_text = first_msg.get("content", "")
+                    if isinstance(query_text, list):  # Multimodal content
+                        query_text = " ".join(p.get("text", "") for p in query_text if isinstance(p, dict))
+                    if query_text and len(query_text) > 10:  # Skip trivial queries
+                        try:
+                            context_chunks = await self._search_project_context(
+                                project_id=project_id_str,
+                                query=query_text,
+                                top_k=3,
+                                min_score=0.75,  # Higher threshold for auto-injection
+                            )
+                            if context_chunks:
+                                context_section = "\n\n## Relevant Project Context\n\n"
+                                for chunk in context_chunks:
+                                    source_label = {
+                                        "session_summary": "Previous Session",
+                                        "message": "Past Message",
+                                        "file": "Project File",
+                                    }.get(chunk.source_type, chunk.source_type)
+                                    context_section += f"**{source_label} (relevance: {chunk.score:.0%}):**\n{chunk.content.strip()}\n\n"
+                                instructions += context_section
+                                logger.info(f"Injected {len(context_chunks)} context chunks for {session_id[:8]}")
+                        except Exception as e:
+                            logger.warning(f"Context injection failed: {e}")
+
                 tools = create_session_aware_tools(
                     session_id,
                     model=model,
                     s3_sync=self.file_service.s3_sync,
+                    pool=self.pool,
+                    project_id=project_id_str,
                 )
 
                 # Create a fresh client for this request to avoid stream mixing
@@ -848,3 +885,44 @@ class ChatService:
             logger.info(f"Generated title for session {session_id}: {generated_title}")
         except Exception as e:
             logger.warning(f"Failed to generate title for {session_id}: {e}")
+
+    async def _search_project_context(
+        self,
+        project_id: str,
+        query: str,
+        top_k: int = 3,
+        min_score: float = 0.75,
+    ) -> list[ChunkResult]:
+        """Search project knowledge base for relevant context.
+
+        Used for automatic context injection into system instructions.
+
+        Args:
+            project_id: Project UUID string
+            query: Search query (typically the user's message)
+            top_k: Maximum results to return
+            min_score: Minimum similarity threshold
+
+        Returns:
+            List of ChunkResult objects with content and metadata
+        """
+        from uuid import UUID as uuid_UUID
+
+        project_uuid = uuid_UUID(project_id)
+
+        # Get embedding service and context service
+        embedding_service = get_embedding_service()
+        context_service = ContextService(self.pool)
+
+        # Generate query embedding
+        query_embedding = await embedding_service.embed_text(query)
+
+        # Search for matching chunks
+        results = await context_service.search_chunks(
+            project_id=project_uuid,
+            query_embedding=query_embedding,
+            top_k=top_k,
+            score_threshold=min_score,
+        )
+
+        return results  # type: ignore[no-any-return]
