@@ -177,7 +177,7 @@ class ChatService:
                                 project_id=project_id_str,
                                 query=query_text,
                                 top_k=3,
-                                min_score=0.68,  # Tuned threshold for auto-injection
+                                min_score=0.70,  # Tuned threshold for auto-injection
                             )
                             if context_chunks:
                                 context_section = "\n\n## Relevant Project Context\n\n"
