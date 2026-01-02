@@ -1779,6 +1779,116 @@ function renderTableSchemaResult(result) {
 }
 
 /**
+ * Render project search results - shows context chunks with source type badges
+ * Parses the text format: "Found N relevant context chunks:\n--- Result 1 (Type, score: 0.XX) ---\ncontent..."
+ * @param {string} resultText - The raw search result text
+ * @returns {HTMLElement} Rendered search results
+ */
+function renderProjectSearchResults(resultText) {
+  const container = document.createElement("div");
+  container.className = "project-search-result";
+
+  // Handle no results or error cases
+  if (!resultText || resultText.includes("No relevant context found") || resultText.includes("unavailable")) {
+    const empty = document.createElement("div");
+    empty.className = "project-search-empty";
+    empty.textContent = resultText || "No results found";
+    container.appendChild(empty);
+    return container;
+  }
+
+  // Parse the text format
+  // Format: "Found N relevant context chunks:\n\n--- Result 1 (Session Summary, score: 0.85) ---\ncontent\n\n--- Result 2..."
+  const lines = resultText.split("\n");
+  let headerText = "";
+  const chunks = [];
+  let currentChunk = null;
+
+  for (const line of lines) {
+    // Match header: "Found N relevant context chunks:"
+    if (line.startsWith("Found ") && line.includes("context chunk")) {
+      headerText = line;
+      continue;
+    }
+
+    // Match chunk header: "--- Result N (Type, score: X.XX) ---"
+    const chunkMatch = line.match(/^---\s*Result\s*(\d+)\s*\(([^,]+),\s*score:\s*([\d.]+)\)\s*---$/);
+    if (chunkMatch) {
+      // Save previous chunk
+      if (currentChunk) {
+        chunks.push(currentChunk);
+      }
+      currentChunk = {
+        index: parseInt(chunkMatch[1], 10),
+        sourceType: chunkMatch[2].trim(),
+        score: parseFloat(chunkMatch[3]),
+        content: [],
+      };
+      continue;
+    }
+
+    // Accumulate content lines
+    if (currentChunk) {
+      currentChunk.content.push(line);
+    }
+  }
+
+  // Don't forget the last chunk
+  if (currentChunk) {
+    chunks.push(currentChunk);
+  }
+
+  // Render header
+  if (headerText) {
+    const header = document.createElement("div");
+    header.className = "project-search-header";
+    header.textContent = headerText;
+    container.appendChild(header);
+  }
+
+  // Render each chunk as a card
+  for (const chunk of chunks) {
+    const card = document.createElement("div");
+    card.className = "project-search-chunk";
+
+    // Chunk header with source type badge and score
+    const chunkHeader = document.createElement("div");
+    chunkHeader.className = "project-search-chunk-header";
+
+    const badge = document.createElement("span");
+    badge.className = `project-search-badge ${chunk.sourceType.toLowerCase().replace(/\s+/g, "-")}`;
+    badge.textContent = chunk.sourceType;
+    chunkHeader.appendChild(badge);
+
+    const score = document.createElement("span");
+    score.className = "project-search-score";
+    score.textContent = `${Math.round(chunk.score * 100)}%`;
+    chunkHeader.appendChild(score);
+
+    card.appendChild(chunkHeader);
+
+    // Chunk content (trim empty lines at start/end)
+    const contentText = chunk.content.join("\n").trim();
+    const contentDiv = document.createElement("div");
+    contentDiv.className = "project-search-chunk-content";
+    contentDiv.textContent = contentText;
+    card.appendChild(contentDiv);
+
+    container.appendChild(card);
+  }
+
+  if (chunks.length === 0 && !headerText) {
+    // Fallback for unexpected format
+    const fallback = document.createElement("pre");
+    fallback.className = "project-search-fallback";
+    fallback.textContent = resultText;
+    container.appendChild(fallback);
+  }
+
+  return container;
+}
+
+/**
  * Download a file from code interpreter output
  * @param {Object} file - File metadata (name, path, type, size)
  */
@@ -2274,6 +2384,15 @@ function flushStatusUpdates(activeCalls) {
           // Fallback or error
           contentDiv.appendChild(createFallbackResultSection(data.tool_result));
         }
+      } else if (card.rawName === "search_project_context" || card.rawName === "wrapped_search_project_context") {
+        // Project search: Show context chunks with source type badges
+        const resultSection = document.createElement("div");
+        resultSection.className = "disclosure-result";
+
+        const contentElement = renderProjectSearchResults(data.tool_result);
+        resultSection.appendChild(contentElement);
+
+        contentDiv.appendChild(resultSection);
       } else {
         // Regular tool: Show with "Result" label and JSON/text formatting
         const resultSection = document.createElement("div");

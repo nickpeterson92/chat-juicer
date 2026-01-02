@@ -337,7 +337,7 @@ def create_session_aware_tools(
     async def wrapped_search_project_context(
         query: str,
         top_k: int = 5,
-        min_score: float = 0.7,
+        min_score: float = 0.66,
     ) -> str:
         """Search the current project's knowledge base for relevant context.
 

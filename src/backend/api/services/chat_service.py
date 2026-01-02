@@ -177,7 +177,7 @@ class ChatService:
                                 project_id=project_id_str,
                                 query=query_text,
                                 top_k=3,
-                                min_score=0.7,  # Tuned threshold for auto-injection
+                                min_score=0.68,  # Tuned threshold for auto-injection
                             )
                             if context_chunks:
                                 context_section = "\n\n## Relevant Project Context\n\n"
@@ -905,7 +905,7 @@ class ChatService:
         project_id: str,
         query: str,
         top_k: int = 3,
-        min_score: float = 0.75,
+        min_score: float = 0.68,
     ) -> list[ChunkResult]:
         """Search project knowledge base for relevant context.
 

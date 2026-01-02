@@ -1280,4 +1280,75 @@
     @apply text-sm leading-relaxed;
     color: var(--color-text-secondary);
   }
+
+  /* ==========================================
+   * PROJECT SEARCH: search_project_context
+   * ========================================== */
+  .project-search-result {
+    @apply flex flex-col gap-3;
+  }
+
+  .project-search-header {
+    @apply text-sm py-2 px-3 rounded-lg;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border-secondary);
+    color: var(--color-text-secondary);
+  }
+
+  .project-search-empty {
+    @apply py-4 px-3 text-center text-sm;
+    color: var(--color-text-tertiary);
+  }
+
+  .project-search-chunk {
+    @apply rounded-lg overflow-hidden;
+    background: var(--color-surface-1);
+    border: 1px solid var(--color-border-secondary);
+  }
+
+  .project-search-chunk-header {
+    @apply flex items-center justify-between py-2 px-3;
+    background: var(--color-surface-2);
+  }
+
+  .project-search-badge {
+    @apply text-xs font-medium py-0.5 px-2 rounded;
+    background: var(--color-surface-3);
+    color: var(--color-text-secondary);
+  }
+
+  /* Source type badge colors */
+  .project-search-badge.session-summary {
+    background: rgba(139, 92, 246, 0.15);
+    color: #8b5cf6;
+  }
+
+  .project-search-badge.message {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+  }
+
+  .project-search-badge.file {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+  }
+
+  .project-search-score {
+    @apply text-xs font-mono;
+    color: var(--color-text-tertiary);
+  }
+
+  .project-search-chunk-content {
+    @apply p-3 text-sm whitespace-pre-wrap;
+    color: var(--color-text-primary);
+    max-height: 200px;
+    overflow-y: auto;
+    line-height: 1.6;
+  }
+
+  .project-search-fallback {
+    @apply p-3 text-xs font-mono overflow-x-auto;
+    background: var(--color-surface-1);
+    color: var(--color-text-secondary);
+  }
 }
