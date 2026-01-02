@@ -733,8 +733,12 @@ export function registerMessageHandlers(context) {
   });
 
   createHandler("session_updated", (message) => {
+    // DEBUG: Trace session_updated messages
+    console.log("[MessageHandlersV2] session_updated received:", message);
+
     // Handle direct WebSocket format from auto-titling: { session_id, title }
     if (message.session_id && message.title) {
+      console.log("[MessageHandlersV2] Updating session via sessionService:", message.session_id, message.title);
       if (services?.sessionService) {
         services.sessionService.updateSession({
           session_id: message.session_id,
@@ -743,6 +747,7 @@ export function registerMessageHandlers(context) {
       }
 
       // Dispatch event to trigger UI refresh (session list re-render)
+      console.log("[MessageHandlersV2] Dispatching session-updated DOM event");
       window.dispatchEvent(
         new CustomEvent("session-updated", {
           detail: { session_id: message.session_id, title: message.title },

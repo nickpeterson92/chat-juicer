@@ -873,6 +873,20 @@ class ChatService:
                     session_uuid,
                 )
 
+            # Invalidate session cache so REST API returns updated title
+            from utils.cache import get_session_cache, get_session_list_cache
+
+            session_cache = get_session_cache()
+            list_cache = get_session_list_cache()
+            # Use user_id from the session if available, otherwise use a wildcard approach
+            # Since we're in ChatService, we need to look up the user_id from the session
+            async with self.pool.acquire() as conn:
+                row = await conn.fetchrow("SELECT user_id FROM sessions WHERE id = $1", session_uuid)
+            if row:
+                user_id = row["user_id"]
+                await session_cache.delete(f"session:{user_id}:{session_id}")
+                await list_cache.delete(f"sessions:{user_id}:0:50")
+
             # Notify frontend via WebSocket
             await self.ws_manager.send(
                 session_id,

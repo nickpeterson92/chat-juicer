@@ -470,9 +470,26 @@ export class SessionService {
 
     let updatedSessions;
     if (index >= 0) {
-      // Update existing session
+      // Update existing session, but preserve locally-known title if server sends stale data
+      // This handles the case where title was updated via WebSocket while session was in background,
+      // but the switch REST API returns older data that hasn't caught up yet
+      const existing = sessions[index];
+      const existingTitle = existing.title;
+      const incomingTitle = sessionData.title;
+
+      // Preserve existing title if:
+      // 1. We have a real title locally (not placeholder)
+      // 2. Incoming title is a placeholder OR incoming title is falsy
+      const isExistingRealTitle = existingTitle && existingTitle !== "New Conversation";
+      const isIncomingPlaceholder = !incomingTitle || incomingTitle === "New Conversation";
+
       updatedSessions = [...sessions];
-      updatedSessions[index] = { ...sessions[index], ...sessionData };
+      updatedSessions[index] = {
+        ...existing,
+        ...sessionData,
+        // Preserve existing title if incoming is stale
+        title: isExistingRealTitle && isIncomingPlaceholder ? existingTitle : incomingTitle,
+      };
     } else {
       // Add new session
       updatedSessions = [...sessions, sessionData];

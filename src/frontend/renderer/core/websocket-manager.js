@@ -67,8 +67,11 @@ export class WebSocketManager {
       this.ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          // Inject session_id for correct frontend routing (matches Electron's mapWebSocketMessage)
+          // Backend may not include session_id in all messages
+          const enrichedData = data.session_id ? data : { ...data, session_id: this.sessionId };
           this._messageCallbacks.forEach((cb) => {
-            cb(data);
+            cb(enrichedData);
           });
         } catch (err) {
           console.error("[WebSocketManager] Failed to parse message:", err);

@@ -118,13 +118,10 @@ export class BrowserAPIAdapter {
     const wsManager = new WebSocketManager(this.apiBase, () => this._getAccessToken());
     wsManager.connect(sessionId);
 
-    // Wire up callbacks - inject session_id to match Electron's mapWebSocketMessage behavior
+    // Wire up callbacks
     wsManager.onMessage((msg) => {
-      // Ensure every message has session_id for correct frontend routing
-      // (Backend messages may not include it; Electron's main.js injects it there)
-      const enrichedMsg = msg.session_id ? msg : { ...msg, session_id: sessionId };
       this._messageCallbacks.forEach((cb) => {
-        cb(enrichedMsg);
+        cb(msg);
       });
     });
     wsManager.onClose((code, reason, isIdle) => {
