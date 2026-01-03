@@ -63,6 +63,36 @@ For production, the FastAPI backend runs on AWS:
 - **S3**: Session file storage with automatic sync and presigned URLs
 - **VPC**: Public subnets with security group whitelisting
 
+### Web App Deployment (Cloudflare Pages)
+
+In addition to the Electron desktop app, Chat Juicer runs as a **browser web application** deployed via Cloudflare Pages:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     Browser Web App                                 │
+│              (chat-juicer.pages.dev via Cloudflare)                │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ HTTPS / WebSocket
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                     FastAPI Backend (EC2)                           │
+│              (api.chat-juicer.com)                                  │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Key Differences from Desktop:**
+- Uses `BrowserAPIAdapter` (direct HTTP/WebSocket) instead of Electron IPC
+- localStorage for token storage
+- Native browser file inputs
+
+**Web Build Commands:**
+```bash
+npm run dev:web       # Development server
+npm run build:web     # Production build
+npm run deploy:web    # Deploy to Cloudflare Pages
+```
+
 ### Project Structure
 
 ```
@@ -77,7 +107,14 @@ chat-juicer/
 │   │   │   └── main-constants.js     # Main process configuration constants
 │   │   ├── ui/           # Frontend static assets
 │   │   │   ├── index.html    # Main chat UI
-│   │   │   └── input.css     # Tailwind CSS source
+│   │   │   ├── input.css     # Tailwind CSS source
+│   │   │   ├── auth-modal.css # Authentication modal styles
+│   │   │   └── styles/       # CSS component styles
+│   │   │       ├── base.css      # Base styles and resets
+│   │   │       ├── theme.css     # Theme variables and tokens
+│   │   │       ├── components/   # Component-specific styles
+│   │   │       ├── platform/     # Platform-specific overrides
+│   │   │       └── utilities/    # Utility classes
 │   │   └── renderer/     # Component-based renderer process (ES6 modules)
 │   │       ├── index.js              # Entry point
 │   │       ├── bootstrap.js          # 7-phase bootstrap orchestrator
@@ -88,9 +125,9 @@ chat-juicer/
 │   │       │   └── validators.js     # Bootstrap validators
 │   │       ├── adapters/             # DOM, IPC, Storage adapters
 │   │       ├── config/               # constants, colors, model-metadata
-│   │       ├── core/                 # AppState, EventBus, lifecycle management
+│   │       ├── core/                 # AppState, EventBus, lifecycle, websocket-manager
 │   │       ├── managers/             # DOM, file, view managers
-│   │       ├── services/             # Business logic (AppState-backed)
+│   │       ├── services/             # Business logic (AppState-backed), stream-manager
 │   │       ├── handlers/             # Event handlers
 │   │       ├── plugins/              # Plugin registry
 │   │       ├── ui/                   # UI components, renderers, tool-registry
@@ -108,6 +145,7 @@ chat-juicer/
 │       │   │       ├── files.py      # File management routes
 │       │   │       ├── health.py     # Health check endpoint
 │       │   │       ├── messages.py   # Message pagination endpoint
+│       │   │       ├── projects.py   # Project management routes
 │       │   │       └── sessions.py   # Session CRUD routes
 │       │   ├── services/         # Business logic
 │       │   │   ├── chat_service.py       # Chat streaming with Agent/Runner
@@ -118,7 +156,10 @@ chat-juicer/
 │       │   │   ├── token_aware_session.py # Token-aware session management
 │       │   │   ├── postgres_session.py   # PostgreSQL session storage
 │       │   │   ├── message_utils.py      # Message utilities
-│       │   │   └── auth_service.py       # Authentication
+│       │   │   ├── auth_service.py       # Authentication
+│       │   │   ├── context_service.py    # Context injection service
+│       │   │   ├── project_service.py    # Project CRUD operations
+│       │   │   └── summarization_service.py # Conversation summarization
 │       │   ├── middleware/       # FastAPI middleware
 │       │   │   ├── auth.py               # Authentication middleware
 │       │   │   ├── exception_handlers.py # Global exception handlers
@@ -148,27 +189,34 @@ chat-juicer/
 │       │       ├── files.py      # File response schemas
 │       │       ├── health.py     # Health response schemas
 │       │       ├── presign.py    # Presigned URL schemas
+│       │       ├── projects.py   # Project response schemas
 │       │       └── sessions.py   # Session response schemas
 │       ├── tools/        # Function calling tools (async)
 │       │   ├── file_operations.py    # File reading, directory listing
 │       │   ├── document_generation.py # Document generation
 │       │   ├── text_editing.py       # Text editing operations
 │       │   ├── code_interpreter.py   # Sandboxed code execution
+│       │   ├── context_search.py     # Project context semantic search
 │       │   ├── schema_fetch.py       # Database schema introspection
 │       │   ├── wrappers.py           # Session-aware tool wrappers
 │       │   └── registry.py           # Tool registration
 │       ├── integrations/ # External integrations
-│       │   ├── mcp_pool.py          # MCP server connection pool
+│       │   ├── mcp_manager.py       # MCP server connection manager
 │       │   ├── mcp_registry.py      # MCP server registry
 │       │   ├── mcp_transport.py     # MCP transport layer
 │       │   ├── mcp_websocket_client.py # MCP WebSocket client
 │       │   ├── sdk_token_tracker.py # Token tracking
+│       │   ├── embedding_service.py # Text embedding generation
 │       │   └── event_handlers/      # Streaming event handlers
 │       │       ├── agent_events.py      # Agent event handlers
 │       │       ├── base.py              # Base handler class
 │       │       ├── raw_events.py        # Raw event handlers
 │       │       ├── registry.py          # Handler registry
 │       │       └── run_item_events.py   # Run item event handlers
+│       ├── workers/      # Background workers
+│       │   └── embedding_worker.py  # Async embedding processing
+│       ├── scripts/      # Utility scripts
+│       │   └── migrate_to_cloud.py  # Cloud migration helper
 │       └── utils/        # Utility modules
 │           ├── logger.py           # Enterprise JSON logging
 │           ├── token_utils.py      # Token counting with LRU cache
@@ -177,7 +225,9 @@ chat-juicer/
 │           ├── db_utils.py         # Database utilities
 │           ├── document_processor.py # Document processing
 │           ├── http_logger.py      # HTTP request logging
-│           └── json_utils.py       # JSON utilities
+│           ├── json_utils.py       # JSON utilities
+│           ├── cache.py            # TTL caching utilities
+│           └── metrics.py          # Performance metrics
 ├── data/             # Persistent data storage
 │   └── files/        # Session-scoped file storage
 ├── docker/           # Docker configurations

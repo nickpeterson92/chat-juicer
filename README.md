@@ -54,23 +54,28 @@ make health             # Check system configuration
 
 ## Features
 
-- **Desktop Application**: Production-grade Electron app with health monitoring and auto-recovery
+- **Desktop + Web Application**: Production-grade Electron desktop app AND browser web app (via Cloudflare Pages)
 - **FastAPI Backend**: RESTful API with WebSocket streaming and PostgreSQL persistence
 - **Agent/Runner Pattern**: Native OpenAI Agents SDK with automatic tool orchestration
 - **MCP Servers**: Sequential Thinking and Fetch servers by default, plus optional Tavily search when configured
 - **MCP Server Manager**: Shared WebSocket clients with multiplexing for concurrent request handling
-- **PostgreSQL Persistence**: Sessions and messages stored in PostgreSQL with connection pooling
+- **PostgreSQL Persistence**: Sessions, messages, and projects stored in PostgreSQL with connection pooling
+- **Projects & Semantic Search**: Organize sessions into projects with pgvector-powered context search
 - **Multi-Session Support**: Create, switch, delete sessions with auto-title after first message
 - **WebSocket Streaming**: Real-time AI response streaming via `/ws/chat/{session_id}`
 - **Function Calling**: Async native tools and MCP integration with session-aware wrappers
+- **Authentication**: JWT-based auth with rate limiting, bcrypt password hashing
 - **Structured Logging**: Enterprise-grade JSON logging with rotation and session correlation
+- **Prometheus Metrics**: Auto-instrumented FastAPI metrics for monitoring
 - **Azure/OpenAI Integration**: Azure by default with optional base OpenAI provider
 - **Token Management**: SDK-level universal token tracking for tool calls and reasoning tokens
 - **Full Async Architecture**: Consistent async/await throughout backend
 - **Document Generation**: Save generated content to session-scoped output/ with optional backups
 - **Editing Tools**: Batch text edits with git-style diffs and whitespace-flexible matching
+- **Code Interpreter**: Sandboxed Python execution with data science libraries
 - **Type Safety**: Full mypy strict compliance with Pydantic runtime validation
 - **Component Architecture**: Reusable frontend components with proper state management
+- **Database Migrations**: Alembic-managed schema migrations
 
 ## Architecture
 
@@ -143,12 +148,43 @@ For production, the FastAPI backend runs on AWS:
 **Infrastructure as Code:**
 All cloud infrastructure is managed via Terraform in the `infra/` directory.
 
+### Web App Deployment (Cloudflare Pages)
+
+In addition to the Electron desktop app, Chat Juicer runs as a **browser web application** deployed via Cloudflare Pages:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     Browser Web App                                 │
+│              (chat-juicer.pages.dev via Cloudflare)                │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ HTTPS / WebSocket
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                     FastAPI Backend (EC2)                           │
+│              (api.chat-juicer.com)                                  │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Key Differences from Desktop:**
+- Uses `BrowserAPIAdapter` instead of Electron IPC
+- Direct HTTP/WebSocket communication to backend API
+- localStorage for token storage (vs secure Electron storage)
+- Native browser file inputs (vs native Electron dialogs)
+
+**Web Build Commands:**
+```bash
+npm run dev:web       # Development server (Vite)
+npm run build:web     # Production build for browser
+npm run deploy:web    # Deploy to Cloudflare Pages via Wrangler
+```
+
 ## Prerequisites
 
 - Node.js 16+ and npm
 - **Python 3.13+** (strictly required for all dependencies)
 - **PostgreSQL 14+** with a database created for the application
-- Azure OpenAI resource with deployment (e.g., gpt-5-mini, gpt-4o, gpt-4)
+- Azure OpenAI resource with deployment (e.g., gpt-5.2, gpt-5.1, gpt-5, gpt-4.1)
 - Azure OpenAI API credentials
 - Internet connection for MCP server downloads
 
@@ -350,6 +386,26 @@ make db-backup          # Backup database to timestamped archive
 make db-restore BACKUP=name  # Restore from backup
 ```
 
+#### Schema Migrations (Alembic)
+
+Database schema is managed with Alembic for version-controlled migrations:
+
+```bash
+# View migration status
+alembic current
+
+# Generate new migration from model changes
+alembic revision --autogenerate -m "description"
+
+# Apply all pending migrations
+alembic upgrade head
+
+# Rollback one migration
+alembic downgrade -1
+```
+
+Migration files are stored in `migrations/versions/`. Initial schema is in `migrations/init.sql`.
+
 #### Maintenance
 
 ```bash
@@ -398,7 +454,14 @@ chat-juicer/
 │   │   │   └── main-constants.js
 │   │   ├── ui/           # Frontend static assets
 │   │   │   ├── index.html    # Main chat UI
-│   │   │   └── input.css     # Tailwind CSS source
+│   │   │   ├── input.css     # Tailwind CSS source
+│   │   │   ├── auth-modal.css # Authentication modal styles
+│   │   │   └── styles/       # CSS component styles
+│   │   │       ├── base.css      # Base styles and resets
+│   │   │       ├── theme.css     # Theme variables and tokens
+│   │   │       ├── components/   # Component-specific styles
+│   │   │       ├── platform/     # Platform-specific overrides
+│   │   │       └── utilities/    # Utility classes
 │   │   └── renderer/     # Component-based renderer (ES modules)
 │   │       ├── index.js              # Entry point
 │   │       ├── bootstrap.js          # 7-phase bootstrap orchestrator
@@ -409,9 +472,9 @@ chat-juicer/
 │   │       │   └── validators.js     # Bootstrap validators
 │   │       ├── adapters/             # DOM, IPC, Storage adapters
 │   │       ├── config/               # constants, colors, model-metadata
-│   │       ├── core/                 # AppState, EventBus, lifecycle management
+│   │       ├── core/                 # AppState, EventBus, lifecycle, websocket-manager
 │   │       ├── managers/             # DOM, file, view managers
-│   │       ├── services/             # Business logic (AppState-backed)
+│   │       ├── services/             # Business logic (AppState-backed), stream-manager
 │   │       ├── handlers/             # Event handlers
 │   │       ├── plugins/              # Plugin registry
 │   │       ├── ui/                   # UI components, renderers, tool-registry
@@ -429,6 +492,7 @@ chat-juicer/
 │       │   │       ├── files.py      # File management routes
 │       │   │       ├── health.py     # Health check endpoint
 │       │   │       ├── messages.py   # Message pagination endpoint
+│       │   │       ├── projects.py   # Project management routes
 │       │   │       └── sessions.py   # Session CRUD routes
 │       │   ├── services/         # Business logic
 │       │   │   ├── chat_service.py       # Chat streaming with Agent/Runner
@@ -439,7 +503,10 @@ chat-juicer/
 │       │   │   ├── token_aware_session.py # Token-aware session management
 │       │   │   ├── postgres_session.py   # PostgreSQL session storage
 │       │   │   ├── message_utils.py      # Message utilities
-│       │   │   └── auth_service.py       # Authentication
+│       │   │   ├── auth_service.py       # Authentication
+│       │   │   ├── context_service.py    # Context injection service
+│       │   │   ├── project_service.py    # Project CRUD operations
+│       │   │   └── summarization_service.py # Conversation summarization
 │       │   ├── middleware/       # FastAPI middleware
 │       │   │   ├── auth.py               # Authentication middleware
 │       │   │   ├── exception_handlers.py # Global exception handlers
@@ -469,12 +536,14 @@ chat-juicer/
 │       │       ├── files.py      # File response schemas
 │       │       ├── health.py     # Health response schemas
 │       │       ├── presign.py    # Presigned URL schemas
+│       │       ├── projects.py   # Project response schemas
 │       │       └── sessions.py   # Session response schemas
 │       ├── tools/        # Function calling tools (async)
 │       │   ├── file_operations.py    # File reading, directory listing
 │       │   ├── document_generation.py # Document generation
 │       │   ├── text_editing.py       # Text editing operations
 │       │   ├── code_interpreter.py   # Sandboxed code execution
+│       │   ├── context_search.py     # Project context semantic search
 │       │   ├── schema_fetch.py       # Database schema introspection
 │       │   ├── wrappers.py           # Session-aware tool wrappers
 │       │   └── registry.py           # Tool registration
@@ -484,12 +553,17 @@ chat-juicer/
 │       │   ├── mcp_transport.py     # MCP transport layer (WebSocket)
 │       │   ├── mcp_websocket_client.py # MCP WebSocket client
 │       │   ├── sdk_token_tracker.py # Token tracking
+│       │   ├── embedding_service.py # Text embedding generation
 │       │   └── event_handlers/      # Streaming event handlers
 │       │       ├── agent_events.py      # Agent event handlers
 │       │       ├── base.py              # Base handler class
 │       │       ├── raw_events.py        # Raw event handlers
 │       │       ├── registry.py          # Handler registry
 │       │       └── run_item_events.py   # Run item event handlers
+│       ├── workers/      # Background workers
+│       │   └── embedding_worker.py  # Async embedding processing
+│       ├── scripts/      # Utility scripts
+│       │   └── migrate_to_cloud.py  # Cloud migration helper
 │       └── utils/        # Utility modules
 │           ├── logger.py           # Enterprise JSON logging
 │           ├── token_utils.py      # Token counting with LRU cache
@@ -498,7 +572,9 @@ chat-juicer/
 │           ├── db_utils.py         # Database utilities
 │           ├── document_processor.py # Document processing
 │           ├── http_logger.py      # HTTP request logging
-│           └── json_utils.py       # JSON utilities
+│           ├── json_utils.py       # JSON utilities
+│           ├── cache.py            # TTL caching utilities
+│           └── metrics.py          # Performance metrics
 ├── data/             # Persistent data storage
 │   └── files/        # Session-scoped file storage
 ├── docker/           # Docker configurations
@@ -706,6 +782,7 @@ The application supports both native functions and MCP server tools:
 - **generate_document**: Save generated content to `output/` with optional backups and session sandboxing
 - **code_interpreter**: Sandboxed code execution with guarded environment
 - **schema_fetch**: Database schema introspection supporting PostgreSQL and SQLite, with column types, constraints, and relationship detection
+- **search_project_context**: Semantic similarity search within the project's knowledge base (requires session to be assigned to a project)
 - **Session-aware wrappers**: All file/doc tools are wrapped to `data/files/{session_id}` via `wrappers.py`
 
 ### MCP Server Integration
@@ -888,6 +965,16 @@ The application uses **PostgreSQL** for session and message persistence with con
 - Supports pagination for efficient session switching
 - Indexed by session_id and created_at for fast queries
 
+**Projects Table**
+- Project organization for grouping related sessions
+- Per-user isolation with user_id foreign key
+- Supports semantic context accumulation across sessions
+
+**Context Chunks Table (pgvector)**
+- Vector embeddings for semantic search (text-embedding-3-small, 1536 dimensions)
+- HNSW index for fast approximate nearest neighbor search
+- Sources: session summaries, messages, uploaded files
+
 #### Session Features
 
 - **Multi-Session Support**: Create, switch, update, delete, pin sessions
@@ -895,23 +982,35 @@ The application uses **PostgreSQL** for session and message persistence with con
 - **Token-Aware Management**: Tracks token usage for context management
 - **Auto Titles**: Generates titles after first user message (non-blocking)
 - **Pagination**: Efficient message loading with offset/limit
+- **Manual Summarization**: On-demand conversation summarization
 
 #### API Endpoints
 
-**Session Management** (`/api/sessions/`)
+**Session Management** (`/api/v1/sessions/`)
 - `POST /` - Create new session
 - `GET /` - List sessions with pagination
 - `GET /{id}` - Get session details
 - `PATCH /{id}` - Update session (rename, pin, config)
 - `DELETE /{id}` - Delete session
+- `POST /{id}/summarize` - Manually trigger conversation summarization
 
 **Chat** (`/ws/chat/{session_id}`)
 - WebSocket endpoint for real-time chat streaming
 - Supports interruption via WebSocket messages
 - Streams agent responses, tool calls, and reasoning
 
-**Messages** (`/api/messages/`)
+**Messages** (`/api/v1/messages/`)
 - `GET /{session_id}` - Get messages with pagination
+
+**Projects** (`/api/v1/projects/`)
+- `POST /` - Create new project
+- `GET /` - List projects with pagination
+- `GET /{id}` - Get project details
+- `PATCH /{id}` - Update project (name, description)
+- `DELETE /{id}` - Delete project
+
+**Context Search** (`/api/v1/context/`)
+- `POST /search` - Semantic similarity search within a project's knowledge base
 
 #### Connection Pooling
 
@@ -925,7 +1024,21 @@ app.state.db_pool = await asyncpg.create_pool(
 ```
 
 ### Rate Limiting & Error Handling
-The application includes robust error handling:
+
+The application includes robust error handling and configurable rate limiting:
+
+**Authentication:**
+- JWT-based authentication with access/refresh token flow
+- bcrypt password hashing via passlib
+- Automatic token refresh on 401 errors
+- `ALLOW_LOCALHOST_NOAUTH=true` bypasses auth for local development
+
+**Rate Limiting (per user):**
+- Auth endpoints: 5 burst / 10 per minute
+- File uploads: 10 per minute
+- Regular API: 120 per minute
+
+**Error Handling:**
 - Streaming error handling for rate limits, connection issues, and API status errors
 - Binary protocol V2 negotiation fallback with helpful error messaging
 - Structured logging of exceptions with session context
@@ -943,6 +1056,14 @@ Recent improvements for better maintainability:
 - **Centralized constants**: All configuration values in `core/constants.py`
 - **Clean separation**: Each module has a single, clear responsibility
 - **Type hints**: Improved type annotations throughout the codebase
+
+### Monitoring
+
+The application exposes Prometheus metrics via `prometheus-fastapi-instrumentator`:
+
+- **Endpoint**: `GET /metrics`
+- **Metrics**: Request latency, status codes, active connections
+- **Auto-instrumented**: All FastAPI endpoints automatically tracked
 
 ## Configuration
 
@@ -970,20 +1091,38 @@ Recent improvements for better maintainability:
 ### Python Dependencies
 
 **Required** (Python 3.13+, from `src/backend/requirements.txt`):
-- `fastapi>=0.109.0`: Modern async web framework
-- `uvicorn>=0.27.0`: ASGI server for FastAPI
-- `asyncpg>=0.29.0`: Async PostgreSQL driver with connection pooling
-- `openai>=1.0.0`: Azure OpenAI client library (AsyncOpenAI)
-- `openai-agents>=0.3.3`: Agent/Runner framework with MCP support
-- `markitdown[all]>=0.1.0`: Document conversion to markdown (PDF, Word, Excel, HTML, CSV, JSON, images)
-- `tiktoken>=0.5.0`: OpenAI's official token counting library for exact token counts
-- `python-json-logger>=2.0.0`: Structured JSON logging with rotation and session correlation
-- `python-dotenv>=1.0.0`: Environment variable management (.env file loading)
-- `httpx>=0.25.0`: Modern HTTP client (dependency of openai library)
-- `aiofiles>=23.0.0`: Async file operations for non-blocking I/O
-- `pydantic>=2.5.0`: Runtime data validation with type hints
-- `pydantic-settings>=2.0.0`: Settings management with environment variables
-- `mcp-server-fetch>=2025.4.0`: MCP server for HTTP/web content retrieval
+- `fastapi>=0.115.0`: Modern async web framework
+- `uvicorn[standard]>=0.32.0`: ASGI server for FastAPI
+- `asyncpg>=0.30.0`: Async PostgreSQL driver with connection pooling
+- `openai>=2.9.0`: Azure OpenAI client library (AsyncOpenAI)
+- `openai-agents>=0.6.2`: Agent/Runner framework with Responses API support
+- `markitdown[pdf,docx,pptx,xlsx,xls]>=0.1.4`: Document conversion to markdown
+- `tiktoken>=0.12.0`: OpenAI's official token counting library
+- `python-json-logger>=4.0.0`: Structured JSON logging with rotation
+- `python-dotenv>=1.2.1`: Environment variable management
+- `httpx>=0.27.2,<0.28`: Modern HTTP client (pinned for mcp-server-fetch)
+- `aiofiles>=25.1.0`: Async file operations for non-blocking I/O
+- `pydantic>=2.12.5`: Runtime data validation with type hints
+- `pydantic-settings>=2.12.0`: Settings management with environment variables
+
+**Database & Migrations**:
+- `alembic>=1.14.0`: Database schema migrations
+- `aiomysql>=0.2.0`: MySQL async driver for schema_fetch
+- `aioodbc>=0.5.0`: SQL Server via ODBC for schema_fetch
+
+**Authentication**:
+- `python-jose[cryptography]>=3.3.0`: JWT token handling
+- `bcrypt>=4.2.0`: Password hashing
+- `passlib[bcrypt]>=1.7.4`: Password utilities
+
+**Monitoring & Serialization**:
+- `prometheus-fastapi-instrumentator>=7.0.0`: Prometheus metrics
+- `msgpack>=1.1.2`: Binary serialization for IPC Protocol V2
+- `websockets>=13.1`: Async WebSocket client for MCP transport
+- `boto3>=1.35.0`: AWS SDK for S3-compatible storage
+
+**External Integrations**:
+- `simple-salesforce>=1.12.5`: Salesforce REST API client
 
 ### Node.js Dependencies
 
@@ -991,9 +1130,13 @@ Recent improvements for better maintainability:
 - `marked`: Markdown parser
 - `marked-footnote`: Footnote support for marked
 - `dompurify`: HTML sanitization for security
-- `highlight.js`: Syntax highlighting for code blocks
+- `shiki`: Syntax highlighting (Snazzy theme)
 - `katex`: Math rendering (LaTeX support)
 - `mermaid`: Diagram rendering from text
+- `lottie-web`: Loading animations
+- `animejs`: Welcome page animations
+- `pdfjs-dist`: PDF thumbnail generation
+- `msgpack-lite`: Binary protocol serialization
 
 **Development**:
 - `electron`: Desktop application framework
@@ -1001,6 +1144,7 @@ Recent improvements for better maintainability:
 - `@tailwindcss/vite`: Tailwind CSS 4.x integration
 - `@tailwindcss/typography`: Typography plugin for prose content
 - `@biomejs/biome`: JavaScript/TypeScript linter and formatter
+- `vitest`: Test framework with coverage
 
 **MCP Servers** (npm global):
 - `@modelcontextprotocol/server-sequential-thinking`: Sequential reasoning MCP server
