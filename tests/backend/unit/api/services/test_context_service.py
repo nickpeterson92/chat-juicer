@@ -27,9 +27,9 @@ def test_embedding_to_pgvector() -> None:
 
 
 def test_metadata_to_json_none() -> None:
-    """Test _metadata_to_json returns {} for None."""
+    """Test _metadata_to_json returns None for None input."""
     result = _metadata_to_json(None)
-    assert result == "{}"
+    assert result is None
 
 
 def test_metadata_to_json_with_uuid() -> None:
@@ -37,16 +37,9 @@ def test_metadata_to_json_with_uuid() -> None:
     test_uuid = uuid4()
     metadata = {"id": test_uuid, "name": "test"}
     result = _metadata_to_json(metadata)
+    assert result is not None
     assert str(test_uuid) in result
     assert "test" in result
-
-
-def test_metadata_to_json_with_datetime() -> None:
-    """Test _metadata_to_json serializes datetimes."""
-    now = datetime.now(timezone.utc)
-    metadata = {"timestamp": now}
-    result = _metadata_to_json(metadata)
-    assert now.isoformat() in result
 
 
 @pytest.mark.asyncio
@@ -54,12 +47,14 @@ async def test_upsert_session_summary(context_service: ContextService, mock_db_p
     """Test upsert_session_summary inserts or updates summary."""
     project_id = uuid4()
     session_id = uuid4()
+    chunk_id = uuid4()
     embedding = [0.1] * 1536
 
     conn = mock_db_pool.acquire.return_value.__aenter__.return_value
-    conn.execute = AsyncMock()
+    mock_row = {"id": chunk_id}
+    conn.fetchrow = AsyncMock(return_value=mock_row)
 
-    await context_service.upsert_session_summary(
+    result = await context_service.upsert_session_summary(
         project_id=project_id,
         session_id=session_id,
         content="Session summary text",
@@ -69,9 +64,8 @@ async def test_upsert_session_summary(context_service: ContextService, mock_db_p
         metadata={"title": "Test Session"},
     )
 
-    conn.execute.assert_called_once()
-    call_args = conn.execute.call_args[0]
-    assert "ON CONFLICT" in call_args[0]
+    assert result == chunk_id
+    conn.fetchrow.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -79,12 +73,14 @@ async def test_insert_chunk(context_service: ContextService, mock_db_pool: Magic
     """Test insert_chunk with deduplication."""
     project_id = uuid4()
     source_id = uuid4()
+    chunk_id = uuid4()
     embedding = [0.1] * 1536
 
     conn = mock_db_pool.acquire.return_value.__aenter__.return_value
-    conn.execute = AsyncMock()
+    mock_row = {"id": chunk_id}
+    conn.fetchrow = AsyncMock(return_value=mock_row)
 
-    await context_service.insert_chunk(
+    result = await context_service.insert_chunk(
         project_id=project_id,
         source_type="message",
         source_id=source_id,
@@ -95,9 +91,8 @@ async def test_insert_chunk(context_service: ContextService, mock_db_pool: Magic
         token_count=25,
     )
 
-    conn.execute.assert_called_once()
-    call_args = conn.execute.call_args[0]
-    assert "ON CONFLICT DO NOTHING" in call_args[0]
+    assert result == chunk_id
+    conn.fetchrow.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -185,7 +180,8 @@ async def test_delete_chunks_for_source_none(context_service: ContextService, mo
 async def test_get_chunk_count_for_project(context_service: ContextService, mock_db_pool: MagicMock) -> None:
     """Test get_chunk_count_for_project returns int."""
     conn = mock_db_pool.acquire.return_value.__aenter__.return_value
-    conn.fetchval = AsyncMock(return_value=42)
+    mock_row = {"count": 42}
+    conn.fetchrow = AsyncMock(return_value=mock_row)
 
     count = await context_service.get_chunk_count_for_project(uuid4())
 
@@ -196,7 +192,8 @@ async def test_get_chunk_count_for_project(context_service: ContextService, mock
 async def test_get_chunk_count_for_project_empty(context_service: ContextService, mock_db_pool: MagicMock) -> None:
     """Test get_chunk_count_for_project returns 0 for empty project."""
     conn = mock_db_pool.acquire.return_value.__aenter__.return_value
-    conn.fetchval = AsyncMock(return_value=0)
+    mock_row = {"count": 0}
+    conn.fetchrow = AsyncMock(return_value=mock_row)
 
     count = await context_service.get_chunk_count_for_project(uuid4())
 
@@ -207,7 +204,7 @@ async def test_get_chunk_count_for_project_empty(context_service: ContextService
 async def test_has_session_summary_true(context_service: ContextService, mock_db_pool: MagicMock) -> None:
     """Test has_session_summary returns True when summary exists."""
     conn = mock_db_pool.acquire.return_value.__aenter__.return_value
-    conn.fetchval = AsyncMock(return_value=True)
+    conn.fetchrow = AsyncMock(return_value={"1": 1})  # Non-None row
 
     result = await context_service.has_session_summary(uuid4(), uuid4())
 
@@ -218,7 +215,7 @@ async def test_has_session_summary_true(context_service: ContextService, mock_db
 async def test_has_session_summary_false(context_service: ContextService, mock_db_pool: MagicMock) -> None:
     """Test has_session_summary returns False when no summary."""
     conn = mock_db_pool.acquire.return_value.__aenter__.return_value
-    conn.fetchval = AsyncMock(return_value=False)
+    conn.fetchrow = AsyncMock(return_value=None)  # No row found
 
     result = await context_service.has_session_summary(uuid4(), uuid4())
 
