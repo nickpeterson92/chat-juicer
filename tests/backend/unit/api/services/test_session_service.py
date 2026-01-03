@@ -200,7 +200,8 @@ async def test_delete_session(
     result = await session_service.delete_session(user_id, session_id)
 
     assert result is True
-    conn.execute.assert_called_once()
+    # 1 for session delete + 2 for context_chunks cleanup (session_summary + message chunks)
+    assert conn.execute.call_count == 3
     mock_rmtree.assert_called_once_with(mock_path)
 
 

@@ -227,8 +227,6 @@ class PostgresTokenAwareSession(PostgresSession):  # type: ignore[misc]
         new_tokens = self._calculate_total_tokens(items)
         self._total_tokens += new_tokens
 
-        logger.debug(f"Added {len(items)} items ({new_tokens} tokens). Total: {self._total_tokens}")
-
     async def recalculate_tokens(self) -> int:
         """Recalculate total tokens from current session items."""
         items = await self.get_items()
@@ -406,7 +404,6 @@ class PostgresTokenAwareSession(PostgresSession):  # type: ignore[misc]
                 "DELETE FROM llm_context WHERE session_id = $1",
                 self.session_uuid,
             )
-        logger.debug(f"Cleared LLM context for session {self.session_id}")
 
     async def _repopulate_session(
         self,
@@ -469,7 +466,6 @@ class PostgresTokenAwareSession(PostgresSession):  # type: ignore[misc]
                 self._accumulated_tool_tokens,
                 self.session_uuid,
             )
-        logger.debug(f"Updated DB token count: {self._total_tokens}")
 
     async def load_token_state_from_db(self) -> None:
         """Load token state from database."""
@@ -485,7 +481,6 @@ class PostgresTokenAwareSession(PostgresSession):  # type: ignore[misc]
         if row:
             self._total_tokens = row["total_tokens"] or 0
             self._accumulated_tool_tokens = row["accumulated_tool_tokens"] or 0
-            logger.debug(f"Loaded token state from DB: {self._total_tokens} total")
 
     @property
     def total_tokens(self) -> int:

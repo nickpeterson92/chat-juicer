@@ -149,180 +149,171 @@ class ChatService:
         # Acquire MCP servers from pool for concurrent safety
         # MCP servers use stdio which doesn't support concurrent access - pool serializes access
         server_keys = session_mcp_config if session_mcp_config else DEFAULT_MCP_SERVERS
-        logger.debug(
-            f"[DIAG:{session_id[:8]}] Acquiring MCP servers: {server_keys}, " f"stats: {self.mcp_manager.get_stats()}"
-        )
-
-        async with self.mcp_manager.acquire_servers(server_keys) as mcp_servers:
-            logger.debug(f"[DIAG:{session_id[:8]}] Acquired {len(mcp_servers)} MCP servers")
-            async with session_file_context(
+        async with (
+            self.mcp_manager.acquire_servers(server_keys) as mcp_servers,
+            session_file_context(
                 file_service=self.file_service,
                 session_id=session_id,
                 base_folder="input",
-            ):
-                # Get project_id for context search (may be None if session not in project)
-                project_id_raw = session_row.get("project_id")
-                project_id_str = str(project_id_raw) if project_id_raw else None
+            ),
+        ):
+            # Get project_id for context search (may be None if session not in project)
+            project_id_raw = session_row.get("project_id")
+            project_id_str = str(project_id_raw) if project_id_raw else None
 
-                # Auto-inject relevant project context into instructions
-                if project_id_str and messages:
-                    # Extract first user message text for context search query
-                    first_msg = messages[0]
-                    query_text = first_msg.get("content", "")
-                    if isinstance(query_text, list):  # Multimodal content
-                        query_text = " ".join(p.get("text", "") for p in query_text if isinstance(p, dict))
-                    if query_text and len(query_text) > 10:  # Skip trivial queries
-                        try:
-                            context_chunks = await self._search_project_context(
-                                project_id=project_id_str,
-                                query=query_text,
-                                top_k=3,
-                                min_score=0.70,  # Tuned threshold for auto-injection
-                            )
-                            if context_chunks:
-                                context_section = "\n\n## Relevant Project Context\n\n"
-                                for chunk in context_chunks:
-                                    source_label = {
-                                        "session_summary": "Previous Session",
-                                        "message": "Past Message",
-                                        "file": "Project File",
-                                    }.get(chunk.source_type, chunk.source_type)
-                                    context_section += f"**{source_label} (relevance: {chunk.score:.0%}):**\n{chunk.content.strip()}\n\n"
-                                instructions += context_section
-                                logger.info(f"Injected {len(context_chunks)} context chunks for {session_id[:8]}")
-                        except Exception as e:
-                            logger.warning(f"Context injection failed: {e}")
-
-                tools = create_session_aware_tools(
-                    session_id,
-                    model=model,
-                    s3_sync=self.file_service.s3_sync,
-                    pool=self.pool,
-                    project_id=project_id_str,
-                )
-
-                # Create a fresh client for this request to avoid stream mixing
-                # between concurrent sessions (critical for multi-user cloud)
-                settings = get_settings()
-                if settings.api_provider == "azure":
-                    request_client = create_openai_client(
-                        api_key=settings.azure_openai_api_key,
-                        base_url=settings.azure_endpoint_str,
-                    )
-                else:
-                    request_client = create_openai_client(
-                        api_key=settings.openai_api_key,
-                    )
-
-                # Create provider with dedicated client for stream isolation
-                request_provider = OpenAIProvider(openai_client=request_client)
-
-                logger.debug(f"[DIAG:{session_id[:8]}] Creating agent with model={model} and dedicated provider")
-                agent = create_agent(
-                    deployment=model,
-                    instructions=instructions,
-                    tools=tools,
-                    mcp_servers=mcp_servers,
-                    reasoning_effort=reasoning,
-                )
-                logger.debug(f"[DIAG:{session_id[:8]}] Agent created, sending assistant_start")
-
-                await self.ws_manager.send(
-                    session_id,
-                    {"type": "assistant_start", "session_id": session_id},
-                )
-                logger.debug(f"[DIAG:{session_id[:8]}] assistant_start sent")
-
-                try:
-                    # Build user messages list for SDK input
-                    # NOTE: Do NOT save to session.add_items() here - SDK handles that via session_input_callback
-                    # Only save to Layer 2 (UI history) which is separate from LLM context
-                    user_messages: list[dict[str, Any]] = []
-                    for msg in messages:
-                        # Extract content and attachments from message dict
-                        text_content = msg.get("content", "")
-                        if not isinstance(text_content, str):
-                            text_content = str(text_content) if text_content else ""
-                        attachments = msg.get("attachments")  # List of {type, filename, path}
-
-                        # Build multimodal content if images are attached
-                        content = await self._build_multimodal_content(
-                            text_content=text_content,
-                            attachments=attachments,
-                            session_id=session_id,
-                            model=model,
-                        )
-
-                        user_messages.append({"role": "user", "content": content})
-                        logger.debug(f"Processing user message for session {session_id}")
-
-                        # Save text to Layer 2 (UI history) - serialize content array to JSON if multimodal
-                        history_content = json.dumps(content) if isinstance(content, list) else text_content
-                        try:
-                            await self._add_to_full_history(session_uuid, "user", history_content)
-                            logger.debug("Saved to messages table (Layer 2) successfully")
-                        except Exception as e:
-                            logger.error(f"Failed to save to messages: {e}", exc_info=True)
-                            raise
-
-                    # Connect session to SDK token tracker for tool token tracking
-                    connect_session(session)
+            # Auto-inject relevant project context into instructions
+            if project_id_str and messages:
+                # Extract first user message text for context search query
+                first_msg = messages[0]
+                query_text = first_msg.get("content", "")
+                if isinstance(query_text, list):  # Multimodal content
+                    query_text = " ".join(p.get("text", "") for p in query_text if isinstance(p, dict))
+                if query_text and len(query_text) > 10:  # Skip trivial queries
                     try:
-                        # Pass only NEW user messages - SDK merges with session history via session_input_callback
-                        # Pass model_provider for stream isolation (critical for concurrent multi-user requests)
-                        logger.debug(f"[DIAG:{session_id[:8]}] Starting _run_agent_stream with dedicated provider")
-                        completed_normally = await self._run_agent_stream(
-                            agent,
-                            session,
-                            session_id,
-                            session_uuid,
-                            user_messages,
-                            model_provider=request_provider,
-                            cancellation_token=cancellation_token,
+                        context_chunks = await self._search_project_context(
+                            project_id=project_id_str,
+                            query=query_text,
+                            top_k=3,
+                            min_score=0.70,  # Tuned threshold for auto-injection
                         )
-                        logger.debug(f"[DIAG:{session_id[:8]}] _run_agent_stream completed: {completed_normally}")
-                    finally:
-                        disconnect_session()
+                        if context_chunks:
+                            context_section = "\n\n## Relevant Project Context\n\n"
+                            for chunk in context_chunks:
+                                source_label = {
+                                    "session_summary": "Previous Session",
+                                    "message": "Past Message",
+                                    "file": "Project File",
+                                }.get(chunk.source_type, chunk.source_type)
+                                context_section += (
+                                    f"**{source_label} (relevance: {chunk.score:.0%}):**\n{chunk.content.strip()}\n\n"
+                                )
+                            instructions += context_section
+                            logger.info(f"Injected {len(context_chunks)} context chunks for {session_id[:8]}")
+                    except Exception as e:
+                        logger.warning(f"Context injection failed: {e}")
 
-                    # Post-run: update token count in DB and notify frontend
+            tools = create_session_aware_tools(
+                session_id,
+                model=model,
+                s3_sync=self.file_service.s3_sync,
+                pool=self.pool,
+                project_id=project_id_str,
+            )
+
+            # Create a fresh client for this request to avoid stream mixing
+            # between concurrent sessions (critical for multi-user cloud)
+            settings = get_settings()
+            if settings.api_provider == "azure":
+                request_client = create_openai_client(
+                    api_key=settings.azure_openai_api_key,
+                    base_url=settings.azure_endpoint_str,
+                )
+            else:
+                request_client = create_openai_client(
+                    api_key=settings.openai_api_key,
+                )
+
+            # Create provider with dedicated client for stream isolation
+            request_provider = OpenAIProvider(openai_client=request_client)
+
+            agent = create_agent(
+                deployment=model,
+                instructions=instructions,
+                tools=tools,
+                mcp_servers=mcp_servers,
+                reasoning_effort=reasoning,
+            )
+            await self.ws_manager.send(
+                session_id,
+                {"type": "assistant_start", "session_id": session_id},
+            )
+
+            try:
+                # Build user messages list for SDK input
+                # NOTE: Do NOT save to session.add_items() here - SDK handles that via session_input_callback
+                # Only save to Layer 2 (UI history) which is separate from LLM context
+                user_messages: list[dict[str, Any]] = []
+                for msg in messages:
+                    # Extract content and attachments from message dict
+                    text_content = msg.get("content", "")
+                    if not isinstance(text_content, str):
+                        text_content = str(text_content) if text_content else ""
+                    attachments = msg.get("attachments")  # List of {type, filename, path}
+
+                    # Build multimodal content if images are attached
+                    content = await self._build_multimodal_content(
+                        text_content=text_content,
+                        attachments=attachments,
+                        session_id=session_id,
+                        model=model,
+                    )
+
+                    user_messages.append({"role": "user", "content": content})
+
+                    # Save text to Layer 2 (UI history) - serialize content array to JSON if multimodal
+                    history_content = json.dumps(content) if isinstance(content, list) else text_content
+                    try:
+                        await self._add_to_full_history(session_uuid, "user", history_content)
+                    except Exception as e:
+                        logger.error(f"Failed to save to messages: {e}", exc_info=True)
+                        raise
+
+                # Connect session to SDK token tracker for tool token tracking
+                connect_session(session)
+                try:
+                    # Pass only NEW user messages - SDK merges with session history via session_input_callback
+                    # Pass model_provider for stream isolation (critical for concurrent multi-user requests)
+                    completed_normally = await self._run_agent_stream(
+                        agent,
+                        session,
+                        session_id,
+                        session_uuid,
+                        user_messages,
+                        model_provider=request_provider,
+                        cancellation_token=cancellation_token,
+                    )
+                finally:
+                    disconnect_session()
+
+                # Post-run: update token count in DB and notify frontend
+                await session.update_db_token_count()
+                await self._send_token_usage(session_id, session)
+
+                # Post-run: check if summarization needed (skip if interrupted)
+                if completed_normally and await session.should_summarize():
+                    logger.info(f"Triggering post-run summarization for {session_id}")
+                    await session.summarize_with_agent()
                     await session.update_db_token_count()
                     await self._send_token_usage(session_id, session)
 
-                    # Post-run: check if summarization needed (skip if interrupted)
-                    if completed_normally and await session.should_summarize():
-                        logger.info(f"Triggering post-run summarization for {session_id}")
-                        await session.summarize_with_agent()
-                        await session.update_db_token_count()
-                        await self._send_token_usage(session_id, session)
+                # Send appropriate finish reason based on completion status
+                finish_reason = "stop" if completed_normally else "interrupted"
+                await self.ws_manager.send(
+                    session_id,
+                    {"type": "assistant_end", "finish_reason": finish_reason},
+                )
 
-                    # Send appropriate finish reason based on completion status
-                    finish_reason = "stop" if completed_normally else "interrupted"
-                    await self.ws_manager.send(
-                        session_id,
-                        {"type": "assistant_end", "finish_reason": finish_reason},
-                    )
-
-                    # Generate title in background (non-blocking) - only if completed normally
-                    if completed_normally:
-                        # Store task reference to prevent garbage collection (RUF006)
-                        task = asyncio.create_task(self._maybe_generate_title(session_id, session_uuid, model))
-                        self._background_tasks.add(task)
-                        task.add_done_callback(self._background_tasks.discard)
-                except asyncio.CancelledError:
-                    logger.info(f"Chat task was cancelled for session {session_id}")
-                    # Flag already cleared by finally block above
-                    await self.ws_manager.send(
-                        session_id,
-                        {"type": "assistant_end", "finish_reason": "interrupted"},
-                    )
-                    # Re-raise so the caller knows the task was cancelled
-                    raise
-                except Exception as exc:
-                    logger.error(f"Chat error: {exc}", exc_info=True)
-                    await self.ws_manager.send(
-                        session_id,
-                        {"type": "error", "message": str(exc), "retryable": True},
-                    )
+                # Generate title in background (non-blocking) - only if completed normally
+                if completed_normally:
+                    # Store task reference to prevent garbage collection (RUF006)
+                    task = asyncio.create_task(self._maybe_generate_title(session_id, session_uuid, model))
+                    self._background_tasks.add(task)
+                    task.add_done_callback(self._background_tasks.discard)
+            except asyncio.CancelledError:
+                logger.info(f"Chat task was cancelled for session {session_id}")
+                # Flag already cleared by finally block above
+                await self.ws_manager.send(
+                    session_id,
+                    {"type": "assistant_end", "finish_reason": "interrupted"},
+                )
+                # Re-raise so the caller knows the task was cancelled
+                raise
+            except Exception as exc:
+                logger.error(f"Chat error: {exc}", exc_info=True)
+                await self.ws_manager.send(
+                    session_id,
+                    {"type": "error", "message": str(exc), "retryable": True},
+                )
         # MCP servers automatically returned to pool when context manager exits
 
     async def _run_agent_stream(
@@ -376,7 +367,6 @@ class ChatService:
 
         # Pass only NEW user messages - SDK uses session_input_callback to merge with history
         # This is critical for concurrent sessions: each session gets its own isolated history
-        logger.debug(f"[DIAG:{session_id[:8]}] Calling Runner.run_streamed")
         stream_candidate = Runner.run_streamed(
             agent,
             input=user_messages,  # type: ignore[arg-type]  # SDK accepts dict messages
@@ -384,9 +374,7 @@ class ChatService:
             run_config=run_config,
             max_turns=MAX_CONVERSATION_TURNS,
         )
-        logger.debug(f"[DIAG:{session_id[:8]}] Awaiting stream_candidate")
         stream = await stream_candidate if inspect.isawaitable(stream_candidate) else stream_candidate
-        logger.debug(f"[DIAG:{session_id[:8]}] Stream ready, entering event loop")
 
         # Store stream for interrupt access (enables SDK cancel())
         self._active_streams[session_id] = stream
@@ -400,8 +388,6 @@ class ChatService:
 
             async with token_context:
                 async for event in stream.stream_events():
-                    if event_count == 0:
-                        logger.debug(f"[DIAG:{session_id[:8]}] First event received: {event.type}")
                     event_count += 1
 
                     # Check cancellation via token
