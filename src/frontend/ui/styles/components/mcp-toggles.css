@@ -225,4 +225,147 @@
   .mcp-toggle-item.active:hover {
     background-color: var(--color-surface-hover);
   }
+
+  /* Project submenu styles */
+  .submenu-loading,
+  .submenu-error {
+    @apply px-3 py-2 text-sm;
+    color: var(--color-text-tertiary);
+  }
+
+  .submenu-error {
+    color: var(--color-error);
+  }
+
+  .submenu-divider {
+    height: 1px;
+    margin: 4px 0;
+    background-color: var(--color-border-secondary);
+    border: none;
+  }
+
+  .project-option {
+    @apply relative;
+  }
+
+  .project-check {
+    @apply w-4 text-center flex-shrink-0;
+    color: var(--color-brand-primary);
+    font-weight: 600;
+  }
+
+  .project-option.selected {
+    color: var(--color-brand-primary);
+  }
+
+  .project-option.no-project {
+    font-style: italic;
+  }
+
+  /* ==========================================
+   * PROJECT SELECTOR DROPDOWN
+   * Matches model selector pattern
+   * ========================================== */
+
+  .project-selector-wrapper {
+    @apply relative flex-shrink-0;
+  }
+
+  .project-selector-trigger {
+    @apply flex items-center gap-1.5 py-1.5 px-3 border-none rounded-lg bg-transparent text-sm font-medium cursor-pointer transition-colors;
+    color: var(--color-text-secondary);
+  }
+
+  .project-selector-trigger:hover {
+    color: var(--color-text-primary);
+  }
+
+  /* When a project is selected, show primary text color */
+  .project-selector-trigger.has-project {
+    color: var(--color-text-primary);
+  }
+
+  .project-selector-trigger svg {
+    @apply w-4 h-4 transition-transform;
+  }
+
+  .project-selector-dropdown {
+    @apply absolute left-0 w-[200px] rounded-lg z-50 overflow-hidden;
+    background-color: var(--color-surface-2);
+    border: 1px solid var(--color-border-secondary);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    bottom: calc(100% + 4px);
+    max-height: 300px;
+  }
+
+  .project-selector-content {
+    @apply p-2 overflow-y-auto flex flex-col gap-0.5;
+    max-height: inherit;
+    scrollbar-color: var(--color-scrollbar-thumb) transparent;
+    scrollbar-width: thin;
+  }
+
+  .project-selector-content::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .project-selector-content::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .project-selector-content::-webkit-scrollbar-thumb {
+    background-color: var(--color-scrollbar-thumb);
+    border-radius: 3px;
+  }
+
+  .project-dropdown-item {
+    @apply flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium cursor-pointer transition-colors;
+    background-color: transparent;
+    border: none;
+    color: var(--color-text-secondary);
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .project-dropdown-item:hover {
+    background-color: var(--color-surface-hover);
+    color: var(--color-text-primary);
+  }
+
+  .project-dropdown-item.selected {
+    color: var(--color-brand-primary);
+  }
+
+  .project-dropdown-item svg {
+    @apply w-4 h-4 flex-shrink-0;
+  }
+
+  .project-item-check {
+    @apply w-4 text-center flex-shrink-0;
+    color: var(--color-brand-primary);
+    font-weight: 600;
+  }
+
+  .project-dropdown-divider {
+    height: 1px;
+    margin: 4px 0;
+    background-color: var(--color-border-secondary);
+    border: none;
+  }
+
+  .project-loading,
+  .project-dropdown-error {
+    @apply px-3 py-2 text-sm;
+    color: var(--color-text-tertiary);
+  }
+
+  .project-dropdown-error {
+    color: var(--color-error);
+  }
+
+  /* Chat page project label - subtle gray indicator */
+  .chat-project-label {
+    @apply text-sm font-medium flex-shrink-0;
+    color: var(--color-text-secondary);
+  }
 }

@@ -152,12 +152,16 @@ async def create_session(
     """Create a new chat session."""
     user_id = UUID(user.id)
 
+    # Parse project_id if provided
+    project_id = UUID(request.project_id) if request.project_id else None
+
     created = await sessions.create_session(
         user_id=user_id,
         title=request.title,
         model=request.model,
         mcp_config=request.mcp_config,
         reasoning_effort=request.reasoning_effort,
+        project_id=project_id,
     )
 
     # Initialize session workspace

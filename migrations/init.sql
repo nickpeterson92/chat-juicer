@@ -16,15 +16,28 @@ INSERT INTO users (email, password_hash, display_name)
 VALUES ('local@chatjuicer.dev', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.VttYS/Vj/3l6Ym', 'Local User')
 ON CONFLICT (email) DO NOTHING;
 
+-- Projects table (for organizing sessions and context)
+CREATE TABLE IF NOT EXISTS projects (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id);
+
 -- Sessions table
 CREATE TABLE IF NOT EXISTS sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    project_id UUID REFERENCES projects(id) ON DELETE SET NULL,
     session_id VARCHAR(20) NOT NULL,
     title VARCHAR(500),
     model VARCHAR(50) DEFAULT 'gpt-5.1',
     reasoning_effort VARCHAR(20) DEFAULT 'medium',
-    mcp_config JSONB DEFAULT '["sequential-thinking", "fetch"]'::jsonb,
+    mcp_config JSONB DEFAULT '[\"sequential-thinking\", \"fetch\"]'::jsonb,
     pinned BOOLEAN DEFAULT FALSE,
     is_named BOOLEAN DEFAULT FALSE,
     message_count INTEGER DEFAULT 0,
@@ -38,6 +51,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_last_used ON sessions(user_id, last_used_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sessions_project_id ON sessions(project_id);
 
 -- Messages table (Layer 2: Full History)
 CREATE TABLE IF NOT EXISTS messages (
@@ -76,6 +90,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_context_seq ON llm_context(session_id, seq);
 CREATE TABLE IF NOT EXISTS files (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    project_id UUID REFERENCES projects(id) ON DELETE SET NULL,
     filename VARCHAR(255) NOT NULL,
     file_path VARCHAR(500) NOT NULL,
     content_type VARCHAR(100),
@@ -85,3 +100,37 @@ CREATE TABLE IF NOT EXISTS files (
 );
 
 CREATE INDEX IF NOT EXISTS idx_files_session_id ON files(session_id);
+CREATE INDEX IF NOT EXISTS idx_files_project_id ON files(project_id);
+
+-- Context chunks table (pgvector embeddings for semantic search)
+-- Note: Requires pgvector extension: CREATE EXTENSION IF NOT EXISTS vector;
+CREATE TABLE IF NOT EXISTS context_chunks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    source_type TEXT NOT NULL,           -- 'session_summary' | 'message' | 'file'
+    source_id UUID NOT NULL,             -- FK to source (sessions.id, messages.id, files.id)
+    chunk_index INT NOT NULL DEFAULT 0,  -- For multi-chunk sources
+    content TEXT NOT NULL,
+    content_hash TEXT NOT NULL,          -- SHA-256 hash for deduplication
+    embedding vector(1536),              -- text-embedding-3-small dimension
+    token_count INT,
+    metadata JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- HNSW index for fast approximate nearest neighbor search
+CREATE INDEX IF NOT EXISTS idx_context_chunks_embedding ON context_chunks
+    USING hnsw (embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64);
+
+CREATE INDEX IF NOT EXISTS idx_context_chunks_project ON context_chunks(project_id);
+CREATE INDEX IF NOT EXISTS idx_context_chunks_source ON context_chunks(source_type, source_id);
+
+-- Deduplication: same content in same project = skip
+CREATE UNIQUE INDEX IF NOT EXISTS idx_context_chunks_dedupe
+ON context_chunks (project_id, source_type, content_hash);
+
+-- Session summary upsert support (one summary per session per project)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_context_chunks_session_summary
+ON context_chunks (project_id, source_type, source_id)
+WHERE source_type = 'session_summary';

@@ -629,4 +629,53 @@ export class BrowserAPIAdapter {
   async send(channel, _data) {
     console.debug(`Browser send: ${channel}`);
   }
+
+  // ==========================================
+  // Project Operations
+  // ==========================================
+
+  /**
+   * List all projects for the current user
+   * @returns {Promise<object>} { projects: [], pagination: {...} }
+   */
+  async listProjects(offset = 0, limit = 50) {
+    return this._fetch(`/api/v1/projects?offset=${offset}&limit=${limit}`);
+  }
+
+  /**
+   * Create a new project
+   * @param {string} name - Project name
+   * @param {string} [description] - Optional description
+   * @returns {Promise<object>} Created project
+   */
+  async createProject(name, description = "") {
+    return this._fetch("/api/v1/projects", {
+      method: "POST",
+      body: { name, description },
+    });
+  }
+
+  /**
+   * Update a project
+   * @param {string} projectId - Project ID
+   * @param {object} updates - Fields to update (name, description)
+   * @returns {Promise<object>} Updated project
+   */
+  async updateProject(projectId, updates) {
+    return this._fetch(`/api/v1/projects/${projectId}`, {
+      method: "PATCH",
+      body: updates,
+    });
+  }
+
+  /**
+   * Delete a project
+   * @param {string} projectId - Project ID
+   * @returns {Promise<object>} Deletion result
+   */
+  async deleteProject(projectId) {
+    return this._fetch(`/api/v1/projects/${projectId}`, {
+      method: "DELETE",
+    });
+  }
 }

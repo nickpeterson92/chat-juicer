@@ -44,7 +44,7 @@ function createWelcomeHeader(userName, greeting) {
 }
 
 /**
- * Create MCP toggle buttons
+ * Create MCP toggle buttons with project selector
  */
 function createMcpToggles() {
   return `
@@ -72,6 +72,19 @@ function createMcpToggles() {
           <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
         </svg>
       </button>
+      <div class="project-selector-wrapper">
+        <button id="project-selector-trigger" class="project-selector-trigger">
+          <span id="selected-project-label">No Project</span>
+          <svg id="project-selector-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div id="project-selector-dropdown" class="project-selector-dropdown" style="display: none;">
+          <div class="project-selector-content" id="project-selector-content">
+            <div class="project-loading">Loading projects...</div>
+          </div>
+        </div>
+      </div>
     </div>
   `;
 }
@@ -299,7 +312,7 @@ export function showWelcomePage(container, userName = "User") {
     });
   });
 
-  // Setup attachment plus button
+  // Setup attachment plus button with context menu
   const attachmentPlusBtn = document.getElementById("attachment-plus-btn");
   let attachmentContextMenu = null;
 
@@ -316,23 +329,6 @@ export function showWelcomePage(container, userName = "User") {
           </svg>
           Add files or images
         </button>
-        <div class="attachment-menu-item has-submenu" data-action="add-to-project">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/>
-            <path d="M12 22V12"/>
-            <polyline points="3.29 7 12 12 20.71 7"/>
-            <path d="m7.5 4.27 9 5.15"/>
-          </svg>
-          Add to project
-          <svg class="submenu-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M9 18l6-6-6-6"/>
-          </svg>
-          <div class="attachment-submenu">
-            <button class="attachment-menu-item disabled" data-action="coming-soon">
-              Coming Soon!
-            </button>
-          </div>
-        </div>
       `;
       document.body.appendChild(menu);
 
@@ -432,6 +428,184 @@ export function showWelcomePage(container, userName = "User") {
     }
     container._attachmentCleanup.push(() => {
       document.removeEventListener("click", globalClickHandler);
+    });
+  }
+
+  // Setup project selector dropdown
+  const projectTrigger = document.getElementById("project-selector-trigger");
+  const projectDropdown = document.getElementById("project-selector-dropdown");
+  const projectContent = document.getElementById("project-selector-content");
+  const projectLabel = document.getElementById("selected-project-label");
+  const projectChevron = document.getElementById("project-selector-chevron");
+
+  if (projectTrigger && projectDropdown) {
+    let selectedProjectId = null;
+    let selectedProjectName = null;
+    let projectsLoaded = false;
+
+    // Update label and appState
+    const updateProjectLabel = (name) => {
+      if (projectLabel) {
+        projectLabel.textContent = name || "No Project";
+      }
+      // Update trigger style based on selection
+      if (name) {
+        projectTrigger.classList.add("has-project");
+      } else {
+        projectTrigger.classList.remove("has-project");
+      }
+    };
+
+    // Close dropdown
+    const closeProjectDropdown = () => {
+      projectDropdown.style.display = "none";
+      if (projectChevron) projectChevron.style.transform = "rotate(0deg)";
+    };
+
+    // Load projects into dropdown
+    const loadProjects = async () => {
+      if (!projectContent) return;
+
+      try {
+        const ipcAdapter = window.app?.adapters?.ipcAdapter;
+        if (!ipcAdapter) {
+          projectContent.innerHTML = `<div class="project-dropdown-error">Not available</div>`;
+          return;
+        }
+
+        const result = await ipcAdapter.listProjects(0, 20);
+        const projects = result.projects || [];
+
+        if (projects.length === 0) {
+          projectContent.innerHTML = `
+            <button class="project-dropdown-item" data-action="create-project">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+              Create first project
+            </button>
+          `;
+        } else {
+          projectContent.innerHTML = `
+            <button class="project-dropdown-item ${!selectedProjectId ? "selected" : ""}" data-project-id="">
+              <span class="project-item-check">${!selectedProjectId ? "✓" : ""}</span>
+              No Project
+            </button>
+            ${projects
+              .map(
+                (p) => `
+              <button class="project-dropdown-item ${selectedProjectId === p.id ? "selected" : ""}" data-project-id="${p.id}">
+                <span class="project-item-check">${selectedProjectId === p.id ? "✓" : ""}</span>
+                ${p.name}
+              </button>
+            `
+              )
+              .join("")}
+            <hr class="project-dropdown-divider"/>
+            <button class="project-dropdown-item" data-action="create-project">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+              New project...
+            </button>
+          `;
+        }
+
+        // Add click handlers for project selection
+        projectContent.querySelectorAll("[data-project-id]").forEach((btn) => {
+          btn.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const projectId = btn.dataset.projectId || null;
+            const projectName = projectId ? btn.textContent.trim() : null;
+            selectedProjectId = projectId;
+            selectedProjectName = projectName;
+
+            // Store in appState for session creation and chat page display
+            window.app?.appState?.setState("ui.selectedProjectId", projectId);
+            window.app?.appState?.setState("ui.selectedProjectName", projectName);
+
+            // Update label
+            updateProjectLabel(projectName);
+
+            // Update visual selection
+            projectContent.querySelectorAll("[data-project-id]").forEach((b) => {
+              b.classList.remove("selected");
+              const check = b.querySelector(".project-item-check");
+              if (check) check.textContent = "";
+            });
+            btn.classList.add("selected");
+            const check = btn.querySelector(".project-item-check");
+            if (check) check.textContent = "✓";
+
+            closeProjectDropdown();
+          });
+        });
+
+        // Handle create project
+        const createBtn = projectContent.querySelector('[data-action="create-project"]');
+        if (createBtn) {
+          createBtn.addEventListener("click", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            closeProjectDropdown();
+
+            const name = prompt("Enter project name:");
+            if (name?.trim()) {
+              try {
+                const newProject = await ipcAdapter.createProject(name.trim(), "");
+                selectedProjectId = newProject.id;
+                selectedProjectName = newProject.name;
+                window.app?.appState?.setState("ui.selectedProjectId", newProject.id);
+                updateProjectLabel(newProject.name);
+                projectsLoaded = false; // Reload on next open
+              } catch (err) {
+                console.error("Failed to create project:", err);
+              }
+            }
+          });
+        }
+
+        projectsLoaded = true;
+      } catch (error) {
+        console.error("Failed to load projects:", error);
+        projectContent.innerHTML = `<div class="project-dropdown-error">Failed to load</div>`;
+      }
+    };
+
+    // Toggle dropdown on trigger click
+    projectTrigger.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const isVisible = projectDropdown.style.display !== "none";
+
+      if (isVisible) {
+        closeProjectDropdown();
+      } else {
+        // Load projects if not loaded
+        if (!projectsLoaded) {
+          await loadProjects();
+        }
+
+        // Position dropdown above trigger
+        projectDropdown.style.display = "block";
+        if (projectChevron) projectChevron.style.transform = "rotate(-90deg)";
+      }
+    });
+
+    // Close on outside click
+    const closeOnOutsideClick = (e) => {
+      if (!projectDropdown.contains(e.target) && !projectTrigger.contains(e.target)) {
+        closeProjectDropdown();
+      }
+    };
+    document.addEventListener("click", closeOnOutsideClick);
+
+    // Store cleanup function
+    if (!container._attachmentCleanup) {
+      container._attachmentCleanup = [];
+    }
+    container._attachmentCleanup.push(() => {
+      document.removeEventListener("click", closeOnOutsideClick);
     });
   }
 

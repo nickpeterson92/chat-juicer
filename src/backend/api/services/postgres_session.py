@@ -95,24 +95,29 @@ class PostgresSession:
             return
 
         start_time = time.perf_counter()
-        async with self.pool.acquire() as conn, conn.transaction():
-            for item in items:
-                # Serialize the item exactly as provided
-                try:
-                    content = json.dumps(item)
-                except (TypeError, ValueError) as e:
-                    logger.warning(f"Failed to serialize item: {e}")
-                    continue
+        try:
+            async with self.pool.acquire() as conn, conn.transaction():
+                for item in items:
+                    # Serialize the item exactly as provided
+                    try:
+                        content = json.dumps(item)
+                    except (TypeError, ValueError) as e:
+                        logger.warning(f"Failed to serialize item: {e}")
+                        continue
 
-                await conn.execute(
-                    """
-                    INSERT INTO llm_context (session_id, role, content)
-                    VALUES ($1, $2, $3)
-                    """,
-                    self.session_uuid,
-                    "item",  # Simple marker - not used for filtering
-                    content,
-                )
+                    await conn.execute(
+                        """
+                        INSERT INTO llm_context (session_id, role, content)
+                        VALUES ($1, $2, $3)
+                        """,
+                        self.session_uuid,
+                        "item",  # Simple marker - not used for filtering
+                        content,
+                    )
+        except asyncpg.ForeignKeyViolationError:
+            # Session was deleted during streaming - skip silently
+            logger.debug(f"Session {self.session_id} deleted, skipping llm_context insert")
+            return
         duration = time.perf_counter() - start_time
         db_query_duration_seconds.labels(query_type="insert").observe(duration)
 

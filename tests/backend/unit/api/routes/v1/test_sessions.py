@@ -142,7 +142,12 @@ def test_create_session(
     assert data["title"] == "New Session"
 
     mock_session_service.create_session.assert_called_with(
-        user_id=USER_ID, title="New Session", model="gpt-4o", mcp_config=None, reasoning_effort="medium"
+        user_id=USER_ID,
+        title="New Session",
+        model="gpt-4o",
+        mcp_config=None,
+        reasoning_effort="medium",
+        project_id=None,
     )
     # verify file service init workspace
     mock_file_service.init_session_workspace.assert_called_once()

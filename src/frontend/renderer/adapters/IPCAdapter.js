@@ -521,6 +521,62 @@ export class IPCAdapter {
     }
     return this.api.authGetAccessToken();
   }
+
+  // ==========================================
+  // Project Operations
+  // ==========================================
+
+  /**
+   * List all projects for the current user
+   * @param {number} [offset=0] - Pagination offset
+   * @param {number} [limit=50] - Maximum projects to return
+   * @returns {Promise<object>} { projects: [], pagination: {...} }
+   */
+  async listProjects(offset = 0, limit = 50) {
+    if (!this.api?.listProjects) {
+      console.warn("IPC API not available: listProjects");
+      return { projects: [], pagination: { total_count: 0 } };
+    }
+    return this.api.listProjects(offset, limit);
+  }
+
+  /**
+   * Create a new project
+   * @param {string} name - Project name
+   * @param {string} [description] - Optional description
+   * @returns {Promise<object>} Created project
+   */
+  async createProject(name, description = "") {
+    if (!this.api?.createProject) {
+      throw new Error("IPC API not available: createProject");
+    }
+    return this.api.createProject(name, description);
+  }
+
+  /**
+   * Update a project
+   * @param {string} projectId - Project ID
+   * @param {object} updates - Fields to update (name, description)
+   * @returns {Promise<object>} Updated project
+   */
+  async updateProject(projectId, updates) {
+    if (!this.api?.updateProject) {
+      throw new Error("IPC API not available: updateProject");
+    }
+    return this.api.updateProject(projectId, updates);
+  }
+
+  /**
+   * Delete a project
+   * @param {string} projectId - Project ID
+   * @returns {Promise<object>} Deletion result
+   */
+  async deleteProject(projectId) {
+    if (!this.api?.deleteProject) {
+      throw new Error("IPC API not available: deleteProject");
+    }
+    return this.api.deleteProject(projectId);
+  }
 }
 
 // Export singleton instance for convenience

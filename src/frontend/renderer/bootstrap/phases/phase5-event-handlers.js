@@ -1141,6 +1141,13 @@ export async function initializeEventHandlers({
           updateChatModelSelector(session);
         }
 
+        // Update chat project label with selected project name
+        const chatProjectLabel = document.getElementById("chat-project-label");
+        if (chatProjectLabel) {
+          const selectedProjectName = appState.getState("ui.selectedProjectName");
+          chatProjectLabel.textContent = selectedProjectName || "No Project";
+        }
+
         // Immediately add session to SessionService's local state and update UI
         // This ensures the session appears right away (even with default title)
         // When session-updated fires later with generated title, it will update the existing session

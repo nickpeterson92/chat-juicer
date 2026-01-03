@@ -33,6 +33,7 @@ class SessionService:
         model: str | None = None,
         mcp_config: list[str] | None = None,
         reasoning_effort: str | None = None,
+        project_id: UUID | None = None,
     ) -> dict[str, Any]:
         """Create a new session."""
         session_id = self._generate_session_id()
@@ -41,9 +42,9 @@ class SessionService:
             row = await conn.fetchrow(
                 """
                 INSERT INTO sessions (
-                    user_id, session_id, title, model, mcp_config, reasoning_effort
+                    user_id, session_id, title, model, mcp_config, reasoning_effort, project_id
                 )
-                VALUES ($1, $2, $3, $4, $5, $6)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING *
                 """,
                 user_id,
@@ -52,6 +53,7 @@ class SessionService:
                 model or DEFAULT_MODEL,
                 json.dumps(mcp_config or ["sequential-thinking", "fetch"]),
                 reasoning_effort or "medium",
+                project_id,
             )
         return self._row_to_session(row)
 
@@ -68,8 +70,10 @@ class SessionService:
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                SELECT * FROM sessions
-                WHERE user_id = $1 AND session_id = $2
+                SELECT s.*, p.name as project_name
+                FROM sessions s
+                LEFT JOIN projects p ON s.project_id = p.id
+                WHERE s.user_id = $1 AND s.session_id = $2
                 """,
                 user_id,
                 session_id,
@@ -153,9 +157,11 @@ class SessionService:
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT * FROM sessions
-                WHERE user_id = $1
-                ORDER BY pinned DESC, last_used_at DESC
+                SELECT s.*, p.name as project_name
+                FROM sessions s
+                LEFT JOIN projects p ON s.project_id = p.id
+                WHERE s.user_id = $1
+                ORDER BY s.pinned DESC, s.last_used_at DESC
                 LIMIT $2 OFFSET $3
                 """,
                 user_id,
@@ -228,8 +234,19 @@ class SessionService:
         return self._row_to_session(row)
 
     async def delete_session(self, user_id: UUID, session_id: str) -> bool:
-        """Delete session and all related data including files."""
+        """Delete session and all related data including files and context chunks."""
+        # First, get the session UUID for chunk cleanup
+        session_uuid: UUID | None = None
         async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT id FROM sessions WHERE user_id = $1 AND session_id = $2",
+                user_id,
+                session_id,
+            )
+            if row:
+                session_uuid = row["id"]
+
+            # Delete session (cascades to messages via FK)
             result: str = await conn.execute(
                 """
                 DELETE FROM sessions
@@ -247,6 +264,23 @@ class SessionService:
             list_cache = get_session_list_cache()
             await session_cache.delete(f"session:{user_id}:{session_id}")
             await list_cache.delete(f"sessions:{user_id}:0:50")
+
+        # Clean up context chunks (session summary + message chunks)
+        if deleted and session_uuid:
+            async with self.pool.acquire() as conn:
+                # Delete session summary chunk
+                await conn.execute(
+                    "DELETE FROM context_chunks WHERE source_type = 'session_summary' AND source_id = $1",
+                    session_uuid,
+                )
+                # Delete message chunks (source_id references messages.id, which are already cascaded)
+                # Messages are deleted via FK cascade, so chunks referencing them become orphans
+                # We delete by querying messages that belonged to this session first
+                # Actually, messages are already gone, so we need to delete by session metadata
+                await conn.execute(
+                    "DELETE FROM context_chunks WHERE source_type = 'message' AND metadata->>'session_id' = $1",
+                    str(session_uuid),
+                )
 
         # Clean up session files from disk
         if deleted:
@@ -291,6 +325,8 @@ class SessionService:
             "message_count": row["message_count"],
             "turn_count": row["turn_count"],
             "total_tokens": row["total_tokens"],
+            "project_id": str(row["project_id"]) if row.get("project_id") else None,
+            "project_name": row.get("project_name"),
             # Token fields for frontend indicator
             "tokens": row["total_tokens"] or 0,
             "max_tokens": max_tokens,

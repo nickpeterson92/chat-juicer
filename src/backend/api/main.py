@@ -178,6 +178,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await rate_limiter.start()
     app.state.rate_limiter = rate_limiter
 
+    # Start embedding background worker
+    from workers.embedding_worker import start_embedding_worker
+
+    app.state.embedding_worker = await start_embedding_worker(app.state.db_pool)
+
     try:
         yield
     finally:
@@ -205,7 +210,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             await app.state.rate_limiter.stop()
             logger.info("Rate limiter shutdown complete")
 
-        # Phase 5: Gracefully close database pool
+        # Phase 5: Stop embedding worker
+        if hasattr(app.state, "embedding_worker") and app.state.embedding_worker:
+            from workers.embedding_worker import stop_embedding_worker
+
+            await stop_embedding_worker()
+            logger.info("Embedding worker shutdown complete")
+
+        # Phase 6: Gracefully close database pool
         await graceful_pool_close(app.state.db_pool, timeout=settings.shutdown_timeout)
 
 
