@@ -28,10 +28,10 @@ LOADTEST_PASSWORD = os.getenv("LOADTEST_PASSWORD", "")
 _state: dict[str, str | None] = {"token": None}
 
 
-class ChatJuicerUser(HttpUser):  # type: ignore[misc]
+class ChatJuicerUser(HttpUser):  # type: ignore[misc, no-untyped-call]
     """Simulates a Chat Juicer user."""
 
-    wait_time = between(1, 3)  # Wait 1-3 seconds between tasks
+    wait_time = between(1, 3)  # type: ignore[no-untyped-call]
 
     def on_start(self) -> None:
         """Login and get token."""
@@ -97,10 +97,10 @@ class ChatJuicerUser(HttpUser):  # type: ignore[misc]
         self.client.get("/api/v1/health")
 
 
-class WebSocketUser(HttpUser):  # type: ignore[misc]
+class WebSocketUser(HttpUser):  # type: ignore[misc, no-untyped-call]
     """Simulates WebSocket chat user (connection test only)."""
 
-    wait_time = between(5, 10)
+    wait_time = between(5, 10)  # type: ignore[no-untyped-call]
 
     def on_start(self) -> None:
         """Use shared token."""

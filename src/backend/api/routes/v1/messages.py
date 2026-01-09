@@ -11,18 +11,24 @@ import contextlib
 import json
 
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from api.dependencies import DB
+from api.middleware.auth import get_current_user
 from api.middleware.exception_handlers import SessionNotFoundError
 from api.middleware.request_context import update_request_context
 from api.services.message_utils import _extract_display_content, calculate_tool_status
+from models.api_models import UserInfo
 from models.schemas.base import PaginationMeta
 from models.schemas.sessions import MessageResponse
 
 router = APIRouter()
+
+# Type alias for authenticated user dependency
+CurrentUser = Annotated[UserInfo, Depends(get_current_user)]
 
 
 # =============================================================================
@@ -111,11 +117,13 @@ SessionIdPath = Annotated[
                 }
             },
         },
+        403: {"description": "Access denied - user does not own this session"},
         404: {"description": "Session not found"},
     },
 )
 async def list_messages(
     session_id: SessionIdPath,
+    user: CurrentUser,
     db: DB,
     offset: Annotated[
         int,
@@ -129,15 +137,21 @@ async def list_messages(
     """List messages with offset/limit pagination."""
     update_request_context(session_id=session_id)
 
+    user_id = UUID(user.id)
+
     async with db.acquire() as conn:
-        # Get session UUID
+        # Get session UUID and verify ownership
         session_row = await conn.fetchrow(
-            "SELECT id FROM sessions WHERE session_id = $1",
+            "SELECT id, user_id FROM sessions WHERE session_id = $1",
             session_id,
         )
 
         if not session_row:
             raise SessionNotFoundError(session_id)
+
+        # Verify user owns this session
+        if session_row["user_id"] != user_id:
+            raise HTTPException(status_code=403, detail="Access denied to this session")
 
         session_uuid = session_row["id"]
 

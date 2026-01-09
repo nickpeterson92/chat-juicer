@@ -276,9 +276,10 @@ Breaking changes will increment the version number.
             "description": "Real-time chat streaming",
         },
     ],
-    openapi_url="/api/v1/openapi.json",
-    docs_url="/api/v1/docs",
-    redoc_url="/api/v1/redoc",
+    # Disable OpenAPI docs in production for security (prevents API enumeration)
+    openapi_url="/api/v1/openapi.json" if settings.app_env != "production" else None,
+    docs_url="/api/v1/docs" if settings.app_env != "production" else None,
+    redoc_url="/api/v1/redoc" if settings.app_env != "production" else None,
 )
 
 # Setup Prometheus metrics (exposes /api/v1/metrics)
