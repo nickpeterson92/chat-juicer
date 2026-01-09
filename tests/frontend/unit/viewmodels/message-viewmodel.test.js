@@ -171,7 +171,7 @@ describe("createMessageViewModel", () => {
     const viewModel = createMessageViewModel(msg);
 
     expect(viewModel.contentClasses).toContain("message-content");
-    expect(viewModel.contentClasses).toContain("text-gray-800");
+    expect(viewModel.contentClasses).toContain("text-slate-100");
   });
 
   it("should include system content classes", () => {

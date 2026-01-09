@@ -1,16 +1,21 @@
 from unittest.mock import AsyncMock, MagicMock
+from uuid import UUID
 
 import pytest
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from api.dependencies import get_file_service
+from api.dependencies import get_db, get_file_service
+from api.middleware.auth import get_current_user
 from api.middleware.exception_handlers import register_exception_handlers
 from api.routes.v1.files import router
+from models.api_models import UserInfo
 
 SESSION_ID = "sess_123"
 FOLDER = "input"
+USER_ID = "550e8400-e29b-41d4-a716-446655440000"
+SESSION_UUID = "660e8400-e29b-41d4-a716-446655440001"
 
 
 @pytest.fixture
@@ -21,12 +26,32 @@ def mock_file_service() -> AsyncMock:
 
 
 @pytest.fixture
-def app(mock_file_service: AsyncMock) -> FastAPI:
+def mock_user() -> UserInfo:
+    return UserInfo(id=USER_ID, email="test@example.com", name="Test User")
+
+
+@pytest.fixture
+def mock_db_pool() -> MagicMock:
+    pool = MagicMock()
+    cm = MagicMock()
+    conn = AsyncMock()
+    # Return user_id via fetchval for verify_session_ownership
+    conn.fetchval.return_value = UUID(USER_ID)
+    cm.__aenter__ = AsyncMock(return_value=conn)
+    cm.__aexit__ = AsyncMock(return_value=None)
+    pool.acquire.return_value = cm
+    return pool
+
+
+@pytest.fixture
+def app(mock_file_service: AsyncMock, mock_user: UserInfo, mock_db_pool: MagicMock) -> FastAPI:
     app = FastAPI()
     register_exception_handlers(app)
     app.include_router(router, prefix="/api/v1")
 
     app.dependency_overrides[get_file_service] = lambda: mock_file_service
+    app.dependency_overrides[get_current_user] = lambda: mock_user
+    app.dependency_overrides[get_db] = lambda: mock_db_pool
     return app
 
 
