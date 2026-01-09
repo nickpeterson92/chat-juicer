@@ -220,6 +220,11 @@ module = [
 ]
 warn_unused_ignores = false
 
+# Load tests use untyped locust library
+[[tool.mypy.overrides]]
+module = "tests.load.*"
+ignore_errors = true
+
 [tool.pytest.ini_options]
 # Add src directory to Python path so tests can import modules
 pythonpath = ["src/backend"]

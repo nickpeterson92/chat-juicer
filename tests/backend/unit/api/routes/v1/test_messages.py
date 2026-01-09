@@ -2,6 +2,7 @@ import datetime
 import json
 
 from unittest.mock import AsyncMock, MagicMock
+from uuid import UUID
 
 import pytest
 
@@ -9,12 +10,20 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from api.dependencies import get_db
+from api.middleware.auth import get_current_user
 from api.middleware.exception_handlers import register_exception_handlers
 from api.routes.v1.messages import router
+from models.api_models import UserInfo
 from models.error_models import ErrorCode
 
 SESSION_ID = "sess_123"
 SESSION_UUID = "550e8400-e29b-41d4-a716-446655440000"
+USER_ID = "660e8400-e29b-41d4-a716-446655440001"
+
+
+@pytest.fixture
+def mock_user() -> UserInfo:
+    return UserInfo(id=USER_ID, email="test@example.com", name="Test User")
 
 
 @pytest.fixture
@@ -31,12 +40,13 @@ def mock_db_pool() -> MagicMock:
 
 
 @pytest.fixture
-def app(mock_db_pool: MagicMock) -> FastAPI:
+def app(mock_db_pool: MagicMock, mock_user: UserInfo) -> FastAPI:
     app = FastAPI()
     register_exception_handlers(app)
     app.include_router(router, prefix="/api/v1/sessions")
 
     app.dependency_overrides[get_db] = lambda: mock_db_pool
+    app.dependency_overrides[get_current_user] = lambda: mock_user
     return app
 
 
@@ -50,8 +60,8 @@ async def test_list_messages_success(client: TestClient, mock_db_pool: MagicMock
     cm = mock_db_pool.acquire.return_value
     conn = cm.__aenter__.return_value
 
-    # 1. Fetch Session UUID
-    conn.fetchrow.return_value = {"id": SESSION_UUID}
+    # 1. Fetch Session UUID with user_id for ownership check
+    conn.fetchrow.return_value = {"id": SESSION_UUID, "user_id": UUID(USER_ID)}
 
     # 2. Count messages
     conn.fetchval.return_value = 2
@@ -69,6 +79,7 @@ async def test_list_messages_success(client: TestClient, mock_db_pool: MagicMock
             "tool_arguments": None,
             "tool_result": None,
             "tool_success": None,
+            "metadata": None,
         },
         {
             "id": "msg_2",
@@ -80,6 +91,7 @@ async def test_list_messages_success(client: TestClient, mock_db_pool: MagicMock
             "tool_arguments": None,
             "tool_result": None,
             "tool_success": None,
+            "metadata": None,
         },
     ]
 
@@ -110,7 +122,7 @@ async def test_list_messages_with_tools_and_json_parsing(client: TestClient, moc
     cm = mock_db_pool.acquire.return_value
     conn = cm.__aenter__.return_value
 
-    conn.fetchrow.return_value = {"id": SESSION_UUID}
+    conn.fetchrow.return_value = {"id": SESSION_UUID, "user_id": UUID(USER_ID)}
     conn.fetchval.return_value = 1
 
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -128,6 +140,7 @@ async def test_list_messages_with_tools_and_json_parsing(client: TestClient, moc
             "tool_arguments": tool_args,  # Stringified JSON
             "tool_result": "Found python",
             "tool_success": True,
+            "metadata": None,
         }
     ]
 
@@ -147,7 +160,7 @@ async def test_list_messages_pagination(client: TestClient, mock_db_pool: MagicM
     cm = mock_db_pool.acquire.return_value
     conn = cm.__aenter__.return_value
 
-    conn.fetchrow.return_value = {"id": SESSION_UUID}
+    conn.fetchrow.return_value = {"id": SESSION_UUID, "user_id": UUID(USER_ID)}
     conn.fetchval.return_value = 100
     conn.fetch.return_value = []  # Return empty for simplicity, checking pagination meta
 

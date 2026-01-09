@@ -155,7 +155,7 @@ In addition to the Electron desktop app, Chat Juicer runs as a **browser web app
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                     Browser Web App                                 │
-│              (chat-juicer.pages.dev via Cloudflare)                │
+│              (chat-juicer.pages.dev via Cloudflare)                 │
 └─────────────────────────────────────────────────────────────────────┘
                                     │
                                     │ HTTPS / WebSocket

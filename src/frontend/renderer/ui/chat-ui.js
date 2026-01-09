@@ -85,7 +85,7 @@ export function createMessageElement(chatContainer, content, type = "assistant",
       "inline-block py-3 px-4 rounded-2xl max-w-[70%] break-words whitespace-pre-wrap leading-snug min-h-6 bg-user-gradient text-white";
   } else if (type === "assistant") {
     contentDiv.className =
-      "message-content text-gray-800 dark:text-slate-100 max-w-full block py-4 px-0 leading-relaxed break-words whitespace-pre-wrap";
+      "message-content text-slate-100 max-w-full block py-4 px-0 leading-relaxed break-words whitespace-pre-wrap";
   } else if (type === "system") {
     contentDiv.className =
       "inline-block py-3 px-4 rounded-2xl max-w-[70%] break-words whitespace-pre-wrap leading-snug min-h-6 bg-amber-50 text-amber-900 text-sm italic";
@@ -242,7 +242,7 @@ export function createStreamingAssistantMessage(chatContainer) {
 
   const contentDiv = document.createElement("div");
   contentDiv.className =
-    "message-content text-gray-800 dark:text-slate-100 max-w-full block py-4 px-0 leading-relaxed break-words whitespace-pre-wrap";
+    "message-content text-slate-100 max-w-full block py-4 px-0 leading-relaxed break-words whitespace-pre-wrap";
 
   // Add loading indicator (start with dot, replace with Lottie if available)
   const loadingSpan = document.createElement("span");
