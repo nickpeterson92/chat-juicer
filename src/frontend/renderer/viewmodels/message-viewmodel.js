@@ -93,7 +93,7 @@ export function createMessageViewModel(msg) {
   const contentClassMap = {
     user: "inline-block py-3 px-4 rounded-2xl max-w-[70%] break-words whitespace-pre-wrap leading-snug min-h-6 bg-user-gradient text-white",
     assistant:
-      "message-content text-gray-800 dark:text-slate-100 max-w-full block py-4 px-0 leading-relaxed break-words whitespace-pre-wrap",
+      "message-content text-slate-100 max-w-full block py-4 px-0 leading-relaxed break-words whitespace-pre-wrap",
     system:
       "inline-block py-3 px-4 rounded-2xl max-w-[70%] break-words whitespace-pre-wrap leading-snug min-h-6 bg-amber-50 text-amber-900 text-sm italic",
     error:

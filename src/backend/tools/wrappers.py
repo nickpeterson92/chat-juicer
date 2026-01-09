@@ -124,13 +124,6 @@ def create_session_aware_tools(
         Returns:
             JSON with directory contents and metadata
         """
-        # Note: list_directory is synchronous, but we can still track it.
-        # However, track_tool_execution is async. We handle list_directory specially or duplicate logic?
-        # Since list_directory is fast and local, maybe skip or wrap manually?
-        # Actually list_directory is synchronous in file_operations.py.
-        # But the agent framework might expect async or sync.
-        # function_tool handles both.
-        # Let's wrap it manually for metrics since decorator is async.
         start_time = time.perf_counter()
         status = "success"
         try:

@@ -10,13 +10,16 @@ from __future__ import annotations
 import mimetypes
 
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, File as FastAPIFile, HTTPException, Path, Query, UploadFile
+from fastapi import APIRouter, Depends, File as FastAPIFile, HTTPException, Path, Query, UploadFile
 from fastapi.responses import Response
 
-from api.dependencies import AppSettings, Files
-from api.middleware.exception_handlers import ApiFileNotFoundError
+from api.dependencies import DB, AppSettings, Files
+from api.middleware.auth import get_current_user
+from api.middleware.exception_handlers import ApiFileNotFoundError, SessionNotFoundError
 from api.middleware.request_context import update_request_context
+from models.api_models import UserInfo
 from models.schemas.files import (
     DeleteFileResponse,
     FileInfo,
@@ -31,6 +34,9 @@ from models.schemas.presign import (
 )
 
 router = APIRouter()
+
+# Type alias for authenticated user dependency
+CurrentUser = Annotated[UserInfo, Depends(get_current_user)]
 
 
 # =============================================================================
@@ -62,6 +68,41 @@ FolderQuery = Annotated[
         examples=["input"],
     ),
 ]
+
+
+# =============================================================================
+# Helpers
+# =============================================================================
+
+
+async def verify_session_ownership(
+    session_id: str,
+    user: UserInfo,
+    db: DB,
+) -> None:
+    """Verify user owns the session or raise appropriate error.
+
+    Args:
+        session_id: Session identifier to verify
+        user: Authenticated user info
+        db: Database connection pool
+
+    Raises:
+        SessionNotFoundError: If session doesn't exist
+        HTTPException: 403 if user doesn't own the session
+    """
+    user_id = UUID(user.id)
+    async with db.acquire() as conn:
+        owner = await conn.fetchval(
+            "SELECT user_id FROM sessions WHERE session_id = $1",
+            session_id,
+        )
+
+    if owner is None:
+        raise SessionNotFoundError(session_id)
+
+    if owner != user_id:
+        raise HTTPException(status_code=403, detail="Access denied to this session")
 
 
 # =============================================================================
@@ -98,11 +139,14 @@ FolderQuery = Annotated[
 )
 async def list_files(
     session_id: SessionIdPath,
+    user: CurrentUser,
+    db: DB,
     files: Files,
     folder: FolderQuery = "input",
 ) -> FileListResponse:
     """List files in session folder."""
     update_request_context(session_id=session_id)
+    await verify_session_ownership(session_id, user, db)
 
     file_list = await files.list_files(session_id, folder)
 
@@ -140,12 +184,15 @@ async def list_files(
 )
 async def upload_file(
     session_id: SessionIdPath,
+    user: CurrentUser,
+    db: DB,
     files: Files,
     file: Annotated[UploadFile, FastAPIFile(description="File to upload")],
     folder: FolderQuery = "input",
 ) -> FileUploadResponse:
     """Upload file to session folder."""
     update_request_context(session_id=session_id)
+    await verify_session_ownership(session_id, user, db)
 
     content = await file.read()
 
@@ -181,11 +228,14 @@ async def upload_file(
 async def download_file(
     session_id: SessionIdPath,
     filename: FilenamePath,
+    user: CurrentUser,
+    db: DB,
     files: Files,
     folder: FolderQuery = "input",
 ) -> Response:
     """Download file content."""
     update_request_context(session_id=session_id)
+    await verify_session_ownership(session_id, user, db)
 
     try:
         content = await files.get_file_content(session_id, folder, filename)
@@ -224,11 +274,14 @@ async def download_file(
 async def get_file_path(
     session_id: SessionIdPath,
     filename: FilenamePath,
+    user: CurrentUser,
+    db: DB,
     files: Files,
     folder: FolderQuery = "input",
 ) -> FilePathResponse:
     """Get local file path for shell.openPath."""
     update_request_context(session_id=session_id)
+    await verify_session_ownership(session_id, user, db)
 
     path = files.get_file_path(session_id, folder, filename)
 
@@ -265,11 +318,14 @@ async def get_file_path(
 async def delete_file(
     session_id: SessionIdPath,
     filename: FilenamePath,
+    user: CurrentUser,
+    db: DB,
     files: Files,
     folder: FolderQuery = "input",
 ) -> DeleteFileResponse:
     """Delete a file from session folder."""
     update_request_context(session_id=session_id)
+    await verify_session_ownership(session_id, user, db)
 
     success = await files.delete_file(session_id, folder, filename)
 
@@ -312,11 +368,14 @@ async def delete_file(
 async def presign_upload(
     session_id: SessionIdPath,
     request: PresignedUploadRequest,
+    user: CurrentUser,
+    db: DB,
     files: Files,
     settings: AppSettings,
 ) -> PresignedUploadResponse:
     """Generate presigned PUT URL for direct S3 upload."""
     update_request_context(session_id=session_id)
+    await verify_session_ownership(session_id, user, db)
 
     if settings.file_storage != "s3" or not files.s3_sync:
         raise HTTPException(status_code=400, detail="S3 storage not enabled")
@@ -355,12 +414,15 @@ async def presign_upload(
 async def presign_download(
     session_id: SessionIdPath,
     filename: FilenamePath,
+    user: CurrentUser,
+    db: DB,
     files: Files,
     settings: AppSettings,
     folder: FolderQuery = "input",
 ) -> PresignedDownloadResponse:
     """Generate presigned GET URL for direct S3 download."""
     update_request_context(session_id=session_id)
+    await verify_session_ownership(session_id, user, db)
 
     if settings.file_storage != "s3" or not files.s3_sync:
         raise HTTPException(status_code=400, detail="S3 storage not enabled")
