@@ -106,6 +106,18 @@ def strip_base64_from_content(content_str: str) -> tuple[str, bool]:
             except json.JSONDecodeError:
                 pass
 
+    # Handle user messages with input_image containing data:image URLs
+    if isinstance(content, dict) and content.get("role") == "user":
+        content_list = content.get("content", [])
+        if isinstance(content_list, list):
+            for item in content_list:
+                if isinstance(item, dict) and item.get("type") == "input_image":
+                    image_url = item.get("image_url", "")
+                    if isinstance(image_url, str) and image_url.startswith("data:image/"):
+                        # Replace with placeholder - image was already sent to LLM
+                        item["image_url"] = "[image data removed for context optimization]"
+                        modified = True
+
     if modified:
         return json.dumps(content), True
     return content_str, False
@@ -155,6 +167,7 @@ async def run_migration(execute: bool = False, debug: bool = False) -> None:
 
             # Find all rows that likely contain base64 data
             # Use multiple patterns to catch different storage formats
+            # Also include any very large rows (> 100KB) as likely candidates
             print("Scanning for rows with base64 data...")
             rows = await conn.fetch(
                 """
@@ -162,8 +175,11 @@ async def run_migration(execute: bool = False, debug: bool = False) -> None:
                 FROM llm_context
                 WHERE content LIKE '%"base64":%'
                    OR content LIKE '%"base64": "%'
+                   OR content LIKE '%\\"base64\\":%'
                    OR content LIKE '%iVBORw0KGgo%'
                    OR content LIKE '%/9j/4AAQ%'
+                   OR content LIKE '%data:image/%'
+                   OR LENGTH(content) > 100000
                 ORDER BY id
                 """
             )
