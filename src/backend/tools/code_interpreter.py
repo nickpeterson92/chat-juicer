@@ -789,12 +789,11 @@ class SandboxPool:
                 "size": file_path.stat().st_size,
             }
 
-            # For images, include base64-encoded content for inline display
+            # Images are saved to disk; frontend fetches via file API
+            # No base64 in tool result to prevent LLM context overflow
             if _is_image_file(file_path):
-                base64_content = _encode_image_to_base64(file_path)
-                if base64_content:
-                    file_info["base64"] = base64_content
-                    logger.info(f"Encoded image {file_path.name} to base64 ({len(base64_content)} chars)")
+                file_info["preview_available"] = True
+                logger.info(f"Image {file_path.name} available for preview ({file_info['size']} bytes)")
 
             files.append(file_info)
 

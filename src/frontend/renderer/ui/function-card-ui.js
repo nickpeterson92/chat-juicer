@@ -404,16 +404,53 @@ function renderCodeInterpreterOutput(result) {
     filesContainer.className = "code-output-files";
 
     for (const file of result.files) {
-      if (file.type?.startsWith("image/") && file.base64) {
+      // Handle images: prefer base64 (legacy), then fetch via file API if preview_available
+      if (file.type?.startsWith("image/") && (file.base64 || file.preview_available)) {
         // Render inline image
         const imageContainer = document.createElement("div");
         imageContainer.className = "code-output-image-container";
 
         const img = document.createElement("img");
         img.className = "code-output-image";
-        img.src = `data:${file.type};base64,${file.base64}`;
         img.alt = file.name || "Generated image";
         img.title = file.name || "Generated image";
+
+        if (file.base64) {
+          // Legacy: inline base64
+          img.src = `data:${file.type};base64,${file.base64}`;
+        } else if (file.preview_available) {
+          // New: fetch via file API (prevents context overflow)
+          img.src = ""; // Will be set async
+          img.alt = "Loading...";
+          img.style.minHeight = "100px";
+          img.style.backgroundColor = "var(--bg-tertiary, #2a2a2a)";
+
+          // Extract session ID from file.path (format: data/files/{session_id}/output/code/{filename})
+          const pathMatch = file.path?.match(/data\/files\/([^/]+)\/output\/code\//);
+          if (pathMatch) {
+            const sessionId = pathMatch[1];
+            // Async fetch - don't block render
+            (async () => {
+              try {
+                const { getAdapter } = await import("../adapters/index.js");
+                const adapter = getAdapter();
+                const dirPath = `data/files/${sessionId}/output/code`;
+                const response = await adapter.getFileContent(dirPath, file.name);
+                if (response?.success && response.data) {
+                  img.src = `data:${response.mimeType || file.type};base64,${response.data}`;
+                  img.style.minHeight = "";
+                  img.style.backgroundColor = "";
+                } else {
+                  img.alt = "Failed to load image";
+                }
+              } catch (err) {
+                console.warn("Failed to fetch image:", err);
+                img.alt = "Failed to load image";
+              }
+            })();
+          }
+        }
+
         imageContainer.appendChild(img);
 
         const imageCaption = document.createElement("div");
