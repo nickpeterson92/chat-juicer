@@ -111,7 +111,7 @@ def strip_base64_from_content(content_str: str) -> tuple[str, bool]:
     return content_str, False
 
 
-async def run_migration(execute: bool = False) -> None:
+async def run_migration(execute: bool = False, debug: bool = False) -> None:
     """Run the migration to strip base64 from llm_context."""
     db_url = await get_database_url()
     print("Connecting to database...")
@@ -120,14 +120,50 @@ async def run_migration(execute: bool = False) -> None:
 
     try:
         async with pool.acquire() as conn:
+            if debug:
+                # Debug mode: show largest rows and sample content
+                print("\n=== DEBUG MODE ===")
+                print("Largest rows in llm_context:")
+                large_rows = await conn.fetch(
+                    """
+                    SELECT id, session_id, LENGTH(content) as content_len,
+                           LEFT(content, 500) as content_preview
+                    FROM llm_context
+                    ORDER BY LENGTH(content) DESC
+                    LIMIT 10
+                    """
+                )
+                for row in large_rows:
+                    print(f"\n  ID: {row['id']}, Session: {row['session_id']}, Size: {row['content_len']:,} bytes")
+                    print(f"  Preview: {row['content_preview'][:200]}...")
+
+                # Check for any base64-like patterns
+                print("\n\nSearching for base64 patterns...")
+                pattern_rows = await conn.fetch(
+                    """
+                    SELECT id, LENGTH(content) as len
+                    FROM llm_context
+                    WHERE content LIKE '%base64%'
+                       OR content LIKE '%iVBOR%'
+                       OR content LIKE '%/9j/%'
+                       OR LENGTH(content) > 50000
+                    LIMIT 20
+                    """
+                )
+                print(f"Found {len(pattern_rows)} rows matching base64/large content patterns")
+                return
+
             # Find all rows that likely contain base64 data
-            # Use LIKE with 'base64' as a quick filter
+            # Use multiple patterns to catch different storage formats
             print("Scanning for rows with base64 data...")
             rows = await conn.fetch(
                 """
                 SELECT id, content, LENGTH(content) as content_len
                 FROM llm_context
                 WHERE content LIKE '%"base64":%'
+                   OR content LIKE '%"base64": "%'
+                   OR content LIKE '%iVBORw0KGgo%'
+                   OR content LIKE '%/9j/4AAQ%'
                 ORDER BY id
                 """
             )
@@ -136,6 +172,7 @@ async def run_migration(execute: bool = False) -> None:
 
             if not rows:
                 print("No rows to migrate!")
+                print("\nTip: Run with --debug to see largest rows and diagnose the issue.")
                 return
 
             # Calculate total size
@@ -185,8 +222,13 @@ async def run_migration(execute: bool = False) -> None:
 def main() -> None:
     """Entry point."""
     execute = "--execute" in sys.argv
+    debug = "--debug" in sys.argv
 
-    if execute:
+    if debug:
+        print("=" * 50)
+        print("DEBUG MODE - Showing database analysis")
+        print("=" * 50)
+    elif execute:
         print("=" * 50)
         print("EXECUTING MIGRATION (changes will be applied)")
         print("=" * 50)
@@ -194,9 +236,10 @@ def main() -> None:
         print("=" * 50)
         print("DRY RUN (no changes will be made)")
         print("Run with --execute to apply changes")
+        print("Run with --debug to analyze database content")
         print("=" * 50)
 
-    asyncio.run(run_migration(execute=execute))
+    asyncio.run(run_migration(execute=execute, debug=debug))
 
 
 if __name__ == "__main__":
