@@ -657,6 +657,7 @@ class ChatService:
                     {
                         "type": "input_image",
                         "image_url": f"data:{mime_type};base64,{base64_data}",
+                        "detail": "auto",
                     }
                 )
                 logger.info(f"Inflated image {file_name} for multimodal input")
