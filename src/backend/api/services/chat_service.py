@@ -655,8 +655,12 @@ class ChatService:
                 mime_type, base64_data = result
                 content_parts.append(
                     {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:{mime_type};base64,{base64_data}"},
+                        "type": "input_image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": mime_type,
+                            "data": base64_data,
+                        },
                     }
                 )
                 logger.info(f"Inflated image {file_name} for multimodal input")
