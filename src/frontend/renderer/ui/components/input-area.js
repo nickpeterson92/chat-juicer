@@ -318,13 +318,13 @@ export class InputArea {
         throw new Error(result?.error || "Summarization failed");
       }
 
-      // Emit function_completed with success
+      // Emit function_completed with success - use result.summary for actual summary text
       globalEventBus.emit("message:function_completed", {
         session_id: sessionId,
         tool_call_id: callId,
         tool_name: "summarize_conversation",
         tool_success: true,
-        tool_result: result.message || "Session summarized successfully",
+        tool_result: result.summary || "Session summarized successfully",
       });
 
       // Update token indicator with new count from backend

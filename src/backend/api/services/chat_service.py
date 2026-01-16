@@ -281,8 +281,66 @@ class ChatService:
 
                 # Post-run: check if summarization needed (skip if interrupted)
                 if completed_normally and await session.should_summarize():
+                    import secrets
+
+                    call_id = f"sum_{secrets.token_hex(4)}"
                     logger.info(f"Triggering post-run summarization for {session_id}")
-                    await session.summarize_with_agent()
+
+                    # Send function_detected so frontend shows the tool card
+                    await self.ws_manager.send(
+                        session_id,
+                        {
+                            "type": MSG_TYPE_FUNCTION_DETECTED,
+                            "tool_call_id": call_id,
+                            "tool_name": "summarize_conversation",
+                            "tool_arguments": None,
+                        },
+                    )
+
+                    tokens_before = session.total_tokens
+                    summary = await session.summarize_with_agent()
+
+                    if summary:
+                        # Send function_completed with the actual summary text
+                        await self.ws_manager.send(
+                            session_id,
+                            {
+                                "type": MSG_TYPE_FUNCTION_COMPLETED,
+                                "tool_call_id": call_id,
+                                "tool_name": "summarize_conversation",
+                                "tool_success": True,
+                                "tool_result": summary,
+                            },
+                        )
+
+                        # Persist to messages table (matches manual summarization flow)
+                        args_json = json.dumps(
+                            {
+                                "tokens_before": tokens_before,
+                                "tokens_after": session.total_tokens,
+                            }
+                        )
+                        await self._add_tool_call_to_history(
+                            session_uuid=session_uuid,
+                            call_id=call_id,
+                            name="summarize_conversation",
+                            arguments=args_json,
+                            result=summary,
+                            success=True,
+                        )
+                    else:
+                        # Summarization was skipped (not enough content)
+                        await self.ws_manager.send(
+                            session_id,
+                            {
+                                "type": MSG_TYPE_FUNCTION_COMPLETED,
+                                "tool_call_id": call_id,
+                                "tool_name": "summarize_conversation",
+                                "tool_success": False,
+                                "tool_result": "Summarization skipped - not enough content",
+                            },
+                        )
+
                     await session.update_db_token_count()
                     await self._send_token_usage(session_id, session)
 
