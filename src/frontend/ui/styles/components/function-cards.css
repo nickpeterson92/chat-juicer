@@ -85,6 +85,52 @@
     transform: rotate(90deg);
   }
 
+  /* Raw JSON toggle button - toggles between rendered and raw JSON view */
+  .disclosure-raw-toggle {
+    @apply inline-flex items-center justify-center w-5 h-5 p-0 border-none rounded cursor-pointer flex-shrink-0 ml-1;
+    background: transparent;
+    color: var(--color-text-secondary);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, background 0.15s ease, color 0.15s ease;
+  }
+
+  /* Only show toggle when tool call is completed */
+  .function-disclosure[data-status="completed"] .disclosure-raw-toggle,
+  .function-disclosure[data-status="error"] .disclosure-raw-toggle,
+  .function-disclosure[data-status="interrupted"] .disclosure-raw-toggle {
+    opacity: 0.4;
+    visibility: visible;
+  }
+
+  .disclosure-raw-toggle:hover {
+    opacity: 0.8;
+    background: var(--color-surface-hover);
+  }
+
+  .disclosure-raw-toggle.active {
+    opacity: 1;
+    color: var(--color-text-primary);
+  }
+
+  .disclosure-raw-toggle svg {
+    @apply w-3.5 h-3.5;
+  }
+
+  /* Raw content container - shown when raw mode is active */
+  .disclosure-raw-container {
+    @apply hidden mt-2 ml-0 pl-3 border-l-2;
+    border-color: var(--color-border-secondary);
+  }
+
+  .function-disclosure.expanded .disclosure-raw-container {
+    @apply block;
+  }
+
+  .disclosure-raw-content {
+    @apply flex flex-col gap-3;
+  }
+
   /* Status-based styling - only highlight errors/interrupts, keep everything else chill */
   .function-disclosure[data-status="error"] .disclosure-tool-name {
     color: var(--color-status-error);

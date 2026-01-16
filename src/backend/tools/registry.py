@@ -210,16 +210,23 @@ The sandbox has access to:
 - openpyxl, python-docx, pypdf, python-pptx (office documents)
 - tabulate, faker, dateutil, humanize, pyyaml, lxml, pypandoc (utilities)
 
+File system access:
+- /workspace (READ-WRITE): Save ALL output files here. This is the working
+  directory and the ONLY location where files can be written. Files saved
+  here are automatically collected and persisted to the session.
+- /input (READ-ONLY): Access to user-uploaded files from this session.
+- /output (READ-ONLY): Access to previously generated documents.
+
+IMPORTANT: Write all generated files (documents, images, etc.) to /workspace.
+Writing to /output or /input will FAIL SILENTLY.
+
 Limitations:
 - No internet access
-- No filesystem access outside /workspace
 - 60 second timeout
 - 512MB memory limit
 
-For plots, use matplotlib - figures are automatically saved to the session's
-output directory (data/files/{session_id}/output/code/) and returned.
-For data output, print to stdout or save files to /workspace/ - they will
-be collected and persisted alongside other generated documents.""",
+For plots, use matplotlib - figures are automatically saved.
+For documents, save to /workspace/filename.docx (NOT /output/).""",
         "parameters": {
             "type": "object",
             "properties": {

@@ -260,16 +260,23 @@ def create_session_aware_tools(
         - openpyxl, python-docx, pypdf, python-pptx (office documents)
         - tabulate, faker, dateutil, humanize, pyyaml, lxml, pypandoc (utilities)
 
+        File system access:
+        - /workspace (READ-WRITE): Save ALL output files here. This is both the
+          working directory and the ONLY location where files can be written.
+          Files saved here are automatically collected and persisted.
+        - /input (READ-ONLY): Access to user-uploaded files from this session.
+        - /output (READ-ONLY): Access to previously generated documents.
+
+        IMPORTANT: You MUST write all generated files (documents, images, etc.)
+        to /workspace. Writing to /output or /input will fail silently.
+
         Limitations:
         - No internet access
-        - No filesystem access outside /workspace
         - 60 second timeout
         - 512MB memory limit
 
-        For plots, use matplotlib - figures are automatically saved to the session's
-        output directory (data/files/{session_id}/output/code/) and returned.
-        For data output, print to stdout or save files to /workspace/ - they will
-        be collected and persisted alongside other generated documents.
+        For plots, use matplotlib - figures are automatically saved.
+        For documents, save to /workspace/filename.docx (NOT /output/).
 
         Args:
             code: Python code to execute

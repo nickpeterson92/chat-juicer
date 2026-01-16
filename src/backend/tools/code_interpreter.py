@@ -841,9 +841,14 @@ async def execute_python_code(code: str, session_id: str) -> str:
     - tabulate, faker, dateutil, humanize, pyyaml, lxml (utilities)
 
     File Access:
-    - /workspace: Read/write for code outputs (default working directory)
-    - /input: Read-only access to uploaded source files (session files)
-    - /output: Read-only access to previously generated documents
+    - /workspace (READ-WRITE): Save ALL output files here. This is both the
+      working directory and the ONLY location where files can be written.
+      Files saved here are automatically collected and persisted.
+    - /input (READ-ONLY): Access to uploaded source files (session files)
+    - /output (READ-ONLY): Access to previously generated documents
+
+    IMPORTANT: Write all output files to /workspace. Writing to /output or
+    /input will fail silently due to read-only mounts.
 
     Limitations:
     - No internet access
