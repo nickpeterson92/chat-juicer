@@ -328,11 +328,11 @@ export class InputArea {
       });
 
       // Update token indicator with new count from backend
-      if (typeof result.new_token_count === "number") {
+      if (typeof result.tokens_after === "number") {
         const currentUsage = this.appState?.getState("session.tokenUsage") || {};
         this.appState?.setState("session.tokenUsage", {
           ...currentUsage,
-          current: result.new_token_count,
+          current: result.tokens_after,
         });
       }
 

@@ -415,7 +415,9 @@ export class SessionService {
         return {
           success: true,
           message: response.message || "Session summarized successfully",
-          new_token_count: response.new_token_count,
+          summary: response.summary, // The actual summary text
+          tokens_after: response.tokens_after, // Token count after summarization
+          tokens_before: response.tokens_before, // Token count before
           tool_call_id: response.tool_call_id,
         };
       }
