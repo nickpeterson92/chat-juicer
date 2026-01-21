@@ -73,6 +73,80 @@ let argUpdateScheduled = false;
 const CHEVRON_RIGHT =
   '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>';
 
+// Raw JSON toggle icon (curly braces)
+const RAW_JSON_ICON =
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4a2 2 0 0 0-2 2v3a2 2 0 0 1-2 2 2 2 0 0 1 2 2v3a2 2 0 0 0 2 2"/><path d="M17 4a2 2 0 0 1 2 2v3a2 2 0 0 0 2 2 2 2 0 0 0-2 2v3a2 2 0 0 1-2 2"/></svg>';
+
+/**
+ * Render raw JSON content for arguments and results
+ * Used when raw mode toggle is enabled for debugging/education
+ * @param {string|Object} args - Tool arguments
+ * @param {string|Object} result - Tool result
+ * @param {boolean} success - Whether the tool call succeeded
+ * @returns {HTMLElement} Container with raw JSON sections
+ */
+function renderRawJsonContent(args, result, success = true) {
+  const container = document.createElement("div");
+  container.className = "disclosure-raw-content";
+
+  // Arguments section
+  if (args) {
+    const argsSection = document.createElement("div");
+    argsSection.className = "disclosure-arguments";
+
+    const argsLabel = document.createElement("div");
+    argsLabel.className = "disclosure-section-label";
+    argsLabel.textContent = "Arguments (Raw)";
+    argsSection.appendChild(argsLabel);
+
+    const argsContent = document.createElement("pre");
+    const { html: argsHtml, isJson: argsIsJson } = prettyPrintJson(args);
+    argsContent.className = `disclosure-section-content${argsIsJson ? " shiki" : ""}`;
+    if (argsIsJson) {
+      argsContent.innerHTML = argsHtml;
+    } else {
+      argsContent.textContent = typeof args === "string" ? args : JSON.stringify(args, null, 2);
+    }
+    argsSection.appendChild(argsContent);
+    container.appendChild(argsSection);
+  }
+
+  // Result section
+  if (result) {
+    const isError = !success;
+    const resultSection = document.createElement("div");
+    resultSection.className = isError ? "disclosure-error" : "disclosure-result";
+
+    const resultLabel = document.createElement("div");
+    resultLabel.className = "disclosure-section-label";
+    resultLabel.textContent = isError ? "Error (Raw)" : "Result (Raw)";
+    resultSection.appendChild(resultLabel);
+
+    const resultContent = document.createElement("pre");
+    const { html: resultHtml, isJson: resultIsJson } = prettyPrintJson(result);
+    // Truncate very long results
+    const resultStr = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+    const isTruncated = resultStr.length > 4000;
+    const displayContent = isTruncated ? resultStr.substring(0, 4000) : resultStr;
+
+    if (resultIsJson && !isTruncated) {
+      resultContent.className = `disclosure-section-content${isError ? " error-text" : ""} shiki`;
+      resultContent.innerHTML = resultHtml;
+    } else if (resultIsJson && isTruncated) {
+      const truncatedResult = prettyPrintJson(displayContent);
+      resultContent.className = `disclosure-section-content${isError ? " error-text" : ""} shiki`;
+      resultContent.innerHTML = `${truncatedResult.html}\n<span style="color: #78787e; font-style: italic;">... (truncated)</span>`;
+    } else {
+      resultContent.className = `disclosure-section-content${isError ? " error-text" : ""}`;
+      resultContent.textContent = isTruncated ? `${displayContent}\n... (truncated)` : displayContent;
+    }
+    resultSection.appendChild(resultContent);
+    container.appendChild(resultSection);
+  }
+
+  return container;
+}
+
 // NOTE: Icons and tool names are now managed in tool-registry.js
 // Use getToolIcon() and getToolDisplayName() instead of the old functions.
 
@@ -271,6 +345,16 @@ export function createFunctionCallCard(
     argsSpan.className = "disclosure-args-preview";
     argsSpan.textContent = ""; // Will be updated when args arrive
 
+    // Raw JSON toggle button
+    const rawToggle = document.createElement("button");
+    rawToggle.className = "disclosure-raw-toggle";
+    rawToggle.title = "Toggle raw JSON view";
+    rawToggle.innerHTML = RAW_JSON_ICON;
+    rawToggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleRawMode(cardDiv);
+    });
+
     const chevronSpan = document.createElement("span");
     chevronSpan.className = "disclosure-chevron";
     chevronSpan.innerHTML = CHEVRON_RIGHT;
@@ -278,13 +362,22 @@ export function createFunctionCallCard(
     headerDiv.appendChild(iconSpan);
     headerDiv.appendChild(toolNameSpan);
     headerDiv.appendChild(argsSpan);
+    headerDiv.appendChild(rawToggle);
     headerDiv.appendChild(chevronSpan);
     cardDiv.appendChild(headerDiv);
 
     // Expandable content container (hidden by default)
     const contentDiv = document.createElement("div");
     contentDiv.className = "disclosure-content";
+
+    // Raw content container (hidden by default, shown when rawMode is true)
+    const rawContentDiv = document.createElement("div");
+    rawContentDiv.className = "disclosure-raw-container";
+    rawContentDiv.style.display = "none";
+
     cardDiv.appendChild(contentDiv);
+    cardDiv.appendChild(rawContentDiv);
+    cardDiv.dataset.rawMode = "false";
 
     // Add click handler for expand/collapse (only on header)
     headerDiv.addEventListener("click", (e) => {
@@ -342,6 +435,52 @@ function toggleFunctionCard(cardElement) {
   } else {
     cardElement.classList.add("expanded");
     cardElement.dataset.expanded = "true";
+  }
+}
+
+/**
+ * Toggle raw JSON mode for a function card
+ * When enabled, shows raw JSON instead of custom-rendered content
+ * @param {HTMLElement} cardElement - The card element to toggle raw mode
+ */
+function toggleRawMode(cardElement) {
+  const isRawMode = cardElement.dataset.rawMode === "true";
+  const contentDiv = cardElement.querySelector(".disclosure-content");
+  const rawContentDiv = cardElement.querySelector(".disclosure-raw-container");
+  const rawToggle = cardElement.querySelector(".disclosure-raw-toggle");
+
+  if (isRawMode) {
+    // Switch back to rendered mode
+    cardElement.dataset.rawMode = "false";
+    cardElement.classList.remove("raw-mode");
+    if (contentDiv) contentDiv.style.display = "";
+    if (rawContentDiv) rawContentDiv.style.display = "none";
+    if (rawToggle) rawToggle.classList.remove("active");
+  } else {
+    // Switch to raw mode
+    cardElement.dataset.rawMode = "true";
+    cardElement.classList.add("raw-mode");
+    if (contentDiv) contentDiv.style.display = "none";
+    if (rawContentDiv) {
+      rawContentDiv.style.display = "";
+      // Populate raw content if not already done
+      if (!rawContentDiv.hasChildNodes()) {
+        // Extract args and result from the card's data attributes or content
+        const args = cardElement.dataset.toolArguments || "";
+        const result = cardElement.dataset.toolResult || "";
+        const success = cardElement.dataset.status !== "error";
+
+        const rawContent = renderRawJsonContent(args, result, success);
+        rawContentDiv.appendChild(rawContent);
+      }
+    }
+    if (rawToggle) rawToggle.classList.add("active");
+
+    // Auto-expand if not already expanded
+    if (cardElement.dataset.expanded !== "true") {
+      cardElement.classList.add("expanded");
+      cardElement.dataset.expanded = "true";
+    }
   }
 }
 
@@ -404,16 +543,53 @@ function renderCodeInterpreterOutput(result) {
     filesContainer.className = "code-output-files";
 
     for (const file of result.files) {
-      if (file.type?.startsWith("image/") && file.base64) {
+      // Handle images: prefer base64 (legacy), then fetch via file API if preview_available
+      if (file.type?.startsWith("image/") && (file.base64 || file.preview_available)) {
         // Render inline image
         const imageContainer = document.createElement("div");
         imageContainer.className = "code-output-image-container";
 
         const img = document.createElement("img");
         img.className = "code-output-image";
-        img.src = `data:${file.type};base64,${file.base64}`;
         img.alt = file.name || "Generated image";
         img.title = file.name || "Generated image";
+
+        if (file.base64) {
+          // Legacy: inline base64
+          img.src = `data:${file.type};base64,${file.base64}`;
+        } else if (file.preview_available) {
+          // New: fetch via file API (prevents context overflow)
+          img.src = ""; // Will be set async
+          img.alt = "Loading...";
+          img.style.minHeight = "100px";
+          img.style.backgroundColor = "var(--bg-tertiary, #2a2a2a)";
+
+          // Extract session ID from file.path (format: data/files/{session_id}/output/code/{filename})
+          const pathMatch = file.path?.match(/data\/files\/([^/]+)\/output\/code\//);
+          if (pathMatch) {
+            const sessionId = pathMatch[1];
+            // Async fetch - don't block render
+            (async () => {
+              try {
+                const { getAdapter } = await import("../adapters/index.js");
+                const adapter = getAdapter();
+                const dirPath = `data/files/${sessionId}/output/code`;
+                const response = await adapter.getFileContent(dirPath, file.name);
+                if (response?.success && response.data) {
+                  img.src = `data:${response.mimeType || file.type};base64,${response.data}`;
+                  img.style.minHeight = "";
+                  img.style.backgroundColor = "";
+                } else {
+                  img.alt = "Failed to load image";
+                }
+              } catch (err) {
+                console.warn("Failed to fetch image:", err);
+                img.alt = "Failed to load image";
+              }
+            })();
+          }
+        }
+
         imageContainer.appendChild(img);
 
         const imageCaption = document.createElement("div");
@@ -2007,6 +2183,8 @@ function flushStatusUpdates(activeCalls) {
     if (data.tool_arguments && !isSummarization) {
       // Store arguments on card for later access (e.g., for web search query extraction)
       card.arguments = data.tool_arguments;
+      // Store as data attribute for raw mode toggle
+      card.element.dataset.toolArguments = data.tool_arguments;
 
       if (argsPreview) {
         const primaryArg = extractPrimaryArg(data.tool_arguments, card.rawName || card.name);
@@ -2139,6 +2317,9 @@ function flushStatusUpdates(activeCalls) {
     );
 
     if (data.tool_result && contentDiv && !contentDiv.querySelector(".disclosure-result") && !hasCustomArgsRenderer) {
+      // Store result as data attribute for raw mode toggle
+      card.element.dataset.toolResult = data.tool_result;
+
       const isSummarizationResult = card.rawName === "summarize_conversation";
       const isCodeInterpreterResult =
         card.rawName === "execute_python_code" || card.rawName === "wrapped_execute_python_code";
@@ -2683,6 +2864,16 @@ export function createCompletedToolCard(chatContainer, toolData) {
   argsSpan.className = `disclosure-args-preview${primaryArg ? " visible" : ""}`;
   argsSpan.textContent = primaryArg;
 
+  // Raw JSON toggle button
+  const rawToggle = document.createElement("button");
+  rawToggle.className = "disclosure-raw-toggle";
+  rawToggle.title = "Toggle raw JSON view";
+  rawToggle.innerHTML = RAW_JSON_ICON;
+  rawToggle.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleRawMode(cardDiv);
+  });
+
   const chevronSpan = document.createElement("span");
   // Show chevron if there's content to expand (args or result)
   // For summarization, always show chevron if there's a result
@@ -2692,12 +2883,27 @@ export function createCompletedToolCard(chatContainer, toolData) {
   headerDiv.appendChild(iconSpan);
   headerDiv.appendChild(toolNameSpan);
   headerDiv.appendChild(argsSpan);
+  headerDiv.appendChild(rawToggle);
   headerDiv.appendChild(chevronSpan);
   cardDiv.appendChild(headerDiv);
+
+  // Store args and result as data attributes for raw mode toggle
+  if (args) {
+    cardDiv.dataset.toolArguments = typeof args === "string" ? args : JSON.stringify(args);
+  }
+  if (result) {
+    cardDiv.dataset.toolResult = typeof result === "string" ? result : JSON.stringify(result);
+  }
+  cardDiv.dataset.rawMode = "false";
 
   // Expandable content container (hidden by default)
   const contentDiv = document.createElement("div");
   contentDiv.className = "disclosure-content";
+
+  // Raw content container (hidden by default, shown when rawMode is true)
+  const rawContentDiv = document.createElement("div");
+  rawContentDiv.className = "disclosure-raw-container";
+  rawContentDiv.style.display = "none";
 
   // Add arguments section (skip for summarization - cleaner card like Thought)
   // Tools with custom result renderers skip args - info is in the rendered result
@@ -3065,6 +3271,7 @@ export function createCompletedToolCard(chatContainer, toolData) {
   }
 
   cardDiv.appendChild(contentDiv);
+  cardDiv.appendChild(rawContentDiv);
 
   // Add click handler for expand/collapse (only on header)
   headerDiv.addEventListener("click", (e) => {
