@@ -162,35 +162,7 @@ class ChatService:
             project_id_str = str(project_id_raw) if project_id_raw else None
 
             # Auto-inject relevant project context into instructions
-            if project_id_str and messages:
-                # Extract first user message text for context search query
-                first_msg = messages[0]
-                query_text = first_msg.get("content", "")
-                if isinstance(query_text, list):  # Multimodal content
-                    query_text = " ".join(p.get("text", "") for p in query_text if isinstance(p, dict))
-                if query_text and len(query_text) > 10:  # Skip trivial queries
-                    try:
-                        context_chunks = await self._search_project_context(
-                            project_id=project_id_str,
-                            query=query_text,
-                            top_k=3,
-                            min_score=0.70,  # Tuned threshold for auto-injection
-                        )
-                        if context_chunks:
-                            context_section = "\n\n## Relevant Project Context\n\n"
-                            for chunk in context_chunks:
-                                source_label = {
-                                    "session_summary": "Previous Session",
-                                    "message": "Past Message",
-                                    "file": "Project File",
-                                }.get(chunk.source_type, chunk.source_type)
-                                context_section += (
-                                    f"**{source_label} (relevance: {chunk.score:.0%}):**\n{chunk.content.strip()}\n\n"
-                                )
-                            instructions += context_section
-                            logger.info(f"Injected {len(context_chunks)} context chunks for {session_id[:8]}")
-                    except Exception as e:
-                        logger.warning(f"Context injection failed: {e}")
+            instructions = await self._inject_project_context(instructions, project_id_str, messages, session_id)
 
             tools = create_session_aware_tools(
                 session_id,
@@ -279,70 +251,9 @@ class ChatService:
                 await session.update_db_token_count()
                 await self._send_token_usage(session_id, session)
 
-                # Post-run: check if summarization needed (skip if interrupted)
-                if completed_normally and await session.should_summarize():
-                    import secrets
-
-                    call_id = f"sum_{secrets.token_hex(4)}"
-                    logger.info(f"Triggering post-run summarization for {session_id}")
-
-                    # Send function_detected so frontend shows the tool card
-                    await self.ws_manager.send(
-                        session_id,
-                        {
-                            "type": MSG_TYPE_FUNCTION_DETECTED,
-                            "tool_call_id": call_id,
-                            "tool_name": "summarize_conversation",
-                            "tool_arguments": None,
-                        },
-                    )
-
-                    tokens_before = session.total_tokens
-                    summary = await session.summarize_with_agent()
-
-                    if summary:
-                        # Send function_completed with the actual summary text
-                        await self.ws_manager.send(
-                            session_id,
-                            {
-                                "type": MSG_TYPE_FUNCTION_COMPLETED,
-                                "tool_call_id": call_id,
-                                "tool_name": "summarize_conversation",
-                                "tool_success": True,
-                                "tool_result": summary,
-                            },
-                        )
-
-                        # Persist to messages table (matches manual summarization flow)
-                        args_json = json.dumps(
-                            {
-                                "tokens_before": tokens_before,
-                                "tokens_after": session.total_tokens,
-                            }
-                        )
-                        await self._add_tool_call_to_history(
-                            session_uuid=session_uuid,
-                            call_id=call_id,
-                            name="summarize_conversation",
-                            arguments=args_json,
-                            result=summary,
-                            success=True,
-                        )
-                    else:
-                        # Summarization was skipped (not enough content)
-                        await self.ws_manager.send(
-                            session_id,
-                            {
-                                "type": MSG_TYPE_FUNCTION_COMPLETED,
-                                "tool_call_id": call_id,
-                                "tool_name": "summarize_conversation",
-                                "tool_success": False,
-                                "tool_result": "Summarization skipped - not enough content",
-                            },
-                        )
-
-                    await session.update_db_token_count()
-                    await self._send_token_usage(session_id, session)
+                # Post-run: auto-summarize if needed (skip if interrupted)
+                if completed_normally:
+                    await self._run_auto_summarization(session, session_id, session_uuid)
 
                 # Send appropriate finish reason based on completion status
                 finish_reason = "stop" if completed_normally else "interrupted"
@@ -461,50 +372,18 @@ class ChatService:
 
                     # Use the typed event handler registry
                     handler = handlers.get(event.type)
-                    if handler:
-                        ipc_msg = handler(event)
-                        if ipc_msg:
-                            # Parse the JSON message from the handler
-                            try:
-                                msg_data = json.loads(ipc_msg)
-                                await self.ws_manager.send(session_id, msg_data)
+                    if not handler:
+                        continue
 
-                                # Accumulate text for persistence (assistant_delta messages)
-                                if msg_data.get("type") == "assistant_delta":
-                                    content = msg_data.get("content", "")
-                                    if content:
-                                        accumulated_text += content
+                    ipc_msg = handler(event)
+                    if not ipc_msg:
+                        continue
 
-                                # Track tool calls for persistence
-                                msg_type = msg_data.get("type")
-                                if msg_type in (MSG_TYPE_FUNCTION_DETECTED, MSG_TYPE_FUNCTION_EXECUTING):
-                                    call_id = msg_data.get("tool_call_id")
-                                    if call_id:
-                                        # Don't overwrite existing arguments if we already have them (from EXECUTING)
-                                        # but ensure we have at least an entry from DETECTED
-                                        existing = pending_tool_calls.get(call_id, {})
-                                        pending_tool_calls[call_id] = {
-                                            "tool_name": msg_data.get("tool_name", "") or existing.get("tool_name", ""),
-                                            "tool_arguments": msg_data.get("tool_arguments")
-                                            or existing.get("tool_arguments"),
-                                        }
-
-                                elif msg_type == MSG_TYPE_FUNCTION_COMPLETED:
-                                    call_id = msg_data.get("tool_call_id")
-                                    if call_id:
-                                        pending = pending_tool_calls.pop(call_id, {})
-                                        await self._add_tool_call_to_history(
-                                            session_uuid=session_uuid,
-                                            call_id=call_id,
-                                            name=pending.get("tool_name") or msg_data.get("tool_name", ""),
-                                            arguments=pending.get("tool_arguments"),
-                                            result=msg_data.get("tool_result"),
-                                            success=msg_data.get("tool_success", True),
-                                            interrupted=msg_data.get("interrupted", False),
-                                        )
-
-                            except json.JSONDecodeError:
-                                logger.warning(f"Failed to parse handler result: {ipc_msg[:100]}")
+                    text_delta = await self._process_stream_message(
+                        ipc_msg, session_id, session_uuid, pending_tool_calls
+                    )
+                    if text_delta:
+                        accumulated_text += text_delta
 
                 # Also extract text from raw response events for accumulation
                 # (backup in case handler doesn't emit assistant_delta)
@@ -593,6 +472,62 @@ class ChatService:
             logger.info(f"No accumulated_text to save for {session_id} (interrupted={interrupted})")
 
         return not interrupted
+
+    async def _process_stream_message(
+        self,
+        ipc_msg: str,
+        session_id: str,
+        session_uuid: UUID,
+        pending_tool_calls: dict[str, dict[str, Any]],
+    ) -> str | None:
+        """Process a stream message and return text delta if applicable.
+
+        Handles WebSocket forwarding, text accumulation, and tool call tracking.
+
+        Returns:
+            Text content to accumulate (for assistant_delta), or None.
+        """
+        try:
+            msg_data = json.loads(ipc_msg)
+        except json.JSONDecodeError:
+            logger.warning(f"Failed to parse handler result: {ipc_msg[:100]}")
+            return None
+
+        await self.ws_manager.send(session_id, msg_data)
+
+        msg_type = msg_data.get("type")
+
+        # Text accumulation
+        if msg_type == "assistant_delta":
+            return msg_data.get("content", "") or None
+
+        # Tool call tracking - detected/executing
+        if msg_type in (MSG_TYPE_FUNCTION_DETECTED, MSG_TYPE_FUNCTION_EXECUTING):
+            call_id = msg_data.get("tool_call_id")
+            if call_id:
+                existing = pending_tool_calls.get(call_id, {})
+                pending_tool_calls[call_id] = {
+                    "tool_name": msg_data.get("tool_name", "") or existing.get("tool_name", ""),
+                    "tool_arguments": msg_data.get("tool_arguments") or existing.get("tool_arguments"),
+                }
+            return None
+
+        # Tool call completed - persist to history
+        if msg_type == MSG_TYPE_FUNCTION_COMPLETED:
+            call_id = msg_data.get("tool_call_id")
+            if call_id:
+                pending = pending_tool_calls.pop(call_id, {})
+                await self._add_tool_call_to_history(
+                    session_uuid=session_uuid,
+                    call_id=call_id,
+                    name=pending.get("tool_name") or msg_data.get("tool_name", ""),
+                    arguments=pending.get("tool_arguments"),
+                    result=msg_data.get("tool_result"),
+                    success=msg_data.get("tool_success", True),
+                    interrupted=msg_data.get("interrupted", False),
+                )
+
+        return None
 
     async def _build_multimodal_content(
         self,
@@ -764,6 +699,132 @@ class ChatService:
                 session_uuid,
             )
         logger.info(f"Persisted tool call {name} (call_id={call_id}, success={success})")
+
+    async def _inject_project_context(
+        self,
+        instructions: str,
+        project_id: str | None,
+        messages: list[dict[str, Any]],
+        session_id: str,
+    ) -> str:
+        """Inject relevant project context into system instructions.
+
+        Searches project context chunks for relevant information based on the
+        first user message and appends matching content to the instructions.
+
+        Returns:
+            Updated instructions with context section appended (if found).
+        """
+        if not project_id or not messages:
+            return instructions
+
+        # Extract first user message text for context search query
+        first_msg = messages[0]
+        query_text = first_msg.get("content", "")
+        if isinstance(query_text, list):  # Multimodal content
+            query_text = " ".join(p.get("text", "") for p in query_text if isinstance(p, dict))
+
+        if not query_text or len(query_text) <= 10:  # Skip trivial queries
+            return instructions
+
+        try:
+            context_chunks = await self._search_project_context(
+                project_id=project_id,
+                query=query_text,
+                top_k=3,
+                min_score=0.70,  # Tuned threshold for auto-injection
+            )
+            if not context_chunks:
+                return instructions
+
+            context_section = "\n\n## Relevant Project Context\n\n"
+            for chunk in context_chunks:
+                source_label = {
+                    "session_summary": "Previous Session",
+                    "message": "Past Message",
+                    "file": "Project File",
+                }.get(chunk.source_type, chunk.source_type)
+                context_section += f"**{source_label} (relevance: {chunk.score:.0%}):**\n{chunk.content.strip()}\n\n"
+            logger.info(f"Injected {len(context_chunks)} context chunks for {session_id[:8]}")
+            return instructions + context_section
+
+        except Exception as e:
+            logger.warning(f"Context injection failed: {e}")
+            return instructions
+
+    async def _run_auto_summarization(
+        self,
+        session: PostgresTokenAwareSession,
+        session_id: str,
+        session_uuid: UUID,
+    ) -> None:
+        """Run automatic summarization if token threshold is exceeded.
+
+        Sends WebSocket events so frontend shows the summarization tool card,
+        then persists the tool call to the messages table.
+        """
+        import secrets
+
+        if not await session.should_summarize():
+            return
+
+        call_id = f"sum_{secrets.token_hex(4)}"
+        logger.info(f"Triggering post-run summarization for {session_id}")
+
+        # Send function_detected so frontend shows the tool card
+        await self.ws_manager.send(
+            session_id,
+            {
+                "type": MSG_TYPE_FUNCTION_DETECTED,
+                "tool_call_id": call_id,
+                "tool_name": "summarize_conversation",
+                "tool_arguments": None,
+            },
+        )
+
+        tokens_before = session.total_tokens
+        summary = await session.summarize_with_agent()
+
+        if summary:
+            await self.ws_manager.send(
+                session_id,
+                {
+                    "type": MSG_TYPE_FUNCTION_COMPLETED,
+                    "tool_call_id": call_id,
+                    "tool_name": "summarize_conversation",
+                    "tool_success": True,
+                    "tool_result": summary,
+                },
+            )
+            # Persist to messages table
+            args_json = json.dumps(
+                {
+                    "tokens_before": tokens_before,
+                    "tokens_after": session.total_tokens,
+                }
+            )
+            await self._add_tool_call_to_history(
+                session_uuid=session_uuid,
+                call_id=call_id,
+                name="summarize_conversation",
+                arguments=args_json,
+                result=summary,
+                success=True,
+            )
+        else:
+            await self.ws_manager.send(
+                session_id,
+                {
+                    "type": MSG_TYPE_FUNCTION_COMPLETED,
+                    "tool_call_id": call_id,
+                    "tool_name": "summarize_conversation",
+                    "tool_success": False,
+                    "tool_result": "Summarization skipped - not enough content",
+                },
+            )
+
+        await session.update_db_token_count()
+        await self._send_token_usage(session_id, session)
 
     async def interrupt(self, session_id: str) -> None:
         """Interrupt active chat processing via SDK stream.cancel().

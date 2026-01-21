@@ -537,12 +537,12 @@ class TestCollectOutputFilesWithBase64:
         with patch("tools.code_interpreter.get_container_runtime", return_value="docker"):
             yield SandboxPool()
 
-    def test_collect_output_files_includes_base64_for_images(
+    def test_collect_output_files_sets_preview_available_for_images(
         self,
         pool: SandboxPool,
         tmp_path: Path,
     ) -> None:
-        """Should include base64 content for image files."""
+        """Should set preview_available for image files (base64 excluded to prevent context overflow)."""
         # Create test image
         image_file = tmp_path / "plot.png"
         test_data = b"PNG\x89fake_png_data"
@@ -553,8 +553,9 @@ class TestCollectOutputFilesWithBase64:
         assert len(files) == 1
         assert files[0]["name"] == "plot.png"
         assert files[0]["type"] == "image/png"
-        assert "base64" in files[0]
-        assert files[0]["base64"] is not None
+        # base64 is intentionally NOT included to prevent LLM context overflow
+        assert "base64" not in files[0]
+        assert files[0]["preview_available"] is True
 
     def test_collect_output_files_no_base64_for_non_images(
         self,
@@ -593,13 +594,14 @@ class TestCollectOutputFilesWithBase64:
         csv_file = next(f for f in files if f["name"] == "data.csv")
         json_file = next(f for f in files if f["name"] == "results.json")
 
-        # PNG should have base64
-        assert "base64" in png_file
+        # PNG should have preview_available flag (no base64 to prevent context overflow)
+        assert "base64" not in png_file
+        assert png_file["preview_available"] is True
         assert png_file["type"] == "image/png"
 
-        # CSV and JSON should not
-        assert "base64" not in csv_file
-        assert "base64" not in json_file
+        # Non-images should not have preview_available
+        assert "preview_available" not in csv_file
+        assert "preview_available" not in json_file
 
     def test_collect_output_files_skips_oversized_images(
         self,

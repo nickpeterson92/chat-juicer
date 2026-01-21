@@ -267,45 +267,46 @@ def create_raw_response_handler(tracker: CallTracker) -> Callable[[StreamEvent],
     the strategy pattern with handler registry for clean extensibility.
     """
 
+    def _log_event(event_type: str, result: str | None) -> None:
+        """Handle event logging with throttling for high-frequency events."""
+        if not result:
+            return
+        if event_type in THROTTLED_EVENTS:
+            _event_counts[event_type] = _event_counts.get(event_type, 0) + 1
+            if _event_counts[event_type] % _LOG_EVERY_N_EVENTS == 0:
+                logger.info(f"Handled {_event_counts[event_type]} {event_type} events")
+        else:
+            logger.info(f"Handled event: {event_type}")
+
     def handle_raw_response_event(event: StreamEvent) -> str | None:
         """Handle raw LLM response events with preserved granularity."""
         try:
-            # Guard clauses for invalid events
-            if getattr(event, "type", None) != RAW_RESPONSE_EVENT or not (data := getattr(event, "data", None)):
+            # Guard: invalid event structure
+            if getattr(event, "type", None) != RAW_RESPONSE_EVENT:
                 return None
 
-            event_type = getattr(data, "type", None)
+            data = getattr(event, "data", None)
+            event_type = getattr(data, "type", None) if data else None
             if not event_type:
-                logger.warning("Event missing type attribute", extra={"event": event})
+                if data:
+                    logger.warning("Event missing type attribute", extra={"event": event})
                 return None
 
+            # Dispatch event to appropriate handler
             result: str | None = None
 
-            # Handle output item events (need tracker)
             if event_type == "response.output_item.added":
                 result = handle_output_item_added(data, tracker)
             elif event_type == "response.output_item.done":
                 result = handle_output_item_done(data)
-            else:
-                # Dispatch to stateless handlers
-                handler = RAW_EVENT_TYPE_HANDLERS.get(event_type)
-                if handler:
-                    result = handler(data)
-                    if result:
-                        # Selective throttling: only throttle high-frequency events
-                        if event_type in THROTTLED_EVENTS:
-                            _event_counts[event_type] = _event_counts.get(event_type, 0) + 1
-                            if _event_counts[event_type] % _LOG_EVERY_N_EVENTS == 0:
-                                logger.info(f"Handled {_event_counts[event_type]} {event_type} events")
-                        else:
-                            # Log all non-throttled events immediately (rare, important)
-                            logger.info(f"Handled event: {event_type}")
-                elif event_type not in IGNORED_EVENTS:
-                    # Log unknown event types (important for debugging)
-                    logger.info(f"Unknown event type: {event_type}")
-                    if delta := getattr(data, "delta", None):
-                        logger.debug(f"Unknown event type with delta: {event_type}")
-                        result = AssistantMessage(type=MSG_TYPE_ASSISTANT_DELTA, content=delta).to_json()
+            elif handler := RAW_EVENT_TYPE_HANDLERS.get(event_type):
+                result = handler(data)
+                _log_event(event_type, result)
+            elif event_type not in IGNORED_EVENTS:
+                logger.info(f"Unknown event type: {event_type}")
+                if delta := getattr(data, "delta", None):
+                    logger.debug(f"Unknown event type with delta: {event_type}")
+                    result = AssistantMessage(type=MSG_TYPE_ASSISTANT_DELTA, content=delta).to_json()
 
             return result
 
