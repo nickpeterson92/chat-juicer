@@ -2,9 +2,9 @@
 # Install with: pip install -r requirements-dev.txt
 
 # Code Quality & Formatting
-ruff>=0.1.0  # Fast Python linter and formatter
+ruff==0.1.9  # Fast Python linter (pinned to match pre-commit)
 black==25.1.0  # Python code formatter (pinned to match pre-commit)
-mypy>=1.0.0  # Static type checker for Python
+mypy==1.18.2  # Static type checker (pinned to match pre-commit)
 
 # Type Stubs for mypy
 types-aiofiles>=23.0.0  # Type stubs for aiofiles

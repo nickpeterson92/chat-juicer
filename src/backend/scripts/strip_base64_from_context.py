@@ -27,10 +27,7 @@ import sys
 
 from pathlib import Path
 
-# Add src/backend to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-import asyncpg  # noqa: E402
+import asyncpg
 
 
 async def get_database_url() -> str:
