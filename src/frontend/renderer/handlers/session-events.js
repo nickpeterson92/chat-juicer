@@ -75,10 +75,11 @@ export function setupSessionEventHandlers({
   // Handle session switch
   const handleSessionSwitch = async (sessionId) => {
     try {
-      // Clear message queue on session switch (queued messages belong to previous session)
+      // Clear message queue for the previous session only (not all sessions)
+      // This preserves queued messages for other sessions in concurrent processing scenarios
       const messageQueueService = getMessageQueueService();
-      if (messageQueueService) {
-        messageQueueService.clear();
+      if (messageQueueService && currentSessionId) {
+        messageQueueService.clearSession(currentSessionId);
       }
 
       // Load session data (pass streamManager for concurrent session reconstruction)

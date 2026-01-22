@@ -175,8 +175,11 @@ export class ChatContainer {
       return;
     }
 
-    // Only render items with 'queued' status (not processing)
-    const queuedItems = items.filter((item) => item.status === "queued");
+    // Get current session ID - only render items for this session
+    const currentSessionId = this.appState?.getState("session.current");
+
+    // Only render items with 'queued' status (not processing) AND matching current session
+    const queuedItems = items.filter((item) => item.status === "queued" && item.sessionId === currentSessionId);
     const queuedIds = new Set(queuedItems.map((item) => item.id));
 
     // Remove elements that are no longer in queue (except those animating out)
