@@ -785,33 +785,8 @@ class ChatService:
         tokens_before = session.total_tokens
         summary = await session.summarize_with_agent()
 
-        if summary:
-            await self.ws_manager.send(
-                session_id,
-                {
-                    "type": MSG_TYPE_FUNCTION_COMPLETED,
-                    "tool_call_id": call_id,
-                    "tool_name": "summarize_conversation",
-                    "tool_success": True,
-                    "tool_result": summary,
-                },
-            )
-            # Persist to messages table
-            args_json = json.dumps(
-                {
-                    "tokens_before": tokens_before,
-                    "tokens_after": session.total_tokens,
-                }
-            )
-            await self._add_tool_call_to_history(
-                session_uuid=session_uuid,
-                call_id=call_id,
-                name="summarize_conversation",
-                arguments=args_json,
-                result=summary,
-                success=True,
-            )
-        else:
+        # Handle failure case with early return
+        if not summary:
             await self.ws_manager.send(
                 session_id,
                 {
@@ -822,7 +797,36 @@ class ChatService:
                     "tool_result": "Summarization skipped - not enough content",
                 },
             )
+            await session.update_db_token_count()
+            await self._send_token_usage(session_id, session)
+            return
 
+        # Success path
+        await self.ws_manager.send(
+            session_id,
+            {
+                "type": MSG_TYPE_FUNCTION_COMPLETED,
+                "tool_call_id": call_id,
+                "tool_name": "summarize_conversation",
+                "tool_success": True,
+                "tool_result": summary,
+            },
+        )
+        # Persist to messages table
+        args_json = json.dumps(
+            {
+                "tokens_before": tokens_before,
+                "tokens_after": session.total_tokens,
+            }
+        )
+        await self._add_tool_call_to_history(
+            session_uuid=session_uuid,
+            call_id=call_id,
+            name="summarize_conversation",
+            arguments=args_json,
+            result=summary,
+            success=True,
+        )
         await session.update_db_token_count()
         await self._send_token_usage(session_id, session)
 
@@ -834,22 +838,29 @@ class ChatService:
         - Clears event queues
         - Discards incomplete turns (not persisted to session)
         """
-        # Use SDK's official cancel() method on the active stream
+        # Helper to send feedback after any interrupt path
+        async def send_interrupted() -> None:
+            await self.ws_manager.send(session_id, {"type": "stream_interrupted", "session_id": session_id})
+
+        # Primary: Use SDK's official cancel() method on the active stream
         stream = self._active_streams.get(session_id)
         if stream:
             stream.cancel(mode="immediate")
             logger.info(f"SDK stream.cancel() called for session {session_id}")
-        else:
-            # Fallback to cancellation token if no active stream
-            token = self._cancellation_tokens.get(session_id)
-            if token is not None:
-                await token.cancel(reason="User interrupt")
-                logger.info(f"Cancellation token triggered for session {session_id}")
-            else:
-                logger.warning(f"No active stream or token found for session {session_id}")
+            await send_interrupted()
+            return
 
-        # Send immediate feedback to frontend (stream loop will send assistant_end when done)
-        await self.ws_manager.send(session_id, {"type": "stream_interrupted", "session_id": session_id})
+        # Fallback: Use cancellation token if no active stream
+        token = self._cancellation_tokens.get(session_id)
+        if token is not None:
+            await token.cancel(reason="User interrupt")
+            logger.info(f"Cancellation token triggered for session {session_id}")
+            await send_interrupted()
+            return
+
+        # No active stream or token found
+        logger.warning(f"No active stream or token found for session {session_id}")
+        await send_interrupted()
 
     def clear_interrupt(self, session_id: str) -> None:
         """Clear interrupt state (reset cancellation token).

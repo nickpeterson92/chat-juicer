@@ -83,3 +83,6 @@ infra/bootstrap/.terraform
 infra/.terraform.lock.hcl
 infra/bootstrap/.terraform.lock.hcl
 *.tfvars
+
+# mcp-schema-fetch
+mcp-schema-fetch/
