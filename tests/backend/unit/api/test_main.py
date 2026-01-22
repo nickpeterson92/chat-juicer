@@ -138,6 +138,9 @@ async def test_lifespan_shutdown() -> None:
         patch("api.main.graceful_pool_close", new_callable=AsyncMock) as mock_close_db,
         patch("api.main.WebSocketManager", autospec=True) as MockWSManager,
         patch("tools.code_interpreter.get_sandbox_pool") as mock_get_sandbox_pool,
+        patch("api.main.get_rate_limiter") as mock_get_rate_limiter,
+        patch("workers.embedding_worker.start_embedding_worker", new_callable=AsyncMock) as _mock_start_worker,
+        patch("workers.embedding_worker.stop_embedding_worker", new_callable=AsyncMock) as _mock_stop_worker,
     ):
 
         mock_check.return_value = {"healthy": True}
@@ -151,8 +154,17 @@ async def test_lifespan_shutdown() -> None:
         mock_mcp_manager = AsyncMock()
         mock_init_mcp.return_value = mock_mcp_manager
 
-        # Mock DB pool instance
+        # Mock DB pool instance with proper async context manager for acquire()
         mock_db_pool = AsyncMock()
+        mock_conn = AsyncMock()
+        mock_conn.fetch = AsyncMock(return_value=[])  # Empty result for any queries
+        mock_conn.fetchrow = AsyncMock(return_value=None)
+        mock_conn.execute = AsyncMock(return_value=None)
+        # Create a context manager mock that returns mock_conn
+        mock_acquire_cm = MagicMock()
+        mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_acquire_cm.__aexit__ = AsyncMock(return_value=None)
+        mock_db_pool.acquire.return_value = mock_acquire_cm
         mock_create_db.return_value = mock_db_pool
 
         # Configure SandboxPool mock
@@ -160,6 +172,12 @@ async def test_lifespan_shutdown() -> None:
         mock_sandbox_pool.initialize = AsyncMock()
         mock_sandbox_pool.shutdown = AsyncMock()
         mock_get_sandbox_pool.return_value = mock_sandbox_pool
+
+        # Configure rate limiter mock
+        mock_rate_limiter = AsyncMock()
+        mock_rate_limiter.start = AsyncMock()
+        mock_rate_limiter.stop = AsyncMock()
+        mock_get_rate_limiter.return_value = mock_rate_limiter
 
         async with lifespan(mock_app):
             pass

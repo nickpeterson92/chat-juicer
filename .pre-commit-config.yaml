@@ -52,16 +52,23 @@ repos:
     rev: v4.5.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^(data/|logs/|node_modules/|dist/|\.git/)
       - id: end-of-file-fixer
+        exclude: ^(data/|logs/|node_modules/|dist/|\.git/)
       - id: check-yaml
+        exclude: ^(data/|logs/|node_modules/|dist/)
       - id: check-json
+        exclude: ^(data/|logs/|node_modules/|dist/)
       - id: check-added-large-files
         args: ['--maxkb=1000']
+        exclude: ^(data/|logs/|node_modules/|dist/|\.git/)
       - id: check-case-conflict
       - id: check-merge-conflict
       - id: detect-private-key
+        exclude: ^(data/|logs/|node_modules/|dist/)
       - id: mixed-line-ending
         args: ['--fix=lf']
+        exclude: ^(data/|logs/|node_modules/|dist/)
 
   # Check for Python syntax errors
   - repo: https://github.com/pre-commit/pygrep-hooks
