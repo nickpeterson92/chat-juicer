@@ -316,12 +316,32 @@ export class MessageQueueService {
   }
 
   /**
+   * Clear queue items for a specific session only
+   * Used on session switch to clear previous session's queued messages
+   * @param {string} sessionId - Session ID to clear
+   */
+  clearSession(sessionId) {
+    if (!sessionId) return;
+    const items = this.appState.getState("queue.items") || [];
+    const remainingItems = items.filter((item) => item.sessionId !== sessionId);
+    const clearedCount = items.length - remainingItems.length;
+
+    this.appState.setState("queue.items", remainingItems);
+
+    if (clearedCount > 0) {
+      globalEventBus.emit("queue:cleared", { sessionId, clearedCount });
+    }
+  }
+
+  /**
    * Get queue count for UI display
+   * @param {string|null} sessionId - Optional session ID to filter by
    * @returns {number} Count of items with status === 'queued'
    */
-  getCount() {
+  getCount(sessionId = null) {
     const items = this.appState.getState("queue.items") || [];
-    return items.filter((item) => item.status === "queued").length;
+    return items.filter((item) => item.status === "queued" && (sessionId === null || item.sessionId === sessionId))
+      .length;
   }
 
   /**
@@ -334,11 +354,15 @@ export class MessageQueueService {
 
   /**
    * Check if queue has items
-   * @returns {boolean} True if queue has items
+   * @param {string|null} sessionId - Optional session ID to filter by
+   * @returns {boolean} True if queue has items (optionally filtered by session)
    */
-  hasItems() {
+  hasItems(sessionId = null) {
     const items = this.appState.getState("queue.items") || [];
-    return items.length > 0;
+    if (sessionId === null) {
+      return items.length > 0;
+    }
+    return items.some((item) => item.sessionId === sessionId);
   }
 
   /**
