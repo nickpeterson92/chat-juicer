@@ -18,13 +18,14 @@ import { destroySessionHeaderDisplay, initSessionHeaderDisplay } from "../../ui/
 import { renderEmptySessionList, renderSessionList } from "../../ui/renderers/session-list-renderer.js";
 import { initializeTitlebar } from "../../ui/titlebar.js";
 import { getPreviewType, hasBinaryExtension, hasTextExtension } from "../../utils/content-preview.js";
-import { base64ToFile, readTextFileChunk } from "../../utils/file-utils.js";
 import {
-  completeFileUpload,
-  finishUploadProgress,
-  startUploadProgress,
-  updateUploadProgress,
-} from "../../utils/upload-progress.js";
+  createFilePreview,
+  createPendingFileEntry,
+  isFileTooLarge,
+  showUploadSummary,
+  uploadFilesToSession,
+} from "../../utils/file-drop-helpers.js";
+import { base64ToFile, readTextFileChunk } from "../../utils/file-utils.js";
 
 // Event handlers component for lifecycle management
 const eventHandlersComponent = {};
@@ -376,159 +377,75 @@ export async function initializeEventHandlers({
       const files = Array.from(e.dataTransfer.files);
       if (files.length === 0) return;
 
+      const { showToast } = await import("../../utils/toast.js");
       const isOnWelcomePage = document.body.classList.contains("view-welcome");
+      const hasActiveSession = !!sessionService.getCurrentSessionId();
 
-      // DEFERRED SESSION CREATION: On welcome page without session, buffer files in memory
-      // Session will be created when user sends their first message
-      if (isOnWelcomePage && !sessionService.getCurrentSessionId()) {
-        const pendingFiles = appState.getState("ui.pendingWelcomeFiles") || [];
-        const { showToast } = await import("../../utils/toast.js");
-        const MAX_PENDING_FILE_SIZE = 50 * 1024 * 1024; // 50MB per file
-
-        for (const file of files) {
-          // Reject files that are too large for memory buffering
-          if (file.size > MAX_PENDING_FILE_SIZE) {
-            showToast(`${file.name} exceeds 50MB limit`, "warning", 3000);
-            continue;
-          }
-
-          // Create preview data
-          let previewUrl = null;
-          let previewContent = null;
-          let previewType = null;
-
-          if (file.type?.startsWith("image/")) {
-            previewUrl = URL.createObjectURL(file);
-            previewType = "image";
-          } else if (file.type === "application/pdf") {
-            // PDF preview requires more work (pdf.js), stick to icon for now or implement later
-            previewType = "pdf";
-          } else {
-            // Check if it's a code/text file based on extension or mime type
-            // IMPORTANT: Exclude known binary formats even if small
-            const isBinaryFile = hasBinaryExtension(file.name);
-            const isTextFile = !isBinaryFile && (file.type?.startsWith("text/") || hasTextExtension(file.name));
-
-            if (isTextFile) {
-              try {
-                // Read first 2KB for preview
-                previewContent = await readTextFileChunk(file, 2048);
-                previewType = getPreviewType(file.name);
-              } catch (err) {
-                console.warn("Failed to read local file for preview:", err);
-              }
-            }
-            // Binary files will have previewType = null, which triggers placeholder icon
-          }
-
-          // Add to pending files buffer
-          pendingFiles.push({
-            file, // Keep original File object for upload later
-            previewUrl,
-            previewContent,
-            previewType, // 'image', 'code', 'text', 'csv'
-            name: file.name,
-            size: file.size,
-            type: file.type,
-          });
-        }
-
-        appState.setState("ui.pendingWelcomeFiles", [...pendingFiles]);
-        appState.setState("ui.welcomeFilesSectionVisible", true);
+      // DEFERRED: On welcome page without session, buffer files in memory
+      if (isOnWelcomePage && !hasActiveSession) {
+        await bufferFilesForWelcomePage(files, showToast);
         return;
       }
 
-      // If we have an active session, upload directly (existing behavior)
+      // IMMEDIATE: Upload to active session
+      const { uploadedCount, failedCount } = await uploadFilesToSession(
+        files,
+        services.fileService,
+        sessionService.getCurrentSessionId(),
+        appState,
+        showToast
+      );
 
-      // Upload each file using FileService with progress tracking
-      const { showToast } = await import("../../utils/toast.js");
-      let uploadedCount = 0;
-      let failedCount = 0;
+      // Refresh file displays
+      await refreshFileDisplays(isOnWelcomePage, uploadedCount > 0);
+      showUploadSummary(files.length, uploadedCount, showToast);
+    };
 
-      // Start progress bar
-      startUploadProgress(files.length);
+    // Helper: Buffer files for deferred upload on welcome page
+    async function bufferFilesForWelcomePage(files, showToast) {
+      const pendingFiles = appState.getState("ui.pendingWelcomeFiles") || [];
 
       for (const file of files) {
-        // Update progress with current file name
-        updateUploadProgress(file.name, 0);
+        if (isFileTooLarge(file, showToast)) continue;
 
-        try {
-          // Pass progress callback for real-time byte progress
-          const result = await services.fileService.uploadFile(file, sessionService.getCurrentSessionId(), (percent) =>
-            updateUploadProgress(file.name, percent)
-          );
+        const preview = await createFilePreview(file);
+        pendingFiles.push(createPendingFileEntry(file, preview));
+      }
 
-          if (result.success) {
-            uploadedCount++;
-            completeFileUpload(file.name, true);
+      appState.setState("ui.pendingWelcomeFiles", [...pendingFiles]);
+      appState.setState("ui.welcomeFilesSectionVisible", true);
+    }
 
-            // Add image files to pending attachments for next message
-            if (file.type?.startsWith("image/")) {
-              const currentAttachments = appState.getState("message.pendingAttachments") || [];
-              appState.setState("message.pendingAttachments", [
-                ...currentAttachments,
-                {
-                  type: "image_ref",
-                  filename: file.name,
-                  path: `input/${file.name}`,
-                  mimeType: file.type,
-                },
-              ]);
-            }
+    // Helper: Refresh file displays after upload
+    async function refreshFileDisplays(isOnWelcomePage, hasUploads) {
+      if (!hasUploads) return;
 
-            // Refresh the appropriate file container
-            if (sessionService.getCurrentSessionId()) {
-              const directory = `data/files/${sessionService.getCurrentSessionId()}/input`;
+      const sessionId = sessionService.getCurrentSessionId();
+      if (!sessionId) return;
 
-              if (isOnWelcomePage) {
-                appState.setState("ui.welcomeFilesSectionVisible", true);
-
-                // Load files into AppState (rendering happens via subscription in view-manager)
-                window.setTimeout(async () => {
-                  try {
-                    await loadFilesIntoState(appState, directory, "input");
-                  } catch (error) {
-                    console.error("Failed to load files after upload", error);
-                  }
-                }, 100);
-              } else {
-                if (components.filePanel) {
-                  window.setTimeout(async () => {
-                    try {
-                      await components.filePanel.refresh();
-                    } catch (error) {
-                      console.error("Failed to refresh file panel after upload", error);
-                    }
-                  }, 100);
-                }
-              }
-            }
-          } else {
-            failedCount++;
-            completeFileUpload(file.name, false);
-            console.error(`File upload failed: ${result.error}`);
-            showToast(`Failed to upload ${file.name}`, "error", 3000);
+      if (isOnWelcomePage) {
+        appState.setState("ui.welcomeFilesSectionVisible", true);
+        const directory = `data/files/${sessionId}/input`;
+        window.setTimeout(async () => {
+          try {
+            await loadFilesIntoState(appState, directory, "input");
+          } catch (error) {
+            console.error("Failed to load files after upload", error);
           }
-        } catch (error) {
-          failedCount++;
-          completeFileUpload(file.name, false);
-          console.error("Error uploading file:", error);
-          showToast(`Error uploading ${file.name}`, "error", 3000);
-        }
+        }, 100);
+        return;
       }
 
-      // Finish progress bar (it will auto-hide after showing completion)
-      finishUploadProgress(uploadedCount, failedCount);
-
-      // Show summary toast for multiple files (progress bar handles single file feedback)
-      if (files.length > 1) {
-        if (uploadedCount === files.length) {
-          showToast(`${uploadedCount} files uploaded successfully`, "success", 2000);
-        } else if (uploadedCount > 0) {
-          showToast(`${uploadedCount}/${files.length} files uploaded`, "warning", 3000);
-        }
+      if (components.filePanel) {
+        window.setTimeout(async () => {
+          try {
+            await components.filePanel.refresh();
+          } catch (error) {
+            console.error("Failed to refresh file panel after upload", error);
+          }
+        }, 100);
       }
-    };
+    }
 
     // Attach drop handler to all drop targets
     if (chatPanel) {
@@ -546,115 +463,76 @@ export async function initializeEventHandlers({
       const { filePaths } = event.detail;
       if (!filePaths || filePaths.length === 0) return;
 
-      const isOnWelcomePage = document.body.classList.contains("view-welcome");
-
-      // Convert file paths to File-like objects by reading them
       const { showToast } = await import("../../utils/toast.js");
-      const pendingFiles = appState.getState("ui.pendingWelcomeFiles") || [];
-      const MAX_PENDING_FILE_SIZE = 50 * 1024 * 1024; // 50MB per file
+      const isOnWelcomePage = document.body.classList.contains("view-welcome");
+      const hasActiveSession = !!sessionService.getCurrentSessionId();
 
-      // Process files from paths (Node.js fs access via IPC)
+      // Process each file path
       for (const filePath of filePaths) {
         try {
-          // Get file info and content via IPC
-          const fileName = filePath.split("/").pop() || filePath.split("\\").pop();
-
-          // For welcome page, we need to create pending file entries
-          // Since we can't directly read files in renderer, we'll upload after session creation
-          // For now, store the path and let the upload happen when session is created
-          if (isOnWelcomePage && !sessionService.getCurrentSessionId()) {
-            // Read file via fetch (for local files packaged with app) or create File reference
-            // Read file via IPC (fetch file:// fails in renderer)
-            const fileData = await ipcAdapter.readFile(filePath);
-            if (!fileData || !fileData.success) throw new Error(fileData?.error || "Failed to read file");
-
-            // Convert base64 to File
-            const file = base64ToFile(fileData.data, fileName, fileData.mimeType);
-
-            if (file.size > MAX_PENDING_FILE_SIZE) {
-              showToast(`${fileName} exceeds 50MB limit`, "warning", 3000);
-              continue;
-            }
-
-            // Create preview data
-            let previewUrl = null;
-            let previewContent = null;
-            let previewType = null;
-
-            if (file.type?.startsWith("image/")) {
-              previewUrl = URL.createObjectURL(file);
-              previewType = "image";
-            } else if (file.type === "application/pdf") {
-              previewType = "pdf";
-            } else {
-              const isBinaryFile = hasBinaryExtension(file.name);
-              const isTextFile = !isBinaryFile && (file.type?.startsWith("text/") || hasTextExtension(file.name));
-
-              if (isTextFile) {
-                try {
-                  previewContent = await readTextFileChunk(file, 2048);
-                  previewType = getPreviewType(file.name);
-                } catch (err) {
-                  console.warn("Failed to read local file for preview:", err);
-                }
-              }
-            }
-
-            pendingFiles.push({
-              file,
-              previewUrl,
-              previewContent,
-              previewType,
-              name: file.name,
-              size: file.size,
-              type: file.type,
-            });
-          } else {
-            // If we have an active session, upload directly via file service
-            // Read the file via fetch and upload
-            // Read file via IPC (fetch file:// fails in renderer)
-            const fileData = await ipcAdapter.readFile(filePath);
-            if (!fileData || !fileData.success) throw new Error(fileData?.error || "Failed to read file");
-
-            // Convert base64 to File
-            const file = base64ToFile(fileData.data, fileName, fileData.mimeType);
-
-            const result = await services.fileService.uploadFile(file, sessionService.getCurrentSessionId());
-            if (result.success) {
-              // Add image files to pending attachments
-              if (file.type?.startsWith("image/")) {
-                const currentAttachments = appState.getState("message.pendingAttachments") || [];
-                appState.setState("message.pendingAttachments", [
-                  ...currentAttachments,
-                  {
-                    type: "image_ref",
-                    filename: file.name,
-                    path: `input/${file.name}`,
-                    mimeType: file.type,
-                  },
-                ]);
-              }
-
-              // Refresh file panel
-              if (components.filePanel) {
-                await components.filePanel.refresh();
-              }
-            } else {
-              showToast(`Failed to upload ${fileName}`, "error", 3000);
-            }
-          }
+          await processFileFromPath(filePath, isOnWelcomePage, hasActiveSession, showToast);
         } catch (error) {
           console.error("Failed to process file from dialog:", error);
           showToast(`Error processing file`, "error", 3000);
         }
       }
 
-      // Update pending files state
-      if (isOnWelcomePage && !sessionService.getCurrentSessionId() && pendingFiles.length > 0) {
-        appState.setState("ui.pendingWelcomeFiles", [...pendingFiles]);
-        appState.setState("ui.welcomeFilesSectionVisible", true);
+      // Update pending files state for welcome page
+      if (isOnWelcomePage && !hasActiveSession) {
+        const pendingFiles = appState.getState("ui.pendingWelcomeFiles") || [];
+        if (pendingFiles.length > 0) {
+          appState.setState("ui.welcomeFilesSectionVisible", true);
+        }
       }
     };
+
+    // Helper: Process a single file from dialog path
+    async function processFileFromPath(filePath, isOnWelcomePage, hasActiveSession, showToast) {
+      const fileName = filePath.split("/").pop() || filePath.split("\\").pop();
+
+      // Read file via IPC (fetch file:// fails in renderer)
+      const fileData = await ipcAdapter.readFile(filePath);
+      if (!fileData?.success) throw new Error(fileData?.error || "Failed to read file");
+
+      const file = base64ToFile(fileData.data, fileName, fileData.mimeType);
+
+      // Deferred path: buffer for welcome page
+      if (isOnWelcomePage && !hasActiveSession) {
+        if (isFileTooLarge(file, showToast)) return;
+
+        const preview = await createFilePreview(file);
+        const pendingFiles = appState.getState("ui.pendingWelcomeFiles") || [];
+        pendingFiles.push(createPendingFileEntry(file, preview));
+        appState.setState("ui.pendingWelcomeFiles", [...pendingFiles]);
+        return;
+      }
+
+      // Immediate path: upload to active session
+      const result = await services.fileService.uploadFile(file, sessionService.getCurrentSessionId());
+      if (!result.success) {
+        showToast(`Failed to upload ${fileName}`, "error", 3000);
+        return;
+      }
+
+      // Add image files to pending attachments
+      if (file.type?.startsWith("image/")) {
+        const currentAttachments = appState.getState("message.pendingAttachments") || [];
+        appState.setState("message.pendingAttachments", [
+          ...currentAttachments,
+          {
+            type: "image_ref",
+            filename: file.name,
+            path: `input/${file.name}`,
+            mimeType: file.type,
+          },
+        ]);
+      }
+
+      // Refresh file panel
+      if (components.filePanel) {
+        await components.filePanel.refresh();
+      }
+    }
 
     window.addEventListener("files-selected-from-dialog", handleFilesFromDialog);
     listeners.push({ element: window, event: "files-selected-from-dialog", handler: handleFilesFromDialog });
