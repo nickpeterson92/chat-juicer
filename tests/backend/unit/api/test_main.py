@@ -139,8 +139,8 @@ async def test_lifespan_shutdown() -> None:
         patch("api.main.WebSocketManager", autospec=True) as MockWSManager,
         patch("tools.code_interpreter.get_sandbox_pool") as mock_get_sandbox_pool,
         patch("api.main.get_rate_limiter") as mock_get_rate_limiter,
-        patch("workers.embedding_worker.start_embedding_worker", new_callable=AsyncMock) as mock_start_worker,
-        patch("workers.embedding_worker.stop_embedding_worker", new_callable=AsyncMock) as mock_stop_worker,
+        patch("workers.embedding_worker.start_embedding_worker", new_callable=AsyncMock) as _mock_start_worker,
+        patch("workers.embedding_worker.stop_embedding_worker", new_callable=AsyncMock) as _mock_stop_worker,
     ):
 
         mock_check.return_value = {"healthy": True}

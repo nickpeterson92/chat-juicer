@@ -838,6 +838,7 @@ class ChatService:
         - Clears event queues
         - Discards incomplete turns (not persisted to session)
         """
+
         # Helper to send feedback after any interrupt path
         async def send_interrupted() -> None:
             await self.ws_manager.send(session_id, {"type": "stream_interrupted", "session_id": session_id})
