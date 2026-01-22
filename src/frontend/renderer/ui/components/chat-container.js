@@ -153,11 +153,14 @@ export class ChatContainer {
     });
     globalLifecycleManager.addUnsubscriber(this, unsubscribeQueueProcessing);
 
-    // Subscribe to session changes - clean up indicators on session switch
-    // This prevents duplicate/stale indicators from previous session
+    // Subscribe to session changes - clean up indicators and re-render queue on session switch
+    // This ensures queued messages only show for the current session
     const unsubscribeSessionChange = this.appState.subscribe("session.current", () => {
       // Clean up all indicators when switching sessions
       this._cleanupAllIndicators();
+      // Re-render queued messages to filter by new session
+      const items = this.appState?.getState("queue.items") || [];
+      this.renderQueuedMessages(items);
     });
     globalLifecycleManager.addUnsubscriber(this, unsubscribeSessionChange);
   }
