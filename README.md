@@ -18,7 +18,7 @@
 
 # Chat Juicer
 
-[![Open Source](https://img.shields.io/badge/Open_Source-green?style=flat-square&logo=opensourceinitiative&logoColor=white)](https://opensource.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 [![A2AS Certified](https://img.shields.io/badge/A2AS-Certified-blue?style=flat-square)](https://a2as.org/certified/agents/nickpeterson92/chat-juicer)
 
 An Electron + FastAPI desktop application for Azure OpenAI chat interactions using the **Agent/Runner pattern** with native **MCP (Model Context Protocol) server support**, **PostgreSQL persistence**, real-time **WebSocket streaming**, and sophisticated document generation capabilities.
