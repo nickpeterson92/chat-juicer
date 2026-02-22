@@ -1,0 +1,2696 @@
+manifest:
+  version: "0.1.2"
+  schema: https://a2as.org/cert/schema
+  subject:
+    name: nickpeterson92/chat-juicer
+    source: https://github.com/nickpeterson92/chat-juicer
+    branch: main
+    commit: "1251cc18"
+    scope: [docs/conf.py, migrations/versions/0001_init_schema.py, src/backend/api/routes/chat.py, src/backend/api/routes/v1/sessions.py,
+      src/backend/api/services/chat_service.py, src/backend/api/services/session_service.py, src/backend/api/services/token_aware_session.py,
+      src/backend/core/agent.py, src/backend/core/constants.py, src/backend/models/api_models.py, src/backend/models/schemas/sessions.py,
+      src/backend/models/session_models.py, src/backend/tools/file_operations.py, src/backend/tools/registry.py, src/backend/tools/wrappers.py,
+      src/backend/utils/document_processor.py, src/backend/utils/metrics.py, src/backend/utils/token_utils.py]
+  issued:
+    by: A2AS.org
+    at: '2026-01-26T16:16:12Z'
+  signatures:
+    digest: sha256:97Kx-eGN1F_4iUZFeQWDis0BWNcy4H40gG_betl5dvA
+    key: ed25519:C5mdk8ZqVUsrD4b2onrbQSkpO4xBmv_QCTfRHFnDmoY
+    sig: ed25519:S2h-Mj1yYqLiaSp16QhuZR3K2ADSnuHYPW3U8R1emosoJGSGPVJz7EsEIlqEWpB9Z2NJnPHrXSc4lW_LwLFRCA
+
+agents:
+  agent:
+    type: instance
+    models: [deployment]
+    params:
+      name: Chat Juicer
+      instructions: instructions
+      tools: tools
+      mcp_servers: mcp_servers
+      function: create_agent
+  summary_agent.0:
+    type: instance
+    models: [deployment]
+    params:
+      function: summarize_content
+      name: DocumentSummarizer
+      instance: summary_agent
+      instructions: [DOCUMENT_SUMMARIZATION_INSTRUCTIONS.format(tokens=10000)]
+  summary_agent.1:
+    type: instance
+    models: [self.model]
+    params:
+      function: _generate_summary
+      name: Summarizer
+      instance: summary_agent
+      instructions: [CONVERSATION_SUMMARIZATION_INSTRUCTIONS]
+  title_agent:
+    type: instance
+    models: [model]
+    params:
+      function: _maybe_generate_title
+      name: TitleGenerator
+      instructions: [SESSION_TITLE_GENERATION_PROMPT]
+
+models:
+  deployment:
+    type: variable
+    agents: [agent, summary_agent.0]
+  model:
+    type: variable
+    agents: [title_agent]
+  self.model:
+    type: variable
+    agents: [summary_agent.1]
+
+tools:
+  edit_file_tool:
+    type: wrapper
+    params:
+      wraps: edit_file
+  execute_python_code_tool:
+    type: wrapper
+    params:
+      wraps: execute_python_code
+  generate_document_tool:
+    type: wrapper
+    params:
+      wraps: generate_document
+  get_table_schema_tool:
+    type: wrapper
+    params:
+      wraps: get_table_schema
+  list_directory_tool:
+    type: wrapper
+    params:
+      wraps: list_directory
+  list_registered_databases_tool:
+    type: wrapper
+    params:
+      wraps: list_registered_databases
+  read_file_tool:
+    type: wrapper
+    params:
+      wraps: read_file
+  search_files_tool:
+    type: wrapper
+    params:
+      wraps: search_files
+
+imports:
+  _extract_display_content: api.services.message_utils._extract_display_content
+  _get_env_files: core.constants._get_env_files
+  _get_service: integrations.embedding_service.get_embedding_service
+  _json: json
+  _json_builder: utils.json_utils.json_compact
+  _MarkItDown: markitdown.MarkItDown
+  _search_project_context_impl: tools.context_search._search_project_context_impl
+  Agent: agents.Agent
+  AGENT_TOOLS: tools.registry.AGENT_TOOLS
+  AGENT_UPDATED_STREAM_EVENT: core.constants.AGENT_UPDATED_STREAM_EVENT
+  AgentUpdatedStreamEvent: models.sdk_models.AgentUpdatedStreamEvent
+  AgentUpdateMessage: models.event_models.AgentUpdateMessage
+  aiofiles: aiofiles
+  Annotated: typing.Annotated
+  annotations: __future__.annotations
+  Any: typing.Any
+  ApiFileNotFoundError: api.middleware.exception_handlers.ApiFileNotFoundError
+  APIResponse: models.schemas.base.APIResponse
+  APIRouter: fastapi.APIRouter
+  AppException: api.middleware.exception_handlers.AppException
+  AppSettings: api.dependencies.AppSettings
+  argparse: argparse
+  AssistantMessage: models.event_models.AssistantMessage
+  asynccontextmanager: contextlib.asynccontextmanager
+  AsyncGenerator: collections.abc.AsyncGenerator
+  asyncio: asyncio
+  AsyncIterator: collections.abc.AsyncIterator
+  AsyncOpenAI: openai.AsyncOpenAI
+  asyncpg: asyncpg
+  auth: api.routes.v1.auth
+  AuthenticationError: api.middleware.exception_handlers.AuthenticationError
+  AuthService: api.services.auth_service.AuthService
+  Awaitable: collections.abc.Awaitable
+  base64: base64
+  BaseHTTPMiddleware: starlette.middleware.base.BaseHTTPMiddleware
+  BaseModel: pydantic.BaseModel
+  BaseSettings: pydantic_settings.BaseSettings
+  bcrypt: bcrypt
+  blake2b: hashlib.blake2b
+  boto3: boto3
+  build_dynamic_instructions: core.prompts.build_dynamic_instructions
+  build_event_handlers: integrations.event_handlers.build_event_handlers
+  calculate_tool_status: api.services.message_utils.calculate_tool_status
+  Callable: collections.abc.Callable
+  CallTracker: base.CallTracker
+  CancellationToken: api.websocket.task_manager.CancellationToken
+  cast: typing.cast
+  chat: chat
+  ChatService: api.services.chat_service.ChatService
+  check_pool_health: utils.db_utils.check_pool_health
+  ChunkResult: api.services.context_service.ChunkResult
+  ClassVar: typing.ClassVar
+  ClientConnection: typing.Any
+  config: api.routes.v1.config
+  ConfigDict: pydantic.ConfigDict
+  ConfigResponse: models.schemas.config.ConfigResponse
+  configure_uvicorn_logging: utils.logger.configure_uvicorn_logging
+  connect_session: integrations.sdk_token_tracker.connect_session
+  ContentItem: models.session_models.ContentItem
+  ContentLike: models.sdk_models.ContentLike
+  ContentPartMessage: models.event_models.ContentPartMessage
+  context: api.routes.v1.context
+  contextlib: contextlib
+  ContextService: api.services.context_service.ContextService
+  ContextVar: contextvars.ContextVar
+  CONVERSATION_SUMMARIZATION_INSTRUCTIONS: core.prompts.CONVERSATION_SUMMARIZATION_INSTRUCTIONS
+  CONVERTIBLE_EXTENSIONS: core.constants.CONVERTIBLE_EXTENSIONS
+  CORSMiddleware: fastapi.middleware.cors.CORSMiddleware
+  count_tokens: utils.token_utils.count_tokens
+  Counter: prometheus_client.Counter
+  create_agent: core.agent.create_agent
+  create_agent_updated_handler: agent_events.create_agent_updated_handler
+  create_database_pool: utils.db_utils.create_database_pool
+  create_http_client: utils.client_factory.create_http_client
+  create_openai_client: utils.client_factory.create_openai_client
+  create_raw_response_handler: raw_events.create_raw_response_handler
+  create_run_item_handler: run_item_events.create_run_item_handler
+  create_session_aware_tools: tools.wrappers.create_session_aware_tools
+  create_sync_openai_client: utils.client_factory.create_sync_openai_client
+  create_transport: integrations.mcp_transport.create_transport
+  create_websocket_context: api.middleware.request_context.create_websocket_context
+  CreateProjectRequest: models.schemas.projects.CreateProjectRequest
+  CreateSessionRequest: models.schemas.sessions.CreateSessionRequest
+  DATA_FILES_PATH: api.dependencies.DATA_FILES_PATH
+  dataclass: dataclasses.dataclass
+  dataclass_field: dataclasses.field
+  datetime: datetime.datetime
+  DB: api.dependencies.DB
+  db_query_duration_seconds: utils.metrics.db_query_duration_seconds
+  DEFAULT_MCP_SERVERS: integrations.mcp_registry.DEFAULT_MCP_SERVERS
+  DEFAULT_MODEL: core.constants.DEFAULT_MODEL
+  DEFAULT_SEARCH_MAX_RESULTS: core.constants.DEFAULT_SEARCH_MAX_RESULTS
+  defaultdict: collections.defaultdict
+  DeleteFileResponse: models.schemas.files.DeleteFileResponse
+  DeleteProjectResponse: models.schemas.projects.DeleteProjectResponse
+  DeleteSessionResponse: models.schemas.sessions.DeleteSessionResponse
+  Depends: fastapi.Depends
+  DirectoryListResponse: models.api_models.DirectoryListResponse
+  disconnect_session: integrations.sdk_token_tracker.disconnect_session
+  DOCUMENT_SUMMARIZATION_INSTRUCTIONS: core.prompts.DOCUMENT_SUMMARIZATION_INSTRUCTIONS
+  DOCUMENT_SUMMARIZATION_THRESHOLD: core.constants.DOCUMENT_SUMMARIZATION_THRESHOLD
+  DocumentGenerateResponse: models.api_models.DocumentGenerateResponse
+  DotEnvSettingsSource: pydantic_settings.sources.DotEnvSettingsSource
+  edit_file: tools.text_editing.edit_file
+  EditOperation: tools.text_editing.EditOperation
+  EmbeddingService: integrations.embedding_service.EmbeddingService
+  ERROR_NULL_BYTE_IN_PATH: core.constants.ERROR_NULL_BYTE_IN_PATH
+  ERROR_PATH_OUTSIDE_PROJECT: core.constants.ERROR_PATH_OUTSIDE_PROJECT
+  ERROR_PATH_OUTSIDE_WORKSPACE: core.constants.ERROR_PATH_OUTSIDE_WORKSPACE
+  ERROR_PATH_TRAVERSAL: core.constants.ERROR_PATH_TRAVERSAL
+  ERROR_SYMLINK_ESCAPE: core.constants.ERROR_SYMLINK_ESCAPE
+  ErrorCode: models.error_models.ErrorCode
+  ErrorDetail: models.error_models.ErrorDetail
+  ErrorResponse: models.error_models.ErrorResponse
+  EventHandler: models.sdk_models.EventHandler
+  execute_python_code: tools.code_interpreter.execute_python_code
+  FastAPI: fastapi.FastAPI
+  FastAPIFile: fastapi.File
+  Field: pydantic.Field
+  field: dataclasses.field
+  field_validator: pydantic.field_validator
+  FileInfo: models.schemas.files.FileInfo
+  FileInfoResponse: models.schemas.sessions.FileInfoResponse
+  FileListResponse: models.schemas.files.FileListResponse
+  FilePathResponse: models.schemas.files.FilePathResponse
+  FileReadResponse: models.api_models.FileReadResponse
+  Files: api.dependencies.Files
+  files: api.routes.v1.files
+  FileService: api.services.file_service.FileService
+  FileUploadResponse: models.schemas.files.FileUploadResponse
+  FUNCTION_REGISTRY: tools.registry.FUNCTION_REGISTRY
+  function_tool: agents.function_tool
+  FunctionArgumentsDeltaMessage: models.event_models.FunctionArgumentsDeltaMessage
+  FunctionArgumentsDoneMessage: models.event_models.FunctionArgumentsDoneMessage
+  Gauge: prometheus_client.Gauge
+  generate_document: tools.document_generation.generate_document
+  get_args: typing.get_args
+  get_context_service: api.dependencies.get_context_service
+  get_current_user: api.middleware.auth.get_current_user
+  get_current_user_from_token: api.middleware.auth.get_current_user_from_token
+  get_db: api.dependencies.get_db
+  get_embedding_service: integrations.embedding_service.get_embedding_service
+  get_jail_relative_path: utils.file_utils.get_jail_relative_path
+  get_markitdown_converter: utils.document_processor.get_markitdown_converter
+  get_rate_limiter: api.middleware.rate_limiter.get_rate_limiter
+  get_reasoning_levels: core.constants.get_reasoning_levels
+  get_request_context: api.middleware.request_context.get_request_context
+  get_request_id: api.middleware.request_context.get_request_id
+  get_sandbox_pool: tools.code_interpreter.get_sandbox_pool
+  get_session_cache: utils.cache.get_session_cache
+  get_session_list_cache: utils.cache.get_session_list_cache
+  get_settings: core.constants.get_settings
+  get_status_code: models.error_models.get_status_code
+  get_table_schema: tools.schema_fetch.get_table_schema
+  graceful_pool_close: utils.db_utils.graceful_pool_close
+  handle_agent_updated: agent_events.handle_agent_updated
+  handle_content_part_added_event: raw_events.handle_content_part_added_event
+  handle_content_part_done_event: raw_events.handle_content_part_done_event
+  handle_function_arguments_delta_event: raw_events.handle_function_arguments_delta_event
+  handle_function_arguments_done_event: raw_events.handle_function_arguments_done_event
+  handle_handoff_call: run_item_events.handle_handoff_call
+  handle_handoff_output: run_item_events.handle_handoff_output
+  handle_message_output: run_item_events.handle_message_output
+  handle_output_item_added: raw_events.handle_output_item_added
+  handle_output_item_done: raw_events.handle_output_item_done
+  handle_reasoning: run_item_events.handle_reasoning
+  handle_reasoning_summary_delta_event: raw_events.handle_reasoning_summary_delta_event
+  handle_reasoning_text_delta_event: raw_events.handle_reasoning_text_delta_event
+  handle_refusal_delta_event: raw_events.handle_refusal_delta_event
+  handle_text_delta_event: raw_events.handle_text_delta_event
+  handle_tool_call: run_item_events.handle_tool_call
+  handle_tool_output: run_item_events.handle_tool_output
+  handlers: logging.handlers
+  HANDOFF_CALL_ITEM: core.constants.HANDOFF_CALL_ITEM
+  HANDOFF_OUTPUT_ITEM: core.constants.HANDOFF_OUTPUT_ITEM
+  HandoffMessage: models.event_models.HandoffMessage
+  hashlib: hashlib
+  health: api.routes.v1.health
+  HealthResponse: models.schemas.health.HealthResponse
+  Histogram: prometheus_client.Histogram
+  HTTPAuthorizationCredentials: fastapi.security.HTTPAuthorizationCredentials
+  HTTPBearer: fastapi.security.HTTPBearer
+  HTTPException: fastapi.HTTPException
+  HttpUrl: pydantic.HttpUrl
+  IGNORED_EVENTS: raw_events.IGNORED_EVENTS
+  initialize_mcp_manager: integrations.mcp_manager.initialize_mcp_manager
+  initialize_mcp_server: integrations.mcp_registry.initialize_mcp_server
+  inspect: inspect
+  Instrumentator: prometheus_fastapi_instrumentator.Instrumentator
+  is_vision_capable: core.constants.is_vision_capable
+  json: json
+  json_pretty: utils.json_utils.json_pretty
+  json_safe: utils.json_utils.json_safe
+  jsonlogger: pythonjsonlogger.json
+  JSONResponse: fastapi.responses.JSONResponse
+  jwt: jose.jwt
+  JWTError: jose.JWTError
+  list_directory: tools.file_operations.list_directory
+  list_registered_databases: tools.schema_fetch.list_registered_databases
+  Literal: typing.Literal
+  LivenessResponse: models.schemas.health.LivenessResponse
+  load_dotenv: dotenv.load_dotenv
+  LocalFileService: api.services.file_service.LocalFileService
+  LOG_BACKUP_COUNT_CONVERSATIONS: core.constants.LOG_BACKUP_COUNT_CONVERSATIONS
+  LOG_BACKUP_COUNT_ERRORS: core.constants.LOG_BACKUP_COUNT_ERRORS
+  LOG_MAX_SIZE: core.constants.LOG_MAX_SIZE
+  LOG_PREVIEW_LENGTH: core.constants.LOG_PREVIEW_LENGTH
+  logger: utils.logger.logger
+  logging: logging
+  LoginRequest: models.schemas.auth.LoginRequest
+  lru_cache: functools.lru_cache
+  MarkItDown: markitdown.MarkItDown
+  math: math
+  MAX_CONVERSATION_TURNS: core.constants.MAX_CONVERSATION_TURNS
+  MAX_FILE_SIZE: core.constants.MAX_FILE_SIZE
+  MCP_CALL_TOOL_TIMEOUT: core.constants.MCP_CALL_TOOL_TIMEOUT
+  MCP_CONNECT_TIMEOUT: core.constants.MCP_CONNECT_TIMEOUT
+  MCP_LIST_TOOLS_TIMEOUT: core.constants.MCP_LIST_TOOLS_TIMEOUT
+  MCP_SERVER_CONFIGS: integrations.mcp_registry.MCP_SERVER_CONFIGS
+  mcp_servers_available: utils.metrics.mcp_servers_available
+  mcp_servers_total: utils.metrics.mcp_servers_total
+  mcp_tool_call_duration_seconds: utils.metrics.mcp_tool_call_duration_seconds
+  mcp_tool_calls_total: utils.metrics.mcp_tool_calls_total
+  MCPResult: models.mcp_models.MCPResult
+  MCPServerConfig: models.schemas.config.MCPServerConfig
+  MCPServerManager: integrations.mcp_manager.MCPServerManager
+  MCPTool: models.mcp_models.MCPTool
+  MESSAGE_STRUCTURE_TOKEN_OVERHEAD: core.constants.MESSAGE_STRUCTURE_TOKEN_OVERHEAD
+  MessageResponse: models.schemas.sessions.MessageResponse
+  messages: api.routes.v1.messages
+  mimetypes: mimetypes
+  MIN_MESSAGES_FOR_SUMMARIZATION: core.constants.MIN_MESSAGES_FOR_SUMMARIZATION
+  MODEL_CONFIGS: core.constants.MODEL_CONFIGS
+  MODEL_METADATA: core.constants.MODEL_METADATA
+  MODEL_TOKEN_LIMITS: core.constants.MODEL_TOKEN_LIMITS
+  model_validator: pydantic.model_validator
+  ModelConfigItem: models.schemas.config.ModelConfigItem
+  MODELS_WITH_REASONING: core.constants.MODELS_WITH_REASONING
+  ModelSettings: agents.ModelSettings
+  MSG_TYPE_AGENT_UPDATED: core.constants.MSG_TYPE_AGENT_UPDATED
+  MSG_TYPE_ASSISTANT_DELTA: core.constants.MSG_TYPE_ASSISTANT_DELTA
+  MSG_TYPE_CONTENT_PART_ADDED: core.constants.MSG_TYPE_CONTENT_PART_ADDED
+  MSG_TYPE_ERROR: core.constants.MSG_TYPE_ERROR
+  MSG_TYPE_FUNCTION_ARGUMENTS_DELTA: core.constants.MSG_TYPE_FUNCTION_ARGUMENTS_DELTA
+  MSG_TYPE_FUNCTION_ARGUMENTS_DONE: core.constants.MSG_TYPE_FUNCTION_ARGUMENTS_DONE
+  MSG_TYPE_FUNCTION_COMPLETED: core.constants.MSG_TYPE_FUNCTION_COMPLETED
+  MSG_TYPE_FUNCTION_DETECTED: core.constants.MSG_TYPE_FUNCTION_DETECTED
+  MSG_TYPE_FUNCTION_EXECUTING: core.constants.MSG_TYPE_FUNCTION_EXECUTING
+  MSG_TYPE_HANDOFF_COMPLETED: core.constants.MSG_TYPE_HANDOFF_COMPLETED
+  MSG_TYPE_HANDOFF_STARTED: core.constants.MSG_TYPE_HANDOFF_STARTED
+  MSG_TYPE_REASONING_DELTA: core.constants.MSG_TYPE_REASONING_DELTA
+  MSG_TYPE_REASONING_SUMMARY_DELTA: core.constants.MSG_TYPE_REASONING_SUMMARY_DELTA
+  MSG_TYPE_REFUSAL_DELTA: core.constants.MSG_TYPE_REFUSAL_DELTA
+  op: alembic.op
+  OpenAIAPIError: openai.APIError
+  OpenAIAuthError: openai.AuthenticationError
+  OpenAIProvider: agents.models.openai_provider.OpenAIProvider
+  OpenAIRateLimitError: openai.RateLimitError
+  os: os
+  PaginatedResponse: models.schemas.base.PaginatedResponse
+  PaginationMeta: models.schemas.base.PaginationMeta
+  patch_sdk_for_auto_tracking: integrations.sdk_token_tracker.patch_sdk_for_auto_tracking
+  Path: fastapi.Path
+  PostgresSession: api.services.postgres_session.PostgresSession
+  PostgresTokenAwareSession: api.services.token_aware_session.PostgresTokenAwareSession
+  PresignedDownloadResponse: models.schemas.presign.PresignedDownloadResponse
+  PresignedUploadRequest: models.schemas.presign.PresignedUploadRequest
+  PresignedUploadResponse: models.schemas.presign.PresignedUploadResponse
+  PROJECT_ROOT: core.constants.PROJECT_ROOT
+  ProjectListResponse: models.schemas.projects.ProjectListResponse
+  ProjectResponse: models.schemas.projects.ProjectResponse
+  Projects: api.dependencies.Projects
+  projects: api.routes.v1.projects
+  ProjectService: api.services.project_service.ProjectService
+  PydanticBaseSettingsSource: pydantic_settings.sources.PydanticBaseSettingsSource
+  Query: fastapi.Query
+  RateLimitMiddleware: api.middleware.rate_limiter.RateLimitMiddleware
+  RAW_EVENT_TYPE_HANDLERS: raw_events.RAW_EVENT_TYPE_HANDLERS
+  RAW_RESPONSE_EVENT: core.constants.RAW_RESPONSE_EVENT
+  RawHandoffLike: models.sdk_models.RawHandoffLike
+  RawMessageLike: models.sdk_models.RawMessageLike
+  RawToolCallLike: models.sdk_models.RawToolCallLike
+  re: re
+  read_file: tools.file_operations.read_file
+  read_file_content: utils.file_utils.read_file_content
+  ReadinessResponse: models.schemas.health.ReadinessResponse
+  Reasoning: openai.types.shared.Reasoning
+  REASONING_EFFORT_OPTIONS: core.constants.REASONING_EFFORT_OPTIONS
+  REASONING_ITEM: core.constants.REASONING_ITEM
+  REASONING_MODELS: core.constants.REASONING_MODELS
+  ReasoningDeltaMessage: models.event_models.ReasoningDeltaMessage
+  ReasoningLevelConfig: models.schemas.config.ReasoningLevelConfig
+  ReasoningSummaryDeltaMessage: models.event_models.ReasoningSummaryDeltaMessage
+  RefreshRequest: models.schemas.auth.RefreshRequest
+  RefusalDeltaMessage: models.event_models.RefusalDeltaMessage
+  register_exception_handlers: api.middleware.exception_handlers.register_exception_handlers
+  RegisterRequest: models.schemas.auth.RegisterRequest
+  Request: fastapi.Request
+  request_duration_seconds: utils.metrics.request_duration_seconds
+  RequestContextMiddleware: api.middleware.request_context.RequestContextMiddleware
+  RequestResponseEndpoint: starlette.middleware.base.RequestResponseEndpoint
+  RequestSizeLimitMiddleware: api.middleware.request_limits.RequestSizeLimitMiddleware
+  RequestValidationError: fastapi.exceptions.RequestValidationError
+  resolve_edit_path: tools.text_editing.resolve_edit_path
+  Response: fastapi.responses.Response
+  ResponseEventData: base.ResponseEventData
+  row_to_message: api.services.message_utils.row_to_message
+  RUN_ITEM_STREAM_EVENT: core.constants.RUN_ITEM_STREAM_EVENT
+  RunConfig: agents.RunConfig
+  RunItem: models.sdk_models.RunItem
+  RunItemStreamEvent: models.sdk_models.RunItemStreamEvent
+  Runner: agents.Runner
+  RunResultStreaming: agents.result.RunResultStreaming
+  S3SyncService: api.services.s3_sync_service.S3SyncService
+  sa: sqlalchemy
+  search_files: tools.file_operations.search_files
+  SearchFilesResponse: models.api_models.SearchFilesResponse
+  secrets: secrets
+  SecurityHeadersMiddleware: api.middleware.security_headers.SecurityHeadersMiddleware
+  send_ws_error: api.websocket.errors.send_ws_error
+  Sequence: collections.abc.Sequence
+  session_file_context: api.services.file_context.session_file_context
+  SESSION_ID_LENGTH: core.constants.SESSION_ID_LENGTH
+  SESSION_TITLE_GENERATION_PROMPT: core.prompts.SESSION_TITLE_GENERATION_PROMPT
+  SessionListResponse: models.schemas.sessions.SessionListResponse
+  SessionNotFoundError: api.middleware.exception_handlers.SessionNotFoundError
+  SessionResponse: models.schemas.sessions.SessionResponse
+  Sessions: api.dependencies.Sessions
+  sessions: api.routes.v1.sessions
+  SessionService: api.services.session_service.SessionService
+  SessionWithHistoryResponse: models.schemas.sessions.SessionWithHistoryResponse
+  set_default_openai_client: agents.set_default_openai_client
+  set_tracing_disabled: agents.set_tracing_disabled
+  Settings: core.constants.Settings
+  SettingsConfigDict: pydantic_settings.SettingsConfigDict
+  shutil: shutil
+  start_embedding_worker: workers.embedding_worker.start_embedding_worker
+  status: fastapi.status
+  stop_embedding_worker: workers.embedding_worker.stop_embedding_worker
+  StreamEvent: models.sdk_models.StreamEvent
+  subprocess: subprocess
+  SuccessResponse: models.schemas.base.SuccessResponse
+  SummarizationService: api.services.summarization_service.SummarizationService
+  summarize_content: utils.document_processor.summarize_content
+  SummarizeResponse: models.schemas.sessions.SummarizeResponse
+  sys: sys
+  SYSTEM_INSTRUCTIONS: core.prompts.SYSTEM_INSTRUCTIONS
+  TextEditResponse: models.api_models.TextEditResponse
+  threading: threading
+  THROTTLED_EVENTS: raw_events.THROTTLED_EVENTS
+  tiktoken: tiktoken
+  time: time
+  timedelta: datetime.timedelta
+  timezone: datetime.timezone
+  TOKEN_CACHE_SIZE: core.constants.TOKEN_CACHE_SIZE
+  TOKEN_SOURCE_HANDOFF: core.constants.TOKEN_SOURCE_HANDOFF
+  TOKEN_SOURCE_REASONING: core.constants.TOKEN_SOURCE_REASONING
+  TOKEN_SOURCE_TOOL_CALL: core.constants.TOKEN_SOURCE_TOOL_CALL
+  TOKEN_SOURCE_TOOL_ERROR: core.constants.TOKEN_SOURCE_TOOL_ERROR
+  TOKEN_SOURCE_TOOL_OUTPUT: core.constants.TOKEN_SOURCE_TOOL_OUTPUT
+  TOKEN_SOURCE_UNKNOWN: core.constants.TOKEN_SOURCE_UNKNOWN
+  TokenResponse: models.schemas.auth.TokenResponse
+  TOOL_CALL_ITEM: core.constants.TOOL_CALL_ITEM
+  TOOL_CALL_OUTPUT_ITEM: core.constants.TOOL_CALL_OUTPUT_ITEM
+  ToolCallNotification: models.event_models.ToolCallNotification
+  ToolResultNotification: models.event_models.ToolResultNotification
+  TOOLS: tools.registry.TOOLS
+  traceback: traceback
+  TYPE_CHECKING: typing.TYPE_CHECKING
+  TypedDict: typing.TypedDict
+  TypeGuard: typing.TypeGuard
+  update_request_context: api.middleware.request_context.update_request_context
+  UpdateProjectRequest: models.schemas.projects.UpdateProjectRequest
+  UpdateSessionRequest: models.schemas.sessions.UpdateSessionRequest
+  UploadFile: fastapi.UploadFile
+  UploadResult: models.ipc_models.UploadResult
+  UserInfo: models.api_models.UserInfo
+  UTC: datetime.UTC
+  UUID: uuid.UUID
+  uuid: uuid
+  uuid_UUID: uuid.UUID
+  UUIDType: uuid.UUID
+  uvicorn: uvicorn
+  v1_router: api.routes.v1.router
+  validate_directory_path: utils.file_utils.validate_directory_path
+  validate_file_path: utils.file_utils.validate_file_path
+  ValidationError: pydantic.ValidationError
+  WebSocket: fastapi.WebSocket
+  WebSocketDisconnect: fastapi.WebSocketDisconnect
+  WebSocketError: models.error_models.WebSocketError
+  WebSocketManager: api.websocket.manager.WebSocketManager
+  websockets: websockets
+  wraps: functools.wraps
+  write_file_content: utils.file_utils.write_file_content
+  ws_connections_active: utils.metrics.ws_connections_active
+  ws_connections_total: utils.metrics.ws_connections_total
+  ws_messages_total: utils.metrics.ws_messages_total
+  WSCloseCode: api.websocket.errors.WSCloseCode
+
+functions:
+  __aenter__:
+    type: async
+    module: src.backend.integrations.mcp_websocket_client
+    args: [self]
+    params:
+      returns: WebSocketMCPClient
+  __aexit__:
+    type: async
+    module: src.backend.integrations.mcp_websocket_client
+    args: [self, exc_type, exc_val, exc_tb]
+    params:
+      returns: None
+  __aiter__:
+    type: async
+    module: src.backend.api.middleware.request_limits
+    args: [self]
+    params:
+      returns: AsyncIterator[bytes]
+  __init__:
+    type: sync
+    module: src.backend.utils.logger
+    args: [self, name]
+  _add_to_full_history:
+    type: async
+    module: src.backend.api.services.chat_service
+    args: [self, session_uuid, role, content, partial]
+    params:
+      returns: None
+  _add_tool_call_to_history:
+    type: async
+    module: src.backend.api.services.chat_service
+    args: [self, session_uuid, call_id, name, arguments, result, success, interrupted]
+    params:
+      returns: None
+  _build_headers:
+    type: sync
+    module: src.backend.api.middleware.rate_limiter
+    args: [self, config, current_count, now, window_size]
+    params:
+      returns: dict
+  _build_multimodal_content:
+    type: async
+    module: src.backend.api.services.chat_service
+    args: [self, text_content, attachments, session_id, model]
+  _calculate_total_tokens:
+    type: sync
+    module: src.backend.api.services.token_aware_session
+    args: [self, items]
+    params:
+      returns: int
+  _check_idle_connections:
+    type: async
+    module: src.backend.api.websocket.manager
+    args: [self]
+    params:
+      returns: None
+  _clean_container_workspace:
+    type: async
+    module: src.backend.tools.code_interpreter
+    args: [self, container_id]
+    params:
+      returns: None
+  _cleanup:
+    type: async
+    module: src.backend.integrations.mcp_websocket_client
+    args: [self]
+    params:
+      returns: None
+  _cleanup_expired:
+    type: async
+    module: src.backend.api.middleware.rate_limiter
+    args: [self]
+    params:
+      returns: None
+  _cleanup_loop:
+    type: async
+    module: src.backend.api.middleware.rate_limiter
+    args: [self]
+    params:
+      returns: None
+  _cleanup_stale_containers:
+    type: async
+    module: src.backend.tools.code_interpreter
+    args: [self]
+    params:
+      returns: None
+  _clear_llm_context:
+    type: async
+    module: src.backend.api.services.token_aware_session
+    args: [self]
+    params:
+      returns: None
+  _close_idle_connections:
+    type: async
+    module: src.backend.api.websocket.manager
+    args: [self]
+    params:
+      returns: None
+  _collect_output_files:
+    type: sync
+    module: src.backend.tools.code_interpreter
+    args: [self, workspace_path]
+    params:
+      returns: list[dict]
+  _container_cp:
+    type: async
+    module: src.backend.tools.code_interpreter
+    args: [self, src, dst, to_container, timeout]
+    params:
+      returns: tuple
+  _count_item_tokens:
+    type: sync
+    module: src.backend.api.services.token_aware_session
+    args: [self, item]
+    params:
+      returns: int
+  _count_text_tokens:
+    type: sync
+    module: src.backend.api.services.token_aware_session
+    args: [self, text]
+    params:
+      returns: int
+  _count_tokens_cached:
+    type: sync
+    module: src.backend.utils.token_utils
+    args: [text_hash, text, model]
+    params:
+      returns: int
+  _create_error_response:
+    type: sync
+    module: src.backend.api.middleware.exception_handlers
+    args: [code, message, request, details, debug_info]
+    params:
+      returns: ErrorResponse
+  _create_file_info:
+    type: sync
+    module: src.backend.tools.file_operations
+    args: [file_path]
+    params:
+      returns: FileInfo
+  _decode_token:
+    type: sync
+    module: src.backend.api.services.auth_service
+    args: [self, token, token_type]
+    params:
+      returns: dict
+  _embed_message:
+    type: async
+    module: src.backend.workers.embedding_worker
+    args: [self, row]
+    params:
+      returns: None
+  _embed_messages_batch:
+    type: async
+    module: src.backend.workers.embedding_worker
+    args: [self, rows]
+    params:
+      returns: None
+  _embed_session_summary:
+    type: async
+    module: src.backend.workers.embedding_worker
+    args: [self, session]
+    params:
+      returns: None
+  _embed_sessions_batch:
+    type: async
+    module: src.backend.workers.embedding_worker
+    args: [self, sessions]
+    params:
+      returns: None
+  _encode_image_to_base64:
+    type: sync
+    module: src.backend.tools.code_interpreter
+    args: [file_path]
+  _encode_token:
+    type: sync
+    module: src.backend.api.services.auth_service
+    args: [self, user, token_type, expires_at]
+    params:
+      returns: str
+  _enrich_context:
+    type: sync
+    module: src.backend.utils.logger
+    args: [self, kwargs]
+    params:
+      returns: dict
+  _exception_to_error_code:
+    type: sync
+    module: src.backend.api.websocket.errors
+    args: [exc]
+    params:
+      returns: ErrorCode
+  _execute_cold:
+    type: async
+    module: src.backend.tools.code_interpreter
+    args: [self, code, workspace_path, session_files_path]
+    params:
+      returns: ExecutionResult
+  _execute_in_container:
+    type: async
+    module: src.backend.tools.code_interpreter
+    args: [self, container_id, code, workspace_path, session_files_path]
+    params:
+      returns: ExecutionResult
+  _extract_text_for_title:
+    type: sync
+    module: src.backend.api.services.chat_service
+    args: [self, content]
+    params:
+      returns: str
+  _extract_text_from_content:
+    type: sync
+    module: src.backend.api.services.token_aware_session
+    args: [self, content]
+    params:
+      returns: str
+  _extract_text_from_parts:
+    type: sync
+    module: src.backend.api.services.token_aware_session
+    args: [self, parts]
+    params:
+      returns: str
+  _generate_session_id:
+    type: sync
+    module: src.backend.api.services.session_service
+    args: [self]
+    params:
+      returns: str
+  _generate_summary:
+    type: async
+    module: src.backend.api.services.token_aware_session
+    args: [self, items]
+    params:
+      returns: str
+  _get_client:
+    type: sync
+    module: src.backend.api.services.s3_sync_service
+    args: [self]
+    params:
+      returns: Any
+  _get_client_identifier:
+    type: sync
+    module: src.backend.api.middleware.rate_limiter
+    args: [request]
+    params:
+      returns: str
+  _get_encoder:
+    type: sync
+    module: src.backend.utils.token_utils
+    args: [model]
+    params:
+      returns: Any
+  _get_env_files:
+    type: sync
+    module: src.backend.core.constants
+    params:
+      returns: list[Path]
+  _get_model_limit:
+    type: sync
+    module: src.backend.api.services.token_aware_session
+    args: [self, model]
+    params:
+      returns: int
+  _get_tier_for_path:
+    type: sync
+    module: src.backend.api.middleware.rate_limiter
+    args: [path]
+    params:
+      returns: str
+  _get_user_for_websocket:
+    type: async
+    module: src.backend.api.routes.chat
+    args: [token, db, client_ip]
+  _handle_chat_message:
+    type: async
+    module: src.backend.api.routes.chat
+    args: [data, session_id, chat_service, websocket, cancellation_token]
+    params:
+      returns: None
+  _hash_text:
+    type: sync
+    module: src.backend.utils.token_utils
+    args: [text]
+    params:
+      returns: str
+  _inject_matplotlib_autosave:
+    type: sync
+    module: src.backend.tools.code_interpreter
+    args: [code]
+    params:
+      returns: str
+  _inject_project_context:
+    type: async
+    module: src.backend.api.services.chat_service
+    args: [self, instructions, project_id, messages, session_id]
+    params:
+      returns: str
+  _is_alive:
+    type: async
+    module: src.backend.tools.code_interpreter
+    args: [self, container_id]
+    params:
+      returns: bool
+  _is_image_file:
+    type: sync
+    module: src.backend.tools.code_interpreter
+    args: [file_path]
+    params:
+      returns: bool
+  _is_localhost:
+    type: sync
+    module: src.backend.api.middleware.auth
+    args: [request]
+    params:
+      returns: bool
+  _is_recoverable:
+    type: sync
+    module: src.backend.api.websocket.errors
+    args: [code]
+    params:
+      returns: bool
+  _is_upload_path:
+    type: sync
+    module: src.backend.api.middleware.request_limits
+    args: [path]
+    params:
+      returns: bool
+  _issue_tokens:
+    type: sync
+    module: src.backend.api.services.auth_service
+    args: [self, user, include_refresh]
+    params:
+      returns: dict
+  _keepalive:
+    type: async
+    module: src.backend.api.routes.chat
+    args: [websocket]
+    params:
+      returns: None
+  _list_files:
+    type: sync
+    module: src.backend.utils.file_utils
+    args: [path]
+    params:
+      returns: list[str]
+  _listen_loop:
+    type: async
+    module: src.backend.integrations.mcp_websocket_client
+    args: [self]
+    params:
+      returns: None
+  _log_error:
+    type: sync
+    module: src.backend.api.middleware.exception_handlers
+    args: [error, code, status_code, request]
+    params:
+      returns: None
+  _log_event:
+    type: sync
+    module: src.backend.integrations.event_handlers.raw_events
+    args: [event_type, result]
+    params:
+      returns: None
+  _maybe_generate_title:
+    type: async
+    module: src.backend.api.services.chat_service
+    args: [self, session_id, session_uuid, model]
+    params:
+      returns: None
+  _next_id:
+    type: sync
+    module: src.backend.integrations.mcp_websocket_client
+    args: [self]
+    params:
+      returns: int
+  _parse_json_item:
+    type: sync
+    module: src.backend.api.services.postgres_session
+    args: [content, session_id]
+  _process_chat_inner:
+    type: async
+    module: src.backend.api.services.chat_service
+    args: [self, session_id, messages, model, reasoning_effort, cancellation_token]
+    params:
+      returns: None
+  _process_cycle:
+    type: async
+    module: src.backend.workers.embedding_worker
+    args: [self]
+    params:
+      returns: None
+  _process_messages:
+    type: async
+    module: src.backend.workers.embedding_worker
+    args: [self]
+    params:
+      returns: None
+  _process_session_summaries:
+    type: async
+    module: src.backend.workers.embedding_worker
+    args: [self]
+    params:
+      returns: None
+  _process_stream_message:
+    type: async
+    module: src.backend.api.services.chat_service
+    args: [self, ipc_msg, session_id, session_uuid, pending_tool_calls]
+  _redact_content:
+    type: sync
+    module: src.backend.utils.logger
+    args: [self, text]
+    params:
+      returns: str
+  _reload_dotenv_into_environ:
+    type: sync
+    module: src.backend.core.constants
+    params:
+      returns: None
+  _repopulate_session:
+    type: async
+    module: src.backend.api.services.token_aware_session
+    args: [self, summary_text, recent_items]
+    params:
+      returns: None
+  _row_to_file:
+    type: sync
+    module: src.backend.api.services.session_service
+    args: [self, row]
+    params:
+      returns: dict
+  _row_to_session:
+    type: sync
+    module: src.backend.api.services.session_service
+    args: [self, row]
+    params:
+      returns: dict
+  _run_agent_stream:
+    type: async
+    module: src.backend.api.services.chat_service
+    args: [self, agent, session, session_id, session_uuid, user_messages, model_provider, cancellation_token]
+    params:
+      returns: bool
+  _run_auto_summarization:
+    type: async
+    module: src.backend.api.services.chat_service
+    args: [self, session, session_id, session_uuid]
+    params:
+      returns: None
+  _run_loop:
+    type: async
+    module: src.backend.workers.embedding_worker
+    args: [self]
+    params:
+      returns: None
+  _safe_embed_message:
+    type: async
+    module: src.backend.workers.embedding_worker
+    args: [self, row]
+    params:
+      returns: None
+  _safe_embed_session_summary:
+    type: async
+    module: src.backend.workers.embedding_worker
+    args: [self, session]
+    params:
+      returns: None
+  _sanitize_items_for_summary:
+    type: sync
+    module: src.backend.api.services.token_aware_session
+    args: [self, items]
+    params:
+      returns: list[dict]
+  _search_project_context:
+    type: async
+    module: src.backend.api.services.chat_service
+    args: [self, project_id, query, top_k, min_score]
+    params:
+      returns: list[ChunkResult]
+  _send_request:
+    type: async
+    module: src.backend.integrations.mcp_websocket_client
+    args: [self, method, params, timeout]
+    params:
+      returns: dict
+  _send_token_usage:
+    type: async
+    module: src.backend.api.services.chat_service
+    args: [self, session_id, session]
+    params:
+      returns: None
+  _setup_openai_client:
+    type: sync
+    module: src.backend.api.main
+    params:
+      returns: None
+  _should_log_content:
+    type: sync
+    module: src.backend.utils.logger
+    args: [self]
+    params:
+      returns: bool
+  _shutdown_mcp_server:
+    type: async
+    module: src.backend.integrations.mcp_manager
+    args: [server, server_key]
+    params:
+      returns: None
+  _spawn_mcp_server:
+    type: async
+    module: src.backend.integrations.mcp_manager
+    args: [server_key, index]
+  _start_warm_container:
+    type: async
+    module: src.backend.tools.code_interpreter
+    args: [self, suffix]
+  _stop_container:
+    type: async
+    module: src.backend.tools.code_interpreter
+    args: [self, container_id]
+    params:
+      returns: None
+  _upload_file:
+    type: async
+    module: src.backend.api.services.s3_sync_service
+    args: [self, session_id, folder, filename]
+    params:
+      returns: None
+  accumulated_tool_tokens:
+    type: sync
+    module: src.backend.api.services.token_aware_session
+    args: [self, value]
+    params:
+      returns: None
+  acquire:
+    type: async
+    module: src.backend.integrations.mcp_manager
+    args: [self, server_key, timeout]
+    params:
+      returns: Any
+  acquire_servers:
+    type: async
+    module: src.backend.integrations.mcp_manager
+    args: [self, server_keys, timeout]
+    params:
+      returns: AsyncGenerator
+  add_items:
+    type: async
+    module: src.backend.api.services.token_aware_session
+    args: [self, items]
+    params:
+      returns: None
+  app_exception_handler:
+    type: async
+    module: src.backend.api.middleware.exception_handlers
+    args: [request, exc]
+    params:
+      returns: JSONResponse
+  asyncpg_exception_handler:
+    type: async
+    module: src.backend.api.middleware.exception_handlers
+    args: [request, exc]
+    params:
+      returns: JSONResponse
+  azure_endpoint_str:
+    type: sync
+    module: src.backend.core.constants
+    args: [self]
+    params:
+      returns: str
+  broadcast:
+    type: async
+    module: src.backend.api.websocket.manager
+    args: [self, message]
+    params:
+      returns: None
+  bucket:
+    type: sync
+    module: src.backend.api.services.s3_sync_service
+    args: [self]
+    params:
+      returns: str
+  build_event_handlers:
+    type: sync
+    module: src.backend.integrations.event_handlers.registry
+    args: [tracker]
+    params:
+      returns: dict
+  call_tool:
+    type: async
+    module: src.backend.integrations.mcp_websocket_client
+    args: [self, tool_name, arguments]
+    params:
+      returns: MCPResult
+  chat_websocket:
+    type: async
+    module: src.backend.api.routes.chat
+    args: [websocket, session_id, token]
+    params:
+      returns: None
+  check_connectivity:
+    type: async
+    module: src.backend.api.services.s3_sync_service
+    args: [self]
+    params:
+      returns: dict
+  check_sandbox_ready:
+    type: sync
+    module: src.backend.tools.code_interpreter
+    params:
+      returns: tuple
+  check_server:
+    type: async
+    module: src.backend.integrations.mcp_manager
+    args: [key, server]
+    params:
+      returns: tuple
+  chunk_text:
+    type: sync
+    module: src.backend.workers.embedding_worker
+    args: [text, max_tokens, overlap]
+    params:
+      returns: list[str]
+  clean_content:
+    type: sync
+    module: src.backend.models.event_models
+    args: [cls, v]
+    params:
+      returns: str
+  cleanup_session_files:
+    type: sync
+    module: src.backend.api.services.s3_sync_service
+    args: [self, session_id]
+    params:
+      returns: int
+  clear:
+    type: sync
+    module: src.backend.core.constants
+    args: [self]
+    params:
+      returns: None
+  clear_interrupt:
+    type: sync
+    module: src.backend.api.services.chat_service
+    args: [self, session_id]
+    params:
+      returns: None
+  clear_request_context:
+    type: sync
+    module: src.backend.api.middleware.request_context
+    params:
+      returns: None
+  clear_session:
+    type: sync
+    module: src.backend.integrations.sdk_token_tracker
+    args: [self]
+    params:
+      returns: None
+  clear_settings_cache:
+    type: sync
+    module: src.backend.core.constants
+    params:
+      returns: None
+  close_connection:
+    type: async
+    module: src.backend.api.websocket.manager
+    args: [ws, session_id]
+    params:
+      returns: None
+  close_with_error:
+    type: async
+    module: src.backend.api.websocket.errors
+    args: [websocket, code, message, session_id]
+    params:
+      returns: None
+  collect_recent_exchanges:
+    type: sync
+    module: src.backend.api.services.token_aware_session
+    args: [items, keep_recent]
+    params:
+      returns: list[dict]
+  configure_uvicorn_logging:
+    type: sync
+    module: src.backend.utils.logger
+    params:
+      returns: None
+  connect:
+    type: async
+    module: src.backend.api.websocket.manager
+    args: [self, websocket, session_id]
+    params:
+      returns: bool
+  connect_session:
+    type: sync
+    module: src.backend.integrations.sdk_token_tracker
+    args: [session]
+    params:
+      returns: None
+  connection_count:
+    type: sync
+    module: src.backend.api.websocket.manager
+    args: [self]
+    params:
+      returns: int
+  content_hash:
+    type: sync
+    module: src.backend.integrations.embedding_service
+    args: [content]
+    params:
+      returns: str
+  cors_allows_all_origins:
+    type: sync
+    module: src.backend.core.constants
+    args: [self]
+    params:
+      returns: bool
+  cors_headers_list:
+    type: sync
+    module: src.backend.core.constants
+    args: [self]
+    params:
+      returns: list[str]
+  cors_methods_list:
+    type: sync
+    module: src.backend.core.constants
+    args: [self]
+    params:
+      returns: list[str]
+  cors_origins_list:
+    type: sync
+    module: src.backend.core.constants
+    args: [self]
+    params:
+      returns: list[str]
+  count_tokens:
+    type: sync
+    module: src.backend.utils.token_utils
+    args: [text, model]
+    params:
+      returns: dict
+  create_agent:
+    type: sync
+    module: src.backend.core.agent
+    args: [deployment, instructions, tools, mcp_servers, reasoning_effort]
+    params:
+      returns: Agent
+  create_agent_updated_handler:
+    type: sync
+    module: src.backend.integrations.event_handlers.agent_events
+    params:
+      returns: Callable
+  create_project:
+    type: async
+    module: src.backend.api.routes.v1.projects
+    args: [request, user, projects]
+    params:
+      returns: ProjectResponse
+  create_raw_response_handler:
+    type: sync
+    module: src.backend.integrations.event_handlers.raw_events
+    args: [tracker]
+    params:
+      returns: Callable
+  create_run_item_handler:
+    type: sync
+    module: src.backend.integrations.event_handlers.run_item_events
+    args: [tracker]
+    params:
+      returns: Callable
+  create_session:
+    type: async
+    module: src.backend.api.services.session_service
+    args: [self, user_id, title, model, mcp_config, reasoning_effort, project_id]
+    params:
+      returns: dict
+  create_session_aware_tools:
+    type: sync
+    module: src.backend.tools.wrappers
+    args: [session_id, model, s3_sync, pool, project_id]
+    params:
+      returns: list[Any]
+  create_tracking_stream_wrapper:
+    type: sync
+    module: src.backend.integrations.sdk_token_tracker
+    args: [original_stream_events]
+    params:
+      returns: Any
+  create_websocket_context:
+    type: sync
+    module: src.backend.api.middleware.request_context
+    args: [session_id, client_ip]
+    params:
+      returns: RequestContext
+  debug:
+    type: sync
+    module: src.backend.utils.logger
+    args: [self, message]
+    params:
+      returns: None
+  decode_access_token:
+    type: sync
+    module: src.backend.api.services.auth_service
+    args: [self, token]
+    params:
+      returns: dict
+  decorator:
+    type: sync
+    module: src.backend.tools.wrappers
+    args: [func]
+    params:
+      returns: Callable
+  delete_file:
+    type: async
+    module: src.backend.api.routes.v1.files
+    args: [session_id, filename, user, db, files, folder]
+    params:
+      returns: DeleteFileResponse
+  delete_project:
+    type: async
+    module: src.backend.api.routes.v1.projects
+    args: [project_id, user, projects]
+    params:
+      returns: DeleteProjectResponse
+  delete_session:
+    type: async
+    module: src.backend.api.services.session_service
+    args: [self, user_id, session_id]
+    params:
+      returns: bool
+  disconnect:
+    type: async
+    module: src.backend.api.websocket.manager
+    args: [self, websocket, session_id]
+    params:
+      returns: None
+  disconnect_session:
+    type: sync
+    module: src.backend.integrations.sdk_token_tracker
+    params:
+      returns: None
+  dispatch:
+    type: async
+    module: src.backend.api.middleware.rate_limiter
+    args: [self, request, call_next]
+    params:
+      returns: Response
+  downgrade:
+    type: sync
+    module: migrations.versions.0001_init_schema
+    params:
+      returns: None
+  download_file:
+    type: async
+    module: src.backend.api.routes.v1.files
+    args: [session_id, filename, user, db, files, folder]
+    params:
+      returns: Response
+  elapsed_ms:
+    type: sync
+    module: src.backend.api.middleware.request_context
+    args: [self]
+    params:
+      returns: float
+  embed_batch:
+    type: async
+    module: src.backend.integrations.embedding_service
+    args: [self, texts]
+    params:
+      returns: list[list[float]]
+  embed_text:
+    type: async
+    module: src.backend.integrations.embedding_service
+    args: [self, text]
+    params:
+      returns: list[float]
+  ensure_bucket_exists:
+    type: async
+    module: src.backend.api.services.s3_sync_service
+    args: [self]
+    params:
+      returns: None
+  ensure_endpoint_format:
+    type: sync
+    module: src.backend.core.constants
+    args: [cls, v]
+  ensure_warm:
+    type: async
+    module: src.backend.tools.code_interpreter
+    args: [self]
+    params:
+      returns: bool
+  error:
+    type: sync
+    module: src.backend.utils.logger
+    args: [self, message, exc_info]
+    params:
+      returns: None
+  execute:
+    type: async
+    module: src.backend.tools.code_interpreter
+    args: [self, code, workspace_path, session_files_path]
+    params:
+      returns: ExecutionResult
+  execute_python_code:
+    type: async
+    module: src.backend.tools.code_interpreter
+    args: [code, session_id]
+    params:
+      returns: str
+  file_operation:
+    type: async
+    module: src.backend.utils.file_utils
+    args: [file_path, operation_func, session_id]
+    params:
+      returns: str
+  filter:
+    type: sync
+    module: src.backend.utils.logger
+    args: [self, record]
+    params:
+      returns: bool
+  filter_mcp_servers:
+    type: sync
+    module: src.backend.integrations.mcp_registry
+    args: [all_servers, config]
+    params:
+      returns: list[Any]
+  find_sessions_needing_summary:
+    type: async
+    module: src.backend.api.services.summarization_service
+    args: [self, limit]
+    params:
+      returns: list[dict]
+  format:
+    type: sync
+    module: src.backend.utils.logger
+    args: [self, record]
+    params:
+      returns: str
+  generate_document:
+    type: async
+    module: src.backend.tools.document_generation
+    args: [content, filename, session_id]
+    params:
+      returns: str
+  generate_model_metadata_js:
+    type: sync
+    module: scripts.generate-model-metadata
+    params:
+      returns: str
+  generate_presigned_download_url:
+    type: sync
+    module: src.backend.api.services.s3_sync_service
+    args: [self, session_id, folder, filename]
+    params:
+      returns: str
+  generate_presigned_upload_url:
+    type: sync
+    module: src.backend.api.services.s3_sync_service
+    args: [self, session_id, folder, filename, content_type]
+    params:
+      returns: tuple
+  generate_request_id:
+    type: sync
+    module: src.backend.api.middleware.request_context
+    args: [prefix]
+    params:
+      returns: str
+  generate_summary:
+    type: async
+    module: src.backend.api.services.summarization_service
+    args: [self, session_id]
+  generic_exception_handler:
+    type: async
+    module: src.backend.api.middleware.exception_handlers
+    args: [request, exc]
+    params:
+      returns: JSONResponse
+  get:
+    type: sync
+    module: src.backend.core.constants
+    args: [self]
+    params:
+      returns: Settings
+  get_app_settings:
+    type: sync
+    module: src.backend.api.dependencies
+    params:
+      returns: Settings
+  get_config:
+    type: async
+    module: src.backend.api.routes.v1.config
+    args: [settings]
+    params:
+      returns: ConfigResponse
+  get_container_runtime:
+    type: sync
+    module: src.backend.tools.code_interpreter
+  get_context_service:
+    type: sync
+    module: src.backend.api.dependencies
+    args: [db]
+    params:
+      returns: ContextService
+  get_current_user:
+    type: async
+    module: src.backend.api.middleware.auth
+    args: [request, credentials, db]
+    params:
+      returns: UserInfo
+  get_current_user_from_token:
+    type: async
+    module: src.backend.api.middleware.auth
+    args: [token, db]
+    params:
+      returns: UserInfo
+  get_db:
+    type: async
+    module: src.backend.api.dependencies
+    args: [request]
+    params:
+      returns: asyncpg.Pool
+  get_default_user:
+    type: async
+    module: src.backend.api.services.auth_service
+    args: [self]
+  get_embedding_service:
+    type: sync
+    module: src.backend.integrations.embedding_service
+    params:
+      returns: EmbeddingService
+  get_file_path:
+    type: async
+    module: src.backend.api.routes.v1.files
+    args: [session_id, filename, user, db, files, folder]
+    params:
+      returns: FilePathResponse
+  get_file_service:
+    type: sync
+    module: src.backend.api.dependencies
+    args: [db, settings]
+    params:
+      returns: FileService
+  get_items:
+    type: async
+    module: src.backend.api.services.postgres_session
+    args: [self, limit]
+    params:
+      returns: list[dict]
+  get_jail_relative_path:
+    type: sync
+    module: src.backend.utils.file_utils
+    args: [path, session_id]
+    params:
+      returns: str
+  get_markitdown_converter:
+    type: sync
+    module: src.backend.utils.document_processor
+  get_mcp_manager:
+    type: sync
+    module: src.backend.integrations.mcp_manager
+    args: [acquire_timeout]
+    params:
+      returns: MCPServerManager
+  get_mcp_server_info:
+    type: sync
+    module: src.backend.integrations.mcp_registry
+    params:
+      returns: dict
+  get_project:
+    type: async
+    module: src.backend.api.routes.v1.projects
+    args: [project_id, user, projects]
+    params:
+      returns: ProjectResponse
+  get_project_service:
+    type: sync
+    module: src.backend.api.dependencies
+    args: [db]
+    params:
+      returns: ProjectService
+  get_rate_limiter:
+    type: sync
+    module: src.backend.api.middleware.rate_limiter
+    params:
+      returns: SlidingWindowRateLimiter
+  get_reasoning_levels:
+    type: sync
+    module: src.backend.core.constants
+    params:
+      returns: list[ReasoningLevelConfig]
+  get_relative_path:
+    type: sync
+    module: src.backend.utils.file_utils
+    args: [path]
+    params:
+      returns: Path
+  get_request_context:
+    type: sync
+    module: src.backend.api.middleware.request_context
+  get_request_id:
+    type: sync
+    module: src.backend.api.middleware.request_context
+  get_sandbox_pool:
+    type: sync
+    module: src.backend.tools.code_interpreter
+    args: [pool_size]
+    params:
+      returns: SandboxPool
+  get_session:
+    type: async
+    module: src.backend.api.services.session_service
+    args: [self, user_id, session_id]
+  get_session_files:
+    type: async
+    module: src.backend.utils.file_utils
+    args: [session_id, subdir]
+    params:
+      returns: list[str]
+  get_session_for_embedding:
+    type: async
+    module: src.backend.api.services.summarization_service
+    args: [self, session_id]
+  get_session_service:
+    type: sync
+    module: src.backend.api.dependencies
+    args: [db]
+    params:
+      returns: SessionService
+  get_session_with_history:
+    type: async
+    module: src.backend.api.services.session_service
+    args: [self, user_id, session_id, message_limit]
+  get_settings:
+    type: sync
+    module: src.backend.core.constants
+    params:
+      returns: Settings
+  get_stats:
+    type: sync
+    module: src.backend.integrations.mcp_manager
+    args: [self]
+    params:
+      returns: dict
+  get_tracker:
+    type: sync
+    module: src.backend.integrations.sdk_token_tracker
+    params:
+      returns: SDKTokenTracker
+  get_user_by_email:
+    type: async
+    module: src.backend.api.services.auth_service
+    args: [self, email]
+  get_user_by_id:
+    type: async
+    module: src.backend.api.services.auth_service
+    args: [self, user_id]
+  get_ws_manager:
+    type: sync
+    module: src.backend.api.dependencies
+    args: [request]
+    params:
+      returns: WebSocketManager
+  graceful_shutdown:
+    type: async
+    module: src.backend.api.websocket.manager
+    args: [self, timeout]
+    params:
+      returns: None
+  handle_agent_updated:
+    type: sync
+    module: src.backend.integrations.event_handlers.agent_events
+    args: [event]
+  handle_content_part_added_event:
+    type: sync
+    module: src.backend.integrations.event_handlers.raw_events
+    args: [data]
+  handle_content_part_done_event:
+    type: sync
+    module: src.backend.integrations.event_handlers.raw_events
+    args: [data]
+  handle_error:
+    type: async
+    module: src.backend.api.websocket.errors
+    args: [self, error, recoverable]
+    params:
+      returns: bool
+  handle_function_arguments_delta_event:
+    type: sync
+    module: src.backend.integrations.event_handlers.raw_events
+    args: [data]
+  handle_function_arguments_done_event:
+    type: sync
+    module: src.backend.integrations.event_handlers.raw_events
+    args: [data]
+  handle_handoff_call:
+    type: sync
+    module: src.backend.integrations.event_handlers.run_item_events
+    args: [item, _tracker]
+  handle_handoff_output:
+    type: sync
+    module: src.backend.integrations.event_handlers.run_item_events
+    args: [item, _tracker]
+  handle_message_output:
+    type: sync
+    module: src.backend.integrations.event_handlers.run_item_events
+    args: [item, _tracker]
+  handle_output_item_added:
+    type: sync
+    module: src.backend.integrations.event_handlers.raw_events
+    args: [data, tracker]
+  handle_output_item_done:
+    type: sync
+    module: src.backend.integrations.event_handlers.raw_events
+    args: [data]
+  handle_raw_response_event:
+    type: sync
+    module: src.backend.integrations.event_handlers.raw_events
+    args: [event]
+  handle_reasoning:
+    type: sync
+    module: src.backend.integrations.event_handlers.run_item_events
+    args: [item, _tracker]
+  handle_reasoning_summary_delta_event:
+    type: sync
+    module: src.backend.integrations.event_handlers.raw_events
+    args: [data]
+  handle_reasoning_text_delta_event:
+    type: sync
+    module: src.backend.integrations.event_handlers.raw_events
+    args: [data]
+  handle_refusal_delta_event:
+    type: sync
+    module: src.backend.integrations.event_handlers.raw_events
+    args: [data]
+  handle_run_item_event:
+    type: sync
+    module: src.backend.integrations.event_handlers.run_item_events
+    args: [event]
+  handle_text_delta_event:
+    type: sync
+    module: src.backend.integrations.event_handlers.raw_events
+    args: [data]
+  handle_tool_call:
+    type: sync
+    module: src.backend.integrations.event_handlers.run_item_events
+    args: [item, tracker]
+  handle_tool_output:
+    type: sync
+    module: src.backend.integrations.event_handlers.run_item_events
+    args: [item, tracker]
+  has_updates:
+    type: sync
+    module: src.backend.models.session_models
+    args: [self]
+    params:
+      returns: bool
+  http_exception_handler:
+    type: async
+    module: src.backend.api.middleware.exception_handlers
+    args: [request, exc]
+    params:
+      returns: JSONResponse
+  info:
+    type: sync
+    module: src.backend.utils.logger
+    args: [self, message]
+    params:
+      returns: None
+  initialize:
+    type: async
+    module: src.backend.integrations.mcp_manager
+    args: [self, server_keys]
+    params:
+      returns: None
+  initialize_all_mcp_servers:
+    type: async
+    module: src.backend.integrations.mcp_registry
+    params:
+      returns: dict
+  initialize_mcp_manager:
+    type: async
+    module: src.backend.integrations.mcp_manager
+    args: [server_keys, acquire_timeout]
+    params:
+      returns: MCPServerManager
+  initialize_mcp_server:
+    type: async
+    module: src.backend.integrations.mcp_registry
+    args: [server_key]
+  initialize_tools:
+    type: sync
+    module: src.backend.tools.registry
+    params:
+      returns: tuple
+  interrupt:
+    type: async
+    module: src.backend.api.services.chat_service
+    args: [self, session_id]
+    params:
+      returns: None
+  is_allowed:
+    type: async
+    module: src.backend.api.middleware.rate_limiter
+    args: [self, identifier, tier]
+    params:
+      returns: tuple
+  is_development:
+    type: sync
+    module: src.backend.core.constants
+    args: [self]
+    params:
+      returns: bool
+  is_production:
+    type: sync
+    module: src.backend.core.constants
+    args: [self]
+    params:
+      returns: bool
+  is_test:
+    type: sync
+    module: src.backend.core.constants
+    args: [self]
+    params:
+      returns: bool
+  is_valid_reasoning_effort:
+    type: sync
+    module: src.backend.core.agent
+    args: [value]
+    params:
+      returns: TypeGuard[ReasoningEffort]
+  is_vision_capable:
+    type: sync
+    module: src.backend.core.constants
+    args: [model]
+    params:
+      returns: bool
+  json_response:
+    type: sync
+    module: src.backend.utils.file_utils
+    args: [success, error]
+    params:
+      returns: str
+  lifespan:
+    type: async
+    module: src.backend.api.main
+    args: [app]
+    params:
+      returns: AsyncGenerator
+  list_directory:
+    type: sync
+    module: src.backend.tools.file_operations
+    args: [path, session_id, show_hidden]
+    params:
+      returns: str
+  list_files:
+    type: async
+    module: src.backend.api.routes.v1.files
+    args: [session_id, user, db, files, folder]
+    params:
+      returns: FileListResponse
+  list_messages:
+    type: async
+    module: src.backend.api.routes.v1.messages
+    args: [session_id, user, db, offset, limit]
+    params:
+      returns: MessageListResponse
+  list_projects:
+    type: async
+    module: src.backend.api.routes.v1.projects
+    args: [user, projects, offset, limit]
+    params:
+      returns: ProjectListResponse
+  list_sessions:
+    type: async
+    module: src.backend.api.services.session_service
+    args: [self, user_id, offset, limit]
+    params:
+      returns: dict
+  list_tools:
+    type: async
+    module: src.backend.integrations.mcp_websocket_client
+    args: [self]
+    params:
+      returns: list[MCPTool]
+  load_token_state_from_db:
+    type: async
+    module: src.backend.api.services.token_aware_session
+    args: [self]
+    params:
+      returns: None
+  log_conversation_turn:
+    type: sync
+    module: src.backend.utils.logger
+    args: [self, user_input, response, function_calls, duration_ms, tokens_used, attachments_count, is_multimodal, tool_names]
+    params:
+      returns: None
+  log_function_call:
+    type: sync
+    module: src.backend.utils.logger
+    args: [self, function_name, args, result]
+    params:
+      returns: None
+  login:
+    type: async
+    module: src.backend.api.services.auth_service
+    args: [self, email, password]
+    params:
+      returns: dict
+  main:
+    type: sync
+    module: scripts.generate-model-metadata
+    params:
+      returns: int
+  me:
+    type: async
+    module: src.backend.api.routes.v1.auth
+    args: [user]
+    params:
+      returns: UserInfo
+  merge_batch_input:
+    type: sync
+    module: src.backend.api.services.chat_service
+    args: [history, new_input]
+    params:
+      returns: list[Any]
+  migrate_files_to_s3:
+    type: async
+    module: scripts.migrate_files_to_s3
+    args: [dry_run]
+    params:
+      returns: None
+  normalize_content:
+    type: sync
+    module: src.backend.models.event_models
+    args: [cls, v]
+    params:
+      returns: Any
+  normalize_reasoning_effort:
+    type: sync
+    module: src.backend.core.agent
+    args: [effort, deployment]
+    params:
+      returns: str
+  on_error:
+    type: sync
+    module: src.backend.api.services.s3_sync_service
+    args: [func, path, exc_info]
+    params:
+      returns: None
+  on_session_disconnect:
+    type: sync
+    module: src.backend.api.main
+    args: [session_id]
+    params:
+      returns: None
+  openai_exception_handler:
+    type: async
+    module: src.backend.api.middleware.exception_handlers
+    args: [request, exc]
+    params:
+      returns: JSONResponse
+  parse_session_command:
+    type: sync
+    module: src.backend.models.session_models
+    args: [data]
+    params:
+      returns: SessionCommand
+  parse_tool_arguments:
+    type: sync
+    module: src.backend.models.schemas.sessions
+    args: [cls, v]
+  patch_sdk_for_auto_tracking:
+    type: sync
+    module: src.backend.integrations.sdk_token_tracker
+    params:
+      returns: bool
+  patched_run_streamed:
+    type: sync
+    module: src.backend.integrations.sdk_token_tracker
+    params:
+      returns: Any
+  pop_item:
+    type: async
+    module: src.backend.api.services.postgres_session
+    args: [self]
+  presign_download:
+    type: async
+    module: src.backend.api.routes.v1.files
+    args: [session_id, filename, user, db, files, settings, folder]
+    params:
+      returns: PresignedDownloadResponse
+  presign_upload:
+    type: async
+    module: src.backend.api.routes.v1.files
+    args: [session_id, request, user, db, files, settings]
+    params:
+      returns: PresignedUploadResponse
+  process_chat:
+    type: async
+    module: src.backend.api.services.chat_service
+    args: [self, session_id, messages, model, reasoning_effort, cancellation_token]
+    params:
+      returns: None
+  pydantic_exception_handler:
+    type: async
+    module: src.backend.api.middleware.exception_handlers
+    args: [request, exc]
+    params:
+      returns: JSONResponse
+  read_file:
+    type: async
+    module: src.backend.tools.file_operations
+    args: [file_path, session_id, head, tail, model]
+    params:
+      returns: str
+  read_file_content:
+    type: async
+    module: src.backend.utils.file_utils
+    args: [target_path]
+    params:
+      returns: tuple
+  recalculate_tokens:
+    type: async
+    module: src.backend.api.services.token_aware_session
+    args: [self]
+    params:
+      returns: int
+  refresh:
+    type: async
+    module: src.backend.api.services.auth_service
+    args: [self, refresh_token]
+    params:
+      returns: dict
+  register:
+    type: async
+    module: src.backend.api.services.auth_service
+    args: [self, email, password, display_name]
+    params:
+      returns: dict
+  register_exception_handlers:
+    type: sync
+    module: src.backend.api.middleware.exception_handlers
+    args: [app]
+    params:
+      returns: None
+  release:
+    type: async
+    module: src.backend.integrations.mcp_manager
+    args: [self, server_key, server]
+    params:
+      returns: None
+  reload:
+    type: sync
+    module: src.backend.core.constants
+    args: [self]
+    params:
+      returns: Settings
+  reload_settings:
+    type: sync
+    module: src.backend.core.constants
+    params:
+      returns: Settings
+  reset_error_count:
+    type: sync
+    module: src.backend.api.websocket.errors
+    args: [self]
+    params:
+      returns: None
+  save_uploaded_file:
+    type: sync
+    module: src.backend.utils.file_utils
+    args: [filename, data, session_id, target_dir, encoding]
+    params:
+      returns: UploadResult
+  search_context:
+    type: async
+    module: src.backend.api.routes.v1.context
+    args: [request, user, context_service, embedding_service]
+    params:
+      returns: ContextSearchResponse
+  search_files:
+    type: async
+    module: src.backend.tools.file_operations
+    args: [pattern, base_path, session_id, recursive, max_results]
+    params:
+      returns: str
+  send:
+    type: async
+    module: src.backend.api.websocket.manager
+    args: [self, session_id, message]
+    params:
+      returns: None
+  send_interrupted:
+    type: async
+    module: src.backend.api.services.chat_service
+    params:
+      returns: None
+  send_ws_error:
+    type: async
+    module: src.backend.api.websocket.errors
+    args: [websocket, code, message, session_id, recoverable, details]
+    params:
+      returns: None
+  session_count:
+    type: sync
+    module: src.backend.api.websocket.manager
+    args: [self]
+    params:
+      returns: int
+  set_request_context:
+    type: sync
+    module: src.backend.api.middleware.request_context
+    args: [context]
+    params:
+      returns: None
+  set_session:
+    type: sync
+    module: src.backend.integrations.sdk_token_tracker
+    args: [self, session]
+    params:
+      returns: None
+  settings_customise_sources:
+    type: sync
+    module: src.backend.core.constants
+    args: [cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings]
+    params:
+      returns: tuple
+  setup_logging:
+    type: sync
+    module: src.backend.utils.logger
+    args: [name, debug]
+    params:
+      returns: logging.Logger
+  should_summarize:
+    type: async
+    module: src.backend.api.services.token_aware_session
+    args: [self]
+    params:
+      returns: bool
+  shutdown:
+    type: async
+    module: src.backend.integrations.mcp_manager
+    args: [self]
+    params:
+      returns: None
+  shutdown_mcp_manager:
+    type: async
+    module: src.backend.integrations.mcp_manager
+    params:
+      returns: None
+  shutdown_sandbox_pool:
+    type: async
+    module: src.backend.tools.code_interpreter
+    params:
+      returns: None
+  start:
+    type: async
+    module: src.backend.workers.embedding_worker
+    args: [self]
+    params:
+      returns: None
+  start_embedding_worker:
+    type: async
+    module: src.backend.workers.embedding_worker
+    args: [pool]
+    params:
+      returns: EmbeddingWorker
+  start_idle_checker:
+    type: async
+    module: src.backend.api.websocket.manager
+    args: [self]
+    params:
+      returns: None
+  stop:
+    type: async
+    module: src.backend.workers.embedding_worker
+    args: [self]
+    params:
+      returns: None
+  stop_embedding_worker:
+    type: async
+    module: src.backend.workers.embedding_worker
+    params:
+      returns: None
+  stop_idle_checker:
+    type: async
+    module: src.backend.api.websocket.manager
+    args: [self]
+    params:
+      returns: None
+  summarize_content:
+    type: async
+    module: src.backend.utils.document_processor
+    args: [content, file_name, model]
+    params:
+      returns: str
+  summarize_session:
+    type: async
+    module: src.backend.api.routes.v1.sessions
+    args: [session_id, user, db]
+    params:
+      returns: SummarizeResponse
+  summarize_with_agent:
+    type: async
+    module: src.backend.api.services.token_aware_session
+    args: [self, keep_recent, force]
+    params:
+      returns: str
+  sync_from_s3:
+    type: async
+    module: src.backend.api.services.s3_sync_service
+    args: [self, session_id]
+    params:
+      returns: int
+  timestamp:
+    type: sync
+    module: src.backend.api.middleware.request_context
+    args: [self]
+    params:
+      returns: str
+  to_dict:
+    type: sync
+    module: src.backend.models.event_models
+    args: [self]
+    params:
+      returns: dict
+  to_json:
+    type: sync
+    module: src.backend.models.session_models
+    args: [self]
+    params:
+      returns: str
+  to_log_context:
+    type: sync
+    module: src.backend.api.middleware.request_context
+    args: [self]
+    params:
+      returns: dict
+  to_session_item:
+    type: sync
+    module: src.backend.models.event_models
+    args: [self]
+    params:
+      returns: SessionItem
+  total_tokens:
+    type: sync
+    module: src.backend.api.services.token_aware_session
+    args: [self, value]
+    params:
+      returns: None
+  touch:
+    type: async
+    module: src.backend.api.websocket.manager
+    args: [self, websocket]
+    params:
+      returns: None
+  track_content:
+    type: sync
+    module: src.backend.integrations.sdk_token_tracker
+    args: [self, content, source]
+    params:
+      returns: int
+  track_streaming_event:
+    type: sync
+    module: src.backend.integrations.sdk_token_tracker
+    args: [event]
+    params:
+      returns: Any
+  track_tool_execution:
+    type: sync
+    module: src.backend.tools.wrappers
+    args: [tool_name]
+    params:
+      returns: Callable
+  update_db_token_count:
+    type: async
+    module: src.backend.api.services.token_aware_session
+    args: [self]
+    params:
+      returns: None
+  update_project:
+    type: async
+    module: src.backend.api.routes.v1.projects
+    args: [project_id, request, user, projects]
+    params:
+      returns: ProjectResponse
+  update_request_context:
+    type: sync
+    module: src.backend.api.middleware.request_context
+    params:
+      returns: None
+  update_session:
+    type: async
+    module: src.backend.api.services.session_service
+    args: [self, user_id, session_id]
+  update_with_tool_tokens:
+    type: sync
+    module: src.backend.api.services.token_aware_session
+    args: [self, tool_tokens]
+    params:
+      returns: None
+  upgrade:
+    type: sync
+    module: migrations.versions.0001_init_schema
+    params:
+      returns: None
+  upload_all_to_s3:
+    type: async
+    module: src.backend.api.services.s3_sync_service
+    args: [self, session_id]
+    params:
+      returns: int
+  upload_file:
+    type: async
+    module: src.backend.api.routes.v1.files
+    args: [session_id, user, db, files, file, folder]
+    params:
+      returns: FileUploadResponse
+  upload_to_s3_background:
+    type: sync
+    module: src.backend.api.services.s3_sync_service
+    args: [self, session_id, folder, filename]
+    params:
+      returns: None
+  user_payload:
+    type: sync
+    module: src.backend.api.services.auth_service
+    args: [self, user]
+    params:
+      returns: dict
+  validate_app_env:
+    type: sync
+    module: src.backend.core.constants
+    args: [cls, v]
+    params:
+      returns: str
+  validate_azure_api_key:
+    type: sync
+    module: src.backend.core.constants
+    args: [cls, v]
+  validate_directory_path:
+    type: sync
+    module: src.backend.utils.file_utils
+    args: [dir_path, check_exists, session_id]
+    params:
+      returns: tuple
+  validate_file_path:
+    type: sync
+    module: src.backend.utils.file_utils
+    args: [file_path, check_exists, max_size, session_id]
+    params:
+      returns: tuple
+  validate_file_storage:
+    type: sync
+    module: src.backend.core.constants
+    args: [cls, v]
+    params:
+      returns: str
+  validate_iso_timestamp:
+    type: sync
+    module: src.backend.models.session_models
+    args: [cls, v]
+    params:
+      returns: str
+  validate_jwt_secret:
+    type: sync
+    module: src.backend.core.constants
+    args: [cls, v]
+    params:
+      returns: str
+  validate_openai_api_key:
+    type: sync
+    module: src.backend.core.constants
+    args: [cls, v]
+  validate_provider:
+    type: sync
+    module: src.backend.core.constants
+    args: [cls, v]
+    params:
+      returns: str
+  validate_provider_credentials:
+    type: sync
+    module: src.backend.core.constants
+    args: [self]
+    params:
+      returns: Settings
+  validate_reasoning_effort:
+    type: sync
+    module: src.backend.models.session_models
+    args: [cls, v]
+    params:
+      returns: str
+  validate_session_id:
+    type: sync
+    module: src.backend.models.session_models
+    args: [cls, v]
+    params:
+      returns: str
+  validate_session_path:
+    type: sync
+    module: src.backend.utils.file_utils
+    args: [file_path, session_id]
+    params:
+      returns: tuple
+  validate_ws_message:
+    type: async
+    module: src.backend.api.websocket.errors
+    args: [websocket, data, required_fields, session_id]
+    params:
+      returns: bool
+  validation_exception_handler:
+    type: async
+    module: src.backend.api.middleware.exception_handlers
+    args: [request, exc]
+    params:
+      returns: JSONResponse
+  verify_session_ownership:
+    type: async
+    module: src.backend.api.routes.v1.files
+    args: [session_id, user, db]
+    params:
+      returns: None
+  warning:
+    type: sync
+    module: src.backend.utils.logger
+    args: [self, message]
+    params:
+      returns: None
+  websocket_error_handler:
+    type: async
+    module: src.backend.api.websocket.errors
+    args: [websocket, session_id, on_error]
+    params:
+      returns: AsyncIterator[None]
+  wrapped_edit_file:
+    type: async
+    module: src.backend.tools.wrappers
+    args: [file_path, edits]
+    params:
+      returns: str
+  wrapped_execute_python_code:
+    type: async
+    module: src.backend.tools.wrappers
+    args: [code]
+    params:
+      returns: str
+  wrapped_generate_document:
+    type: async
+    module: src.backend.tools.wrappers
+    args: [content, filename]
+    params:
+      returns: str
+  wrapped_get_table_schema:
+    type: async
+    module: src.backend.tools.wrappers
+    args: [db_name, table_name]
+    params:
+      returns: str
+  wrapped_list_directory:
+    type: sync
+    module: src.backend.tools.wrappers
+    args: [path, show_hidden]
+    params:
+      returns: str
+  wrapped_list_registered_databases:
+    type: async
+    module: src.backend.tools.wrappers
+    params:
+      returns: str
+  wrapped_read_file:
+    type: async
+    module: src.backend.tools.wrappers
+    args: [file_path, head, tail]
+    params:
+      returns: str
+  wrapped_search_files:
+    type: async
+    module: src.backend.tools.wrappers
+    args: [pattern, base_path, recursive, max_results]
+    params:
+      returns: str
+  wrapped_search_project_context:
+    type: async
+    module: src.backend.tools.wrappers
+    args: [query, top_k, min_score]
+    params:
+      returns: str
+  wrapped_stream_events:
+    type: async
+    module: src.backend.integrations.sdk_token_tracker
+    params:
+      returns: Any
+  wrapper:
+    type: async
+    module: src.backend.tools.wrappers
+    params:
+      returns: str
+  write_file_content:
+    type: async
+    module: src.backend.utils.file_utils
+    args: [target_path, content]
+    params:
+      returns: tuple
+
+variables:
+  APP_ENV:
+    type: env
+    params:
+      caller: [os.getenv]
+      path: [src.backend.core.constants]
+  DEBUG:
+    type: env
+    params:
+      caller: [os.getenv]
+      path: [env_file]
+  MSG_TYPE_TOKEN_USAGE:
+    type: env
+  TOKEN_SOURCE_HANDOFF:
+    type: env
+  TOKEN_SOURCE_REASONING:
+    type: env
+  TOKEN_SOURCE_TOOL_CALL:
+    type: env
+  TOKEN_SOURCE_TOOL_ERROR:
+    type: env
+  TOKEN_SOURCE_TOOL_OUTPUT:
+    type: env
+  TOKEN_SOURCE_UNKNOWN:
+    type: env
+  token_type:
+    type: env
+
+files:
+  ../src:
+    type: literal
+    actions: [read]
+  ./:
+    type: pattern
+    actions: [read]
+    params:
+      patterns: ['*']
+      caller: [migrate_files_to_s3, cleanup_session_files, upload_all_to_s3]
+  .backup:
+    type: literal
+    actions: [read]
+    params:
+      caller: [save_uploaded_file]
+      path: [target_path]
+  .env:
+    type: literal
+    actions: [read]
+    params:
+      caller: [_get_env_files]
+      path: [_BACKEND_DIR]
+  .env.:
+    type: literal
+    actions: [read]
+    params:
+      caller: [_get_env_files]
+      path: [_BACKEND_DIR]
+  .env.local:
+    type: literal
+    actions: [read]
+    params:
+      caller: [_get_env_files]
+      path: [_BACKEND_DIR]
+  BACKUP_FILES_PATH:
+    type: variable
+    actions: [read]
+    params:
+      caller: [BACKUP_FILES_PATH.iterdir]
+  backup_path:
+    type: variable
+    actions: [write]
+    params:
+      caller: [backup_path.write_bytes]
+  base_dir:
+    type: variable
+    actions: [read]
+    params:
+      caller: [base_dir.rglob, base_dir.glob]
+  conversations.jsonl:
+    type: literal
+    actions: [read]
+    params:
+      caller: [setup_logging]
+      path: [log_dir]
+  errors.jsonl:
+    type: literal
+    actions: [read]
+    params:
+      caller: [setup_logging]
+      path: [log_dir]
+  file_path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [file_path.iterdir, open]
+  folder_path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [folder_path.rglob]
+  local_path:
+    type: variable
+    actions: [write]
+    params:
+      caller: [local_path.parent.mkdir]
+  log_dir:
+    type: variable
+    actions: [write]
+    params:
+      caller: [log_dir.mkdir]
+  model-metadata.js:
+    type: literal
+    actions: [read]
+    params:
+      path: [PROJECT_ROOT]
+  OUTPUT_PATH:
+    type: variable
+    actions: [write]
+    params:
+      caller: [OUTPUT_PATH.write_text]
+  output_path:
+    type: variable
+    actions: [write]
+    params:
+      caller: [output_path.parent.mkdir]
+  path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [path.iterdir]
+  pattern/:
+    type: variable
+    actions: [read]
+    params:
+      links: [pattern]
+      caller: [search_files]
+  requested_path:
+    type: literal
+    actions: [read]
+    params:
+      caller: [Path(sanitized_path)]
+  sanitized_path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [Path]
+  script.py:
+    type: literal
+    actions: [read]
+    params:
+      caller: [execute, _execute_cold]
+      path: [workspace_path]
+  script_path:
+    type: variable
+    actions: [write]
+    params:
+      caller: [script_path.write_text]
+  session_dir:
+    type: variable
+    actions: [read]
+    params:
+      caller: [shutil.rmtree]
+  session_path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [session_path.rglob, shutil.rmtree]
+  target_file:
+    type: variable
+    actions: [read, write]
+    params:
+      caller: [target_file.read_bytes, target_file.write_bytes, aiofiles.open]
+  target_path:
+    type: variable
+    actions: [read, write]
+    params:
+      caller: [aiofiles.open, target_path.mkdir, target_path.iterdir]
+  workspace_path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [workspace_path.iterdir]
+
+networks:
+  localhost:
+    type: api
+    actions: [GET]
+    urls: [/]
+    protocols: [http]
+    ports: ["8081", "8082", "8083"]
+    params:
+      links: [default]
