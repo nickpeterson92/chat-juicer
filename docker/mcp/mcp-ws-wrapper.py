@@ -54,9 +54,10 @@ class MCPBridge:
                     await task
                 except asyncio.CancelledError:
                     pass
-        except Exception:
+        except Exception as e:
             for task in tasks:
                 task.cancel()
+            raise
 
     async def _forward_ws_to_stdio(self) -> None:
         """Forward messages from WebSocket to stdio."""
