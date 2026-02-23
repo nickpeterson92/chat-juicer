@@ -6,6 +6,10 @@ This file provides guidance to you (Claude) when working with code in this repos
 
 Chat Juicer is a production-grade Electron + FastAPI desktop application that provides a chat interface for Azure OpenAI using the **Agent/Runner pattern** with native **MCP (Model Context Protocol) server support**. The application features advanced reasoning capabilities through Sequential Thinking, sophisticated document generation, enterprise-grade logging, and comprehensive type safety.
 
+## Task Tracking
+
+Use 'bd' for task tracking.
+
 ## Current Architecture (FastAPI Backend)
 
 The application uses a **three-tier architecture**:

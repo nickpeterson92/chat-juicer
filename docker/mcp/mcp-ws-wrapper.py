@@ -40,8 +40,23 @@ class MCPBridge:
         )
         self.running = True
 
-        # Start bidirectional forwarding
-        await asyncio.gather(self._forward_ws_to_stdio(), self._forward_stdio_to_ws())
+        # Start bidirectional forwarding - use FIRST_COMPLETED to exit when either side closes
+        tasks = [
+            asyncio.create_task(self._forward_ws_to_stdio()),
+            asyncio.create_task(self._forward_stdio_to_ws()),
+        ]
+        try:
+            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            # Cancel remaining tasks
+            for task in pending:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        except Exception:
+            for task in tasks:
+                task.cancel()
 
     async def _forward_ws_to_stdio(self) -> None:
         """Forward messages from WebSocket to stdio."""
@@ -64,8 +79,14 @@ class MCPBridge:
         """Forward messages from stdio to WebSocket."""
         try:
             while self.running and self.process and self.process.stdout:
-                # Read line from stdio
-                line = await self.process.stdout.readline()
+                # Read line from stdio with timeout to allow checking self.running
+                try:
+                    line = await asyncio.wait_for(
+                        self.process.stdout.readline(),
+                        timeout=5.0,
+                    )
+                except asyncio.TimeoutError:
+                    continue  # Check self.running and retry
                 if not line:
                     break
 
