@@ -207,10 +207,10 @@ resource "aws_instance" "app_server" {
     nukeoptout = "true"
   }
 
-  # Prevent replacement when user_data changes (e.g., JWT secret regenerates)
+  # Prevent replacement when user_data or AMI changes
   # To force replacement, use: terraform apply -replace="module.compute.aws_instance.app_server"
   lifecycle {
-    ignore_changes = [user_data]
+    ignore_changes = [user_data, ami]
   }
 }
 
