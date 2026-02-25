@@ -11,7 +11,7 @@ issue-prefix: "chat-juicer"
 # Use no-db mode: load from JSONL, write back after each command
 # When true, bd will use .beads/issues.jsonl as the source of truth
 # instead of the Dolt database
-no-db: true  # JSONL-only mode, no SQLite database
+# no-db: false  # Using Dolt database
 
 # Enable JSON output by default
 # json: false
